@@ -118,7 +118,7 @@ fun ChatScreen(
                     }
                 }
             }
-            if (status.working) item(key = "working") { WorkingRow(status) }
+            if (status.working && !waitingOnYou) item(key = "working") { WorkingRow(status) }
         }
     }
 }
@@ -223,8 +223,9 @@ private fun StepsRow(items: List<ChatItem>) {
                 Icon(iconFor(JSONObject(last.meta).optString("tool")), null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
             }
             Spacer(Modifier.width(10.dp))
-            Text(if (items.size == 1) last.text else "${last.text}  ·  ${items.size} steps", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Text(last.text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = if (open) 3 else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            if (items.size > 1) Text("${items.size} steps", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 8.dp))
             if (items.size > 1) Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, if (open) "Hide steps" else "Show steps", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         AnimatedVisibility(open && items.size > 1, enter = expandVertically(spring(0.8f, 380f)) + fadeIn(), exit = shrinkVertically() + fadeOut()) {

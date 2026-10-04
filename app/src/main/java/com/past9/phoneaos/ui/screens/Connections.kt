@@ -44,7 +44,8 @@ data class ConnectionsActions(
 @Composable
 fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions) {
     var query by remember { mutableStateOf("") }
-    SubScreen("Connections", if (state.hasKey) "${state.connected.count { it.status == "ACTIVE" }} apps connected" else "Connect your apps", actions.onBack,
+    val activeCount = state.connected.count { it.status == "ACTIVE" }
+    SubScreen("Connections", if (state.hasKey) (if (activeCount == 1) "1 app connected" else "$activeCount apps connected") else "Connect your apps", actions.onBack,
         actions = { if (state.hasKey) IconButton(onClick = actions.onRefresh) { Icon(Icons.Rounded.Refresh, "Refresh") } }) { pad ->
         LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 48.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item { SectionHeader("On this phone", "Built in, nothing to set up", Modifier.padding(start = 4.dp, top = 4.dp)) }
@@ -64,7 +65,7 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions) {
                 val active = state.connected
                 if (active.isNotEmpty()) item {
                     AppCard(padding = PaddingValues(vertical = 4.dp)) {
-                        active.forEach { c -> ConnectedLine(c, actions) }
+                        active.forEach { c -> ConnectedLine(c, state.toolkits.firstOrNull { it.slug == c.toolkit }?.name ?: prettySlug(c.toolkit), actions) }
                     }
                 }
                 item {
@@ -102,13 +103,13 @@ private fun Initial(name: String) {
 }
 
 @Composable
-private fun ConnectedLine(c: Connection, actions: ConnectionsActions) {
+private fun ConnectedLine(c: Connection, name: String, actions: ConnectionsActions) {
     Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Initial(c.toolkit)
+        Initial(name)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(c.toolkit.replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.titleSmall)
-            Text(c.label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(name, style = MaterialTheme.typography.titleSmall)
+            Text(if (c.label == c.toolkit) "Signed in through Composio" else c.label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         val extra = LocalExtra.current
         when (c.status) {
@@ -136,3 +137,6 @@ private fun ToolkitLine(t: Toolkit, connected: Boolean, onConnect: () -> Unit) {
         }
     }
 }
+
+private val known = mapOf("googlecalendar" to "Google Calendar", "googledrive" to "Google Drive", "googledocs" to "Google Docs", "googlesheets" to "Google Sheets", "github" to "GitHub", "linkedin" to "LinkedIn", "whatsapp" to "WhatsApp")
+fun prettySlug(slug: String) = known[slug] ?: slug.replace('_', ' ').replaceFirstChar { it.uppercase() }
