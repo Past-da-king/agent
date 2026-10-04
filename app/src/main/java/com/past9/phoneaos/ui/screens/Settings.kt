@@ -29,6 +29,7 @@ data class SettingsActions(
     val onChangeKey: () -> Unit = {},
     val setSpeak: (Boolean) -> Unit = {},
     val onClaudeSetup: () -> Unit = {},
+    val onStyle: () -> Unit = {},
     val onDeleteRuntime: () -> Unit = {},
     val onClearChat: () -> Unit = {},
     val onResetAll: () -> Unit = {},
@@ -48,13 +49,14 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 Line(Icons.Rounded.Person, "Your name", s.userName.ifBlank { "Not set" }) { editValue = s.userName; edit = "Your name" to actions.setUserName }
                 Line(Icons.Rounded.Face, "Your agent's name", s.agentName) { editValue = s.agentName; edit = "Your agent's name" to actions.setAgentName }
+                Line(Icons.Rounded.Palette, "Colour and sidekick", "${com.past9.phoneaos.ui.theme.accentOf(s.accent).label} · ${com.past9.phoneaos.ui.mascotOf(s.mascot).label}") { actions.onStyle() }
             }
             SectionHeader("Power", "What your agent thinks with", Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 Line(Icons.Rounded.Key, "API key", if (s.mode == PowerMode.API_KEY) "${s.provider.label}${if (s.hasKey) " · key saved" else " · no key yet"}" else "Not in use",
                     trailing = { RadioButton(s.mode == PowerMode.API_KEY, { actions.setMode(PowerMode.API_KEY) }) }) { actions.setMode(PowerMode.API_KEY) }
-                Line(Icons.Rounded.AutoAwesome, "Claude subscription", if (s.mode == PowerMode.CLAUDE_SUBSCRIPTION) runtime.note else "Pro or Max, runs Claude Code in the app",
-                    trailing = { RadioButton(s.mode == PowerMode.CLAUDE_SUBSCRIPTION, { actions.setMode(PowerMode.CLAUDE_SUBSCRIPTION) }) }) { actions.setMode(PowerMode.CLAUDE_SUBSCRIPTION) }
+                Line(Icons.Rounded.AutoAwesome, "Subscription", if (s.mode == PowerMode.SUBSCRIPTION) "${s.subKind.label} ${s.subKind.plan} · ${runtime.note}" else "Claude, ChatGPT or OpenCode plan",
+                    trailing = { RadioButton(s.mode == PowerMode.SUBSCRIPTION, { actions.setMode(PowerMode.SUBSCRIPTION) }) }) { actions.setMode(PowerMode.SUBSCRIPTION) }
             }
             if (s.mode == PowerMode.API_KEY) AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 Line(Icons.Rounded.Hub, "Provider", s.provider.label) { actions.onChangeKey() }
@@ -62,8 +64,8 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
                 Line(Icons.Rounded.Groups, "Helper model", s.helperModel + " (used by helper agents)") { editValue = s.helperModel; edit = "Helper model" to actions.setHelperModel }
                 Line(Icons.Rounded.Password, "Change key", "Paste a new key or switch provider") { actions.onChangeKey() }
             }
-            if (s.mode == PowerMode.CLAUDE_SUBSCRIPTION || runtime.installedBytes > 0) AppCard(padding = PaddingValues(vertical = 4.dp)) {
-                Line(Icons.Rounded.Terminal, "Claude runtime", runtime.note) { actions.onClaudeSetup() }
+            if (s.mode == PowerMode.SUBSCRIPTION || runtime.installedBytes > 0) AppCard(padding = PaddingValues(vertical = 4.dp)) {
+                Line(Icons.Rounded.Terminal, "${s.subKind.label} runtime", runtime.note) { actions.onClaudeSetup() }
                 if (runtime.installedBytes > 0) Line(Icons.Rounded.DeleteSweep, "Delete runtime data", "Frees ${runtime.installedBytes / 1_000_000} MB. You can set it up again later.") { actions.onDeleteRuntime() }
             }
             SectionHeader("Voice", "Talking instead of typing", Modifier.padding(start = 4.dp, top = 12.dp))

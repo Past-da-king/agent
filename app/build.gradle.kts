@@ -38,6 +38,8 @@ android {
         // Without this Roborazzi writes nothing and the run still passes green.
         it.systemProperty("roborazzi.test.record", "true")
         it.maxHeapSize = "3g"
+        // Live provider tests run only when a key is passed in the environment (never stored in the repo).
+        it.environment("DEEPSEEK_KEY", System.getenv("DEEPSEEK_KEY") ?: "")
       }
     }
   }
@@ -74,6 +76,7 @@ dependencies {
   implementation(libs.androidx.security.crypto)
   implementation(libs.okhttp)
   implementation(libs.androidx.graphics.shapes)
+  implementation(libs.coil.compose)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.androidx.credentials)
   implementation(libs.androidx.credentials.play.services)

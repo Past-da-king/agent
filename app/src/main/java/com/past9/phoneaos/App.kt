@@ -22,6 +22,14 @@ class Graph(context: Context) {
         onRoutineChanged = { t -> if (t != null) Routines.schedule(app, t) }
         onRoutineDeleted = { id -> Routines.cancel(app, id) }
     }
+    /** The runtime for whichever subscription the user picked (Claude, ChatGPT/Codex, OpenCode). */
+    fun subRuntime() = com.past9.phoneaos.runtime.SubscriptionRuntime(app, settings.state.value.subKind)
+    init {
+        runtime.subscription = object : com.past9.phoneaos.agent.SubscriptionEngine {
+            override val ready get() = subRuntime().let { it.available && it.installed && it.signedIn }
+            override fun turn(prompt: String, system: String, resume: String?, mcpUrl: String, mcpToken: String) = subRuntime().turn(prompt, system, resume, null, mcpUrl, mcpToken)
+        }
+    }
 }
 
 class App : Application() {

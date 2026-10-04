@@ -1,0 +1,40 @@
+// Runs ONE turn of the user's agent through the Claude Agent SDK, using the user's own Claude
+// subscription (CLAUDE_CODE_OAUTH_TOKEN). The phone's tools arrive over a localhost MCP server.
+// Input: one JSON line on stdin {prompt, system, resume}. Output: JSON lines on stdout.
+import { query } from "@anthropic-ai/claude-agent-sdk";
+import { createInterface } from "node:readline";
+
+const out = (o) => process.stdout.write(JSON.stringify(o) + "\n");
+const rl = createInterface({ input: process.stdin });
+const line = await new Promise((res) => rl.once("line", res));
+rl.close();
+const { prompt, system, resume, model } = JSON.parse(line);
+
+try {
+  for await (const m of query({
+    prompt,
+    options: {
+      systemPrompt: system,
+      resume: resume || undefined,
+      model: model || undefined,
+      cwd: process.env.HOME,
+      permissionMode: "bypassPermissions",
+      // Productivity agent, not a coding agent: the phone's tools plus web search/fetch only.
+      allowedTools: ["mcp__phone", "WebSearch", "WebFetch"],
+      disallowedTools: ["Bash", "Edit", "Write", "NotebookEdit", "KillShell"],
+      mcpServers: { phone: { type: "http", url: process.env.PHONE_MCP_URL, headers: { Authorization: `Bearer ${process.env.PHONE_MCP_TOKEN}` } } },
+      maxTurns: 30,
+    },
+  })) {
+    if (m.type === "system" && m.subtype === "init") out({ type: "session", id: m.session_id });
+    else if (m.type === "assistant") {
+      for (const b of m.message.content) {
+        if (b.type === "text" && b.text.trim()) out({ type: "text", text: b.text });
+        else if (b.type === "tool_use") out({ type: "tool", name: b.name.replace(/^mcp__phone__/, "") });
+      }
+    } else if (m.type === "result") out({ type: "done", ok: m.subtype === "success", session: m.session_id, usage: m.usage, cost: m.total_cost_usd });
+  }
+} catch (e) {
+  out({ type: "error", message: String(e?.message || e) });
+  process.exitCode = 1;
+}

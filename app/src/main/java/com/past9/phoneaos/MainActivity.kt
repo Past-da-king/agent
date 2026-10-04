@@ -16,6 +16,10 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.core.content.ContextCompat
@@ -31,7 +35,6 @@ import com.past9.phoneaos.data.MemoryRow
 import com.past9.phoneaos.data.PowerMode
 import com.past9.phoneaos.data.Provider
 import com.past9.phoneaos.data.TaskRow
-import com.past9.phoneaos.runtime.ClaudeRuntime
 import com.past9.phoneaos.system.Speaker
 import com.past9.phoneaos.triggers.Routines
 import com.past9.phoneaos.ui.AppDrawer
@@ -50,7 +53,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         handle(intent)
         val g = App.graph(this)
-        setContent { AppTheme { Root(g) } }
+        setContent {
+            val st by g.settings.state.collectAsStateWithLifecycle()
+            AppTheme(accent = st.accent, mascot = st.mascot) { Root(g) }
+        }
     }
 
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); handle(intent) }
@@ -78,7 +84,7 @@ class MainActivity : ComponentActivity() {
         val scope = rememberCoroutineScope()
         var draft by rememberSaveable { mutableStateOf("") }
         var conn by remember { mutableStateOf(ConnectionsState(hasKey = settings.composioEnabled)) }
-        val claude = remember { ClaudeRuntime(this) }
+        val sub = remember(settings.subKind) { g.subRuntime() }
         val speaker = remember { Speaker(this) }
 
         val incomingNow by incoming.collectAsStateWithLifecycle()
@@ -162,13 +168,13 @@ class MainActivity : ComponentActivity() {
                     ))
                 }
                 composable("settings") {
-                    var info by remember { mutableStateOf(claude.info()) }
+                    var info by remember { mutableStateOf(sub.info()) }
                     SettingsScreen(settings, info, BuildConfig.VERSION_NAME, SettingsActions(
                         onBack = { nav.popBackStack() },
                         setUserName = g.settings::setUserName, setAgentName = g.settings::setAgentName,
                         setMode = g.settings::setMode, setProvider = g.settings::setProvider, setModel = g.settings::setModel, setHelperModel = g.settings::setHelperModel,
                         onChangeKey = { nav.navigate("key") }, setSpeak = g.settings::setSpeakReplies,
-                        onClaudeSetup = {}, onDeleteRuntime = { claude.delete(); info = claude.info() },
+                        onClaudeSetup = { nav.navigate("sub") }, onDeleteRuntime = { sub.delete(); info = sub.info() }, onStyle = { nav.navigate("style") },
                         onClearChat = { g.runtime.clearConversation() },
                         onResetAll = { scope.launch { g.runtime.stop(); g.db.clearAllTables(); g.settings.resetAll() } },
                         onBattery = { runCatching { startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))) } },
@@ -179,6 +185,22 @@ class MainActivity : ComponentActivity() {
                     androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.surface) {
                         androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.systemBarsPadding()) {
                             KeyStep(p, { p = it }, onboardingActions(g)) { g.settings.setProvider(p); g.settings.setMode(PowerMode.API_KEY); nav.popBackStack() }
+                        }
+                    }
+                }
+                composable("sub") {
+                    var info by remember { mutableStateOf(sub.info()) }
+                    val log = remember { mutableStateListOf<String>() }
+                    var installing by remember { mutableStateOf(false) }
+                    SubSetupScreen(sub.kind, sub.spec.signInHelp, info, sub.installed, log, installing, onBack = { nav.popBackStack() },
+                        onInstall = { scope.launch { installing = true; runCatching { sub.install { l -> scope.launch { log += l } } }.onFailure { log += "Failed: ${it.message}" }; installing = false; info = sub.info() } },
+                        onSaveToken = { t -> sub.setToken(t); g.settings.setMode(PowerMode.SUBSCRIPTION); info = sub.info() },
+                        onUseKey = { g.settings.setMode(PowerMode.API_KEY); nav.navigate("key") })
+                }
+                composable("style") {
+                    com.past9.phoneaos.ui.SubScreen("Make it yours", "Colour and sidekick", { nav.popBackStack() }) { pad ->
+                        androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 48.dp)) {
+                            StylePicker(settings.userName, settings.agentName, settings.accent, settings.mascot, g.settings::setAccent, g.settings::setMascot)
                         }
                     }
                 }
@@ -196,26 +218,31 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun Onboarding(g: Graph) {
-        val claude = remember { ClaudeRuntime(this) }
         val notifPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+        val st = g.settings.state.value
         OnboardingScreen(onboardingActions(g).copy(
             requestNotifications = { if (Build.VERSION.SDK_INT >= 33) notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS) },
             finish = { g.settings.setOnboarded(true) },
-        ), claudeRuntimeAvailable = claude.available)
+        ), initialAccent = st.accent, initialMascot = st.mascot, initialUser = st.userName, initialAgent = if (st.agentName == "Your agent") "" else st.agentName)
     }
 
     private fun onboardingActions(g: Graph) = OnboardingActions(
         saveNames = { u, a -> g.settings.setUserName(u); if (a.isNotBlank()) g.settings.setAgentName(a) },
         choosePower = g.settings::setMode,
-        saveKey = { p, k -> g.settings.setProvider(p); g.settings.setApiKey(p, k) },
+        chooseStyle = { a, m -> g.settings.setAccent(a); g.settings.setMascot(m) },
+        chooseSub = g.settings::setSubKind,
+        subAvailable = { k -> com.past9.phoneaos.runtime.SubscriptionRuntime(this, k).available },
+        saveCustom = { url, model -> g.settings.setProvider(Provider.CUSTOM); g.settings.setBaseUrl(url); g.settings.setModel(model) },
+        saveKey = { p, k -> if (g.settings.state.value.provider != p) g.settings.setProvider(p); g.settings.setApiKey(p, k) },
         testKey = { p, k -> testKey(p, k) },
         saveComposio = { k -> saveComposio(g, k) },
         openUrl = ::open,
     )
 
     private suspend fun testKey(p: Provider, key: String): String? = try {
-        val provider = if (p == Provider.ANTHROPIC) AnthropicProvider(key, p.baseUrl) else OpenAiCompatProvider(p.name.lowercase(), key, p.baseUrl)
-        provider.complete("Reply with OK.", listOf(Msg.user("ping")), emptyList(), p.defaultModel, 16); null
+        val st = App.graph(this).settings.state.value
+        val model = if (st.provider == p && st.model.isNotBlank()) st.model else p.defaultModel
+        com.past9.phoneaos.agent.AgentRuntime.providerFor(p, key, if (p == Provider.CUSTOM) st.baseUrl else p.baseUrl).complete("Reply with OK.", listOf(Msg.user("ping")), emptyList(), model, 16); null
     } catch (e: com.past9.phoneaos.agent.ProviderException) {
         when (e.status) { 401, 403 -> "That key was rejected."; 404 -> "Key works but model ${p.defaultModel} isn't available. You can change the model in Settings."; 429 -> "Key works but has no credit or is rate-limited."; else -> e.message }
     } catch (e: Exception) { "Couldn't check: ${e.message}" }

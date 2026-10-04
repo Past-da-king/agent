@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.past9.phoneaos.agent.AgentStatus
 import com.past9.phoneaos.data.*
+import com.past9.phoneaos.data.SubKind
 import com.past9.phoneaos.tools.Connection
 import com.past9.phoneaos.tools.Toolkit
 import com.past9.phoneaos.ui.screens.*
@@ -60,8 +61,31 @@ class ScreensTest(private val dark: Boolean) {
     @Test fun onboarding() { shot("01-onboarding-hello") { OnboardingScreen(OnboardingActions()) } }
     @Test fun onboardingPower() { shot("02-onboarding-power") { OnboardingScreen(OnboardingActions(), start = OnbStep.POWER) } }
     @Test fun onboardingKey() { shot("03-onboarding-key") { OnboardingScreen(OnboardingActions(), start = OnbStep.KEY) } }
+    @Test fun onboardingName() { shot("06-onboarding-name") { OnboardingScreen(OnboardingActions(), start = OnbStep.NAME, initialUser = "Ayanda", initialAgent = "Nova") } }
+    @Test fun onboardingStyle() { shot("07-onboarding-style") { OnboardingScreen(OnboardingActions(), start = OnbStep.STYLE, initialAccent = "teal", initialMascot = "ghost", initialUser = "Ayanda", initialAgent = "Nova") } }
+    @Test fun onboardingSub() { shot("08-onboarding-sub") { OnboardingScreen(OnboardingActions(), start = OnbStep.SUB, initialSub = SubKind.CODEX) } }
+    @Test fun onboardingReady() { shot("09-onboarding-ready") { OnboardingScreen(OnboardingActions(), start = OnbStep.READY, initialAccent = "ember", initialUser = "Ayanda") } }
+    @Test fun chatImages() {
+        val files = listOf(0xFF4A3FD1.toInt() to (1200 to 800), 0xFF00696B.toInt() to (800 to 1200), 0xFFB0410C.toInt() to (1000 to 1000)).mapIndexed { i, (c, wh) ->
+            val bmp = android.graphics.Bitmap.createBitmap(wh.first, wh.second, android.graphics.Bitmap.Config.ARGB_8888).apply { eraseColor(c) }
+            android.graphics.Canvas(bmp).drawCircle(wh.first / 2f, wh.second / 2f, wh.first / 4f, android.graphics.Paint().apply { color = 0xFFFAF8F4.toInt() })
+            File(androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>().cacheDir, "img$i.png").also { f -> f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 90, it) } }
+        }
+        val big = android.graphics.Bitmap.createBitmap(1000, 3000, android.graphics.Bitmap.Config.ARGB_8888).apply { eraseColor(0xFF2E6A2F.toInt()) }
+        val bigFile = File(androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>().cacheDir, "tall.png").also { f -> f.outputStream().use { big.compress(android.graphics.Bitmap.CompressFormat.PNG, 90, it) } }
+        val items = listOf(
+            item("user", "Show me three cafés near Rosebank with good Wi-Fi"),
+            item("agent", "Here are three, all under 10 minutes away:\n\n![Father Coffee](file://${files[0].path}) ![Bean There](file://${files[1].path}) ![Starbucks Keyes](file://${files[2].path})\n\n1. **Father Coffee**, quiet upstairs, fast Wi-Fi\n2. **Bean There**, big tables\n3. **Starbucks Keyes Art Mile**, open till 21:00"),
+            item("user", "And the menu at Father?"),
+            item("agent", "Their menu board (it's a tall photo, tap to zoom):\n\n![Menu board](file://${bigFile.path})"),
+        )
+        val ctx = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        coil.Coil.setImageLoader(coil.ImageLoader.Builder(ctx).dispatcher(kotlinx.coroutines.Dispatchers.Unconfined)
+            .interceptorDispatcher(kotlinx.coroutines.Dispatchers.Unconfined).fetcherDispatcher(kotlinx.coroutines.Dispatchers.Unconfined)
+            .decoderDispatcher(kotlinx.coroutines.Dispatchers.Unconfined).transformationDispatcher(kotlinx.coroutines.Dispatchers.Unconfined).crossfade(false).build())
+        shot("14-chat-images") { ChatScreen(items, AgentStatus(), "Nova", "Ayanda", false, "", {}, ChatActions()) }
+    }
     @Test fun onboardingApps() { shot("04-onboarding-apps") { OnboardingScreen(OnboardingActions(), start = OnbStep.APPS) } }
-    @Test fun onboardingClaude() { shot("05-onboarding-claude") { OnboardingScreen(OnboardingActions(), start = OnbStep.CLAUDE) } }
 
     @Test fun chatEmpty() { shot("10-chat-empty") { ChatScreen(emptyList(), AgentStatus(), "Your agent", "Ayanda", false, "", {}, ChatActions()) } }
     @Test fun chatBusy() { shot("11-chat-working") { ChatScreen(conversation.dropLast(1), AgentStatus(true, "Browsing", 1), "Nova", "Ayanda", true, "", {}, ChatActions(), openCount = 3) } }

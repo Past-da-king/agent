@@ -22,6 +22,12 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
 
+/** The Claude-subscription engine: runs a whole turn itself (Agent SDK), our tools over MCP. */
+interface SubscriptionEngine {
+    val ready: Boolean
+    fun turn(prompt: String, system: String, resume: String?, mcpUrl: String, mcpToken: String): kotlinx.coroutines.flow.Flow<JSONObject>
+}
+
 /** What the top bar shows. */
 data class AgentStatus(val working: Boolean = false, val label: String = "", val helpers: Int = 0)
 
@@ -49,7 +55,12 @@ class AgentRuntime(
     /** Routines call this when they change, to (re)schedule WorkManager jobs. */
     var onRoutineChanged: suspend (com.past9.phoneaos.data.TriggerRow?) -> Unit = {},
     var onRoutineDeleted: suspend (Long) -> Unit = {},
+    var subscription: SubscriptionEngine? = null,
 ) {
+    /** Our tools, served to Claude Code on 127.0.0.1 with a per-install token. Started on first use. */
+    val mcp by lazy {
+        com.past9.phoneaos.runtime.LocalMcpServer(settings.localToken(), { tools() }, { ChatContext("main", interactive = true) }).start()
+    }
     private val _status = MutableStateFlow(AgentStatus())
     val status: StateFlow<AgentStatus> = _status
     private val pending = ConcurrentHashMap<Long, CompletableDeferred<String>>()
@@ -106,6 +117,7 @@ class AgentRuntime(
             if (!s.composioEnabled) appendLine("- No apps are connected yet (Gmail, Calendar...). If a task needs one, tell the user they can connect apps in Connections.")
             else appendLine("- Connected apps run through apps_find_tools then apps_run. If an app is not connected yet, offer apps_connect.")
             appendLine()
+            appendLine("- To show the user an image (a product photo, a map, a chart from a page), put it in your reply as markdown: ![what it is](https://...). Several images in a row become a swipeable strip.")
             appendLine("STYLE: short and warm. Lead with the answer. Use short bullets for lists. No walls of text. Plain words. No em dashes.")
             if (background) appendLine("\nThis is a BACKGROUND run (a routine). Nobody is watching. Do the work, then finish with a short summary the user will read later. Use notify_user if something needs their attention.")
             if (pinned.isNotEmpty()) { appendLine("\nCORE MEMORIES (pinned)"); pinned.forEach { appendLine("- ${Recall.format(it)}") } }
@@ -154,10 +166,11 @@ class AgentRuntime(
     }
 
     private suspend fun runTurn(userText: String) {
+        if (settings.state.value.mode == PowerMode.SUBSCRIPTION && subscription?.ready == true) return runSubscriptionTurn(userText, subscription!!)
         val provider = providerFactory(settings)
         if (provider == null) {
-            db.chat().insert(ChatItem(kind = "notice", text = if (settings.state.value.mode == PowerMode.CLAUDE_SUBSCRIPTION)
-                "The Claude subscription runtime is not set up on this phone yet. Open Settings to finish setup, or switch to an API key." else "Add an API key in Settings so I can start working."))
+            db.chat().insert(ChatItem(kind = "notice", text = if (settings.state.value.mode == PowerMode.SUBSCRIPTION)
+                "Your ${settings.state.value.subKind.label} subscription isn't set up on this phone yet. Open Settings to finish setup, or switch to an API key." else "Add an API key in Settings so I can start working."))
             return
         }
         _status.value = AgentStatus(true, "Thinking")
@@ -186,6 +199,24 @@ class AgentRuntime(
             _status.value = AgentStatus()
             phone.workFinished()
         }
+    }
+
+    private suspend fun runSubscriptionTurn(userText: String, engine: SubscriptionEngine) {
+        _status.value = AgentStatus(true, "Thinking"); phone.workStarted()
+        try {
+            engine.turn(userText, systemPrompt(userText), settings.extra("claude_session"), mcp.url, settings.localToken()).collect { e ->
+                when (e.optString("type")) {
+                    "session" -> settings.setExtra("claude_session", e.optString("id"))
+                    "text" -> db.chat().insert(ChatItem(kind = "agent", text = e.optString("text")))
+                    "tool" -> _status.value = _status.value.copy(label = labelFor(e.optString("name")))
+                    "error" -> db.chat().insert(ChatItem(kind = "notice", text = "Claude: " + e.optString("message").take(300), meta = JSONObject().put("error", true).toString()))
+                }
+            }
+        } catch (e: CancellationException) {
+            db.chat().insert(ChatItem(kind = "notice", text = "Stopped."))
+        } catch (e: Exception) {
+            db.chat().insert(ChatItem(kind = "notice", text = friendlyError(e), meta = JSONObject().put("error", true).toString()))
+        } finally { _status.value = AgentStatus(); phone.workFinished() }
     }
 
     // ---- helpers & routines -------------------------------------------------------------------
@@ -227,7 +258,7 @@ class AgentRuntime(
         } finally { phone.workFinished() }
     }
 
-    fun clearConversation() = scope.launch { db.chat().clear(); db.chat().clearTurns("main") }
+    fun clearConversation() = scope.launch { db.chat().clear(); db.chat().clearTurns("main"); settings.setExtra("claude_session", null) }
 
     // ---- tool context -----------------------------------------------------------------------
 
@@ -254,10 +285,14 @@ class AgentRuntime(
             val st = s.state.value
             if (st.mode != PowerMode.API_KEY) return null
             val key = s.apiKey(st.provider) ?: return null
-            return when (st.provider) {
-                Provider.ANTHROPIC -> AnthropicProvider(key, st.provider.baseUrl)
-                else -> OpenAiCompatProvider(st.provider.name.lowercase(), key, st.provider.baseUrl)
-            }
+            return providerFor(st.provider, key, st.baseUrl)
+        }
+
+        fun providerFor(p: Provider, key: String, baseUrl: String = p.baseUrl): LlmProvider = when (p) {
+            Provider.ANTHROPIC -> AnthropicProvider(key, baseUrl.ifBlank { p.baseUrl })
+            // DeepSeek reasons by default and can spend a whole small budget thinking; tool use is snappier without it.
+            Provider.DEEPSEEK -> OpenAiCompatProvider("deepseek", key, baseUrl.ifBlank { p.baseUrl }, extra = JSONObject().put("thinking", JSONObject().put("type", "disabled")))
+            else -> OpenAiCompatProvider(p.name.lowercase(), key, baseUrl.ifBlank { p.baseUrl })
         }
 
         fun labelFor(tool: String) = when {

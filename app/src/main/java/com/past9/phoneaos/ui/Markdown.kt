@@ -30,11 +30,15 @@ fun Markdown(text: String, modifier: Modifier = Modifier, style: TextStyle = Mat
     val codeBg = MaterialTheme.colorScheme.surfaceContainerHigh
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         text.trim().split("\n").fold(mutableListOf<String>()) { acc, line ->
-            if (line.isBlank()) acc += "" else if (acc.isNotEmpty() && acc.last().isNotEmpty() && !isBlockStart(line) && !isBlockStart(acc.last())) acc[acc.lastIndex] = acc.last() + " " + line.trim() else acc += line
+            val pureImage = line.isNotBlank() && splitImages(line).first.isEmpty()
+            if (pureImage && acc.isNotEmpty() && acc.last().isNotEmpty() && splitImages(acc.last()).first.isEmpty()) acc[acc.lastIndex] = acc.last() + " " + line.trim()
+            else if (line.isBlank()) acc += "" else if (acc.isNotEmpty() && acc.last().isNotEmpty() && !isBlockStart(line) && !isBlockStart(acc.last())) acc[acc.lastIndex] = acc.last() + " " + line.trim() else acc += line
             acc
-        }.filter { it.isNotEmpty() }.forEach { line ->
+        }.filter { it.isNotEmpty() }.forEach { raw ->
+            val (line, images) = splitImages(raw)
             val t = line.trimStart()
             when {
+                t.isEmpty() -> {}
                 t.startsWith("#") -> Text(inline(t.trimStart('#').trim(), link, codeBg), style = MaterialTheme.typography.titleMedium, color = color)
                 Regex("^[-*•] ").containsMatchIn(t) -> Row {
                     Text("•", style = style, color = MaterialTheme.colorScheme.primary, modifier = Modifier.width(18.dp).padding(start = 4.dp))
@@ -47,6 +51,7 @@ fun Markdown(text: String, modifier: Modifier = Modifier, style: TextStyle = Mat
                 }
                 else -> Text(inline(t, link, codeBg), style = style, color = color)
             }
+            if (images.isNotEmpty()) ImageStrip(images, Modifier.padding(vertical = 4.dp))
         }
     }
 }

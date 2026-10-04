@@ -72,32 +72,51 @@ class MorphShape(private val morph: Morph, private val progress: Float) : Shape 
 
 fun RoundedPolygon.unit(): RoundedPolygon = normalized()
 
+/** A mascot: its resting shape, the shape it breathes into while working, and whether it may spin. */
+data class Mascot(val id: String, val label: String, val rest: RoundedPolygon, val busy: RoundedPolygon, val spins: Boolean)
+
+val Mascots = listOf(
+    Mascot("scout", "Scout", MaterialShapes.Cookie9Sided, MaterialShapes.SoftBurst, true),
+    Mascot("ghost", "Ghost", MaterialShapes.Ghostish, MaterialShapes.Ghostish, false),
+    Mascot("clover", "Clover", MaterialShapes.Clover4Leaf, MaterialShapes.Clover8Leaf, true),
+    Mascot("bloom", "Bloom", MaterialShapes.Flower, MaterialShapes.Sunny, true),
+    Mascot("puff", "Puff", MaterialShapes.Puffy, MaterialShapes.Cookie12Sided, false),
+    Mascot("gem", "Gem", MaterialShapes.Gem, MaterialShapes.PuffyDiamond, false),
+    Mascot("pebble", "Pebble", MaterialShapes.Pill, MaterialShapes.Oval, false),
+    Mascot("heart", "Heart", MaterialShapes.Heart, MaterialShapes.Heart, false),
+    Mascot("bun", "Bun", MaterialShapes.Bun, MaterialShapes.Arch, false),
+)
+
+fun mascotOf(id: String) = Mascots.firstOrNull { it.id == id } ?: Mascots.first()
+
 /**
- * THE MASCOT SLOT. Today it is a shape: a calm cookie at rest that breathes into a sunny burst
- * and slowly turns while the agent works (only the radially-symmetric shape rotates). The
- * customizable mascot drops in here later without touching any screen.
+ * THE MASCOT SLOT. The user's chosen shape with a face. At rest it sits still; while the agent
+ * works it breathes into its busy shape (and turns, if the shape is radially symmetric; a
+ * spinning ghost or heart would look broken, so those bob instead). The customizable
+ * character drops in here later without touching any screen.
  */
 @Composable
-fun AgentAvatar(working: Boolean, modifier: Modifier = Modifier, size: Dp = 40.dp, needsYou: Boolean = false) {
-    val morph = remember { Morph(MaterialShapes.Cookie9Sided.unit(), MaterialShapes.SoftBurst.unit()) }
+fun AgentAvatar(working: Boolean, modifier: Modifier = Modifier, size: Dp = 40.dp, needsYou: Boolean = false, mascot: String? = null, color: Color? = null) {
+    val m = mascotOf(mascot ?: com.past9.phoneaos.ui.theme.LocalMascot.current)
+    val morph = remember(m) { Morph(m.rest.unit(), m.busy.unit()) }
     val t = rememberInfiniteTransition(label = "avatar")
     val spin by t.animateFloat(0f, 360f, infiniteRepeatable(tween(9000, easing = LinearEasing)), label = "spin")
     val breathe by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1400), RepeatMode.Reverse), label = "breathe")
     val amount by animateFloatAsState(if (working) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = 380f), label = "work")
-    val color = when {
-        needsYou -> MaterialTheme.colorScheme.tertiary
-        else -> MaterialTheme.colorScheme.primary
-    }
+    val fill = color ?: if (needsYou) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
+    val eye = if (needsYou && color == null) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onPrimary
     Box(modifier.size(size), contentAlignment = Alignment.Center) {
         Box(
             Modifier.fillMaxSize()
-                .graphicsLayer { rotationZ = spin * amount; val s = 1f + 0.04f * breathe * amount; scaleX = s; scaleY = s }
+                .graphicsLayer {
+                    if (m.spins) rotationZ = spin * amount else translationY = -size.toPx() * 0.05f * breathe * amount
+                    val s = 1f + 0.04f * breathe * amount; scaleX = s; scaleY = s
+                }
                 .clip(MorphShape(morph, (0.15f + 0.85f * breathe) * amount))
-                .background(color)
+                .background(fill)
         )
-        // Eyes: the smallest hint of a character, so the mascot has somewhere to grow from.
-        Row(horizontalArrangement = Arrangement.spacedBy(size * 0.14f)) {
-            repeat(2) { Box(Modifier.size(size * 0.09f, size * 0.15f).clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.onPrimary.takeIf { !needsYou } ?: MaterialTheme.colorScheme.onTertiary)) }
+        Row(horizontalArrangement = Arrangement.spacedBy(size * 0.14f), modifier = Modifier.graphicsLayer { if (!m.spins) translationY = -size.toPx() * 0.05f * breathe * amount }) {
+            repeat(2) { Box(Modifier.size(size * 0.09f, size * 0.15f).clip(RoundedCornerShape(50)).background(eye)) }
         }
     }
 }

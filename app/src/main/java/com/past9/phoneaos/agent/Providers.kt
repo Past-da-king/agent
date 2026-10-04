@@ -77,12 +77,15 @@ class AnthropicProvider(private val apiKey: String, private val baseUrl: String 
 }
 
 /** OpenAI Chat Completions shape: OpenAI, OpenRouter and Gemini's OpenAI-compatible endpoint. */
-class OpenAiCompatProvider(override val name: String, private val apiKey: String, private val baseUrl: String, private val http: OkHttpClient = sharedHttp) : LlmProvider {
+class OpenAiCompatProvider(override val name: String, private val apiKey: String, private val baseUrl: String, private val http: OkHttpClient = sharedHttp,
+                           /** Provider-specific body fields, e.g. DeepSeek's thinking switch. */
+                           private val extra: JSONObject = JSONObject()) : LlmProvider {
 
     override suspend fun complete(system: String, messages: List<Msg>, tools: List<ToolSpec>, model: String, maxTokens: Int): Completion {
         val wire = JSONArray().put(JSONObject().put("role", "system").put("content", system))
         messages.forEach { m -> toWire(m).forEach { wire.put(it) } }
-        val body = JSONObject().put("model", model).put("messages", wire)
+        val body = JSONObject().put("model", model).put("messages", wire).put("max_tokens", maxTokens)
+        extra.keys().forEach { body.put(it, extra.get(it)) }
         if (tools.isNotEmpty()) body.put("tools", JSONArray().apply {
             tools.forEach { put(JSONObject().put("type", "function").put("function", JSONObject().put("name", it.name).put("description", it.description).put("parameters", it.schema))) }
         })

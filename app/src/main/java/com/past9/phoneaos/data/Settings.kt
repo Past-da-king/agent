@@ -8,13 +8,22 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /** How the agent is powered. */
-enum class PowerMode { NONE, API_KEY, CLAUDE_SUBSCRIPTION }
+enum class PowerMode { NONE, API_KEY, SUBSCRIPTION }
+
+/** Subscriptions people already pay for that come with a coding-agent CLI we can run in-app. */
+enum class SubKind(val label: String, val plan: String, val line: String) {
+    CLAUDE("Claude", "Pro or Max", "Claude Code runs inside the app on your Claude plan."),
+    CODEX("ChatGPT", "Plus or Pro", "OpenAI's Codex runs inside the app on your ChatGPT plan."),
+    OPENCODE("OpenCode", "Zen or Go", "OpenCode runs inside the app on your OpenCode plan."),
+}
 
 enum class Provider(val label: String, val defaultModel: String, val helperModel: String, val baseUrl: String, val keyHint: String) {
     ANTHROPIC("Anthropic", "claude-sonnet-5-5", "claude-haiku-4-5-20251001", "https://api.anthropic.com/v1", "sk-ant-..."),
     OPENAI("OpenAI", "gpt-5", "gpt-5-mini", "https://api.openai.com/v1", "sk-..."),
     GEMINI("Google Gemini", "gemini-2.5-flash", "gemini-2.5-flash-lite", "https://generativelanguage.googleapis.com/v1beta/openai", "AIza..."),
+    DEEPSEEK("DeepSeek", "deepseek-flash", "deepseek-flash", "https://api.deepseek.com/v1", "sk-..."),
     OPENROUTER("OpenRouter", "openrouter/auto", "openrouter/auto", "https://openrouter.ai/api/v1", "sk-or-..."),
+    CUSTOM("Other (OpenAI-compatible)", "", "", "", "Key for that service"),
 }
 
 data class AgentSettings(
@@ -28,10 +37,14 @@ data class AgentSettings(
     val speakReplies: Boolean = false,
     val composioEnabled: Boolean = false,
     val onboarded: Boolean = false,
+    val baseUrl: String = "",
+    val accent: String = "iris",
+    val mascot: String = "scout",
+    val subKind: SubKind = SubKind.CLAUDE,
 ) {
     val ready: Boolean get() = when (mode) {
         PowerMode.API_KEY -> hasKey
-        PowerMode.CLAUDE_SUBSCRIPTION -> true
+        PowerMode.SUBSCRIPTION -> true
         PowerMode.NONE -> false
     }
 }
@@ -70,13 +83,21 @@ class SettingsStore(context: Context) {
             speakReplies = prefs.getBoolean("speakReplies", false),
             composioEnabled = !secrets.getString("composio", null).isNullOrBlank(),
             onboarded = prefs.getBoolean("onboarded", false),
+            baseUrl = prefs.getString("baseUrl", null) ?: provider.baseUrl,
+            accent = prefs.getString("accent", "iris") ?: "iris",
+            mascot = prefs.getString("mascot", "scout") ?: "scout",
+            subKind = runCatching { SubKind.valueOf(prefs.getString("subKind", "CLAUDE")!!) }.getOrDefault(SubKind.CLAUDE),
         )
     }
 
     private fun edit(block: SharedPreferences.Editor.() -> Unit) { prefs.edit().apply(block).apply(); _state.value = read() }
 
     fun setMode(mode: PowerMode) = edit { putString("mode", mode.name) }
-    fun setProvider(p: Provider) = edit { putString("provider", p.name); remove("model"); remove("helperModel") }
+    fun setProvider(p: Provider) = edit { putString("provider", p.name); remove("model"); remove("helperModel"); remove("baseUrl") }
+    fun setBaseUrl(url: String) = edit { putString("baseUrl", url.trim().trimEnd('/')) }
+    fun setSubKind(k: SubKind) = edit { putString("subKind", k.name) }
+    fun setAccent(a: String) = edit { putString("accent", a) }
+    fun setMascot(m: String) = edit { putString("mascot", m) }
     fun setModel(model: String) = edit { putString("model", model.trim()) }
     fun setHelperModel(model: String) = edit { putString("helperModel", model.trim()) }
     fun setUserName(name: String) = edit { putString("userName", name.trim()) }
@@ -102,6 +123,9 @@ class SettingsStore(context: Context) {
     fun localToken(): String = secrets.getString("local_token", null) ?: java.util.UUID.randomUUID().toString().also {
         secrets.edit().putString("local_token", it).apply()
     }
+
+    fun extra(key: String): String? = prefs.getString("x_$key", null)
+    fun setExtra(key: String, value: String?) { prefs.edit().apply { if (value == null) remove("x_$key") else putString("x_$key", value) }.apply() }
 
     fun resetAll() { prefs.edit().clear().apply(); secrets.edit().clear().apply(); _state.value = read() }
 }
