@@ -1,0 +1,107 @@
+package com.past9.phoneaos.data
+
+import android.content.Context
+import android.content.SharedPreferences
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+
+/** How the agent is powered. */
+enum class PowerMode { NONE, API_KEY, CLAUDE_SUBSCRIPTION }
+
+enum class Provider(val label: String, val defaultModel: String, val helperModel: String, val baseUrl: String, val keyHint: String) {
+    ANTHROPIC("Anthropic", "claude-sonnet-5-5", "claude-haiku-4-5-20251001", "https://api.anthropic.com/v1", "sk-ant-..."),
+    OPENAI("OpenAI", "gpt-5", "gpt-5-mini", "https://api.openai.com/v1", "sk-..."),
+    GEMINI("Google Gemini", "gemini-2.5-flash", "gemini-2.5-flash-lite", "https://generativelanguage.googleapis.com/v1beta/openai", "AIza..."),
+    OPENROUTER("OpenRouter", "openrouter/auto", "openrouter/auto", "https://openrouter.ai/api/v1", "sk-or-..."),
+}
+
+data class AgentSettings(
+    val mode: PowerMode = PowerMode.NONE,
+    val provider: Provider = Provider.ANTHROPIC,
+    val model: String = Provider.ANTHROPIC.defaultModel,
+    val helperModel: String = Provider.ANTHROPIC.helperModel,
+    val hasKey: Boolean = false,
+    val userName: String = "",
+    val agentName: String = "Your agent",
+    val speakReplies: Boolean = false,
+    val composioEnabled: Boolean = false,
+    val onboarded: Boolean = false,
+) {
+    val ready: Boolean get() = when (mode) {
+        PowerMode.API_KEY -> hasKey
+        PowerMode.CLAUDE_SUBSCRIPTION -> true
+        PowerMode.NONE -> false
+    }
+}
+
+/**
+ * Plain settings in SharedPreferences; secrets (API keys, OAuth tokens) in an
+ * EncryptedSharedPreferences file keyed by the Android Keystore. Nothing leaves the phone.
+ */
+class SettingsStore(context: Context) {
+    private val prefs: SharedPreferences = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+    private val secrets: SharedPreferences = try {
+        EncryptedSharedPreferences.create(
+            context, "secrets",
+            MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+        )
+    } catch (e: Throwable) {
+        // Robolectric and a few broken keystores: fall back to private prefs rather than crash.
+        context.getSharedPreferences("secrets_fallback", Context.MODE_PRIVATE)
+    }
+
+    private val _state = MutableStateFlow(read())
+    val state: StateFlow<AgentSettings> = _state
+
+    private fun read(): AgentSettings {
+        val provider = runCatching { Provider.valueOf(prefs.getString("provider", Provider.ANTHROPIC.name)!!) }.getOrDefault(Provider.ANTHROPIC)
+        return AgentSettings(
+            mode = runCatching { PowerMode.valueOf(prefs.getString("mode", PowerMode.NONE.name)!!) }.getOrDefault(PowerMode.NONE),
+            provider = provider,
+            model = prefs.getString("model", null) ?: provider.defaultModel,
+            helperModel = prefs.getString("helperModel", null) ?: provider.helperModel,
+            hasKey = !secrets.getString("key_${provider.name}", null).isNullOrBlank(),
+            userName = prefs.getString("userName", "") ?: "",
+            agentName = prefs.getString("agentName", null)?.takeIf { it.isNotBlank() } ?: "Your agent",
+            speakReplies = prefs.getBoolean("speakReplies", false),
+            composioEnabled = !secrets.getString("composio", null).isNullOrBlank(),
+            onboarded = prefs.getBoolean("onboarded", false),
+        )
+    }
+
+    private fun edit(block: SharedPreferences.Editor.() -> Unit) { prefs.edit().apply(block).apply(); _state.value = read() }
+
+    fun setMode(mode: PowerMode) = edit { putString("mode", mode.name) }
+    fun setProvider(p: Provider) = edit { putString("provider", p.name); remove("model"); remove("helperModel") }
+    fun setModel(model: String) = edit { putString("model", model.trim()) }
+    fun setHelperModel(model: String) = edit { putString("helperModel", model.trim()) }
+    fun setUserName(name: String) = edit { putString("userName", name.trim()) }
+    fun setAgentName(name: String) = edit { putString("agentName", name.trim()) }
+    fun setSpeakReplies(on: Boolean) = edit { putBoolean("speakReplies", on) }
+
+    fun apiKey(p: Provider = _state.value.provider): String? = secrets.getString("key_${p.name}", null)
+    fun setApiKey(p: Provider, key: String) { secrets.edit().putString("key_${p.name}", key.trim()).apply(); _state.value = read() }
+    fun clearApiKey(p: Provider) { secrets.edit().remove("key_${p.name}").apply(); _state.value = read() }
+
+    fun composioKey(): String? = secrets.getString("composio", null)
+    fun setComposioKey(key: String?) { secrets.edit().apply { if (key.isNullOrBlank()) remove("composio") else putString("composio", key.trim()) }.apply(); _state.value = read() }
+
+    /** Stable per-install id: our Composio user id, so connections survive restarts. */
+    fun installId(): String = prefs.getString("install_id", null) ?: ("phone-" + java.util.UUID.randomUUID().toString().take(12)).also {
+        prefs.edit().putString("install_id", it).apply()
+    }
+
+    fun onboarded(): Boolean = prefs.getBoolean("onboarded", false)
+    fun setOnboarded(v: Boolean) = edit { putBoolean("onboarded", v) }
+
+    /** A per-install secret the localhost APIs require, so other apps on the phone cannot drive us. */
+    fun localToken(): String = secrets.getString("local_token", null) ?: java.util.UUID.randomUUID().toString().also {
+        secrets.edit().putString("local_token", it).apply()
+    }
+
+    fun resetAll() { prefs.edit().clear().apply(); secrets.edit().clear().apply(); _state.value = read() }
+}

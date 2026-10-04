@@ -1,0 +1,300 @@
+package com.past9.phoneaos.agent
+
+import android.content.Context
+import com.past9.phoneaos.data.AppDb
+import com.past9.phoneaos.data.ChatItem
+import com.past9.phoneaos.data.PowerMode
+import com.past9.phoneaos.data.Provider
+import com.past9.phoneaos.data.SettingsStore
+import com.past9.phoneaos.data.TurnRow
+import com.past9.phoneaos.tools.*
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import org.json.JSONObject
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.util.concurrent.ConcurrentHashMap
+
+/** What the top bar shows. */
+data class AgentStatus(val working: Boolean = false, val label: String = "", val helpers: Int = 0)
+
+/** Hooks into the phone that the runtime needs but should not own (so tests can fake them). */
+interface PhoneBridge {
+    fun notify(title: String, body: String, questionItemId: Long? = null, options: List<String> = emptyList())
+    fun openLink(url: String)
+    fun workStarted()
+    fun workFinished()
+}
+
+/**
+ * The ONE agent. Owns the conversation, builds the system prompt (memory, tasks, time), runs the
+ * provider-neutral loop on the app's own scope so it keeps going when the screen goes away, and
+ * turns everything the loop does into chat items the UI renders.
+ */
+class AgentRuntime(
+    private val context: Context,
+    val db: AppDb,
+    val settings: SettingsStore,
+    private val scope: CoroutineScope,
+    private val phone: PhoneBridge,
+    /** Overridable for tests: build a provider from settings. */
+    private val providerFactory: (SettingsStore) -> LlmProvider? = ::defaultProvider,
+    /** Routines call this when they change, to (re)schedule WorkManager jobs. */
+    var onRoutineChanged: suspend (com.past9.phoneaos.data.TriggerRow?) -> Unit = {},
+    var onRoutineDeleted: suspend (Long) -> Unit = {},
+) {
+    private val _status = MutableStateFlow(AgentStatus())
+    val status: StateFlow<AgentStatus> = _status
+    private val pending = ConcurrentHashMap<Long, CompletableDeferred<String>>()
+    private val turnLock = Mutex()
+    private var job: Job? = null
+
+    val composio = ComposioClient({ settings.composioKey() }, settings.installId())
+
+    fun tools(forHelper: Boolean = false): List<Tool> {
+        val list = mutableListOf<Tool>(
+            NowTool(), WebFetchTool(),
+            MemorySearchTool(db.memory()), MemorySaveTool(db.memory()), MemoryUpdateTool(db.memory()),
+            TaskListTool(db.tasks()), TaskAddTool(db.tasks()), TaskUpdateTool(db.tasks()), GoalCreateTool(db.tasks()),
+        )
+        list += browserTools(context).filter { !forHelper || it !is BrowserHandoffTool }
+        if (settings.state.value.composioEnabled) {
+            list += AppsListTool(composio); list += AppsFindToolsTool(composio)
+            list += GuardedAppsRunTool(AppsRunTool(composio))
+            if (!forHelper) list += AppsConnectTool(composio) { _, url -> phone.openLink(url) }
+        }
+        if (!forHelper) {
+            list += AskUserTool(); list += ApprovalTool(); list += NotifyTool()
+            list += ScheduleCreateTool(db.triggers()) { onRoutineChanged(it) }
+            list += ScheduleListTool(db.triggers())
+            list += ScheduleDeleteTool(db.triggers()) { onRoutineDeleted(it) }
+            list += DelegateTool { task, label, ctx -> runHelper(task, label, ctx) }
+        }
+        return list
+    }
+
+    // ---- prompt ---------------------------------------------------------------------------
+
+    suspend fun systemPrompt(latestUserText: String, background: Boolean = false): String {
+        val s = settings.state.value
+        val now = ZonedDateTime.now()
+        val pinned = db.memory().pinned()
+        val recalled = Recall.rank(latestUserText, db.memory().list(), 6).filter { m -> pinned.none { it.id == m.id } }
+        val goals = db.tasks().openGoals(); val tasks = db.tasks().openTasks()
+        return buildString {
+            if (s.agentName != "Your agent") appendLine("Your name is ${s.agentName}.")
+            appendLine("You are the user's personal agent, living on their Android phone. One agent, one ongoing conversation. You get things done for them: find, fetch, plan, follow up, remember.")
+            if (s.userName.isNotBlank()) appendLine("The user's name is ${s.userName}.")
+            appendLine("Now: ${now.format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy, HH:mm"))} (${now.zone}). Always resolve 'today', 'tomorrow', '10am' in THIS timezone and read concrete dates back to the user.")
+            appendLine()
+            appendLine("HOW YOU WORK")
+            appendLine("- Do the work yourself with your tools instead of telling the user how. Only ask when it is a real choice (ask_user with buttons).")
+            appendLine("- Before anything goes out in their name, costs money, or deletes something: request_approval with the exact content. Never skip this.")
+            appendLine("- Memory is yours to keep. When you learn something durable about them (people, preferences, plans, accounts, decisions) save it with memory_save right away. Search memory before asking anything they may have told you. Fix wrong memories.")
+            appendLine("- Bigger asks become a goal with tasks (goal_create); tick tasks off as you go.")
+            appendLine("- For parallel research or many pages, use delegate to run helper agents at once.")
+            appendLine("- The browser_* tools drive your own background browser; it keeps going while the user is in other apps. If a page needs them (sign-in, captcha) use browser_handoff.")
+            appendLine("- Recurring or later work becomes a routine (routine_create).")
+            appendLine("- Facts like phone numbers, addresses, prices and opening hours must come from a page you actually read this session; name the source. If you could not verify it, say so. Never invent.")
+            if (!s.composioEnabled) appendLine("- No apps are connected yet (Gmail, Calendar...). If a task needs one, tell the user they can connect apps in Connections.")
+            else appendLine("- Connected apps run through apps_find_tools then apps_run. If an app is not connected yet, offer apps_connect.")
+            appendLine()
+            appendLine("STYLE: short and warm. Lead with the answer. Use short bullets for lists. No walls of text. Plain words. No em dashes.")
+            if (background) appendLine("\nThis is a BACKGROUND run (a routine). Nobody is watching. Do the work, then finish with a short summary the user will read later. Use notify_user if something needs their attention.")
+            if (pinned.isNotEmpty()) { appendLine("\nCORE MEMORIES (pinned)"); pinned.forEach { appendLine("- ${Recall.format(it)}") } }
+            if (recalled.isNotEmpty()) { appendLine("\nPOSSIBLY RELEVANT MEMORIES"); recalled.forEach { appendLine("- ${Recall.format(it)}") } }
+            if (goals.isNotEmpty() || tasks.isNotEmpty()) {
+                appendLine("\nOPEN GOALS AND TASKS")
+                goals.forEach { appendLine("- Goal #${it.id}: ${it.title}") }
+                tasks.take(25).forEach { appendLine("- Task #${it.id} [${it.status}] ${it.title}${it.goalId?.let { g -> " (goal #$g)" } ?: ""}") }
+            }
+        }
+    }
+
+    // ---- the main conversation --------------------------------------------------------------
+
+    fun send(text: String) {
+        val clean = text.trim(); if (clean.isEmpty()) return
+        job = scope.launch {
+            db.chat().insert(ChatItem(kind = "user", text = clean))
+            turnLock.withLock { runTurn(clean) }
+        }
+    }
+
+    /** Wait for the current turn to finish (tests, and routines that must not overlap a turn). */
+    suspend fun awaitIdle() { job?.join() }
+
+    fun stop() {
+        job?.cancel(); job = null
+        pending.values.forEach { it.cancel() }; pending.clear()
+        _status.value = AgentStatus()
+    }
+
+    /** The user tapped an option on a question card (in the app or on a notification). */
+    fun answer(itemId: Long, option: String) {
+        scope.launch {
+            db.chat().get(itemId)?.let { db.chat().update(it.copy(meta = JSONObject(it.meta).put("answer", option).toString())) }
+            pending.remove(itemId)?.complete(option)
+        }
+    }
+
+    private suspend fun loadHistory(thread: String): MutableList<Msg> {
+        val rows = db.chat().recentTurns(thread, 60).reversed()
+        val msgs = rows.mapNotNull { runCatching { Msg.fromJson(JSONObject(it.json)) }.getOrNull() }.toMutableList()
+        // Never start mid tool-exchange: the first message must be a real user message.
+        while (msgs.isNotEmpty() && !(msgs.first().role == Role.USER && msgs.first().blocks.any { it is Block.Text })) msgs.removeAt(0)
+        return msgs
+    }
+
+    private suspend fun runTurn(userText: String) {
+        val provider = providerFactory(settings)
+        if (provider == null) {
+            db.chat().insert(ChatItem(kind = "notice", text = if (settings.state.value.mode == PowerMode.CLAUDE_SUBSCRIPTION)
+                "The Claude subscription runtime is not set up on this phone yet. Open Settings to finish setup, or switch to an API key." else "Add an API key in Settings so I can start working."))
+            return
+        }
+        _status.value = AgentStatus(true, "Thinking")
+        phone.workStarted()
+        val history = loadHistory("main")
+        val first = Msg.user(userText)
+        history += first; db.chat().insertTurn(TurnRow(thread = "main", json = first.toJson().toString()))
+        val ctx = ChatContext("main", interactive = true)
+        try {
+            val s = settings.state.value
+            AgentLoop(provider, s.model, tools()).run(systemPrompt(userText), history, ctx,
+                onEvent = { e ->
+                    when (e) {
+                        is AgentEvent.Thinking -> _status.value = _status.value.copy(working = true, label = if (e.step == 1) "Thinking" else "Working")
+                        is AgentEvent.Said -> db.chat().insert(ChatItem(kind = "agent", text = e.text))
+                        is AgentEvent.ToolStarted -> _status.value = _status.value.copy(label = labelFor(e.call.name))
+                        is AgentEvent.ToolFinished -> {}
+                    }
+                },
+                onAppend = { m -> db.chat().insertTurn(TurnRow(thread = "main", json = m.toJson().toString())) })
+        } catch (e: CancellationException) {
+            db.chat().insert(ChatItem(kind = "notice", text = "Stopped."))
+        } catch (e: Exception) {
+            db.chat().insert(ChatItem(kind = "notice", text = friendlyError(e), meta = JSONObject().put("error", true).toString()))
+        } finally {
+            _status.value = AgentStatus()
+            phone.workFinished()
+        }
+    }
+
+    // ---- helpers & routines -------------------------------------------------------------------
+
+    private suspend fun runHelper(task: String, label: String, parent: ToolContext): String {
+        val provider = providerFactory(settings) ?: error("No provider")
+        _status.value = _status.value.copy(helpers = _status.value.helpers + 1)
+        val itemId = db.chat().insert(ChatItem(kind = "helper", text = task, meta = JSONObject().put("label", label).put("state", "working").toString()))
+        val ctx = ChatContext(label, interactive = false, parentAsk = parent)
+        return try {
+            val history = mutableListOf(Msg.user(task))
+            val sys = systemPrompt(task) + "\n\nYou are a HELPER the main agent started. Do this one job with your tools, then reply with only the findings (facts, links, numbers), no chat. Do not ask the user anything."
+            val result = AgentLoop(provider, settings.state.value.helperModel, tools(forHelper = true), maxSteps = 12).run(sys, history, ctx)
+            db.chat().get(itemId)?.let { db.chat().update(it.copy(meta = JSONObject(it.meta).put("state", "done").put("result", result.take(4000)).toString())) }
+            result
+        } catch (e: Exception) {
+            db.chat().get(itemId)?.let { db.chat().update(it.copy(meta = JSONObject(it.meta).put("state", "failed").toString())) }
+            throw e
+        } finally {
+            _status.value = _status.value.copy(helpers = (_status.value.helpers - 1).coerceAtLeast(0))
+        }
+    }
+
+    /** Run a routine with nobody watching. Posts its summary into the chat and as a notification. */
+    suspend fun runBackground(name: String, prompt: String): String {
+        val provider = providerFactory(settings) ?: return "No AI provider configured"
+        val ctx = ChatContext("routine", interactive = false)
+        val history = mutableListOf(Msg.user("Routine \"$name\": $prompt"))
+        phone.workStarted()
+        return try {
+            val out = AgentLoop(provider, settings.state.value.model, tools()).run(systemPrompt(prompt, background = true), history, ctx)
+            db.chat().insert(ChatItem(kind = "agent", text = out, meta = JSONObject().put("routine", name).toString()))
+            phone.notify(name, out.lineSequence().firstOrNull { it.isNotBlank() }?.take(180) ?: "Done")
+            out
+        } catch (e: Exception) {
+            val msg = friendlyError(e)
+            db.chat().insert(ChatItem(kind = "notice", text = "Routine \"$name\" failed: $msg"))
+            msg
+        } finally { phone.workFinished() }
+    }
+
+    fun clearConversation() = scope.launch { db.chat().clear(); db.chat().clearTurns("main") }
+
+    // ---- tool context -----------------------------------------------------------------------
+
+    private inner class ChatContext(override val agentLabel: String, private val interactive: Boolean, private val parentAsk: ToolContext? = null) : ToolContext {
+        override suspend fun activity(text: String, meta: JSONObject): Long =
+            db.chat().insert(ChatItem(kind = "activity", text = text, meta = meta.put("by", agentLabel).toString()))
+        override suspend fun updateActivity(id: Long, text: String, meta: JSONObject) {
+            db.chat().get(id)?.let { old -> db.chat().update(old.copy(text = text, meta = JSONObject(old.meta).also { m -> meta.keys().forEach { k -> m.put(k, meta.get(k)) } }.toString())) }
+        }
+        override suspend fun ask(question: String, options: List<String>): String? {
+            if (!interactive) return parentAsk?.ask(question, options)
+            val id = db.chat().insert(ChatItem(kind = "question", text = question, meta = JSONObject().put("options", org.json.JSONArray(options)).toString()))
+            val d = CompletableDeferred<String>(); pending[id] = d
+            val prev = _status.value; _status.value = prev.copy(label = "Waiting for you")
+            val isApproval = question.startsWith("APPROVAL|")
+            phone.notify(if (isApproval) "Approve?" else "Your agent has a question", if (isApproval) question.split("|").getOrElse(1) { "" } else question, id, options)
+            return try { d.await() } finally { _status.value = prev }
+        }
+        override suspend fun notify(title: String, body: String) = phone.notify(title, body)
+    }
+
+    companion object {
+        fun defaultProvider(s: SettingsStore): LlmProvider? {
+            val st = s.state.value
+            if (st.mode != PowerMode.API_KEY) return null
+            val key = s.apiKey(st.provider) ?: return null
+            return when (st.provider) {
+                Provider.ANTHROPIC -> AnthropicProvider(key, st.provider.baseUrl)
+                else -> OpenAiCompatProvider(st.provider.name.lowercase(), key, st.provider.baseUrl)
+            }
+        }
+
+        fun labelFor(tool: String) = when {
+            tool.startsWith("browser") -> "Browsing"
+            tool.startsWith("memory") -> "Remembering"
+            tool.startsWith("apps") -> "Using your apps"
+            tool == "delegate" -> "Helpers working"
+            tool == "web_fetch" -> "Reading the web"
+            tool.startsWith("task") || tool.startsWith("goal") -> "Updating tasks"
+            tool.startsWith("routine") -> "Setting up a routine"
+            tool == "ask_user" || tool == "request_approval" -> "Waiting for you"
+            else -> "Working"
+        }
+
+        fun friendlyError(e: Exception): String = when {
+            e is ProviderException && e.status == 401 -> "Your API key was rejected. Check it in Settings."
+            e is ProviderException && e.status == 429 -> "The AI provider says we are sending too much right now (rate limit or out of credit). Try again shortly."
+            e is ProviderException && e.status == 0 -> "I could not reach the AI provider. Check your connection."
+            else -> "Something went wrong: ${e.message?.take(240)}"
+        }
+    }
+}
+
+/**
+ * Write actions in connected apps need the user's yes, enforced in code (not just asked of the
+ * model): sending, posting, deleting, paying, inviting, sharing...
+ */
+class GuardedAppsRunTool(private val inner: AppsRunTool) : Tool {
+    override val spec = inner.spec
+    private val writeWords = Regex("(SEND|REPLY|FORWARD|CREATE|DELETE|REMOVE|TRASH|UPDATE|PATCH|POST|PUBLISH|PAY|PURCHASE|ARCHIVE|MOVE|INVITE|SHARE|ADD|INSERT|UPLOAD|ACCEPT|DECLINE|CANCEL)")
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String {
+        val slug = input.optString("slug").uppercase()
+        if (writeWords.containsMatchIn(slug.substringAfter('_'))) {
+            val args = input.optJSONObject("arguments")?.toString(2)?.take(1500) ?: "{}"
+            val a = ctx.ask("APPROVAL|${slug.lowercase().replace('_', ' ')}|$args", listOf("Approve", "Decline"))
+            if (a != "Approve") return if (a == null) "Needs the user's approval and nobody is around. Not done." else "The user declined. Not done."
+        }
+        return inner.run(input, ctx)
+    }
+}

@@ -1,0 +1,74 @@
+package com.past9.phoneaos.ui
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.dp
+
+/** Just enough markdown for chat: headings, bullets, numbered lists, **bold**, *italic*, `code`, links. */
+@Composable
+fun Markdown(text: String, modifier: Modifier = Modifier, style: TextStyle = MaterialTheme.typography.bodyLarge, color: Color = MaterialTheme.colorScheme.onSurface) {
+    val link = MaterialTheme.colorScheme.primary
+    val codeBg = MaterialTheme.colorScheme.surfaceContainerHigh
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        text.trim().split("\n").fold(mutableListOf<String>()) { acc, line ->
+            if (line.isBlank()) acc += "" else if (acc.isNotEmpty() && acc.last().isNotEmpty() && !isBlockStart(line) && !isBlockStart(acc.last())) acc[acc.lastIndex] = acc.last() + " " + line.trim() else acc += line
+            acc
+        }.filter { it.isNotEmpty() }.forEach { line ->
+            val t = line.trimStart()
+            when {
+                t.startsWith("#") -> Text(inline(t.trimStart('#').trim(), link, codeBg), style = MaterialTheme.typography.titleMedium, color = color)
+                Regex("^[-*•] ").containsMatchIn(t) -> Row {
+                    Text("•", style = style, color = MaterialTheme.colorScheme.primary, modifier = Modifier.width(18.dp).padding(start = 4.dp))
+                    Text(inline(t.drop(2), link, codeBg), style = style, color = color)
+                }
+                Regex("^\\d+[.)] ").containsMatchIn(t) -> Row {
+                    val n = t.substringBefore(' ')
+                    Text(n, style = style.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.primary, modifier = Modifier.width(26.dp))
+                    Text(inline(t.substringAfter(' '), link, codeBg), style = style, color = color)
+                }
+                else -> Text(inline(t, link, codeBg), style = style, color = color)
+            }
+        }
+    }
+}
+
+private fun isBlockStart(l: String) = l.trimStart().let { it.startsWith("#") || Regex("^([-*•]|\\d+[.)]) ").containsMatchIn(it) }
+
+private val token = Regex("""\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)\]\((https?://[^)\s]+)\)|(?<![*\w])\*(?!\s)(.+?)(?<!\s)\*(?!\w)|(https?://[^\s)]+)""")
+
+fun inline(s: String, linkColor: Color, codeBg: Color): AnnotatedString = buildAnnotatedString {
+    var i = 0
+    val linkStyle = TextLinkStyles(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline))
+    token.findAll(s).forEach { m ->
+        append(s.substring(i, m.range.first))
+        val g = m.groupValues
+        when {
+            g[1].isNotEmpty() -> withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(g[1]) }
+            g[2].isNotEmpty() -> withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = codeBg)) { append(" ${g[2]} ") }
+            g[3].isNotEmpty() -> withLink(LinkAnnotation.Url(g[4], linkStyle)) { append(g[3]) }
+            g[5].isNotEmpty() -> withStyle(SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) { append(g[5]) }
+            g[6].isNotEmpty() -> withLink(LinkAnnotation.Url(g[6], linkStyle)) { append(g[6].removePrefix("https://").removePrefix("www.").let { if (it.length > 40) it.take(38) + "…" else it }) }
+        }
+        i = m.range.last + 1
+    }
+    append(s.substring(i))
+}

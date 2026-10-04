@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Agent</string>
+    <string name="share_label">Send to your agent</string>
+</resources>
