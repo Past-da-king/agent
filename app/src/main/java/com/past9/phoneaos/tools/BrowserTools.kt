@@ -95,7 +95,16 @@ class BrowserScreenshotTool(c: Context) : BrowserTool(c) {
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val f = engine(ctx).screenshot() ?: return "Screenshot failed"
         ctx.activity(input.optString("caption").ifBlank { "Screenshot" }, JSONObject().put("tool", "browser").put("image", f.absolutePath))
-        return "Shown to the user."
+        return "Shown to the user. You can see it too:\n[[image:${f.absolutePath}]]"
+    }
+}
+
+/** The agent looks at the page itself (layouts, images, captchas, charts) without bothering the user. */
+class BrowserLookTool(c: Context) : BrowserTool(c) {
+    override val spec = ToolSpec("browser_look", "Take a screenshot of the current page for YOURSELF to look at (when text isn't enough: images, layouts, maps, charts, a button you can't find).", schema())
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String {
+        val f = engine(ctx).screenshot() ?: return "Screenshot failed"
+        return "Here is the page:\n[[image:${f.absolutePath}]]"
     }
 }
 
@@ -110,4 +119,4 @@ class BrowserHandoffTool(c: Context) : BrowserTool(c) {
     }
 }
 
-fun browserTools(c: Context): List<Tool> = listOf(BrowserOpenTool(c), BrowserReadTool(c), BrowserClickTool(c), BrowserTypeTool(c), BrowserKeyTool(c), BrowserWaitTool(c), BrowserScrollTool(c), BrowserBackTool(c), BrowserScreenshotTool(c), BrowserHandoffTool(c))
+fun browserTools(c: Context): List<Tool> = listOf(BrowserOpenTool(c), BrowserReadTool(c), BrowserClickTool(c), BrowserTypeTool(c), BrowserKeyTool(c), BrowserWaitTool(c), BrowserScrollTool(c), BrowserBackTool(c), BrowserScreenshotTool(c), BrowserLookTool(c), BrowserHandoffTool(c))

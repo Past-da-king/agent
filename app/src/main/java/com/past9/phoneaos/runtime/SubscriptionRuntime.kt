@@ -85,7 +85,10 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
     /** Everything we unpacked or downloaded, for every subscription. The libs inside the APK stay. */
     fun delete() { dir.deleteRecursively() }
 
-    private val bin: File get() = File(dir, "bin")
+    val bin: File get() = File(dir, "bin")
+
+    /** Node can run on its own (no sign-in needed): the agent's code tool uses it. */
+    val nodeAvailable: Boolean get() = node.exists()
 
     /** Unpack the bundled JS (Agent SDK + Codex SDK) and wire up bin/ links to the native executables. */
     suspend fun install(progress: (String) -> Unit) = withContext(Dispatchers.IO) {
@@ -142,7 +145,7 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
      * bin/node, bin/rg, bin/codex point into nativeLibraryDir, and that path CHANGES on every app
      * update (/data/app/~~random/...). Re-point them before every run or they dangle.
      */
-    private fun linkBins() {
+    fun linkBins() {
         bin.mkdirs()
         mapOf("node" to "libnode.so", "rg" to "librg.so", "codex" to "libcodex.so").forEach { (name, lib) ->
             val target = File(libDir, lib); val link = File(bin, name)
@@ -152,7 +155,7 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
         }
     }
 
-    private fun env(): Map<String, String> {
+    fun env(): Map<String, String> {
         linkBins()
         val proxy = "http://127.0.0.1:${proxy.start().port}"
         return mapOf(

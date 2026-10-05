@@ -84,6 +84,7 @@ class AgentRuntime(
             MemorySearchTool(db.memory()), MemorySaveTool(db.memory()), MemoryGetTool(db.memory()), MemoryUpdateTool(db.memory()),
             TaskListTool(db.tasks()), TaskAddTool(db.tasks()), TaskUpdateTool(db.tasks()), GoalCreateTool(db.tasks()),
             NotificationsTool(db.notifications()) { settings.state.value.notifApps },
+            RunCodeTool(context),
         )
         if (!forHelper) { list += LocationTool(context); list += NotificationsAllowTool(context, settings); list += NotificationsStopTool(settings); list += FilesPickTool(context); list += PhotosTool(context)
             list += WaitForCodeTool(db, settings, NotificationsAllowTool(context, settings)) }
@@ -125,6 +126,8 @@ class AgentRuntime(
             appendLine("- Phone permissions are OFF until you need one. Need their location (delivery, 'near me')? Use location_get. Need a document from their phone? files_pick. Their latest photo or screenshot? photos_recent. A site sent a one-time code during sign-in? notifications_wait_code picks it up so you can finish on your own. Need to keep an eye on an app's notifications? notifications_allow, then a 'notification' routine, and notifications_stop when done. Don't ask for things you don't need.")
             if (s.notifApps.isNotEmpty()) appendLine("- You can read the phone's notifications from the apps the user allowed (notifications_read): bank alerts, messages, deliveries. Check them when they would help.")
             appendLine("- For parallel research or many pages, use delegate to run helper agents at once.")
+            appendLine("- You have your own small computer: run_code runs JavaScript (Node) on the phone. Use it for maths, data crunching, building files (CSV, HTML, SVG, images) and anything code does better than words.")
+            appendLine("- You can see images: photos the user sends, gallery photos (photos_recent), page screenshots (browser_look), scanned PDFs, and images your code makes.")
             appendLine("- The browser_* tools drive your own background browser; it keeps going while the user is in other apps. If a page needs them (sign-in, captcha) use browser_handoff.")
             appendLine("- Recurring or later work becomes a routine (routine_create).")
             appendLine("- Facts like phone numbers, addresses, prices and opening hours must come from a page you actually read this session; name the source. If you could not verify it, say so. Never invent.")

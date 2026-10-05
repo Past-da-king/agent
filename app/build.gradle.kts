@@ -12,8 +12,8 @@ android {
     applicationId = "com.past9.phoneaos"
     minSdk = 29
     targetSdk = 36
-    versionCode = 6
-    versionName = "0.2.4"
+    versionCode = 7
+    versionName = "0.2.5"
     // The runtime pack (node, codex, ripgrep) is arm64 only, like every phone we target.
     ndk { abiFilters += listOf("arm64-v8a") }
   }
@@ -81,6 +81,7 @@ dependencies {
   implementation(libs.okhttp)
   implementation(libs.androidx.graphics.shapes)
   implementation(libs.coil.compose)
+  implementation(libs.coil.svg)
   implementation(libs.androidx.webkit)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.androidx.credentials)

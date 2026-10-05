@@ -61,7 +61,8 @@ class ComposioClient(
         val items = get("/connected_accounts", mapOf("user_ids" to userId, "limit" to "200")).optJSONArray("items") ?: JSONArray()
         return (0 until items.length()).map { i ->
             val c = items.getJSONObject(i)
-            Connection(c.optString("id"), c.optJSONObject("toolkit")?.optString("slug") ?: "", c.optString("status"), c.optString("alias").ifBlank { c.optJSONObject("toolkit")?.optString("slug") ?: "" })
+            val alias = if (c.isNull("alias")) "" else c.optString("alias")
+            Connection(c.optString("id"), c.optJSONObject("toolkit")?.optString("slug") ?: "", c.optString("status"), alias.ifBlank { c.optJSONObject("toolkit")?.optString("slug") ?: "" })
         }
     }
 

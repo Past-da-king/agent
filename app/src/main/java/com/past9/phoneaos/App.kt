@@ -33,8 +33,11 @@ class Graph(context: Context) {
     }
 }
 
-class App : Application() {
+class App : Application(), coil.ImageLoaderFactory {
     val graph by lazy { Graph(this) }
+
+    /** App logos from Composio are SVGs; teach the image loader to draw them. */
+    override fun newImageLoader(): coil.ImageLoader = coil.ImageLoader.Builder(this).components { add(coil.decode.SvgDecoder.Factory()) }.crossfade(true).build()
 
     companion object {
         @Volatile private var fallback: Graph? = null
