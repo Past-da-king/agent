@@ -117,7 +117,9 @@ fun OnboardingScreen(actions: OnboardingActions, start: OnbStep = OnbStep.HELLO,
                         OnbStep.STYLE -> StyleStep(user, agent, accent, mascot, { accent = it }, { mascot = it }) { actions.chooseStyle(accent, mascot); step = OnbStep.POWER }
                         OnbStep.POWER -> PowerStep(actions.subAvailable,
                             onKey = { actions.choosePower(PowerMode.API_KEY); step = OnbStep.KEY },
-                            onSub = { k -> sub = k; actions.chooseSub(k); actions.choosePower(PowerMode.SUBSCRIPTION); step = OnbStep.SUB })
+                            onSub = { k ->
+                                if (k == SubKind.OPENCODE) { provider = Provider.OPENCODE_GO; actions.choosePower(PowerMode.API_KEY); step = OnbStep.KEY }
+                                else { sub = k; actions.chooseSub(k); actions.choosePower(PowerMode.SUBSCRIPTION); step = OnbStep.SUB } })
                         OnbStep.KEY -> KeyStep(provider, { provider = it }, actions) { step = OnbStep.APPS }
                         OnbStep.SUB -> SubStep(sub, actions.subAvailable(sub), onUseKey = { actions.choosePower(PowerMode.API_KEY); step = OnbStep.KEY }, onSetup = actions.openSubSetup) { step = OnbStep.APPS }
                         OnbStep.APPS -> AppsStep(actions) { step = OnbStep.READY }
@@ -343,7 +345,7 @@ private fun PowerStep(available: (SubKind) -> Boolean, onKey: () -> Unit, onSub:
                         Spacer(Modifier.width(16.dp))
                         Column(Modifier.weight(1f)) {
                             Text("${k.label} ${k.plan}", style = MaterialTheme.typography.titleMedium)
-                            Text(if (available(k)) k.line else "${k.line.substringBefore(" on ")} on your plan. Needs the runtime pack.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                            Text(if (available(k) || k == SubKind.OPENCODE) k.line else "${k.line.substringBefore(" on ")} on your plan. Needs the runtime pack.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
                         Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = cs.onSurfaceVariant)
                     }
@@ -378,6 +380,8 @@ val keySteps = mapOf(
     Provider.OPENAI to ("https://platform.openai.com/api-keys" to listOf("Open platform.openai.com and sign in.", "Go to API keys, then Create new secret key.", "Add credit under Billing.", "Copy the key (it starts with sk-) and paste it below.")),
     Provider.GEMINI to ("https://aistudio.google.com/app/apikey" to listOf("Open aistudio.google.com with your Google account.", "Tap Get API key, then Create API key.", "Gemini has a free tier to start with.", "Copy the key (it starts with AIza) and paste it below.")),
     Provider.DEEPSEEK to ("https://platform.deepseek.com/api_keys" to listOf("Open platform.deepseek.com and sign in.", "Go to API keys, then Create new API key.", "Top up a few dollars under Billing; it goes a long way.", "Copy the key (it starts with sk-) and paste it below.")),
+    Provider.OPENCODE_GO to ("https://opencode.ai/auth" to listOf("Open opencode.ai and sign in.", "Go to your Zen or Go plan's API keys and create one.", "Copy it and paste it below. That's it: no sign-in needed.")),
+    Provider.OPENCODE_ZEN to ("https://opencode.ai/auth" to listOf("Open opencode.ai and sign in.", "Go to your Zen plan's API keys and create one.", "Copy it and paste it below.")),
     Provider.OPENROUTER to ("https://openrouter.ai/settings/keys" to listOf("Open openrouter.ai and sign in.", "Go to Keys, then Create key.", "Add credits to use paid models.", "Copy the key (it starts with sk-or-) and paste it below.")),
     Provider.CUSTOM to ("https://platform.openai.com/docs/api-reference/chat" to listOf("Any service that speaks the OpenAI chat API works: Groq, Together, Mistral, a local server...", "Enter its base URL (usually ending in /v1) and the model name.", "Paste its API key below.")),
 )

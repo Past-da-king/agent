@@ -35,7 +35,12 @@ try {
     else if (m.type === "assistant") {
       for (const b of m.message.content) {
         if (b.type === "text" && b.text.trim()) out({ type: "text", text: b.text });
-        else if (b.type === "tool_use") out({ type: "tool", name: b.name.replace(/^mcp__phone__/, "") });
+        else if (b.type === "tool_use") {
+          // A short, human hint of what the tool is doing (the query, the URL, the file).
+          const i = b.input || {};
+          const detail = i.query || i.url || i.q || i.prompt || i.description || i.path || i.file_path || i.title || i.subject || "";
+          out({ type: "tool", name: b.name.replace(/^mcp__phone__/, ""), detail: String(detail).slice(0, 120) });
+        }
       }
     } else if (m.type === "result") out({ type: "done", ok: m.subtype === "success", session: m.session_id, usage: m.usage, cost: m.total_cost_usd });
   }

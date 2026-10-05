@@ -14,7 +14,7 @@ enum class PowerMode { NONE, API_KEY, SUBSCRIPTION }
 enum class SubKind(val label: String, val plan: String, val line: String) {
     CLAUDE("Claude", "Pro or Max", "Claude Code runs inside the app on your Claude plan."),
     CODEX("ChatGPT", "Plus or Pro", "OpenAI's Codex runs inside the app on your ChatGPT plan."),
-    OPENCODE("OpenCode", "Zen or Go", "OpenCode runs inside the app on your OpenCode plan."),
+    OPENCODE("OpenCode", "Zen or Go", "Paste your OpenCode key and your agent runs on your OpenCode plan."),
 }
 
 enum class Provider(val label: String, val defaultModel: String, val helperModel: String, val baseUrl: String, val keyHint: String) {
@@ -22,6 +22,8 @@ enum class Provider(val label: String, val defaultModel: String, val helperModel
     OPENAI("OpenAI", "gpt-5", "gpt-5-mini", "https://api.openai.com/v1", "sk-..."),
     GEMINI("Google Gemini", "gemini-2.5-flash", "gemini-2.5-flash-lite", "https://generativelanguage.googleapis.com/v1beta/openai", "AIza..."),
     DEEPSEEK("DeepSeek", "deepseek-flash", "deepseek-flash", "https://api.deepseek.com/v1", "sk-..."),
+    OPENCODE_GO("OpenCode Go", "deepseek-v4.1-flash", "deepseek-v4.1-flash", "https://opencode.ai/zen/go/v1", "Your OpenCode key"),
+    OPENCODE_ZEN("OpenCode Zen", "claude-haiku-4-5", "claude-haiku-4-5", "https://opencode.ai/zen/v1", "Your OpenCode key"),
     OPENROUTER("OpenRouter", "openrouter/auto", "openrouter/auto", "https://openrouter.ai/api/v1", "sk-or-..."),
     CUSTOM("Other (OpenAI-compatible)", "", "", "", "Key for that service"),
 }

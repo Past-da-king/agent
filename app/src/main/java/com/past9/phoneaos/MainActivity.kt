@@ -261,6 +261,7 @@ class MainActivity : ComponentActivity() {
                         setMode = g.settings::setMode, setProvider = g.settings::setProvider, setModel = g.settings::setModel, setHelperModel = g.settings::setHelperModel,
                         onChangeKey = { nav.navigate("key") }, setSpeak = g.settings::setSpeakReplies,
                         onClaudeSetup = { nav.navigate("sub") }, onDeleteRuntime = { sub.delete(); info = sub.info() }, onStyle = { nav.navigate("style") },
+                        onPinHome = { com.past9.phoneaos.system.Identity.pinNamedShortcut(this@MainActivity, settings.agentName, settings.mascot, settings.accent) },
                         onClearChat = { g.runtime.clearConversation() },
                         onResetAll = { scope.launch { g.runtime.stop(); g.db.clearAllTables(); g.settings.resetAll() } },
                         onBattery = { runCatching { startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))) } },

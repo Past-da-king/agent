@@ -44,6 +44,18 @@ object Identity {
         return person
     }
 
+    /**
+     * Android won't rename an installed app, so the closest thing: a home-screen shortcut carrying
+     * the agent's own name and face (e.g. "Hina", red ghost) that opens straight into the app.
+     */
+    fun pinNamedShortcut(context: Context, name: String, mascot: String, accent: String): Boolean {
+        if (!androidx.core.content.pm.ShortcutManagerCompat.isRequestPinShortcutSupported(context)) return false
+        val sc = androidx.core.content.pm.ShortcutInfoCompat.Builder(context, "home-$name").setShortLabel(name).setLongLabel(name)
+            .setIcon(androidx.core.graphics.drawable.IconCompat.createWithAdaptiveBitmap(avatar(context, mascot, accent, 216)))
+            .setIntent(android.content.Intent(context, com.past9.phoneaos.MainActivity::class.java).setAction(android.content.Intent.ACTION_MAIN)).build()
+        return androidx.core.content.pm.ShortcutManagerCompat.requestPinShortcut(context, sc, null)
+    }
+
     fun statIcon(context: Context, mascot: String): Int =
         context.resources.getIdentifier("ic_stat_$mascot", "drawable", context.packageName).takeIf { it != 0 } ?: com.past9.phoneaos.R.drawable.ic_stat_agent
 

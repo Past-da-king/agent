@@ -259,7 +259,14 @@ class AgentRuntime(
                         "session" -> newSession = e.optString("id")
                         "text" -> e.optString("text").takeIf { !it.contains("API Error: 401") && !it.startsWith("Failed to authenticate") }
                             ?.let { db.chat().insert(ChatItem(kind = "agent", text = it)) }
-                        "tool" -> _status.value = _status.value.copy(label = labelFor(e.optString("name")))
+                        "tool" -> {
+                            val name = e.optString("name")
+                            _status.value = _status.value.copy(label = labelFor(name))
+                            // Our own phone tools log themselves; show everything else (web search, the
+                            // user's Claude connectors, Codex commands) as a live step too.
+                            if (phoneToolNames.none { it == name }) db.chat().insert(ChatItem(kind = "activity", text = describeExternalTool(name, e.optString("detail")),
+                                meta = JSONObject().put("tool", toolGroup(name)).toString()))
+                        }
                         "done" -> ok = e.optBoolean("ok", true)
                         "error" -> {
                             val m = e.optString("message")
@@ -286,6 +293,8 @@ class AgentRuntime(
             db.chat().insert(ChatItem(kind = "notice", text = friendlyError(e), meta = JSONObject().put("error", true).toString()))
         } finally { _status.value = AgentStatus(); phone.workFinished() }
     }
+
+    private val phoneToolNames by lazy { tools().map { it.spec.name }.toSet() }
 
     // ---- helpers & routines -------------------------------------------------------------------
 
@@ -362,6 +371,20 @@ class AgentRuntime(
             // DeepSeek reasons by default and can spend a whole small budget thinking; tool use is snappier without it.
             Provider.DEEPSEEK -> OpenAiCompatProvider("deepseek", key, baseUrl.ifBlank { p.baseUrl }, extra = JSONObject().put("thinking", JSONObject().put("type", "disabled")))
             else -> OpenAiCompatProvider(p.name.lowercase(), key, baseUrl.ifBlank { p.baseUrl })
+        }
+
+        fun toolGroup(name: String) = when {
+            name.contains("browser", true) -> "browser"; name.contains("search", true) || name.contains("fetch", true) -> "web"
+            name.contains("memory", true) -> "memory"; name.startsWith("mcp__", true) -> "apps"; else -> "code"
+        }
+
+        /** "mcp__claude_ai_Gmail__search_emails" + {"query":"invoice"} -> "Gmail: search emails · invoice" */
+        fun describeExternalTool(name: String, detail: String): String {
+            val clean = name.removePrefix("mcp__").replace("claude_ai_", "").split("__").let { parts ->
+                if (parts.size >= 2) parts[0].replace('_', ' ') + ": " + parts.drop(1).joinToString(" ").replace('_', ' ') else parts[0].replace('_', ' ')
+            }
+            val pretty = when (clean) { "WebSearch" -> "Searching the web"; "WebFetch" -> "Reading a page"; "TodoWrite" -> "Planning"; "Task" -> "Starting a helper"; else -> clean }
+            return pretty + (detail.takeIf { it.isNotBlank() }?.let { " · ${it.take(80)}" } ?: "")
         }
 
         fun labelFor(tool: String) = when {

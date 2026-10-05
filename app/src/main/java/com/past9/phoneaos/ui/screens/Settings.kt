@@ -30,6 +30,7 @@ data class SettingsActions(
     val setSpeak: (Boolean) -> Unit = {},
     val onClaudeSetup: () -> Unit = {},
     val onStyle: () -> Unit = {},
+    val onPinHome: () -> Unit = {},
     val onDeleteRuntime: () -> Unit = {},
     val onClearChat: () -> Unit = {},
     val onResetAll: () -> Unit = {},
@@ -49,6 +50,7 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 Line(Icons.Rounded.Person, "Your name", s.userName.ifBlank { "Not set" }) { editValue = s.userName; edit = "Your name" to actions.setUserName }
                 Line(Icons.Rounded.Face, "Your agent's name", s.agentName) { editValue = s.agentName; edit = "Your agent's name" to actions.setAgentName }
+                Line(Icons.Rounded.AddToHomeScreen, "Put ${s.agentName} on your home screen", "An icon with ${s.agentName}'s name and face") { actions.onPinHome() }
                 Line(Icons.Rounded.Palette, "Colour and sidekick", "${com.past9.phoneaos.ui.theme.accentOf(s.accent).label} · ${com.past9.phoneaos.ui.mascotOf(s.mascot).label}") { actions.onStyle() }
             }
             SectionHeader("Power", "What your agent thinks with", Modifier.padding(start = 4.dp, top = 12.dp))

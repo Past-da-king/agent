@@ -26,7 +26,9 @@ try {
   for await (const e of events) {
     if (e.type === "thread.started") out({ type: "session", id: e.thread_id });
     else if (e.type === "item.completed" && e.item.type === "agent_message") out({ type: "text", text: e.item.text });
-    else if (e.type === "item.started" && e.item.type === "mcp_tool_call") out({ type: "tool", name: e.item.tool });
+    else if (e.type === "item.started" && e.item.type === "mcp_tool_call") out({ type: "tool", name: e.item.server === "phone" ? e.item.tool : `mcp__${e.item.server}__${e.item.tool}` });
+    else if (e.type === "item.started" && e.item.type === "web_search") out({ type: "tool", name: "WebSearch", detail: e.item.query || "" });
+    else if (e.type === "item.started" && e.item.type === "command_execution") out({ type: "tool", name: "Running a command", detail: e.item.command || "" });
     else if (e.type === "turn.completed") out({ type: "done", ok: true, usage: e.usage });
     else if (e.type === "turn.failed" || e.type === "error") out({ type: "error", message: e.error?.message || e.message || "Codex failed" });
   }
