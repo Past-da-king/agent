@@ -4,6 +4,10 @@ plugins {
   alias(libs.plugins.google.devtools.ksp)
 }
 
+// Release signing lives OUTSIDE the repo (never commit a key): ~/phone-aos/keys/signing.properties, or -PsigningProps=<file>.
+val releaseSigning: Map<String, String> = file((project.findProperty("signingProps") as String?) ?: "${System.getProperty("user.home")}/phone-aos/keys/signing.properties")
+  .takeIf { it.exists() }?.readLines()?.filter { "=" in it && !it.startsWith("#") }?.associate { it.substringBefore("=").trim() to it.substringAfter("=").trim() } ?: emptyMap()
+
 android {
   namespace = "com.past9.phoneaos"
   compileSdk = 37
@@ -12,8 +16,8 @@ android {
     applicationId = "com.past9.phoneaos"
     minSdk = 29
     targetSdk = 36
-    versionCode = 29
-    versionName = "0.4.8"
+    versionCode = 30
+    versionName = "0.5.0"
     // Android never lets an installed app rename itself or change the icon Samsung shows on
     // notifications, so a personal build bakes the owner's agent in: -PagentName=Hina -PagentIcon=ic_app_heart_red
     resValue("string", "app_name", (project.findProperty("agentName") as String?) ?: "Agent")
@@ -24,9 +28,16 @@ android {
   // Native executables must be extracted to nativeLibraryDir to be runnable.
   packaging { jniLibs { useLegacyPackaging = true } }
 
+  signingConfigs {
+    if (releaseSigning.isNotEmpty()) create("release") {
+      storeFile = file(releaseSigning.getValue("storeFile")); storePassword = releaseSigning["storePassword"]
+      keyAlias = releaseSigning["keyAlias"]; keyPassword = releaseSigning["keyPassword"]
+    }
+  }
   buildTypes {
     release {
       isMinifyEnabled = false
+      signingConfigs.findByName("release")?.let { signingConfig = it }
     }
   }
   compileOptions {

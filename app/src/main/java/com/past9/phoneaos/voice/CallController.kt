@@ -58,6 +58,8 @@ class CallController(private val context: Context, private val db: AppDb, privat
             When you get an update from the main agent, tell the user the part that matters in a sentence or two. Never invent results.
         """.trimIndent()
         _state.value = CallState(active = true, phase = "connecting")
+        // Started while the call screen is in front, which is what Android requires for the mic.
+        CallService.start(context)
         scope.launch { begin(key, system) }
     }
 
@@ -144,6 +146,7 @@ class CallController(private val context: Context, private val db: AppDb, privat
     fun end() { live?.stop(); _state.value = _state.value.copy(active = false, phase = "ended"); cleanup() }
 
     private fun cleanup() {
+        CallService.stop(context)
         flush()
         // The call becomes part of the conversation: the main agent remembers what was said.
         if (callLines.isNotEmpty()) runtime.rememberCall(transcript(80))
