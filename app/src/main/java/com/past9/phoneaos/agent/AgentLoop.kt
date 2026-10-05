@@ -44,7 +44,8 @@ class AgentLoop(
     private val provider: LlmProvider,
     private val model: String,
     private val tools: List<Tool>,
-    private val maxSteps: Int = 16,
+    /** No cap by default: the agent is long-running and stops when the work is done or the user stops it. */
+    private val maxSteps: Int = Int.MAX_VALUE,
 ) {
     private val byName = tools.associateBy { it.spec.name }
 
@@ -58,6 +59,7 @@ class AgentLoop(
         var lastText = ""
         for (step in 1..maxSteps) {
             onEvent(AgentEvent.Thinking(step))
+            Trim.fit(history)
             val completion = provider.complete(system, history, tools.map { it.spec }, model)
             val reply = completion.message
             history += reply; onAppend(reply)
@@ -83,5 +85,34 @@ class AgentLoop(
             history += resultMsg; onAppend(resultMsg)
         }
         return lastText.ifBlank { "I stopped after $maxSteps steps without finishing. Tell me to carry on and I will pick it up." }
+    }
+}
+
+/**
+ * A long run piles up tool output (pages, screenshots, code results) until the model's context is full.
+ * Before each step, old tool results beyond the budget are cut down to a short stub, newest kept whole,
+ * so the agent can keep going for hundreds of steps. Its own words and the user's are never cut.
+ */
+object Trim {
+    private const val BUDGET = 350_000 // characters, comfortably inside a 128k-token window
+    private const val KEEP_RECENT = 8   // messages always left untouched
+
+    fun size(m: Msg): Int = m.blocks.sumOf { b -> when (b) { is Block.Text -> b.text.length; is Block.ToolResult -> b.content.length; is Block.ToolCall -> b.input.toString().length; is Block.Image -> 6_000; else -> 0 } }
+
+    fun fit(history: MutableList<Msg>) {
+        var total = history.sumOf { size(it) }
+        if (total <= BUDGET) return
+        for (i in 0 until (history.size - KEEP_RECENT).coerceAtLeast(0)) {
+            if (total <= BUDGET) return
+            val m = history[i]
+            if (m.blocks.none { it is Block.ToolResult || it is Block.Image }) continue
+            val slim = Msg(m.role, m.blocks.mapNotNull { b -> when {
+                b is Block.ToolResult && b.content.length > 400 -> b.copy(content = b.content.take(300) + "\n[...older output trimmed to save room]")
+                b is Block.Image -> null
+                else -> b
+            } })
+            if (slim.blocks.isEmpty()) continue
+            total += size(slim) - size(m); history[i] = slim
+        }
     }
 }

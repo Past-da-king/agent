@@ -327,7 +327,7 @@ class AgentRuntime(
         return try {
             val history = mutableListOf(Msg.user(task))
             val sys = systemPrompt(task) + "\n\nYou are a HELPER the main agent started. Do this one job with your tools, then reply with only the findings (facts, links, numbers), no chat. Do not ask the user anything."
-            val result = AgentLoop(provider, settings.state.value.helperModel, tools(forHelper = true), maxSteps = 12).run(sys, history, ctx)
+            val result = AgentLoop(provider, settings.state.value.helperModel, tools(forHelper = true), maxSteps = 60).run(sys, history, ctx)
             db.chat().get(itemId)?.let { db.chat().update(it.copy(meta = JSONObject(it.meta).put("state", "done").put("result", result.take(4000)).toString())) }
             result
         } catch (e: Exception) {
@@ -365,7 +365,7 @@ class AgentRuntime(
         val sys = systemPrompt(prompt, background = true)
         providerFactory(settings)?.let { provider ->
             val tools = if (withMemoryTools) tools(forHelper = true).filter { it.spec.name.startsWith("memory_") || it.spec.name == "task_list" } else emptyList()
-            return AgentLoop(provider, settings.state.value.model, tools, maxSteps = 14).run(sys, mutableListOf(Msg.user(prompt)), QuietContext())
+            return AgentLoop(provider, settings.state.value.model, tools, maxSteps = 40).run(sys, mutableListOf(Msg.user(prompt)), QuietContext())
         }
         val engine = subscription?.takeIf { settings.state.value.mode == PowerMode.SUBSCRIPTION && it.ready } ?: return null
         var last = ""
