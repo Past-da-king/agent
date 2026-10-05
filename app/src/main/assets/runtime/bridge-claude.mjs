@@ -39,7 +39,6 @@ try {
       allowedTools: ["mcp__phone", "WebSearch", "WebFetch"],
       disallowedTools: ["Bash", "Edit", "Write", "NotebookEdit", "KillShell"],
       mcpServers: { phone: { type: "http", url: process.env.PHONE_MCP_URL, headers: { Authorization: `Bearer ${process.env.PHONE_MCP_TOKEN}` } } },
-      maxTurns: 30,
     },
   })) {
     if (m.type === "system" && m.subtype === "init") out({ type: "session", id: m.session_id });
