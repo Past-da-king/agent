@@ -37,10 +37,13 @@ object Identity {
         val icon = androidx.core.graphics.drawable.IconCompat.createWithAdaptiveBitmap(avatar(context, mascot, accent, 216))
         val person = androidx.core.app.Person.Builder().setName(name).setIcon(icon).setBot(true).setKey("agent").setImportant(true).build()
         runCatching {
+            // A shortcut must belong to a launcher activity. MainActivity isn't one (the icon aliases are),
+            // so without naming the live alias Android rejected it and Samsung fell back to the stock icon.
             val sc = androidx.core.content.pm.ShortcutInfoCompat.Builder(context, "agent").setShortLabel(name).setLongLived(true).setPerson(person).setIcon(icon)
+                .setActivity(launcherAlias(context))
                 .setIntent(android.content.Intent(context, com.past9.phoneaos.MainActivity::class.java).setAction(android.content.Intent.ACTION_VIEW).putExtra("open", "chat")).build()
             androidx.core.content.pm.ShortcutManagerCompat.pushDynamicShortcut(context, sc)
-        }
+        }.onFailure { android.util.Log.w("Identity", "agent shortcut rejected", it) }
         return person
     }
 
@@ -54,6 +57,26 @@ object Identity {
             .setIcon(androidx.core.graphics.drawable.IconCompat.createWithAdaptiveBitmap(avatar(context, mascot, accent, 216)))
             .setIntent(android.content.Intent(context, com.past9.phoneaos.MainActivity::class.java).setAction(android.content.Intent.ACTION_MAIN)).build()
         return androidx.core.content.pm.ShortcutManagerCompat.requestPinShortcut(context, sc, null)
+    }
+
+    /** The icon alias that is enabled right now: the app's real launcher entry. */
+    fun launcherAlias(context: Context): ComponentName {
+        val pm = context.packageManager
+        return pm.queryIntentActivities(android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_LAUNCHER).setPackage(context.packageName), 0)
+            .firstOrNull()?.activityInfo?.let { ComponentName(context.packageName, it.name) }
+            ?: ComponentName(context, "${context.packageName}.Icon_scout_iris")
+    }
+
+    /**
+     * Every notification speaks as the agent: a one-message conversation from the agent's Person, tied to
+     * the agent shortcut. Samsung and Pixel then draw the agent's own face where the app icon would go.
+     */
+    fun asAgent(context: Context, b: androidx.core.app.NotificationCompat.Builder, title: String, body: String): androidx.core.app.NotificationCompat.Builder {
+        val st = com.past9.phoneaos.App.graph(context).settings.state.value
+        val agent = publishAgentShortcut(context, st.agentName.ifBlank { "Your agent" }, st.mascot, st.accent)
+        val me = androidx.core.app.Person.Builder().setName(st.userName.ifBlank { "You" }).setKey("me").build()
+        return b.setStyle(androidx.core.app.NotificationCompat.MessagingStyle(me).addMessage(if (title.isBlank()) body else "$title\n$body", System.currentTimeMillis(), agent))
+            .setShortcutId("agent").setLargeIcon(avatar(context, st.mascot, st.accent, 192))
     }
 
     fun statIcon(context: Context, mascot: String): Int =

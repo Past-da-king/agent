@@ -146,24 +146,23 @@ fun WikiPageScreen(page: MemoryRow?, all: List<MemoryRow>, onBack: () -> Unit, o
 }
 
 @Composable
-private fun PageEditor(m: MemoryRow, onDismiss: () -> Unit, onSave: (MemoryRow) -> Unit, onDelete: (() -> Unit)? = null) {
+internal fun PageEditor(m: MemoryRow, onDismiss: () -> Unit, onSave: (MemoryRow) -> Unit, onDelete: (() -> Unit)? = null) {
     var title by remember { mutableStateOf(m.title) }
     var body by remember { mutableStateOf(m.body) }
     var tags by remember { mutableStateOf(m.topics) }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp).verticalScroll(rememberScrollState())) {
-            Text(if (m.id == 0L) "New page" else "Edit page", style = MaterialTheme.typography.headlineSmall)
-            Text("Link other pages with [[Name]].", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(16.dp))
-            OutlinedTextField(title, { title = it }, label = { Text("Title") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
-            Spacer(Modifier.height(12.dp))
-            OutlinedTextField(body, { body = it }, label = { Text("Page") }, minLines = 6, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
-            Spacer(Modifier.height(12.dp))
-            OutlinedTextField(tags, { tags = it }, label = { Text("Tags, comma separated") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
-            Spacer(Modifier.height(20.dp))
-            Button(onClick = { onSave(m.copy(title = title.trim(), body = body.trim(), topics = tags.trim(), updatedAt = System.currentTimeMillis())) }, enabled = title.isNotBlank() && body.isNotBlank(),
-                modifier = Modifier.fillMaxWidth().height(56.dp), shapes = ButtonDefaults.shapes()) { Text("Save") }
-            if (onDelete != null) TextButton(onClick = onDelete, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("Forget this page", color = MaterialTheme.colorScheme.error) }
-        }
+    var kind by remember { mutableStateOf(m.kind) }
+    com.past9.phoneaos.ui.AppSheet(pageIcon(kind), if (m.id == 0L) "Your agent's memory" else "Editing a page", if (m.id == 0L) "New page" else m.title.ifBlank { "Page" }, onDismiss,
+        primary = if (m.id == 0L) "Save to memory" else "Save changes", primaryEnabled = title.isNotBlank() && body.isNotBlank(),
+        onPrimary = { onSave(m.copy(title = title.trim(), body = body.trim(), topics = tags.trim(), kind = kind, updatedAt = System.currentTimeMillis())) },
+        shape = MaterialShapes.Flower,
+        secondary = onDelete?.let { del -> { TextButton(onClick = del, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("Forget this page", color = MaterialTheme.colorScheme.error) } } }) {
+        com.past9.phoneaos.ui.ChoiceChips(listOf("person" to "Person", "place" to "Place", "company" to "Company", "project" to "Project", "preference" to "Preference", "event" to "Event", "how-to" to "How-to", "fact" to "Fact")
+            .map { (id, l) -> Triple(id, l, pageIcon(id)) }, kind, { kind = it }, label = "What is it")
+        Spacer(Modifier.height(20.dp))
+        com.past9.phoneaos.ui.SheetField(title, { title = it }, "Title", "Thandi, Durban trip, Gym...", big = true, singleLine = true)
+        Spacer(Modifier.height(16.dp))
+        com.past9.phoneaos.ui.SheetField(body, { body = it }, "The page", "What your agent should know. Link other pages with [[Name]].", minLines = 6)
+        Spacer(Modifier.height(16.dp))
+        com.past9.phoneaos.ui.SheetField(tags, { tags = it }, "Tags", "family, work, health", singleLine = true)
     }
 }

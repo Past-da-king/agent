@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -53,12 +54,30 @@ class BrowserEngine(private val context: Context, val profile: String = "Persona
             settings.loadWithOverviewMode = true
             settings.useWideViewPort = true
             settings.setSupportMultipleWindows(false)
+            settings.setGeolocationEnabled(true)
+            // Sites that ask for the location (store finders, delivery) get the phone's, once the app has it.
+            webChromeClient = object : android.webkit.WebChromeClient() {
+                override fun onGeolocationPermissionsShowPrompt(origin: String, callback: android.webkit.GeolocationPermissions.Callback) {
+                    val g = com.past9.phoneaos.App.graph(context)
+                    g.scope.launch {
+                        val ok = com.past9.phoneaos.system.PermissionBroker.request(context, arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION)) {}
+                        main.post { callback.invoke(origin, ok, ok) }
+                    }
+                }
+            }
+            // Web notifications: WebView has none, so give pages one that hands them to the app.
+            addJavascriptInterface(WebNotifications(context, profile), "__aosWeb")
+            if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT))
+                runCatching { androidx.webkit.WebViewCompat.addDocumentStartJavaScript(this, WebNotifications.SHIM, setOf("*")) }
             val cookies = if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.MULTI_PROFILE))
                 runCatching { androidx.webkit.WebViewCompat.getProfile(this).cookieManager }.getOrNull() ?: CookieManager.getInstance() else CookieManager.getInstance()
             cookies.setAcceptCookie(true)
             cookies.setAcceptThirdPartyCookies(this, true)
             webViewClient = object : WebViewClient() {
-                override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) { _page.value = PageState(url, view.title ?: "", true) }
+                override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+                    _page.value = PageState(url, view.title ?: "", true)
+                    if (!androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)) view.evaluateJavascript(WebNotifications.SHIM, null)
+                }
                 override fun onPageFinished(view: WebView, url: String) { _page.value = PageState(url, view.title ?: "", false); pageDone?.complete(Unit) }
             }
             layoutOffscreen(this)
@@ -240,5 +259,44 @@ class BrowserEngine(private val context: Context, val profile: String = "Persona
           const text=(document.body?document.body.innerText:'').replace(/\n{3,}/g,'\n\n').slice(0,9000);
           return {url:location.href,title:document.title,els:out.join('\n'),text};
         })()"""
+    }
+}
+
+/**
+ * Pages in the agent's browser can "send notifications". They land in the same store as phone
+ * notifications (app "web:<site>"), so notification routines fire on them. Only while the page is
+ * open in the agent's browser: WebView has no push service for closed sites.
+ */
+class WebNotifications(private val context: Context, private val profile: String) {
+    @android.webkit.JavascriptInterface
+    fun notify(title: String, body: String, host: String) {
+        val g = com.past9.phoneaos.App.graph(context)
+        g.scope.launch {
+            val pkg = "web:$host"
+            val dao = g.db.notifications()
+            if (dao.dupes(pkg, title, body, System.currentTimeMillis() - 600_000) > 0) return@launch
+            dao.insert(com.past9.phoneaos.data.NotificationRow(pkg = pkg, app = host, title = title, text = body, postedAt = System.currentTimeMillis()))
+            g.db.triggers().list().filter { it.enabled && it.kind == "notification" }.forEach { t ->
+                val (who, word) = t.spec.split("|", limit = 2).let { it[0] to it.getOrElse(1) { "" } }
+                val site = who.removePrefix("web:").lowercase()
+                if ((who == pkg || (site.isNotBlank() && host.lowercase().contains(site))) && (word.isBlank() || title.contains(word, true) || body.contains(word, true)))
+                    com.past9.phoneaos.triggers.Routines.runNow(context, t.id, "A web notification just arrived from $host: \"$title: ${body.take(400)}\". ")
+            }
+        }
+    }
+
+    companion object {
+        val SHIM = """
+            (function(){ if (window.__aosNotif || typeof __aosWeb === 'undefined') return; window.__aosNotif = 1;
+              function send(t, o){ o = o || {}; try { __aosWeb.notify(String(t || ''), String(o.body || ''), location.host); } catch (e) {} }
+              function N(t, o){ send(t, o); this.title = t; this.body = (o && o.body) || ''; this.close = function(){}; this.addEventListener = function(){}; this.removeEventListener = function(){}; }
+              N.permission = 'granted';
+              N.requestPermission = function(cb){ if (cb) cb('granted'); return Promise.resolve('granted'); };
+              window.Notification = N;
+              if (window.ServiceWorkerRegistration) ServiceWorkerRegistration.prototype.showNotification = function(t, o){ send(t, o); return Promise.resolve(); };
+              if (navigator.permissions && navigator.permissions.query) { var q = navigator.permissions.query.bind(navigator.permissions);
+                navigator.permissions.query = function(d){ return d && d.name === 'notifications' ? Promise.resolve({ state: 'granted', onchange: null }) : q(d); }; }
+            })();
+        """.trimIndent()
     }
 }

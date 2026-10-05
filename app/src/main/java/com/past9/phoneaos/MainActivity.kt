@@ -259,7 +259,7 @@ class MainActivity : ComponentActivity() {
                     TasksScreen(goals, tasks, bottomPadding = barPad, actions = TaskActions(
                         onBack = { nav.popBackStack() },
                         onToggle = { t -> scope.launch { g.db.tasks().updateTask(t.copy(status = if (t.status == "done") "todo" else "done", updatedAt = System.currentTimeMillis())) } },
-                        onAdd = { text -> scope.launch { g.db.tasks().insertTask(TaskRow(title = text.trim(), owner = "user")) } },
+                        onAdd = { text, due -> scope.launch { g.db.tasks().insertTask(TaskRow(title = text.trim(), owner = "user", dueAt = due)) } },
                         onDelete = { t -> scope.launch { g.db.tasks().deleteTask(t.id) } },
                         onAsk = { prompt -> g.runtime.send(prompt); nav.navigate("chat") },
                     ))

@@ -78,8 +78,9 @@ class WorkService : Service() {
         super.onCreate()
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         val st = App.graph(this).settings.state.value
-        val n = NotificationCompat.Builder(this, AndroidPhone.CH_WORK).setSmallIcon(Identity.statIcon(this, st.mascot)).setLargeIcon(Identity.avatar(this, st.mascot, st.accent, 192))
-            .setContentTitle("Your agent is working").setContentText("You can leave the app. I will let you know.").setOngoing(true).setContentIntent(open).build()
+        val n = Identity.asAgent(this, NotificationCompat.Builder(this, AndroidPhone.CH_WORK).setSmallIcon(Identity.statIcon(this, st.mascot))
+            .setContentTitle("${st.agentName.ifBlank { "Your agent" }} is working").setContentText("You can leave the app. I will let you know.").setOngoing(true).setContentIntent(open),
+            "", "Working on it. You can leave the app, I will let you know.").build()
         if (Build.VERSION.SDK_INT >= 34) startForeground(42, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(42, n)
     }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int) = START_NOT_STICKY

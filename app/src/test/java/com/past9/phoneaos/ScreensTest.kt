@@ -126,6 +126,8 @@ class ScreensTest(private val dark: Boolean) {
             TriggerRow(1, "Morning brief", "daily", "07:00", "Brief me on SA business and tech news, my calendar and anything due today.", lastRunAt = now - 3_600_000 * 5, lastResult = "3 stories, 2 meetings, 1 task due (licence renewal)."),
             TriggerRow(2, "Bank alerts", "email", "from:noreply@capitecbank.co.za", "Tell me what changed and flag anything over R 1,000."),
             TriggerRow(3, "Check flight price", "interval", "180", "Check FlySafair JNB-DUR Fri 9 Oct 06:05 and tell me if it drops below R 800.", enabled = false),
+            TriggerRow(5, "Overnight: tidy up and plan your morning", "nightly", "02:00", "While your phone charges: go over the day, save what I learned to memory, tidy the chat, and get your morning screen ready.", lastRunAt = now - 3_600_000 * 17, lastResult = "Morning screen ready: Want me to chase the Uber refund?"),
+            TriggerRow(6, "Sunday plan", "daily", "18:00", "If it's Sunday, plan my week from my open tasks."),
         )
         shot("40-routines") { RoutinesScreen(r, RoutineActions()) }
     }
@@ -175,5 +177,13 @@ class ScreensTest(private val dark: Boolean) {
     }
     @Test fun styleRed() { shot("17-onboarding-style-red") { OnboardingScreen(OnboardingActions(), start = OnbStep.STYLE, initialAccent = "red", initialMascot = "scout", initialUser = "Ayanda", initialAgent = "Nova") } }
 
+    private fun sheet(name: String, content: @Composable () -> Unit) = shot(name) {
+        androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.LocalSheetPreview provides true) { content() }
+    }
+    @Test fun sheetTask() { sheet("80-sheet-task") { AddTaskSheet({}, {}) { _, _ -> } } }
+    @Test fun sheetMemory() { sheet("81-sheet-memory") { PageEditor(MemoryRow(id = 3, title = "Thandi", body = "Thandi is his business partner at Guavas. Invoices go to her on the 25th.", kind = "person", topics = "work, guavas"), {}, {}, {}) } }
+    @Test fun sheetMemoryNew() { sheet("82-sheet-memory-new") { PageEditor(MemoryRow(id = 0, title = "", body = "", source = "user"), {}, {}) } }
+    @Test fun sheetRoutineNew() { sheet("83-sheet-routine-new") { RoutineEditor(TriggerRow(name = "", kind = "daily", spec = "07:00", prompt = ""), {}, {}, null, null) } }
+    @Test fun sheetRoutineEdit() { sheet("84-sheet-routine-edit") { RoutineEditor(TriggerRow(id = 4, name = "Bank alerts", kind = "email", spec = "from:noreply@capitecbank.co.za", prompt = "Tell me what changed and flag anything over R 1,000."), {}, {}, {}, {}) } }
     @Test fun browserEmpty() { shot("70-browser-empty") { BrowserScreen(emptyMap(), listOf("Personal", "Work"), BrowserActions()) } }
 }

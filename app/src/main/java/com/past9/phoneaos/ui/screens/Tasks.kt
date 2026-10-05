@@ -29,7 +29,8 @@ import java.time.format.DateTimeFormatter
 data class TaskActions(
     val onBack: () -> Unit = {},
     val onToggle: (TaskRow) -> Unit = {},
-    val onAdd: (String) -> Unit = {},
+    /** title, due time (null = no date) */
+    val onAdd: (String, Long?) -> Unit = { _, _ -> },
     val onDelete: (TaskRow) -> Unit = {},
     val onAsk: (String) -> Unit = {},
 )
@@ -85,7 +86,7 @@ fun TasksScreen(goals: List<GoalRow>, tasks: List<TaskRow>, actions: TaskActions
             }
         }
     }
-    if (adding) AddTaskSheet({ adding = false }) { actions.onAdd(it); adding = false }
+    if (adding) AddTaskSheet({ adding = false }, onAsk = { actions.onAsk(it); adding = false }) { t, due -> actions.onAdd(t, due); adding = false }
 }
 
 @Composable
@@ -131,16 +132,38 @@ fun TaskLine(t: TaskRow, actions: TaskActions) {
     }
 }
 
+/** When a to-do is due, in plain choices. Times are local: 18:00 today, 09:00 otherwise. */
+internal fun dueChoice(id: String, now: java.time.ZonedDateTime = java.time.ZonedDateTime.now()): Long? {
+    val d = now.toLocalDate()
+    val at = when (id) {
+        "today" -> d.atTime(18, 0).let { if (it.isBefore(now.toLocalDateTime())) now.toLocalDateTime().plusHours(2).withMinute(0) else it }
+        "tomorrow" -> d.plusDays(1).atTime(9, 0)
+        "weekend" -> d.with(java.time.temporal.TemporalAdjusters.next(java.time.DayOfWeek.SATURDAY)).atTime(9, 0)
+        "nextweek" -> d.with(java.time.temporal.TemporalAdjusters.next(java.time.DayOfWeek.MONDAY)).atTime(9, 0)
+        else -> return null
+    }
+    return at.atZone(now.zone).toInstant().toEpochMilli()
+}
+
 @Composable
-private fun AddTaskSheet(onDismiss: () -> Unit, onAdd: (String) -> Unit) {
+internal fun AddTaskSheet(onDismiss: () -> Unit, onAsk: (String) -> Unit, onAdd: (String, Long?) -> Unit) {
     var text by remember { mutableStateOf("") }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
-            Text("New task", style = MaterialTheme.typography.headlineSmall)
-            Spacer(Modifier.height(16.dp))
-            OutlinedTextField(text, { text = it }, label = { Text("What needs doing?") }, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
-            Spacer(Modifier.height(16.dp))
-            Button(onClick = { onAdd(text) }, enabled = text.isNotBlank(), modifier = Modifier.fillMaxWidth().height(56.dp), shapes = ButtonDefaults.shapes()) { Text("Add") }
-        }
+    var due by remember { mutableStateOf("none") }
+    val dueAt = dueChoice(due)
+    com.past9.phoneaos.ui.AppSheet(Icons.Rounded.TaskAlt, "Your list", "New to-do", onDismiss,
+        primary = if (dueAt == null) "Add to my list" else "Add for ${dueLabel(dueAt)}", primaryEnabled = text.isNotBlank(), onPrimary = { onAdd(text.trim(), dueAt) },
+        shape = MaterialShapes.Cookie7Sided,
+        secondary = {
+            TextButton(onClick = { onAsk("Please take care of this for me: ${text.trim()}") }, enabled = text.isNotBlank(), modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Have my agent do it instead")
+            }
+        }) {
+        com.past9.phoneaos.ui.SheetField(text, { text = it }, "What needs doing", "Call the landlord about the geyser", big = true, minLines = 2)
+        Spacer(Modifier.height(20.dp))
+        com.past9.phoneaos.ui.ChoiceChips(listOf(
+            Triple("none", "No date", Icons.Rounded.AllInclusive), Triple("today", "Today", Icons.Rounded.WbTwilight),
+            Triple("tomorrow", "Tomorrow", Icons.Rounded.WbSunny), Triple("weekend", "This weekend", Icons.Rounded.Weekend),
+            Triple("nextweek", "Next week", Icons.Rounded.DateRange),
+        ), due, { due = it }, label = "When")
     }
 }

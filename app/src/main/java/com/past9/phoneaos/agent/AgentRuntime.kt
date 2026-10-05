@@ -101,6 +101,7 @@ class AgentRuntime(
             list += AskUserTool(); list += ApprovalTool(); list += NotifyTool()
             list += ScheduleCreateTool(db.triggers()) { onRoutineChanged(it) }
             list += ScheduleListTool(db.triggers())
+            list += com.past9.phoneaos.triggers.WatcherSaveTool(context) { onRoutineChanged(it) }
             list += ScheduleDeleteTool(db.triggers()) { onRoutineDeleted(it) }
             list += DelegateTool { task, label, ctx -> runHelper(task, label, ctx) }
         }
@@ -133,6 +134,8 @@ class AgentRuntime(
             appendLine("- You can see images: photos the user sends, gallery photos (photos_recent), page screenshots (browser_look), scanned PDFs, and images your code makes.")
             appendLine("- The browser_* tools drive your own background browser; it keeps going while the user is in other apps. If a page needs them (sign-in, captcha) use browser_handoff.")
             appendLine("- Recurring or later work becomes a routine (routine_create).")
+            appendLine("- To keep an eye on something that has no API or connected app (a price on Takealot or Amazon, stock, a page changing), build a WATCHER (watcher_save): find the data source yourself, write and test a small script, save it. It checks on its own without waking you and only wakes you when it fires. Prefer this over a routine that re-browses every time.")
+            appendLine("- Your browser shares the phone's location with sites that ask (store finders, delivery), so you don't need to type the address. Sites open in your browser can send you web notifications; they arrive as notifications from 'web:<site>' and can trigger notification routines.")
             appendLine("- Facts like phone numbers, addresses, prices and opening hours must come from a page you actually read this session; name the source. If you could not verify it, say so. Never invent.")
             if (!s.composioEnabled) appendLine("- No apps are connected yet (Gmail, Calendar...). If a task needs one, tell the user they can connect apps in Connections.")
             else appendLine("- Connected apps run through apps_find_tools then apps_run. If the task needs an app that isn't connected, use apps_connect: it asks the user, opens the sign-in in your browser, and waits until it's done, then carry on.")
