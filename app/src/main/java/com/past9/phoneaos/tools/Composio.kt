@@ -30,18 +30,25 @@ class ComposioClient(
     private val base: String = "https://backend.composio.dev/api/v3.1",
     private val http: OkHttpClient = sharedHttp,
 ) {
-    private fun key() = apiKey()?.takeIf { it.isNotBlank() } ?: throw ProviderException("No Composio key yet. Add one in Connections.")
+    private fun key() = apiKey()?.trim()?.takeIf { it.isNotBlank() } ?: throw ProviderException("No Composio key yet. Add one in Connections.")
+
+    /**
+     * Composio has two kinds of key and each goes in its own header: a PROJECT key (ak_...) in x-api-key,
+     * and a personal USER key (uak_..., from the dashboard or `composio login`) in x-user-api-key, which
+     * addresses the user's own developer project. Sending one in the other's header is a 401.
+     */
+    private fun auth(): Pair<String, String> = key().let { k -> if (k.startsWith("uak_")) "x-user-api-key" to k else "x-api-key" to k }
 
     private suspend fun get(path: String, query: Map<String, String> = emptyMap()): JSONObject = withContext(Dispatchers.IO) {
         val url = "$base$path".toHttpUrl().newBuilder().apply { query.forEach { (k, v) -> addQueryParameter(k, v) } }.build()
-        http.newCall(Request.Builder().url(url).header("x-api-key", key()).build()).execute().use { res ->
+        http.newCall(Request.Builder().url(url).header(auth().first, auth().second).build()).execute().use { res ->
             val text = res.body?.string().orEmpty()
             if (!res.isSuccessful) throw ProviderException("Composio ${res.code}: ${runCatching { JSONObject(text).optJSONObject("error")?.optString("message") }.getOrNull() ?: text.take(200)}", res.code)
             JSONObject(text)
         }
     }
 
-    private suspend fun post(path: String, body: JSONObject) = postJson(http, "$base$path", mapOf("x-api-key" to key()), body, attempts = 2)
+    private suspend fun post(path: String, body: JSONObject) = postJson(http, "$base$path", mapOf(auth()), body, attempts = 2)
 
     /** Cheap call that proves the key works. */
     suspend fun verify(): Boolean = runCatching { get("/toolkits", mapOf("limit" to "1")) }.isSuccess
@@ -84,7 +91,7 @@ class ComposioClient(
     }
 
     suspend fun disconnect(connectionId: String) = withContext(Dispatchers.IO) {
-        http.newCall(Request.Builder().url("$base/connected_accounts/$connectionId").delete().header("x-api-key", key()).build()).execute().close()
+        http.newCall(Request.Builder().url("$base/connected_accounts/$connectionId").delete().header(auth().first, auth().second).build()).execute().close()
     }
 
     suspend fun searchTools(query: String, toolkit: String?, limit: Int): JSONArray {
