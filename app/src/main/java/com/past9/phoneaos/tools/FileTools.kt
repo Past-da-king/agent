@@ -1,0 +1,81 @@
+package com.past9.phoneaos.tools
+
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
+import com.past9.phoneaos.agent.Tool
+import com.past9.phoneaos.agent.ToolContext
+import com.past9.phoneaos.agent.ToolSpec
+import com.past9.phoneaos.agent.schema
+import com.past9.phoneaos.agent.str
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONObject
+
+/** The open screen shows Android's file picker when the agent asks for files. */
+object FilePickBroker {
+    class Request(val mimeTypes: Array<String>, val result: CompletableDeferred<List<Uri>> = CompletableDeferred())
+    val pending = MutableStateFlow<Request?>(null)
+    fun answer(r: Request, uris: List<Uri>) { r.result.complete(uris); if (pending.value === r) pending.value = null }
+}
+
+/**
+ * Reads files the user picks (a PDF statement, a CSV, notes). Android's picker means the agent
+ * only ever sees exactly the files the user chose; nothing else on the phone.
+ */
+class FilesPickTool(private val context: Context) : Tool {
+    override val spec = ToolSpec("files_pick", "Ask the user to pick one or more files from their phone (documents, notes, spreadsheets, photos) and read them. You only see what they choose.",
+        schema(listOf("reason"), "reason" to str("What you need, e.g. 'your latest bank statement'")))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String {
+        val a = ctx.ask("Pick ${input.optString("reason")} for me?", listOf("Choose files", "Not now"))
+        if (a != "Choose files") return "The user didn't pick any files."
+        val r = FilePickBroker.Request(arrayOf("*/*")); FilePickBroker.pending.value = r
+        ctx.notify("Pick a file", "Open the app to choose ${input.optString("reason")}")
+        val uris = withTimeoutOrNull(300_000) { r.result.await() }.orEmpty()
+        if (uris.isEmpty()) return "No files picked."
+        return withContext(Dispatchers.IO) { uris.joinToString("\n\n") { read(it) } }.also { ctx.activity("Read ${uris.size} file${if (uris.size > 1) "s" else ""} you picked", JSONObject().put("tool", "files")) }
+    }
+
+    private fun read(uri: Uri): String {
+        val cr = context.contentResolver
+        val (name, size) = cr.query(uri, null, null, null, null)?.use { c ->
+            c.moveToFirst(); c.getString(c.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME)) to c.getLong(c.getColumnIndexOrThrow(OpenableColumns.SIZE))
+        } ?: ("file" to 0L)
+        val type = cr.getType(uri).orEmpty()
+        val head = "## $name ($type, ${size / 1024} KB)"
+        return when {
+            type.startsWith("text/") || type.contains("json") || type.contains("csv") || type.contains("xml") || name.endsWith(".md") ->
+                head + "\n" + (cr.openInputStream(uri)?.use { it.readBytes().decodeToString() } ?: "").take(30_000)
+            type == "application/pdf" -> head + "\n" + pdfText(uri)
+            type.startsWith("image/") -> "$head\n(An image. Ask the user to send it in the chat with the photo button so you can look at it.)"
+            else -> "$head\n(Can't read this kind of file as text.)"
+        }
+    }
+
+    /** PDFs: pull the text layer out of the raw stream (works for most statements and invoices). */
+    private fun pdfText(uri: Uri): String {
+        val raw = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return ""
+        val out = StringBuilder()
+        val streams = Regex("stream\\r?\\n").findAll(raw.decodeToString(throwOnInvalidSequence = false)).map { it.range.last + 1 }.toList()
+        for (start in streams) {
+            val endIdx = indexOf(raw, "endstream".toByteArray(), start).takeIf { it > 0 } ?: continue
+            val chunk = raw.copyOfRange(start, endIdx)
+            val text = runCatching { java.util.zip.InflaterInputStream(chunk.inputStream()).readBytes().decodeToString() }.getOrElse { chunk.decodeToString() }
+            Regex("\\(((?:\\\\.|[^\\\\)])*)\\)\\s*Tj|\\[(.*?)]\\s*TJ").findAll(text).forEach { m ->
+                val s = m.groupValues[1].ifEmpty { Regex("\\(((?:\\\\.|[^\\\\)])*)\\)").findAll(m.groupValues[2]).joinToString("") { it.groupValues[1] } }
+                out.append(s.replace("\\(", "(").replace("\\)", ")")).append(' ')
+            }
+            if (text.contains("ET")) out.append('\n')
+            if (out.length > 30_000) break
+        }
+        return out.toString().replace(Regex("[ \\t]+"), " ").trim().ifBlank { "(This PDF has no readable text layer; it may be a scan.)" }.take(30_000)
+    }
+
+    private fun indexOf(a: ByteArray, b: ByteArray, from: Int): Int {
+        outer@ for (i in from..a.size - b.size) { for (j in b.indices) if (a[i + j] != b[j]) continue@outer; return i }
+        return -1
+    }
+}

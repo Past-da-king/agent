@@ -47,17 +47,43 @@ class MemorySearchTool(private val dao: MemoryDao) : Tool {
     }
 }
 
+/** Wiki links in a memory page: [[Name]]. */
+val wikiLink = Regex("""\[\[([^\]|]+)(?:\|[^\]]*)?]]""")
+fun linksIn(body: String) = wikiLink.findAll(body).map { it.groupValues[1].trim() }.toSet()
+
+/**
+ * Memory is a small wiki: one page per thing (a person, a company, a place, a plan, a preference),
+ * written in markdown, with [[Name]] links to other pages and tags for search.
+ */
 class MemorySaveTool(private val dao: MemoryDao) : Tool {
-    override val spec = ToolSpec("memory_save", "Remember something durable about the user for later: a fact, preference, person, decision or how-to. Save the moment you learn it. Write it so it makes sense on its own later.",
-        schema(listOf("title", "body"),
-            "title" to str("Short label"), "body" to str("The thing to remember, self-contained"),
-            "kind" to enumOf("Type", "fact", "preference", "person", "decision", "how-to", "event"),
-            "topics" to str("Comma-separated tags"), "pinned" to bool("Pin it so it is always in your context (use for core facts like the user's name)")))
+    override val spec = ToolSpec("memory_save", "Write or update a wiki page in your memory about ONE thing: a person, company, place, project, plan or preference. Title = its name (e.g. 'Thandi', 'Guavas', 'Seat preferences'). Body = markdown, detailed but no padding; refer to other people/companies/places as [[Name]] links (e.g. 'Thandi is [[Ayanda]]'s sister and works at [[Guavas]]'). If a page with the title exists your body REPLACES it, so memory_get it first and merge. Always add tags.",
+        schema(listOf("title", "body", "tags"),
+            "title" to str("The thing's name"), "body" to str("Markdown page with [[links]]"),
+            "kind" to enumOf("What it is", "person", "company", "place", "project", "preference", "fact", "event", "how-to"),
+            "tags" to str("Comma-separated tags for search, e.g. 'family, durban, birthday'"), "pinned" to bool("Pin it (core facts like the user's own page)")))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
-        val id = dao.insert(MemoryRow(title = input.optString("title"), body = input.optString("body"), kind = input.optString("kind", "fact").ifBlank { "fact" },
-            topics = input.optString("topics"), pinned = input.optBoolean("pinned")))
-        ctx.activity("Remembered: ${input.optString("title")}", JSONObject().put("tool", "memory"))
-        return "Saved memory #$id"
+        val title = input.optString("title").trim()
+        val existing = dao.byTitle(title)
+        val tags = input.optString("tags").ifBlank { input.optString("topics") }
+        return if (existing != null) {
+            dao.update(existing.copy(body = input.optString("body"), kind = input.optString("kind").ifBlank { existing.kind },
+                topics = tags.ifBlank { existing.topics }, pinned = existing.pinned || input.optBoolean("pinned"), updatedAt = System.currentTimeMillis()))
+            ctx.activity("Updated memory: $title", JSONObject().put("tool", "memory"))
+            "Updated page #${existing.id} '$title'"
+        } else {
+            val id = dao.insert(MemoryRow(title = title, body = input.optString("body"), kind = input.optString("kind", "fact").ifBlank { "fact" }, topics = tags, pinned = input.optBoolean("pinned")))
+            ctx.activity("Remembered: $title", JSONObject().put("tool", "memory"))
+            "Saved page #$id '$title'"
+        }
+    }
+}
+
+class MemoryGetTool(private val dao: MemoryDao) : Tool {
+    override val spec = ToolSpec("memory_get", "Read one memory page in full by its title, plus which pages link to it.", schema(listOf("title"), "title" to str("Page title")))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String {
+        val t = input.optString("title"); val m = dao.byTitle(t) ?: return "No page called '$t'."
+        val back = dao.list().filter { o -> o.id != m.id && linksIn(o.body).any { it.equals(m.title, true) } }.map { it.title }
+        return "# ${m.title} (#${m.id}, ${m.kind}; tags: ${m.topics})\n${m.body}" + if (back.isNotEmpty()) "\n\nLinked from: ${back.joinToString()}" else ""
     }
 }
 

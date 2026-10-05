@@ -88,6 +88,15 @@ val Accents = listOf(
     Accent("forest", "Forest", Color(0xFF2E6A2F), Color(0xFFF5FFF0), Color(0xFFC6EFBC), Color(0xFF032105), Color(0xFF9CD89A), Color(0xFF0A390D), Color(0xFF1B5220), Color(0xFFC6EFBC)),
     Accent("ember", "Ember", Color(0xFFB0410C), Color(0xFFFFF8F5), Color(0xFFFFDBCB), Color(0xFF390C00), Color(0xFFFFB591), Color(0xFF5A1C00), Color(0xFF853000), Color(0xFFFFDBCB)),
     Accent("rose", "Rose", Color(0xFFB0255E), Color(0xFFFFF7F8), Color(0xFFFFD9E2), Color(0xFF3E001D), Color(0xFFFFB1C8), Color(0xFF650033), Color(0xFF8E0D48), Color(0xFFFFD9E2)),
+    // Bright and bold: full-strength colours for people who want the app to shout a little.
+    Accent("red", "Red", Color(0xFFD7141E), Color(0xFFFFF8F7), Color(0xFFFFDAD6), Color(0xFF410002), Color(0xFFFF5A4F), Color(0xFF2D0001), Color(0xFF93000F), Color(0xFFFFDAD6)),
+    Accent("tangerine", "Tangerine", Color(0xFFF26B00), Color(0xFF231000), Color(0xFFFFDCC4), Color(0xFF301400), Color(0xFFFF8F3A), Color(0xFF2A1100), Color(0xFF8A3D00), Color(0xFFFFDCC4)),
+    Accent("sunflower", "Sunflower", Color(0xFFF2BC00), Color(0xFF231A00), Color(0xFFFFE08A), Color(0xFF241A00), Color(0xFFFFD233), Color(0xFF231A00), Color(0xFF5B4300), Color(0xFFFFE08A)),
+    Accent("lime", "Lime", Color(0xFF5EA300), Color(0xFF0E1F00), Color(0xFFD2F5A6), Color(0xFF132100), Color(0xFF9BE34A), Color(0xFF132100), Color(0xFF2E5200), Color(0xFFD2F5A6)),
+    Accent("mint", "Mint", Color(0xFF00A880), Color(0xFF00201A), Color(0xFFB2F2DF), Color(0xFF002019), Color(0xFF4FDDB4), Color(0xFF00201A), Color(0xFF00513E), Color(0xFFB2F2DF)),
+    Accent("sky", "Sky", Color(0xFF008FE0), Color(0xFF00182B), Color(0xFFCDE5FF), Color(0xFF001D33), Color(0xFF52B8FF), Color(0xFF00182B), Color(0xFF004B78), Color(0xFFCDE5FF)),
+    Accent("violet", "Violet", Color(0xFF7A2BF0), Color(0xFFFCF8FF), Color(0xFFEADDFF), Color(0xFF25005A), Color(0xFFB98AFF), Color(0xFF25005A), Color(0xFF5A00C6), Color(0xFFEADDFF)),
+    Accent("magenta", "Magenta", Color(0xFFD6008A), Color(0xFFFFF7F9), Color(0xFFFFD8EA), Color(0xFF3D0026), Color(0xFFFF6BC1), Color(0xFF3D0026), Color(0xFF8F005B), Color(0xFFFFD8EA)),
     Accent("graphite", "Graphite", Color(0xFF1F1E24), Color(0xFFF7F6FA), Color(0xFFE3E1E8), Color(0xFF1B1A1F), Color(0xFFE6E4EC), Color(0xFF1B1A1F), Color(0xFF3A3940), Color(0xFFE6E4EC)),
 )
 

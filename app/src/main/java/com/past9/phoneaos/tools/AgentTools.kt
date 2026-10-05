@@ -44,8 +44,8 @@ class ApprovalTool : Tool {
 }
 
 class ScheduleCreateTool(private val dao: TriggerDao, private val onChange: suspend (TriggerRow) -> Unit) : Tool {
-    override val spec = ToolSpec("routine_create", "Create a routine: a prompt you will run later by yourself. kind 'at' = once at a time (spec ISO like 2026-10-06T07:30); 'daily' = every day (spec HH:mm); 'interval' = every N minutes (spec minutes, min 15); 'email' = when a new email matches a Gmail search (spec e.g. 'from:bank@x.com', needs Gmail connected).",
-        schema(listOf("name", "kind", "spec", "prompt"), "name" to str("Short name"), "kind" to enumOf("When it runs", "at", "daily", "interval", "email"),
+    override val spec = ToolSpec("routine_create", "Create a routine: a prompt you will run later by yourself. kind 'at' = once at a time (spec ISO like 2026-10-06T07:30); 'daily' = every day (spec HH:mm); 'interval' = every N minutes (spec minutes, min 15); 'email' = when a new email matches a Gmail search (spec e.g. 'from:bank@x.com', needs Gmail connected); 'notification' = the moment a phone notification arrives (spec 'App name|keyword', keyword optional, app must be allowed in Connections).",
+        schema(listOf("name", "kind", "spec", "prompt"), "name" to str("Short name"), "kind" to enumOf("When it runs", "at", "daily", "interval", "email", "notification"),
             "spec" to str("Time/interval/query per kind"), "prompt" to str("What you will do each time, written as an instruction to yourself")))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val kind = input.optString("kind")
@@ -55,6 +55,7 @@ class ScheduleCreateTool(private val dao: TriggerDao, private val onChange: susp
             "daily" -> if (!Regex("^\\d{1,2}:\\d{2}$").matches(spec)) "spec must be HH:mm" else null
             "interval" -> if ((spec.toIntOrNull() ?: 0) < 15) "spec must be minutes, at least 15" else null
             "email" -> null
+            "notification" -> if (spec.substringBefore('|').isBlank()) "spec must start with the app name" else null
             else -> "unknown kind"
         }
         if (err != null) return "Not created: $err"

@@ -85,16 +85,29 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp, vertical = 16.dp))
         }
     }
+    // Slide-up sheets, never pop-up dialogs.
     edit?.let { (label, save) ->
-        AlertDialog(onDismissRequest = { edit = null }, title = { Text(label) },
-            text = { OutlinedTextField(editValue, { editValue = it }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
-            confirmButton = { TextButton(onClick = { save(editValue); edit = null }) { Text("Save") } },
-            dismissButton = { TextButton(onClick = { edit = null }) { Text("Cancel") } })
+        ModalBottomSheet(onDismissRequest = { edit = null }) {
+            Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
+                Text(label, style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(16.dp))
+                OutlinedTextField(editValue, { editValue = it }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = { save(editValue); edit = null }, modifier = Modifier.fillMaxWidth().height(56.dp), shapes = ButtonDefaults.shapes()) { Text("Save") }
+            }
+        }
     }
-    if (confirmReset) AlertDialog(onDismissRequest = { confirmReset = false }, title = { Text("Reset everything?") },
-        text = { Text("This deletes your keys, memory, tasks, routines and the conversation from this phone. It can't be undone.") },
-        confirmButton = { TextButton(onClick = { confirmReset = false; actions.onResetAll() }) { Text("Reset", color = MaterialTheme.colorScheme.error) } },
-        dismissButton = { TextButton(onClick = { confirmReset = false }) { Text("Cancel") } })
+    if (confirmReset) ModalBottomSheet(onDismissRequest = { confirmReset = false }) {
+        Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
+            Text("Reset everything?", style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.height(8.dp))
+            Text("This deletes your keys, memory, tasks, routines and the conversation from this phone. It can't be undone.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(20.dp))
+            Button(onClick = { confirmReset = false; actions.onResetAll() }, modifier = Modifier.fillMaxWidth().height(56.dp), shapes = ButtonDefaults.shapes(),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError)) { Text("Reset everything") }
+            TextButton(onClick = { confirmReset = false }, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("Keep my stuff") }
+        }
+    }
 }
 
 @Composable

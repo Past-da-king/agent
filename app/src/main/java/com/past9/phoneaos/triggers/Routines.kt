@@ -40,7 +40,7 @@ object Routines {
         }.getOrNull()
         "interval" -> t.lastRunAt?.let { (it + (t.spec.toLongOrNull() ?: 60) * 60_000 - now.toInstant().toEpochMilli()).coerceAtLeast(0) } ?: ((t.spec.toLongOrNull() ?: 60) * 60_000)
         "email" -> 15 * 60_000L
-        else -> null
+        else -> null // "notification" fires on arrival, not on a clock
     }
 
     fun schedule(context: Context, t: TriggerRow) {
@@ -53,6 +53,7 @@ object Routines {
                 wm.enqueueUniquePeriodicWork(name(t.id), ExistingPeriodicWorkPolicy.UPDATE,
                     PeriodicWorkRequestBuilder<RoutineWorker>(minutes, TimeUnit.MINUTES).setInputData(data).setConstraints(net).build())
             }
+            "notification" -> wm.cancelUniqueWork(name(t.id))
             else -> {
                 val delay = nextRunIn(t) ?: run { wm.cancelUniqueWork(name(t.id)); return }
                 wm.enqueueUniqueWork(name(t.id), ExistingWorkPolicy.REPLACE,
@@ -61,9 +62,9 @@ object Routines {
         }
     }
 
-    fun runNow(context: Context, id: Long) {
-        WorkManager.getInstance(context).enqueueUniqueWork("$id-now", ExistingWorkPolicy.KEEP,
-            OneTimeWorkRequestBuilder<RoutineWorker>().setInputData(workDataOf("id" to id, "manual" to true)).build())
+    fun runNow(context: Context, id: Long, context_: String = "") {
+        WorkManager.getInstance(context).enqueueUniqueWork("$id-now-${System.currentTimeMillis() / 60_000}", ExistingWorkPolicy.KEEP,
+            OneTimeWorkRequestBuilder<RoutineWorker>().setInputData(workDataOf("id" to id, "manual" to true, "context" to context_)).build())
     }
 
     fun cancel(context: Context, id: Long) = WorkManager.getInstance(context).cancelUniqueWork(name(id))
@@ -83,10 +84,10 @@ class RoutineWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         val g = App.graph(applicationContext)
         val id = inputData.getLong("id", -1)
         val t = g.db.triggers().get(id) ?: return Result.success()
-        val manual = inputData.getBoolean("manual", false)
-        if (!t.enabled && !manual) return Result.success()
+        val manual = inputData.getBoolean("manual", false) && inputData.getString("context").isNullOrEmpty()
+        if (!t.enabled && !inputData.getBoolean("manual", false)) return Result.success()
 
-        var prompt = t.prompt
+        var prompt = inputData.getString("context").orEmpty() + t.prompt
         var cursor = t.cursor
         if (t.kind == "email" && !manual) {
             // Event trigger: only run when a NEW email matches the search.

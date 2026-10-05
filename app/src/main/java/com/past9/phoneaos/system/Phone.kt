@@ -32,7 +32,9 @@ class AndroidPhone(private val context: Context) : PhoneBridge {
 
     override fun notify(title: String, body: String, questionItemId: Long?, options: List<String>) {
         val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE)
-        val b = NotificationCompat.Builder(context, CH_MESSAGES).setSmallIcon(R.drawable.ic_stat_agent).setContentTitle(title)
+        val st = App.graph(context).settings.state.value
+        val b = NotificationCompat.Builder(context, CH_MESSAGES).setSmallIcon(Identity.statIcon(context, st.mascot)).setContentTitle(title)
+            .setColor(com.past9.phoneaos.ui.theme.accentOf(st.accent).lP.let { android.graphics.Color.rgb((it.red * 255).toInt(), (it.green * 255).toInt(), (it.blue * 255).toInt()) })
             .setContentText(body).setStyle(NotificationCompat.BigTextStyle().bigText(body)).setAutoCancel(true).setContentIntent(open)
         val nid = questionItemId?.toInt() ?: (System.currentTimeMillis() % 100000).toInt()
         if (questionItemId != null) options.take(3).forEachIndexed { i, opt ->
@@ -71,7 +73,7 @@ class WorkService : Service() {
     override fun onCreate() {
         super.onCreate()
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
-        val n = NotificationCompat.Builder(this, AndroidPhone.CH_WORK).setSmallIcon(R.drawable.ic_stat_agent)
+        val n = NotificationCompat.Builder(this, AndroidPhone.CH_WORK).setSmallIcon(Identity.statIcon(this, App.graph(this).settings.state.value.mascot))
             .setContentTitle("Your agent is working").setContentText("You can leave the app. I will let you know.").setOngoing(true).setContentIntent(open).build()
         if (Build.VERSION.SDK_INT >= 34) startForeground(42, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(42, n)
     }

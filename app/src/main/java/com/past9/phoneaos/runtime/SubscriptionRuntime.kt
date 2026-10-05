@@ -33,9 +33,9 @@ data class SubSpec(
 
 val SubSpecs = mapOf(
     SubKind.CLAUDE to SubSpec(SubKind.CLAUDE, listOf("@anthropic-ai/claude-agent-sdk"), "bridge-claude.mjs", emptyList(), "CLAUDE_CODE_OAUTH_TOKEN",
-        "Paste a Claude sign-in token (from claude setup-token). It stays on this phone and is only given to Claude Code."),
+        "Or paste a long-lived token from claude setup-token on a computer."),
     SubKind.CODEX to SubSpec(SubKind.CODEX, listOf("@openai/codex-sdk"), "bridge-codex.mjs", listOf("codex"), "CODEX_AUTH_JSON",
-        "Sign in with ChatGPT: paste the contents of your Codex auth.json (from codex login). It stays on this phone."),
+        "Or paste the contents of auth.json from codex login on a computer."),
     SubKind.OPENCODE to SubSpec(SubKind.OPENCODE, listOf("@opencode-ai/sdk"), "bridge-opencode.mjs", listOf("opencode"), "OPENCODE_API_KEY",
         "Paste your OpenCode Zen or Go API key (opencode.ai, Settings, API keys). It stays on this phone."),
 )
@@ -56,10 +56,19 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
 
     val available: Boolean get() = node.exists() && spec.nativeBins.all { File(libDir, "lib$it.so").exists() }
     val installed: Boolean get() = spec.packages.all { File(dir, "node_modules/$it/package.json").exists() }
-    val signedIn: Boolean get() = token() != null
+    val signedIn: Boolean get() = token() != null || when (kind) {
+        SubKind.CLAUDE -> File(home, ".claude/.credentials.json").exists()
+        SubKind.CODEX -> File(home, ".codex/auth.json").exists()
+        SubKind.OPENCODE -> false
+    }
 
     fun token(): String? = tokenFile.takeIf { it.exists() }?.readText()?.trim()?.takeIf { it.length > 20 }
-    fun setToken(t: String?) { if (t == null) tokenFile.delete() else { dir.mkdirs(); tokenFile.writeText(t.trim()); tokenFile.setReadable(false, false); tokenFile.setReadable(true, true) } }
+    fun setToken(t: String?) {
+        if (t == null) { tokenFile.delete(); return }
+        dir.mkdirs()
+        if (kind == SubKind.CODEX && t.trim().startsWith("{")) { File(home, ".codex").mkdirs(); File(home, ".codex/auth.json").writeText(t.trim()); return }
+        tokenFile.writeText(t.trim()); tokenFile.setReadable(false, false); tokenFile.setReadable(true, true)
+    }
 
     fun sizeBytes(): Long = if (dir.exists()) dir.walkBottomUp().filter { it.isFile }.sumOf { it.length() } else 0L
 
@@ -76,34 +85,65 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
     /** Everything we unpacked or downloaded, for every subscription. The libs inside the APK stay. */
     fun delete() { dir.deleteRecursively() }
 
-    /** Unpack npm, then npm-install this subscription's SDK. Reports progress lines. */
+    private val bin: File get() = File(dir, "bin")
+
+    /** Unpack the bundled JS (Agent SDK + Codex SDK) and wire up bin/ links to the native executables. */
     suspend fun install(progress: (String) -> Unit) = withContext(Dispatchers.IO) {
         check(available) { "This build has no ${kind.label} runtime pack" }
-        dir.mkdirs()
-        context.assets.list("runtime")?.forEach { name -> context.assets.open("runtime/$name").use { i -> File(dir, name).outputStream().use { i.copyTo(it) } } }
-        File(dir, "package.json").takeIf { !it.exists() }?.writeText("""{"name":"phone-runtime","private":true,"type":"module"}""")
-        val npmDir = File(dir, "npm")
-        if (!File(npmDir, "bin/npm-cli.js").exists()) {
-            progress("Downloading npm")
-            val meta = JSONObject(get("https://registry.npmjs.org/npm/latest").use { it.readBytes().decodeToString() })
-            get(meta.getJSONObject("dist").getString("tarball")).use { untarGz(it, npmDir, stripFirst = true) }
+        dir.mkdirs(); bin.mkdirs()
+        progress("Unpacking")
+        context.assets.list("runtime")?.filter { it != "node_modules.zip" }?.forEach { name -> context.assets.open("runtime/$name").use { i -> File(dir, name).outputStream().use { i.copyTo(it) } } }
+        if (!installed) context.assets.open("runtime/node_modules.zip").use { unzip(it, dir) }
+        mapOf("node" to "libnode.so", "rg" to "librg.so", "codex" to "libcodex.so").forEach { (name, lib) ->
+            val target = File(libDir, lib); val link = File(bin, name)
+            if (target.exists()) { link.delete(); android.system.Os.symlink(target.path, link.path) }
         }
-        progress("Installing ${kind.label}")
-        val code = exec(listOf(node.path, File(npmDir, "bin/npm-cli.js").path, "install", "--no-audit", "--no-fund", "--ignore-scripts") + spec.packages, progress)
-        check(code == 0 && installed) { "npm install failed (exit $code)" }
+        progress("Checking Node")
+        val out = StringBuilder()
+        val code = exec(listOf(File(bin, "node").path, "-e", "console.log('node ' + process.version)")) { out.appendLine(it); progress(it) }
+        check(code == 0 && installed) { "Runtime check failed (exit $code): ${out.toString().take(300)}" }
         progress("Installed")
     }
 
-    private fun env() = mapOf(
-        "HOME" to home.path, "TMPDIR" to context.cacheDir.path, "npm_config_cache" to File(dir, ".npm").path,
-        "PATH" to "${libDir.path}:/system/bin", "NODE_PATH" to File(dir, "node_modules").path,
-        // The SDKs look for their CLI on PATH or at these paths; ours live in nativeLibraryDir.
-        "CODEX_BIN" to File(libDir, "libcodex.so").path, "OPENCODE_BIN" to File(libDir, "libopencode.so").path,
-    )
+    /**
+     * Sign in with the user's own account, the way the CLI does it on a computer: the CLI starts a
+     * callback server on localhost and prints a URL; we open that URL in the phone's browser and
+     * the provider redirects back to localhost, which is this phone. Returns null on success.
+     */
+    suspend fun login(onUrl: (String) -> Unit, progress: (String) -> Unit): String? = withContext(Dispatchers.IO) {
+        val cmd = when (kind) {
+            SubKind.CLAUDE -> listOf(File(bin, "node").path, File(dir, "node_modules/@anthropic-ai/claude-agent-sdk/cli.js").path, "auth", "login", "--claudeai")
+            SubKind.CODEX -> listOf(File(bin, "codex").path, "login")
+            SubKind.OPENCODE -> return@withContext "OpenCode sign-in isn't available yet"
+        }
+        var opened = false
+        val lines = StringBuilder()
+        val code = exec(cmd) { line ->
+            lines.appendLine(line); progress(line)
+            val url = Regex("https://\\S+").find(line)?.value?.trimEnd('.', ')')
+            if (!opened && url != null && (url.contains("oauth") || url.contains("authorize") || url.contains("login"))) { opened = true; onUrl(url) }
+        }
+        if (code == 0 && signedIn) null else "Sign-in didn't finish (exit $code). ${lines.lines().lastOrNull { it.isNotBlank() }.orEmpty().take(200)}"
+    }
+
+    private fun env(): Map<String, String> {
+        val proxy = "http://127.0.0.1:${proxy.start().port}"
+        return mapOf(
+            "HOME" to home.path, "TMPDIR" to context.cacheDir.path, "SHELL" to "/system/bin/sh",
+            "PATH" to "${bin.path}:/system/bin", "LD_LIBRARY_PATH" to libDir.path, "NODE_PATH" to File(dir, "node_modules").path,
+            // Termux's OpenSSL looks for CAs under Termux's own prefix; hand it ours.
+            "SSL_CERT_FILE" to File(dir, "cacert.pem").path, "NODE_EXTRA_CA_CERTS" to File(dir, "cacert.pem").path,
+            "USE_BUILTIN_RIPGREP" to "0", "DISABLE_AUTOUPDATER" to "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC" to "1",
+            "CODEX_HOME" to File(home, ".codex").path, "CODEX_BIN" to File(bin, "codex").path,
+            // Codex (static musl) can't resolve DNS on Android; it reaches the internet through our proxy.
+            "HTTPS_PROXY" to proxy, "HTTP_PROXY" to proxy, "https_proxy" to proxy, "http_proxy" to proxy,
+            "NO_PROXY" to "127.0.0.1,localhost", "no_proxy" to "127.0.0.1,localhost",
+        )
+    }
 
     private fun exec(cmd: List<String>, progress: (String) -> Unit): Int {
         val p = ProcessBuilder(cmd).directory(dir).redirectErrorStream(true).apply { environment().putAll(env()) }.start()
-        p.inputStream.bufferedReader().forEachLine { progress(it.take(160)) }
+        p.inputStream.bufferedReader().forEachLine { progress(it.take(400)) }
         return p.waitFor()
     }
 
@@ -111,7 +151,7 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
     fun turn(prompt: String, system: String, resume: String?, model: String?, mcpUrl: String, mcpToken: String): Flow<JSONObject> = callbackFlow {
         val pb = ProcessBuilder(node.path, File(dir, spec.bridge).path).directory(dir).redirectErrorStream(false)
         pb.environment().putAll(env())
-        pb.environment()[spec.tokenEnv] = token() ?: error("Not signed in to ${kind.label}")
+        token()?.let { pb.environment()[spec.tokenEnv] = it } ?: check(signedIn) { "Not signed in to ${kind.label}" }
         pb.environment()["PHONE_MCP_URL"] = mcpUrl
         pb.environment()["PHONE_MCP_TOKEN"] = mcpToken
         val p = pb.start()
@@ -134,6 +174,19 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
     }
 
     companion object {
+        private val proxy = LocalProxy()
+
+        fun unzip(input: InputStream, dest: File) {
+            java.util.zip.ZipInputStream(input.buffered()).use { z ->
+                while (true) {
+                    val e = z.nextEntry ?: break
+                    if (e.name.contains("..")) continue
+                    val f = File(dest, e.name)
+                    if (e.isDirectory) f.mkdirs() else { f.parentFile?.mkdirs(); f.outputStream().use { z.copyTo(it) } }
+                }
+            }
+        }
+
         /** Minimal ustar reader: regular files and directories, GNU long names. Enough for npm tarballs. */
         fun untarGz(input: InputStream, dest: File, stripFirst: Boolean) {
             val tin = GZIPInputStream(input).buffered()

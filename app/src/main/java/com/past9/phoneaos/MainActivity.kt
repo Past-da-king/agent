@@ -27,6 +27,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.graphics.drawable.toBitmap
 import com.past9.phoneaos.agent.AnthropicProvider
 import com.past9.phoneaos.agent.Msg
 import com.past9.phoneaos.agent.OpenAiCompatProvider
@@ -37,8 +41,6 @@ import com.past9.phoneaos.data.Provider
 import com.past9.phoneaos.data.TaskRow
 import com.past9.phoneaos.system.Speaker
 import com.past9.phoneaos.triggers.Routines
-import com.past9.phoneaos.ui.AppDrawer
-import com.past9.phoneaos.ui.NavCounts
 import com.past9.phoneaos.ui.screens.*
 import com.past9.phoneaos.ui.theme.AppTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,6 +59,13 @@ class MainActivity : ComponentActivity() {
             val st by g.settings.state.collectAsStateWithLifecycle()
             AppTheme(accent = st.accent, mascot = st.mascot) { Root(g) }
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Swap the home-screen icon to the user's character only once they've left the app.
+        val st = App.graph(this).settings.state.value
+        if (st.onboarded) runCatching { com.past9.phoneaos.system.Identity.applyLauncherIcon(this, st.mascot, st.accent) }
     }
 
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); handle(intent) }
@@ -80,17 +89,31 @@ class MainActivity : ComponentActivity() {
         val routines by g.db.triggers().all().collectAsStateWithLifecycle(emptyList())
         val browserLive by BrowserService.running.collectAsStateWithLifecycle()
         val nav = rememberNavController()
-        val drawer = rememberDrawerState(DrawerValue.Closed)
+        val notifRows by g.db.notifications().recent(200).collectAsStateWithLifecycle(emptyList())
+        val backEntry by nav.currentBackStackEntryAsState()
+        val route = backEntry?.destination?.route ?: "home"
         val scope = rememberCoroutineScope()
         var draft by rememberSaveable { mutableStateOf("") }
+        val attachments = remember { mutableStateListOf<String>() }
+        val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(4)) { uris ->
+            scope.launch { uris.forEach { u -> importImage(u)?.let { attachments += it } } }
+        }
         var conn by remember { mutableStateOf(ConnectionsState(hasKey = settings.composioEnabled)) }
         val sub = remember(settings.subKind) { g.subRuntime() }
         val speaker = remember { Speaker(this) }
 
+        // The agent wants a page (e.g. an app sign-in) shown in the built-in browser.
+        LaunchedEffect(Unit) {
+            com.past9.phoneaos.system.UiBus.openInBrowser.collect { req ->
+                com.past9.phoneaos.system.UiBus.openInBrowser.resetReplayCache()
+                runCatching { BrowserService.await(this@MainActivity, "main", req.profile ?: settings.browserProfiles.first()).goto(req.url) }
+                nav.navigate("browser") { launchSingleTop = true }
+            }
+        }
         val incomingNow by incoming.collectAsStateWithLifecycle()
         LaunchedEffect(incomingNow) {
             val (text, open) = incomingNow
-            if (text != null) { draft = text; nav.navigate("chat") { popUpTo("chat") { inclusive = false } } }
+            if (text != null) { draft = text; nav.navigate("chat") { launchSingleTop = true } }
             if (open != null) nav.navigate(open)
             if (text != null || open != null) incoming.value = null to null
         }
@@ -103,6 +126,19 @@ class MainActivity : ComponentActivity() {
         }
 
         val notifPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { conn = conn.copy(notificationsAllowed = it) }
+        // The agent asked for a permission mid-task: show Android's prompt and hand the answer back.
+        val permReq by com.past9.phoneaos.system.PermissionBroker.pending.collectAsStateWithLifecycle()
+        var activeReq by remember { mutableStateOf<com.past9.phoneaos.system.PermissionBroker.Request?>(null) }
+        val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { res ->
+            activeReq?.let { com.past9.phoneaos.system.PermissionBroker.answer(it, res.values.any { v -> v }) }; activeReq = null
+        }
+        val fileReq by com.past9.phoneaos.tools.FilePickBroker.pending.collectAsStateWithLifecycle()
+        var activeFile by remember { mutableStateOf<com.past9.phoneaos.tools.FilePickBroker.Request?>(null) }
+        val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+            activeFile?.let { com.past9.phoneaos.tools.FilePickBroker.answer(it, uris) }; activeFile = null
+        }
+        LaunchedEffect(fileReq) { fileReq?.let { if (activeFile == null) { activeFile = it; filePicker.launch(it.mimeTypes) } } }
+        LaunchedEffect(permReq) { permReq?.let { if (activeReq == null) { activeReq = it; permLauncher.launch(it.permissions) } } }
         val voice = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
             r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let { draft = if (draft.isBlank()) it else "$draft $it" }
         }
@@ -115,39 +151,88 @@ class MainActivity : ComponentActivity() {
                 val t = g.runtime.composio.toolkits(); conn = conn.copy(toolkits = t, loading = false)
             } catch (e: Exception) { conn = conn.copy(loading = false, error = "Couldn't reach Composio: ${e.message}") }
         }
-        fun go(route: String) { scope.launch { drawer.close() }; if (route != "chat") nav.navigate(route) { launchSingleTop = true } else nav.popBackStack("chat", false) }
+        fun go(r: String) { if (r == "home") nav.popBackStack("home", false) else nav.navigate(r) { popUpTo("home"); launchSingleTop = true } }
+        val home = HomeState(settings.agentName, settings.userName, status, items, goals, tasks, routines,
+            notifRows.count { it.postedAt > System.currentTimeMillis() - 86_400_000L }, settings.notifApps.size, browserLive)
+        val barRoutes = setOf("home", "tasks", "routines", "connections")
+        val barPad = 112.dp
 
-        ModalNavigationDrawer(drawerState = drawer, drawerContent = {
-            AppDrawer(settings.agentName, NavCounts(tasks.count { it.status != "done" }, memories.size, routines.count { it.enabled }, conn.connected.count { it.status == "ACTIVE" }), ::go)
-        }) {
-            NavHost(nav, startDestination = "chat") {
+        androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
+            NavHost(nav, startDestination = "home") {
+                composable("home") {
+                    androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.surface) {
+                        HomeScreen(home, HomeActions(
+                            onProfile = { nav.navigate("profile") }, onChat = { nav.navigate("chat") },
+                            onAnswer = { id, o -> g.runtime.answer(id, o) },
+                            onToggleTask = { t -> scope.launch { g.db.tasks().updateTask(t.copy(status = if (t.status == "done") "todo" else "done", updatedAt = System.currentTimeMillis())) } },
+                            onTasks = { go("tasks") }, onGoal = { nav.navigate("profile") }, onRoutines = { go("routines") },
+                            onSettings = { nav.navigate("settings") }, onBrowser = { nav.navigate("browser") }, onNotifications = { nav.navigate("notifications") },
+                        ), bottomPadding = barPad + 24.dp)
+                    }
+                }
+                composable("profile") {
+                    androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.surface) {
+                        ProfileScreen(home, memories, ProfileActions(onBack = { nav.popBackStack() }, onChat = { nav.navigate("chat") },
+                            onMemory = { nav.navigate("memory") }, onRoutines = { go("routines") }, onStyle = { nav.navigate("style") }))
+                    }
+                }
+                composable("notifications") {
+                    val pm = packageManager
+                    val apps = remember {
+                        val launch = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+                        pm.queryIntentActivities(launch, 0).map { it.activityInfo.packageName }.distinct().filter { it != packageName }.mapNotNull { pkg ->
+                            runCatching {
+                                val ai = pm.getApplicationInfo(pkg, 0)
+                                PhoneApp(pkg, pm.getApplicationLabel(ai).toString(), runCatching { pm.getApplicationIcon(ai).toBitmap(96, 96).asImageBitmap() }.getOrNull())
+                            }.getOrNull()
+                        }
+                    }
+                    val access = remember(backEntry) { androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(this@MainActivity).contains(packageName) }
+                    NotificationsScreen(access, apps, settings.notifApps, notifRows, NotificationsActions(
+                        onBack = { nav.popBackStack() },
+                        onToggle = { pkg, on -> g.settings.setNotifApp(pkg, on); if (!on) scope.launch { g.db.notifications().forget(pkg) } },
+                        onGrantAccess = { runCatching { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } },
+                    ))
+                }
                 composable("chat") {
                     ChatScreen(items, status, settings.agentName, settings.userName, browserLive, draft, { draft = it },
                         ChatActions(
-                            onSend = { g.runtime.send(it) }, onStop = { g.runtime.stop() },
+                            onSend = { g.runtime.send(it, attachments.toList()); attachments.clear() }, onStop = { g.runtime.stop() },
+                            onAttach = { picker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                            onRemoveAttachment = { attachments.remove(it) },
                             onAnswer = { id, o -> g.runtime.answer(id, o) },
-                            onMenu = { scope.launch { drawer.open() } }, onBrowser = { nav.navigate("browser") },
+                            onMenu = { nav.popBackStack() }, onBrowser = { nav.navigate("browser") }, onProfile = { nav.navigate("profile") },
                             onMic = { runCatching { voice.launch(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)) } },
-                        ), openCount = tasks.count { it.status != "done" })
+                        ), openCount = tasks.count { it.status != "done" }, attachments = attachments)
                 }
                 composable("tasks") {
-                    TasksScreen(goals, tasks, TaskActions(
+                    TasksScreen(goals, tasks, bottomPadding = barPad, actions = TaskActions(
                         onBack = { nav.popBackStack() },
                         onToggle = { t -> scope.launch { g.db.tasks().updateTask(t.copy(status = if (t.status == "done") "todo" else "done", updatedAt = System.currentTimeMillis())) } },
-                        onAdd = { text -> scope.launch { g.db.tasks().insertTask(TaskRow(title = text.trim())) } },
+                        onAdd = { text -> scope.launch { g.db.tasks().insertTask(TaskRow(title = text.trim(), owner = "user")) } },
                         onDelete = { t -> scope.launch { g.db.tasks().deleteTask(t.id) } },
-                        onAsk = { prompt -> g.runtime.send(prompt); nav.popBackStack("chat", false) },
+                        onAsk = { prompt -> g.runtime.send(prompt); nav.navigate("chat") },
                     ))
                 }
                 composable("memory") {
                     MemoryScreen(memories, MemoryActions(
                         onBack = { nav.popBackStack() },
+                        onOpen = { m -> nav.navigate("page/${m.id}") },
                         onSave = { m -> scope.launch { if (m.id == 0L) g.db.memory().insert(m) else g.db.memory().update(m) } },
                         onDelete = { m -> scope.launch { g.db.memory().delete(m.id) } },
                     ))
                 }
+                composable("page/{id}") { e ->
+                    val id = e.arguments?.getString("id")?.toLongOrNull()
+                    WikiPageScreen(memories.firstOrNull { it.id == id }, memories, onBack = { nav.popBackStack() },
+                        onOpenTitle = { t -> val target = memories.firstOrNull { it.title.equals(t, true) }
+                            if (target != null) nav.navigate("page/${target.id}") else { g.runtime.send("Start a memory page about $t with what you know."); nav.navigate("chat") } },
+                        onSave = { m -> scope.launch { g.db.memory().update(m) } },
+                        onDelete = { m -> scope.launch { g.db.memory().delete(m.id) }; nav.popBackStack() },
+                        onAsk = { p -> g.runtime.send(p); nav.navigate("chat") })
+                }
                 composable("routines") {
-                    RoutinesScreen(routines, RoutineActions(
+                    RoutinesScreen(routines, bottomPadding = barPad, actions = RoutineActions(
                         onBack = { nav.popBackStack() },
                         onToggle = { r -> scope.launch { val n = r.copy(enabled = !r.enabled); g.db.triggers().upsert(n); Routines.schedule(this@MainActivity, n) } },
                         onRunNow = { r -> Routines.runNow(this@MainActivity, r.id) },
@@ -157,7 +242,8 @@ class MainActivity : ComponentActivity() {
                 }
                 composable("connections") {
                     LaunchedEffect(Unit) { refreshConnections() }
-                    ConnectionsScreen(conn, ConnectionsActions(
+                    ConnectionsScreen(conn, bottomPadding = barPad + 24.dp, actions = ConnectionsActions(
+                        onNotifications = { nav.navigate("notifications") },
                         onBack = { nav.popBackStack() },
                         onSaveKey = { k -> saveComposio(g, k).also { if (it == null) refreshConnections() } },
                         onRemoveKey = { g.settings.setComposioKey(null); conn = ConnectionsState(hasKey = false) },
@@ -192,7 +278,13 @@ class MainActivity : ComponentActivity() {
                     var info by remember { mutableStateOf(sub.info()) }
                     val log = remember { mutableStateListOf<String>() }
                     var installing by remember { mutableStateOf(false) }
+                    var signingIn by remember { mutableStateOf(false) }
+                    var signErr by remember { mutableStateOf<String?>(null) }
                     SubSetupScreen(sub.kind, sub.spec.signInHelp, info, sub.installed, log, installing, onBack = { nav.popBackStack() },
+                        signingIn = signingIn, signInError = signErr,
+                        onSignIn = { scope.launch { signingIn = true; signErr = null
+                            signErr = sub.login(onUrl = { url -> runOnUiThread { open(url) } }, progress = { l -> scope.launch { log += l } })
+                            signingIn = false; info = sub.info(); if (sub.signedIn) g.settings.setMode(PowerMode.SUBSCRIPTION) } },
                         onInstall = { scope.launch { installing = true; runCatching { sub.install { l -> scope.launch { log += l } } }.onFailure { log += "Failed: ${it.message}" }; installing = false; info = sub.info() } },
                         onSaveToken = { t -> sub.setToken(t); g.settings.setMode(PowerMode.SUBSCRIPTION); info = sub.info() },
                         onUseKey = { g.settings.setMode(PowerMode.API_KEY); nav.navigate("key") })
@@ -205,13 +297,21 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 composable("browser") {
-                    val engine = BrowserService.engine
-                    val page by (engine?.page ?: MutableStateFlow(com.past9.phoneaos.browser.PageState())).collectAsStateWithLifecycle()
-                    BrowserScreen(engine, page, onClose = { nav.popBackStack() }, onHandBack = {
-                        items.lastOrNull { it.kind == "question" && !org.json.JSONObject(it.meta).has("answer") }?.let { g.runtime.answer(it.id, "Done") }
-                        nav.popBackStack()
-                    })
+                    val engines by BrowserService.live.collectAsStateWithLifecycle()
+                    BrowserScreen(engines, settings.browserProfiles, BrowserActions(
+                        onClose = { nav.popBackStack() },
+                        onHandBack = {
+                            items.lastOrNull { it.kind == "question" && !org.json.JSONObject(it.meta).has("answer") }?.let { g.runtime.answer(it.id, "Done") }
+                            nav.popBackStack()
+                        },
+                        onProfile = { p -> scope.launch { runCatching { BrowserService.await(this@MainActivity, "main", p).goto("https://www.google.com") } } },
+                        onAddProfile = { n -> g.settings.addBrowserProfile(n); scope.launch { runCatching { BrowserService.await(this@MainActivity, "main", n).goto("https://www.google.com") } } },
+                    ))
                 }
+            }
+            androidx.compose.animation.AnimatedVisibility(route in barRoutes, modifier = androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
+                enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut()) {
+                HomeBar(route, ::go, onTalk = { nav.navigate("chat") })
             }
         }
     }
@@ -253,6 +353,20 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun notificationsAllowed() = Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    /** Copy a picked photo into app storage, scaled to at most 1568px (what vision models use) as JPEG. */
+    private suspend fun importImage(uri: Uri): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        runCatching {
+            val src = android.graphics.ImageDecoder.createSource(contentResolver, uri)
+            val bmp = android.graphics.ImageDecoder.decodeBitmap(src) { d, info, _ ->
+                val w = info.size.width; val h = info.size.height; val scale = minOf(1f, 1568f / maxOf(w, h))
+                d.setTargetSize((w * scale).toInt().coerceAtLeast(1), (h * scale).toInt().coerceAtLeast(1)); d.allocator = android.graphics.ImageDecoder.ALLOCATOR_SOFTWARE
+            }
+            val f = java.io.File(filesDir, "uploads/${System.currentTimeMillis()}.jpg").apply { parentFile?.mkdirs() }
+            f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, it) }
+            f.path
+        }.getOrNull()
+    }
 
     private fun open(url: String) { runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }
 }

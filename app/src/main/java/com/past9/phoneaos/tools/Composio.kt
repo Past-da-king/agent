@@ -112,15 +112,32 @@ class AppsListTool(private val c: ComposioClient) : Tool {
     }
 }
 
+/**
+ * The agent connects an app itself when it needs one: it asks, the user taps Connect, the
+ * sign-in opens in the built-in browser, and the tool waits until Composio reports the
+ * connection ACTIVE, then the agent carries on.
+ */
 class AppsConnectTool(private val c: ComposioClient, private val openLink: suspend (String, String) -> Unit) : Tool {
-    override val spec = ToolSpec("apps_connect", "Start connecting an app for the user (e.g. gmail, googlecalendar, googledrive, slack, notion). Opens the app's sign-in page for them.",
-        schema(listOf("toolkit"), "toolkit" to str("Composio toolkit slug, lower case")))
+    override val spec = ToolSpec("apps_connect", "Connect an app the task needs (e.g. gmail, googlecalendar, googledrive, googledocs, slack, notion). Asks the user, opens the sign-in in the app's browser, and waits until it's connected (up to 5 minutes).",
+        schema(listOf("toolkit", "reason"), "toolkit" to str("Composio toolkit slug, lower case"), "reason" to str("What you need it for, finishing 'so I can...'")))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val slug = input.optString("toolkit").lowercase().trim()
+        if (c.connections().any { it.toolkit == slug && it.status == "ACTIVE" }) return "$slug is already connected."
+        val name = slug.replaceFirstChar { it.uppercase() }
+        val a = ctx.ask("Connect $name so I can ${input.optString("reason").removePrefix("so I can ")}?", listOf("Connect", "Not now"))
+        if (a != "Connect") return if (a == null) "Nobody around to approve connecting $slug." else "The user doesn't want to connect $slug right now."
         val link = c.connect(slug)
         openLink(slug, link)
-        ctx.activity("Connecting $slug: sign-in opened", JSONObject().put("tool", "apps").put("link", link))
-        return "Sign-in link opened for the user: $link . They finish it there; check apps_connected afterwards."
+        val id = ctx.activity("Waiting for you to sign in to $name", JSONObject().put("tool", "apps").put("link", link))
+        val deadline = System.currentTimeMillis() + 5 * 60_000
+        while (System.currentTimeMillis() < deadline) {
+            kotlinx.coroutines.delay(4000)
+            if (runCatching { c.connections() }.getOrNull()?.any { it.toolkit == slug && it.status == "ACTIVE" } == true) {
+                ctx.updateActivity(id, "$name connected"); return "$slug is connected now. Carry on."
+            }
+        }
+        ctx.updateActivity(id, "$name sign-in not finished")
+        return "The user hasn't finished signing in to $slug yet. Tell them you'll continue once it's connected."
     }
 }
 

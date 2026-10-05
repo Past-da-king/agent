@@ -72,14 +72,16 @@ class AgentRuntime(
     fun tools(forHelper: Boolean = false): List<Tool> {
         val list = mutableListOf<Tool>(
             NowTool(), WebFetchTool(),
-            MemorySearchTool(db.memory()), MemorySaveTool(db.memory()), MemoryUpdateTool(db.memory()),
+            MemorySearchTool(db.memory()), MemorySaveTool(db.memory()), MemoryGetTool(db.memory()), MemoryUpdateTool(db.memory()),
             TaskListTool(db.tasks()), TaskAddTool(db.tasks()), TaskUpdateTool(db.tasks()), GoalCreateTool(db.tasks()),
+            NotificationsTool(db.notifications()) { settings.state.value.notifApps },
         )
+        if (!forHelper) { list += LocationTool(context); list += NotificationsAllowTool(context, settings); list += NotificationsStopTool(settings); list += FilesPickTool(context) }
         list += browserTools(context).filter { !forHelper || it !is BrowserHandoffTool }
         if (settings.state.value.composioEnabled) {
             list += AppsListTool(composio); list += AppsFindToolsTool(composio)
             list += GuardedAppsRunTool(AppsRunTool(composio))
-            if (!forHelper) list += AppsConnectTool(composio) { _, url -> phone.openLink(url) }
+            if (!forHelper) list += AppsConnectTool(composio) { _, url -> com.past9.phoneaos.system.UiBus.openInBrowser.emit(com.past9.phoneaos.system.UiBus.OpenInBrowser(url)) }
         }
         if (!forHelper) {
             list += AskUserTool(); list += ApprovalTool(); list += NotifyTool()
@@ -108,14 +110,16 @@ class AgentRuntime(
             appendLine("HOW YOU WORK")
             appendLine("- Do the work yourself with your tools instead of telling the user how. Only ask when it is a real choice (ask_user with buttons).")
             appendLine("- Before anything goes out in their name, costs money, or deletes something: request_approval with the exact content. Never skip this.")
-            appendLine("- Memory is yours to keep. When you learn something durable about them (people, preferences, plans, accounts, decisions) save it with memory_save right away. Search memory before asking anything they may have told you. Fix wrong memories.")
-            appendLine("- Bigger asks become a goal with tasks (goal_create); tick tasks off as you go.")
+            appendLine("- Memory is your wiki about the user's life: one page per person, company, place, project or preference, in markdown, linking other pages as [[Name]], always tagged. When you learn something durable, save or update the page right away (memory_get first to merge). Search memory before asking anything they may have told you. Keep pages accurate; fix wrong ones.")
+            appendLine("- The user uses you as their to-do list. Things THEY must do or asked to be reminded of go on their list (task_add owner user). Your own working steps live under goals (goal_create) and you tick them off as you go; when stuck, mark the step blocked and say what would unblock it.")
+            appendLine("- Phone permissions are OFF until you need one. Need their location (delivery, 'near me')? Use location_get. Need a document from their phone? files_pick. Need to keep an eye on an app's notifications? notifications_allow, then a 'notification' routine, and notifications_stop when done. Don't ask for things you don't need.")
+            if (s.notifApps.isNotEmpty()) appendLine("- You can read the phone's notifications from the apps the user allowed (notifications_read): bank alerts, messages, deliveries. Check them when they would help.")
             appendLine("- For parallel research or many pages, use delegate to run helper agents at once.")
             appendLine("- The browser_* tools drive your own background browser; it keeps going while the user is in other apps. If a page needs them (sign-in, captcha) use browser_handoff.")
             appendLine("- Recurring or later work becomes a routine (routine_create).")
             appendLine("- Facts like phone numbers, addresses, prices and opening hours must come from a page you actually read this session; name the source. If you could not verify it, say so. Never invent.")
             if (!s.composioEnabled) appendLine("- No apps are connected yet (Gmail, Calendar...). If a task needs one, tell the user they can connect apps in Connections.")
-            else appendLine("- Connected apps run through apps_find_tools then apps_run. If an app is not connected yet, offer apps_connect.")
+            else appendLine("- Connected apps run through apps_find_tools then apps_run. If the task needs an app that isn't connected, use apps_connect: it asks the user, opens the sign-in in your browser, and waits until it's done, then carry on.")
             appendLine()
             appendLine("- To show the user an image (a product photo, a map, a chart from a page), put it in your reply as markdown: ![what it is](https://...). Several images in a row become a swipeable strip.")
             appendLine("STYLE: short and warm. Lead with the answer. Use short bullets for lists. No walls of text. Plain words. No em dashes.")
@@ -125,18 +129,18 @@ class AgentRuntime(
             if (goals.isNotEmpty() || tasks.isNotEmpty()) {
                 appendLine("\nOPEN GOALS AND TASKS")
                 goals.forEach { appendLine("- Goal #${it.id}: ${it.title}") }
-                tasks.take(25).forEach { appendLine("- Task #${it.id} [${it.status}] ${it.title}${it.goalId?.let { g -> " (goal #$g)" } ?: ""}") }
+                tasks.take(25).forEach { appendLine("- Task #${it.id} [${it.status}${if (it.owner == "user") ", user's to-do" else ""}] ${it.title}${it.goalId?.let { g -> " (goal #$g)" } ?: ""}") }
             }
         }
     }
 
     // ---- the main conversation --------------------------------------------------------------
 
-    fun send(text: String) {
-        val clean = text.trim(); if (clean.isEmpty()) return
+    fun send(text: String, images: List<String> = emptyList()) {
+        val clean = text.trim().ifEmpty { if (images.isNotEmpty()) "What do you make of this?" else "" }; if (clean.isEmpty()) return
         job = scope.launch {
-            db.chat().insert(ChatItem(kind = "user", text = clean))
-            turnLock.withLock { runTurn(clean) }
+            db.chat().insert(ChatItem(kind = "user", text = clean, meta = JSONObject().put("images", org.json.JSONArray(images)).toString()))
+            turnLock.withLock { runTurn(clean, images) }
         }
     }
 
@@ -165,7 +169,7 @@ class AgentRuntime(
         return msgs
     }
 
-    private suspend fun runTurn(userText: String) {
+    private suspend fun runTurn(userText: String, images: List<String> = emptyList()) {
         if (settings.state.value.mode == PowerMode.SUBSCRIPTION && subscription?.ready == true) return runSubscriptionTurn(userText, subscription!!)
         val provider = providerFactory(settings)
         if (provider == null) {
@@ -176,7 +180,7 @@ class AgentRuntime(
         _status.value = AgentStatus(true, "Thinking")
         phone.workStarted()
         val history = loadHistory("main")
-        val first = Msg.user(userText)
+        val first = Msg.user(userText, images)
         history += first; db.chat().insertTurn(TurnRow(thread = "main", json = first.toJson().toString()))
         val ctx = ChatContext("main", interactive = true)
         try {
@@ -225,7 +229,7 @@ class AgentRuntime(
         val provider = providerFactory(settings) ?: error("No provider")
         _status.value = _status.value.copy(helpers = _status.value.helpers + 1)
         val itemId = db.chat().insert(ChatItem(kind = "helper", text = task, meta = JSONObject().put("label", label).put("state", "working").toString()))
-        val ctx = ChatContext(label, interactive = false, parentAsk = parent)
+        val ctx = ChatContext(label, interactive = false, parentAsk = parent, helperItem = itemId)
         return try {
             val history = mutableListOf(Msg.user(task))
             val sys = systemPrompt(task) + "\n\nYou are a HELPER the main agent started. Do this one job with your tools, then reply with only the findings (facts, links, numbers), no chat. Do not ask the user anything."
@@ -236,6 +240,7 @@ class AgentRuntime(
             db.chat().get(itemId)?.let { db.chat().update(it.copy(meta = JSONObject(it.meta).put("state", "failed").toString())) }
             throw e
         } finally {
+            com.past9.phoneaos.browser.BrowserService.release(label)
             _status.value = _status.value.copy(helpers = (_status.value.helpers - 1).coerceAtLeast(0))
         }
     }
@@ -262,9 +267,9 @@ class AgentRuntime(
 
     // ---- tool context -----------------------------------------------------------------------
 
-    private inner class ChatContext(override val agentLabel: String, private val interactive: Boolean, private val parentAsk: ToolContext? = null) : ToolContext {
+    private inner class ChatContext(override val agentLabel: String, private val interactive: Boolean, private val parentAsk: ToolContext? = null, private val helperItem: Long? = null) : ToolContext {
         override suspend fun activity(text: String, meta: JSONObject): Long =
-            db.chat().insert(ChatItem(kind = "activity", text = text, meta = meta.put("by", agentLabel).toString()))
+            db.chat().insert(ChatItem(kind = "activity", text = text, meta = meta.put("by", agentLabel).apply { helperItem?.let { put("helper", it) } }.toString()))
         override suspend fun updateActivity(id: Long, text: String, meta: JSONObject) {
             db.chat().get(id)?.let { old -> db.chat().update(old.copy(text = text, meta = JSONObject(old.meta).also { m -> meta.keys().forEach { k -> m.put(k, meta.get(k)) } }.toString())) }
         }
@@ -311,6 +316,7 @@ class AgentRuntime(
             e is ProviderException && e.status == 401 -> "Your API key was rejected. Check it in Settings."
             e is ProviderException && e.status == 429 -> "The AI provider says we are sending too much right now (rate limit or out of credit). Try again shortly."
             e is ProviderException && e.status == 0 -> "I could not reach the AI provider. Check your connection."
+            e is ProviderException && e.status == 400 && (e.message ?: "").contains("image", true) -> "This model can't look at images. Pick a vision model in Settings, or send it as text."
             else -> "Something went wrong: ${e.message?.take(240)}"
         }
     }

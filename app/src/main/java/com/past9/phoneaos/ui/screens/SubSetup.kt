@@ -17,7 +17,8 @@ import com.past9.phoneaos.ui.theme.LocalExtra
 
 /** Set up Claude Code inside the app and sign in with the user's Claude subscription. */
 @Composable
-fun SubSetupScreen(kind: com.past9.phoneaos.data.SubKind, signInHelp: String, info: RuntimeInfo, installed: Boolean, log: List<String>, installing: Boolean, onBack: () -> Unit, onInstall: () -> Unit, onSaveToken: (String) -> Unit, onUseKey: () -> Unit) {
+fun SubSetupScreen(kind: com.past9.phoneaos.data.SubKind, signInHelp: String, info: RuntimeInfo, installed: Boolean, log: List<String>, installing: Boolean, onBack: () -> Unit, onInstall: () -> Unit, onSaveToken: (String) -> Unit, onUseKey: () -> Unit,
+                   onSignIn: () -> Unit = {}, signingIn: Boolean = false, signInError: String? = null) {
     var token by remember { mutableStateOf("") }
     SubScreen("${kind.label} ${kind.plan}", info.note, onBack) { pad ->
         Column(Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 48.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -43,7 +44,12 @@ fun SubSetupScreen(kind: com.past9.phoneaos.data.SubKind, signInHelp: String, in
             AppCard {
                 if (info.signedIn) Text("Signed in.", color = LocalExtra.current.success, style = MaterialTheme.typography.titleSmall)
                 else {
-                    Text(signInHelp, style = MaterialTheme.typography.bodyMedium)
+                    Button(onClick = onSignIn, enabled = installed && !signingIn, modifier = Modifier.fillMaxWidth().height(56.dp), shapes = ButtonDefaults.shapes()) {
+                        Text(if (signingIn) "Finish signing in, in your browser…" else "Sign in with ${kind.label}")
+                    }
+                    if (signInError != null) { Spacer(Modifier.height(8.dp)); Text(signInError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                    Spacer(Modifier.height(16.dp))
+                    Text(signInHelp, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(12.dp))
                     OutlinedTextField(token, { token = it.trim() }, label = { Text("${kind.label} sign-in") }, singleLine = true, visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)

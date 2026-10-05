@@ -71,6 +71,7 @@ class AnthropicProvider(private val apiKey: String, private val baseUrl: String 
                     is Block.Text -> if (b.text.isNotEmpty()) put(JSONObject().put("type", "text").put("text", b.text))
                     is Block.ToolCall -> put(JSONObject().put("type", "tool_use").put("id", b.id).put("name", b.name).put("input", b.input))
                     is Block.ToolResult -> put(JSONObject().put("type", "tool_result").put("tool_use_id", b.callId).put("content", b.content).put("is_error", b.isError))
+                    is Block.Image -> if (java.io.File(b.path).exists()) put(JSONObject().put("type", "image").put("source", JSONObject().put("type", "base64").put("media_type", b.mime).put("data", b.base64())))
                 }
             }
         })
@@ -118,7 +119,12 @@ class OpenAiCompatProvider(override val name: String, private val apiKey: String
         val out = mutableListOf<JSONObject>()
         m.blocks.filterIsInstance<Block.ToolResult>().forEach { out += JSONObject().put("role", "tool").put("tool_call_id", it.callId).put("content", it.content) }
         val text = m.text
-        if (text.isNotEmpty()) out += JSONObject().put("role", "user").put("content", text)
+        val images = m.blocks.filterIsInstance<Block.Image>().filter { java.io.File(it.path).exists() }
+        if (images.isNotEmpty()) out += JSONObject().put("role", "user").put("content", JSONArray().apply {
+            images.forEach { put(JSONObject().put("type", "image_url").put("image_url", JSONObject().put("url", "data:${it.mime};base64,${it.base64()}"))) }
+            if (text.isNotEmpty()) put(JSONObject().put("type", "text").put("text", text))
+        })
+        else if (text.isNotEmpty()) out += JSONObject().put("role", "user").put("content", text)
         return out
     }
 }

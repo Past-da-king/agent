@@ -39,15 +39,16 @@ data class ConnectionsActions(
     val onRefresh: () -> Unit = {},
     val onOpenUrl: (String) -> Unit = {},
     val onAllowNotifications: () -> Unit = {},
+    val onNotifications: () -> Unit = {},
 )
 
 @Composable
-fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions) {
+fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bottomPadding: androidx.compose.ui.unit.Dp = 48.dp) {
     var query by remember { mutableStateOf("") }
     val activeCount = state.connected.count { it.status == "ACTIVE" }
     SubScreen("Connections", if (state.hasKey) (if (activeCount == 1) "1 app connected" else "$activeCount apps connected") else "Connect your apps", actions.onBack,
         actions = { if (state.hasKey) IconButton(onClick = actions.onRefresh) { Icon(Icons.Rounded.Refresh, "Refresh") } }) { pad ->
-        LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 48.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item { SectionHeader("On this phone", "Built in, nothing to set up", Modifier.padding(start = 4.dp, top = 4.dp)) }
             item {
                 AppCard(padding = PaddingValues(vertical = 4.dp)) {
@@ -55,6 +56,9 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions) {
                     PhoneLine(Icons.Rounded.IosShare, "Share to your agent", "From any app, tap Share and pick your agent", true, null)
                     PhoneLine(Icons.Rounded.Notifications, "Notifications", if (state.notificationsAllowed) "Results and questions reach you anywhere" else "Off: you'll only see results in the app",
                         state.notificationsAllowed, if (state.notificationsAllowed) null else actions.onAllowNotifications)
+                    Surface(onClick = actions.onNotifications, color = androidx.compose.ui.graphics.Color.Transparent) {
+                        PhoneLine(Icons.Rounded.MarkEmailUnread, "Read my notifications", "Pick the apps your agent may learn from", false, null)
+                    }
                 }
             }
             item { SectionHeader("Your apps", "Gmail, Calendar, Drive, Slack and 250+ more, through Composio with your own key", Modifier.padding(start = 4.dp, top = 16.dp)) }
@@ -65,7 +69,7 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions) {
                 val active = state.connected
                 if (active.isNotEmpty()) item {
                     AppCard(padding = PaddingValues(vertical = 4.dp)) {
-                        active.forEach { c -> ConnectedLine(c, state.toolkits.firstOrNull { it.slug == c.toolkit }?.name ?: prettySlug(c.toolkit), actions) }
+                        active.forEach { c -> val tk = state.toolkits.firstOrNull { it.slug == c.toolkit }; ConnectedLine(c, tk?.name ?: prettySlug(c.toolkit), actions, tk?.logo.orEmpty()) }
                     }
                 }
                 item {
@@ -92,20 +96,31 @@ private fun PhoneLine(icon: androidx.compose.ui.graphics.vector.ImageVector, tit
         }
         if (fix != null) FilledTonalButton(onClick = fix) { Text("Allow") }
         else if (on) Icon(Icons.Rounded.CheckCircle, "On", tint = LocalExtra.current.success)
+        else Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 @Composable
-private fun Initial(name: String) {
+private fun Initial(name: String, logo: String = "") {
+    if (logo.isNotBlank()) {
+        coil.compose.SubcomposeAsyncImage(model = logo, contentDescription = null, modifier = Modifier.size(40.dp).clip(MaterialTheme.shapes.small).background(androidx.compose.ui.graphics.Color.White).padding(5.dp),
+            error = { InitialBox(name) }, loading = { InitialBox(name) })
+        return
+    }
+    InitialBox(name)
+}
+
+@Composable
+private fun InitialBox(name: String) {
     Box(Modifier.size(40.dp).clip(MaterialTheme.shapes.small).background(MaterialTheme.colorScheme.secondaryContainer), contentAlignment = Alignment.Center) {
         Text(name.take(1).uppercase(), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
     }
 }
 
 @Composable
-private fun ConnectedLine(c: Connection, name: String, actions: ConnectionsActions) {
+private fun ConnectedLine(c: Connection, name: String, actions: ConnectionsActions, logo: String = "") {
     Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Initial(name)
+        Initial(name, logo)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(name, style = MaterialTheme.typography.titleSmall)
@@ -125,7 +140,7 @@ private fun ConnectedLine(c: Connection, name: String, actions: ConnectionsActio
 private fun ToolkitLine(t: Toolkit, connected: Boolean, onConnect: () -> Unit) {
     Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Initial(t.name)
+            Initial(t.name, t.logo)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(t.name, style = MaterialTheme.typography.titleSmall)

@@ -28,33 +28,47 @@ class BrowserService : Service() {
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "Background browsing", NotificationManager.IMPORTANCE_LOW))
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java).putExtra("open", "browser"), PendingIntent.FLAG_IMMUTABLE)
         val n = Notification.Builder(this, CHANNEL).setContentTitle("Your agent is browsing").setContentText("Tap to watch or take over")
-            .setSmallIcon(R.drawable.ic_stat_agent).setOngoing(true).setContentIntent(open).build()
+            .setSmallIcon(com.past9.phoneaos.system.Identity.statIcon(this, com.past9.phoneaos.App.graph(this).settings.state.value.mascot)).setOngoing(true).setContentIntent(open).build()
         if (Build.VERSION.SDK_INT >= 34) startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(ID, n)
-        engine = BrowserEngine(this).also { it.create() }
         _running.value = true
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_NOT_STICKY
 
-    override fun onDestroy() { engine?.destroy(); engine = null; _running.value = false; super.onDestroy() }
+    override fun onDestroy() { engines.values.forEach { it.destroy() }; engines.clear(); _engines.value = emptyMap(); _running.value = false; super.onDestroy() }
 
     companion object {
         private const val CHANNEL = "browser"
         private const val ID = 41
-        @Volatile var engine: BrowserEngine? = null
-            private set
+        /** One browser per agent: the main agent's, plus one for each helper while it works. */
+        private val engines = java.util.concurrent.ConcurrentHashMap<String, BrowserEngine>()
+        private val _engines = MutableStateFlow<Map<String, BrowserEngine>>(emptyMap())
+        val live: StateFlow<Map<String, BrowserEngine>> = _engines
+        val engine: BrowserEngine? get() = engines.entries.firstOrNull { it.key.startsWith("main/") }?.value ?: engines.values.firstOrNull()
         private val _running = MutableStateFlow(false)
         val running: StateFlow<Boolean> = _running
+        private const val MAX = 4
 
         fun start(context: Context) { context.startForegroundService(Intent(context, BrowserService::class.java)) }
         fun stop(context: Context) { context.stopService(Intent(context, BrowserService::class.java)) }
 
-        /** Start the service if needed and wait for its engine. */
-        suspend fun await(context: Context): BrowserEngine {
-            engine?.let { return it }
-            start(context)
-            repeat(50) { kotlinx.coroutines.delay(100); engine?.let { kotlinx.coroutines.delay(300); return it } }
-            error("The browser did not start")
+        /** Start the service if needed and get (or open) the browser for this agent. */
+        suspend fun await(context: Context, owner: String = "main", profile: String = "Personal"): BrowserEngine {
+            val key = "$owner/$profile"
+            engines[key]?.let { return it }
+            if (!_running.value) { start(context); repeat(50) { if (_running.value) return@repeat; kotlinx.coroutines.delay(100) } }
+            check(_running.value) { "The browser did not start" }
+            check(engines.size < MAX) { "Too many browsers open at once ($MAX). Finish one first." }
+            val e = BrowserEngine(context.applicationContext, profile).also { it.create() }
+            engines[key] = e; _engines.value = engines.toMap()
+            kotlinx.coroutines.delay(400)
+            return e
+        }
+
+        /** A helper finished: close its browser. The main agent's stays open. */
+        fun release(owner: String) {
+            if (owner == "main") return
+            engines.keys.filter { it.startsWith("$owner/") }.forEach { engines.remove(it)?.destroy() }; _engines.value = engines.toMap()
         }
     }
 }

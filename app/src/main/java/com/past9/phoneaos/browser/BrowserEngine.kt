@@ -29,7 +29,7 @@ data class PageState(val url: String = "", val title: String = "", val loading: 
  * another app. When the user opens the Browser screen the same WebView is attached to it, so
  * they can watch, or take over for a sign-in or captcha, and hand it back.
  */
-class BrowserEngine(private val context: Context) {
+class BrowserEngine(private val context: Context, val profile: String = "Personal") {
     private val main = Handler(Looper.getMainLooper())
     private var web: WebView? = null
     private var pageDone: CompletableDeferred<Unit>? = null
@@ -43,13 +43,20 @@ class BrowserEngine(private val context: Context) {
     fun create() = main.post {
         if (web != null) return@post
         web = WebView(context.applicationContext).apply {
+            // Each profile is its own cookie jar: work and personal accounts stay signed in side by side.
+            if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.MULTI_PROFILE)) runCatching {
+                androidx.webkit.ProfileStore.getInstance().getOrCreateProfile(profile)
+                androidx.webkit.WebViewCompat.setProfile(this, profile)
+            }
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.loadWithOverviewMode = true
             settings.useWideViewPort = true
             settings.setSupportMultipleWindows(false)
-            CookieManager.getInstance().setAcceptCookie(true)
-            CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+            val cookies = if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.MULTI_PROFILE))
+                runCatching { androidx.webkit.WebViewCompat.getProfile(this).cookieManager }.getOrNull() ?: CookieManager.getInstance() else CookieManager.getInstance()
+            cookies.setAcceptCookie(true)
+            cookies.setAcceptThirdPartyCookies(this, true)
             webViewClient = object : WebViewClient() {
                 override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) { _page.value = PageState(url, view.title ?: "", true) }
                 override fun onPageFinished(view: WebView, url: String) { _page.value = PageState(url, view.title ?: "", false); pageDone?.complete(Unit) }

@@ -39,34 +39,49 @@ fun dueLabel(ms: Long): String = Instant.ofEpochMilli(ms).atZone(ZoneId.systemDe
 }
 
 @Composable
-fun TasksScreen(goals: List<GoalRow>, tasks: List<TaskRow>, actions: TaskActions) {
+fun TasksScreen(goals: List<GoalRow>, tasks: List<TaskRow>, actions: TaskActions, startTab: Int = 0, bottomPadding: androidx.compose.ui.unit.Dp = 120.dp) {
     var adding by remember { mutableStateOf(false) }
-    val open = tasks.count { it.status != "done" }
-    SubScreen("Tasks", if (open == 0) "Nothing open" else "$open open", actions.onBack,
-        fab = { ExtendedFloatingActionButton(onClick = { adding = true }, icon = { Icon(Icons.Rounded.Add, null) }, text = { Text("Add task") }) }) { pad ->
-        if (goals.isEmpty() && tasks.isEmpty()) {
-            Box(Modifier.padding(pad).fillMaxSize()) { EmptyState("No tasks yet", "Ask your agent to plan something, or add a task yourself. Goals and their tasks show up here.") }
-            return@SubScreen
-        }
-        LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 120.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            val openGoals = goals.filter { it.status == "open" }
-            if (openGoals.isNotEmpty()) item { SectionHeader("Goals", "Bigger things your agent is working through, task by task", Modifier.padding(top = 8.dp, start = 4.dp)) }
-            items(openGoals, key = { "g${it.id}" }) { g -> GoalCard(g, tasks.filter { it.goalId == g.id }, actions) }
-            val loose = tasks.filter { t -> t.goalId == null || goals.none { it.id == t.goalId } }
-            val looseOpen = loose.filter { it.status != "done" }
-            if (looseOpen.isNotEmpty()) {
-                item { SectionHeader("To do", "Single tasks, soonest first", Modifier.padding(top = 12.dp, start = 4.dp)) }
-                item { AppCard(padding = PaddingValues(vertical = 6.dp)) { looseOpen.sortedBy { it.dueAt ?: Long.MAX_VALUE }.forEach { TaskLine(it, actions) } } }
+    var tab by remember { mutableIntStateOf(startTab) }
+    val mine = tasks.filter { it.owner == "user" }
+    val agents = tasks.filter { it.owner == "agent" }
+    val open = mine.count { it.status != "done" }
+    SubScreen("Tasks", if (tab == 0) (if (open == 0) "Your list is clear" else "$open on your list") else "${goals.count { it.status == "open" }} goals your agent is working on", actions.onBack,
+        fab = { if (tab == 0) ExtendedFloatingActionButton(onClick = { adding = true }, icon = { Icon(Icons.Rounded.Add, null) }, text = { Text("Add to-do") }, modifier = Modifier.padding(bottom = bottomPadding - 40.dp)) }) { pad ->
+        Column(Modifier.padding(pad)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
+                listOf("Your to-dos", "Agent's work").forEachIndexed { i, label ->
+                    ToggleButton(tab == i, { tab = i }, modifier = Modifier.weight(1f).height(48.dp),
+                        shapes = if (i == 0) ButtonGroupDefaults.connectedLeadingButtonShapes() else ButtonGroupDefaults.connectedTrailingButtonShapes()) { Text(label) }
+                }
             }
-            val done = tasks.filter { it.status == "done" && (it.goalId == null || openGoals.none { g -> g.id == it.goalId }) }
-            if (done.isNotEmpty()) {
-                item { SectionHeader("Done", "Finished recently", Modifier.padding(top = 12.dp, start = 4.dp)) }
-                item { AppCard(padding = PaddingValues(vertical = 6.dp), container = MaterialTheme.colorScheme.surfaceContainerLowest) { done.take(30).forEach { TaskLine(it, actions) } } }
-            }
-            val achieved = goals.filter { it.status == "achieved" }
-            if (achieved.isNotEmpty()) {
-                item { SectionHeader("Achieved", "Goals where every task got done", Modifier.padding(top = 12.dp, start = 4.dp)) }
-                items(achieved, key = { "a${it.id}" }) { g -> Text("✓  ${g.title}", style = MaterialTheme.typography.bodyLarge, color = LocalExtra.current.success, modifier = Modifier.padding(horizontal = 8.dp)) }
+            if (tab == 0) {
+                if (mine.isEmpty()) { EmptyState("Your list is clear", "Add a to-do, or tell your agent \"remind me to…\". Everything you need to do lives here."); return@Column }
+                val today = java.time.LocalDate.now()
+                LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    val todo = mine.filter { it.status != "done" }.sortedWith(compareBy({ it.dueAt ?: Long.MAX_VALUE }, { it.createdAt }))
+                    if (todo.isNotEmpty()) item { AppCard(padding = PaddingValues(vertical = 6.dp)) { todo.forEach { TodoLine(it, today, actions.onToggle) } } }
+                    val done = mine.filter { it.status == "done" }
+                    if (done.isNotEmpty()) {
+                        item { SectionHeader("Done", "Ticked off recently", Modifier.padding(top = 8.dp, start = 4.dp)) }
+                        item { AppCard(padding = PaddingValues(vertical = 6.dp), container = MaterialTheme.colorScheme.surfaceContainerLowest) { done.take(30).forEach { TaskLine(it, actions) } } }
+                    }
+                }
+            } else {
+                val openGoals = goals.filter { it.status == "open" }
+                if (openGoals.isEmpty() && agents.isEmpty()) { EmptyState("Nothing in progress", "Give your agent something bigger, like \"plan my trip to Durban\". It breaks it into steps and works through them here."); return@Column }
+                LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(openGoals.sortedByDescending { g -> tasks.any { it.goalId == g.id && it.status == "blocked" } }, key = { "g${it.id}" }) { g -> GoalCard(g, tasks.filter { it.goalId == g.id }, actions) }
+                    val loose = agents.filter { t -> t.goalId == null || openGoals.none { it.id == t.goalId } }.filter { it.status != "done" }
+                    if (loose.isNotEmpty()) {
+                        item { SectionHeader("Other steps", "Things your agent is following up", Modifier.padding(top = 8.dp, start = 4.dp)) }
+                        item { AppCard(padding = PaddingValues(vertical = 6.dp)) { loose.forEach { TaskLine(it, actions) } } }
+                    }
+                    val achieved = goals.filter { it.status == "achieved" }
+                    if (achieved.isNotEmpty()) {
+                        item { SectionHeader("Achieved", "Goals where every step got done", Modifier.padding(top = 12.dp, start = 4.dp)) }
+                        items(achieved, key = { "a${it.id}" }) { g -> Text("✓  ${g.title}", style = MaterialTheme.typography.bodyLarge, color = LocalExtra.current.success, modifier = Modifier.padding(horizontal = 8.dp)) }
+                    }
+                }
             }
         }
     }
@@ -104,14 +119,15 @@ fun TaskLine(t: TaskRow, actions: TaskActions) {
         Column(Modifier.weight(1f)) {
             Text(t.title, style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis,
                 textDecoration = if (done) TextDecoration.LineThrough else null, color = if (done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
-            val sub = listOfNotNull(t.dueAt?.let { dueLabel(it) }, t.notes.takeIf { it.isNotBlank() }).joinToString(" · ")
+            val sub = listOfNotNull(t.blocker.takeIf { t.status == "blocked" && it.isNotBlank() }?.let { "Needs: $it" }, t.dueAt?.let { dueLabel(it) }, t.notes.takeIf { it.isNotBlank() }, "You".takeIf { t.owner == "user" && t.goalId != null }).joinToString(" · ")
             if (sub.isNotEmpty()) Text(sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         when (t.status) {
             "doing" -> StatusPill("Doing", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
             "blocked" -> StatusPill("Blocked", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
         }
-        if (!done) IconButton(onClick = { actions.onAsk("Help me with task #${t.id}: ${t.title}") }) { Icon(Icons.Rounded.AutoAwesome, "Ask your agent to do this", tint = MaterialTheme.colorScheme.primary) }
+        if (t.status == "blocked" && t.blocker.isNotBlank()) Unit
+        if (!done && t.owner == "user") IconButton(onClick = { actions.onAsk("Help me with task #${t.id}: ${t.title}") }) { Icon(Icons.Rounded.AutoAwesome, "Ask your agent to do this", tint = MaterialTheme.colorScheme.primary) }
     }
 }
 

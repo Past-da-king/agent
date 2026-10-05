@@ -1,5 +1,6 @@
 // Runs ONE turn of the user's agent through the Claude Agent SDK, using the user's own Claude
-// subscription (CLAUDE_CODE_OAUTH_TOKEN). The phone's tools arrive over a localhost MCP server.
+// subscription (signed in with `claude auth login` in-app, or CLAUDE_CODE_OAUTH_TOKEN).
+// The phone's tools arrive over a localhost MCP server.
 // Input: one JSON line on stdin {prompt, system, resume}. Output: JSON lines on stdout.
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { createInterface } from "node:readline";
@@ -18,6 +19,8 @@ try {
       resume: resume || undefined,
       model: model || undefined,
       cwd: process.env.HOME,
+      executable: "node",
+      env: { ...process.env },
       permissionMode: "bypassPermissions",
       // Productivity agent, not a coding agent: the phone's tools plus web search/fetch only.
       allowedTools: ["mcp__phone", "WebSearch", "WebFetch"],

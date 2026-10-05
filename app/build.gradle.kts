@@ -12,9 +12,13 @@ android {
     applicationId = "com.past9.phoneaos"
     minSdk = 29
     targetSdk = 36
-    versionCode = 1
-    versionName = "0.1.0"
+    versionCode = 2
+    versionName = "0.2.0"
+    // The runtime pack (node, codex, ripgrep) is arm64 only, like every phone we target.
+    ndk { abiFilters += listOf("arm64-v8a") }
   }
+  // Native executables must be extracted to nativeLibraryDir to be runnable.
+  packaging { jniLibs { useLegacyPackaging = true } }
 
   buildTypes {
     release {
@@ -77,6 +81,7 @@ dependencies {
   implementation(libs.okhttp)
   implementation(libs.androidx.graphics.shapes)
   implementation(libs.coil.compose)
+  implementation(libs.androidx.webkit)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.androidx.credentials)
   implementation(libs.androidx.credentials.play.services)

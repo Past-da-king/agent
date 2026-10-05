@@ -41,6 +41,10 @@ data class AgentSettings(
     val accent: String = "iris",
     val mascot: String = "scout",
     val subKind: SubKind = SubKind.CLAUDE,
+    /** Apps whose notifications the agent may read (package names). Empty = none. */
+    val notifApps: Set<String> = emptySet(),
+    /** Browser profiles: separate cookie jars so work and personal accounts both stay signed in. */
+    val browserProfiles: List<String> = listOf("Personal"),
 ) {
     val ready: Boolean get() = when (mode) {
         PowerMode.API_KEY -> hasKey
@@ -86,6 +90,8 @@ class SettingsStore(context: Context) {
             baseUrl = prefs.getString("baseUrl", null) ?: provider.baseUrl,
             accent = prefs.getString("accent", "iris") ?: "iris",
             mascot = prefs.getString("mascot", "scout") ?: "scout",
+            notifApps = prefs.getStringSet("notifApps", emptySet()) ?: emptySet(),
+            browserProfiles = (prefs.getString("browserProfiles", null) ?: "Personal").split("\n").filter { it.isNotBlank() }.ifEmpty { listOf("Personal") },
             subKind = runCatching { SubKind.valueOf(prefs.getString("subKind", "CLAUDE")!!) }.getOrDefault(SubKind.CLAUDE),
         )
     }
@@ -95,6 +101,9 @@ class SettingsStore(context: Context) {
     fun setMode(mode: PowerMode) = edit { putString("mode", mode.name) }
     fun setProvider(p: Provider) = edit { putString("provider", p.name); remove("model"); remove("helperModel"); remove("baseUrl") }
     fun setBaseUrl(url: String) = edit { putString("baseUrl", url.trim().trimEnd('/')) }
+    fun setNotifApp(pkg: String, on: Boolean) = edit { putStringSet("notifApps", (_state.value.notifApps.toMutableSet().apply { if (on) add(pkg) else remove(pkg) })) }
+    fun addBrowserProfile(name: String) = edit { putString("browserProfiles", (_state.value.browserProfiles + name.trim()).distinct().joinToString("\n")) }
+    fun removeBrowserProfile(name: String) = edit { putString("browserProfiles", _state.value.browserProfiles.filter { it != name }.ifEmpty { listOf("Personal") }.joinToString("\n")) }
     fun setSubKind(k: SubKind) = edit { putString("subKind", k.name) }
     fun setAccent(a: String) = edit { putString("accent", a) }
     fun setMascot(m: String) = edit { putString("mascot", m) }

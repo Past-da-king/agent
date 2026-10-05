@@ -20,6 +20,8 @@ interface ToolContext {
     suspend fun ask(question: String, options: List<String>): String?
     /** Post a phone notification. */
     suspend fun notify(title: String, body: String)
+    /** Same, callable from non-suspending callbacks. */
+    fun notifyBlocking(title: String, body: String) = kotlinx.coroutines.runBlocking { notify(title, body) }
 }
 
 sealed interface AgentEvent {

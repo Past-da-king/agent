@@ -68,6 +68,10 @@ data class TaskRow(
     /** todo | doing | done | blocked */
     val status: String = "todo",
     val dueAt: Long? = null,
+    /** user = on the person's to-do list; agent = the agent's own working steps. */
+    val owner: String = "user",
+    /** Why it is blocked and what would unblock it. */
+    val blocker: String = "",
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
 )
@@ -77,9 +81,9 @@ data class TaskRow(
 data class TriggerRow(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
-    /** at | daily | interval | email */
+    /** at | daily | interval | email | notification */
     val kind: String,
-    /** at: epoch millis; daily: "HH:mm"; interval: minutes; email: gmail search query */
+    /** at: ISO time; daily: "HH:mm"; interval: minutes; email: gmail search query; notification: "pkg|keyword" */
     val spec: String,
     val prompt: String,
     val enabled: Boolean = true,
@@ -89,6 +93,27 @@ data class TriggerRow(
     val cursor: String = "",
     val createdAt: Long = System.currentTimeMillis(),
 )
+
+/** A phone notification from an app the user allowed the agent to read. */
+@Entity(tableName = "notifications")
+data class NotificationRow(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val pkg: String,
+    val app: String,
+    val title: String,
+    val text: String,
+    val postedAt: Long = System.currentTimeMillis(),
+)
+
+@Dao
+interface NotificationDao {
+    @Query("SELECT * FROM notifications ORDER BY postedAt DESC LIMIT :limit") fun recent(limit: Int = 200): Flow<List<NotificationRow>>
+    @Query("SELECT * FROM notifications WHERE postedAt > :since ORDER BY postedAt DESC LIMIT :limit") suspend fun since(since: Long, limit: Int = 300): List<NotificationRow>
+    @Insert suspend fun insert(n: NotificationRow): Long
+    @Query("DELETE FROM notifications WHERE postedAt < :before") suspend fun prune(before: Long)
+    @Query("DELETE FROM notifications WHERE pkg = :pkg") suspend fun forget(pkg: String)
+    @Query("SELECT COUNT(*) FROM notifications WHERE pkg = :pkg AND title = :title AND text = :text AND postedAt > :since") suspend fun dupes(pkg: String, title: String, text: String, since: Long): Int
+}
 
 @Dao
 interface ChatDao {
@@ -109,6 +134,7 @@ interface MemoryDao {
     @Query("SELECT * FROM memories ORDER BY updatedAt DESC") suspend fun list(): List<MemoryRow>
     @Query("SELECT * FROM memories WHERE pinned = 1 ORDER BY updatedAt DESC") suspend fun pinned(): List<MemoryRow>
     @Query("SELECT * FROM memories WHERE id = :id") suspend fun get(id: Long): MemoryRow?
+    @Query("SELECT * FROM memories WHERE lower(title) = lower(:title) LIMIT 1") suspend fun byTitle(title: String): MemoryRow?
     @Insert suspend fun insert(m: MemoryRow): Long
     @Update suspend fun update(m: MemoryRow)
     @Query("DELETE FROM memories WHERE id = :id") suspend fun delete(id: Long)
@@ -120,6 +146,7 @@ interface TaskDao {
     @Query("SELECT * FROM tasks ORDER BY status = 'done', createdAt DESC") fun tasks(): Flow<List<TaskRow>>
     @Query("SELECT * FROM goals WHERE status = 'open'") suspend fun openGoals(): List<GoalRow>
     @Query("SELECT * FROM tasks WHERE status != 'done' ORDER BY createdAt") suspend fun openTasks(): List<TaskRow>
+    @Query("SELECT * FROM tasks ORDER BY createdAt") suspend fun allTasks(): List<TaskRow>
     @Query("SELECT * FROM tasks WHERE goalId = :goalId") suspend fun tasksFor(goalId: Long): List<TaskRow>
     @Query("SELECT * FROM tasks WHERE id = :id") suspend fun task(id: Long): TaskRow?
     @Query("SELECT * FROM goals WHERE id = :id") suspend fun goal(id: Long): GoalRow?
@@ -141,8 +168,8 @@ interface TriggerDao {
 }
 
 @Database(
-    entities = [ChatItem::class, TurnRow::class, MemoryRow::class, GoalRow::class, TaskRow::class, TriggerRow::class],
-    version = 1,
+    entities = [ChatItem::class, TurnRow::class, MemoryRow::class, GoalRow::class, TaskRow::class, TriggerRow::class, NotificationRow::class],
+    version = 2,
     exportSchema = true,
 )
 abstract class AppDb : RoomDatabase() {
@@ -150,10 +177,12 @@ abstract class AppDb : RoomDatabase() {
     abstract fun memory(): MemoryDao
     abstract fun tasks(): TaskDao
     abstract fun triggers(): TriggerDao
+    abstract fun notifications(): NotificationDao
 
     companion object {
         fun open(context: Context): AppDb =
-            Room.databaseBuilder(context, AppDb::class.java, "agent.db").build()
+            // Pre-release: no installed users yet, so schema changes simply rebuild. Real migrations from 1.0.
+            Room.databaseBuilder(context, AppDb::class.java, "agent.db").fallbackToDestructiveMigration(true).build()
         fun inMemory(context: Context): AppDb =
             Room.inMemoryDatabaseBuilder(context, AppDb::class.java).allowMainThreadQueries().build()
     }

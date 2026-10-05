@@ -36,6 +36,7 @@ fun whenLabel(t: TriggerRow): String = when (t.kind) {
     "daily" -> "Every day at ${t.spec}"
     "interval" -> (t.spec.toIntOrNull() ?: 60).let { if (it % 60 == 0) "Every ${it / 60} h" else "Every $it min" }
     "email" -> "When a new email matches: ${t.spec}"
+    "notification" -> t.spec.split("|").let { "When ${it[0]} notifies" + (it.getOrNull(1)?.takeIf { w -> w.isNotBlank() }?.let { w -> " about \"$w\"" } ?: "") }
     else -> t.kind
 }
 
@@ -44,15 +45,15 @@ fun inLabel(ms: Long): String = when {
     ms < 86_400_000 -> "in ${ms / 3_600_000} h ${(ms % 3_600_000) / 60_000} min"; else -> "in ${ms / 86_400_000} d"
 }
 
-private fun kindIcon(kind: String): ImageVector = when (kind) { "at" -> Icons.Rounded.Event; "daily" -> Icons.Rounded.WbSunny; "interval" -> Icons.Rounded.Autorenew; else -> Icons.Rounded.Mail }
+private fun kindIcon(kind: String): ImageVector = when (kind) { "at" -> Icons.Rounded.Event; "daily" -> Icons.Rounded.WbSunny; "interval" -> Icons.Rounded.Autorenew; "notification" -> Icons.Rounded.NotificationsActive; else -> Icons.Rounded.Mail }
 
 @Composable
-fun RoutinesScreen(routines: List<TriggerRow>, actions: RoutineActions, now: Long = System.currentTimeMillis()) {
+fun RoutinesScreen(routines: List<TriggerRow>, actions: RoutineActions, now: Long = System.currentTimeMillis(), bottomPadding: androidx.compose.ui.unit.Dp = 120.dp) {
     var editing by remember { mutableStateOf<TriggerRow?>(null) }
     SubScreen("Routines", "Things your agent does on its own", actions.onBack,
-        fab = { ExtendedFloatingActionButton(onClick = { editing = TriggerRow(name = "", kind = "daily", spec = "07:00", prompt = "") }, icon = { Icon(Icons.Rounded.Add, null) }, text = { Text("New routine") }) }) { pad ->
+        fab = { ExtendedFloatingActionButton(onClick = { editing = TriggerRow(name = "", kind = "daily", spec = "07:00", prompt = "") }, icon = { Icon(Icons.Rounded.Add, null) }, text = { Text("New routine") }, modifier = Modifier.padding(bottom = (bottomPadding - 40.dp).coerceAtLeast(0.dp))) }) { pad ->
         if (routines.isEmpty()) { Box(Modifier.padding(pad)) { EmptyState("No routines yet", "Say \"every morning at 7, brief me on my day\" or \"when my bank emails, tell me what changed\". Or add one here.") }; return@SubScreen }
-        LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 120.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomPadding + 60.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             items(routines, key = { it.id }) { r -> RoutineCard(r, actions, now) { editing = r } }
         }
     }
@@ -69,7 +70,7 @@ private fun RoutineCard(r: TriggerRow, actions: RoutineActions, now: Long, onEdi
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(when { !r.enabled -> "PAUSED"; r.kind == "email" -> "WATCHING EVERY 15 MIN"; next != null -> "NEXT RUN ${inLabel(next).uppercase()}"; else -> "FINISHED" },
+                Text(when { !r.enabled -> "PAUSED"; r.kind == "email" -> "WATCHING EVERY 15 MIN"; r.kind == "notification" -> "LISTENING"; next != null -> "NEXT RUN ${inLabel(next).uppercase()}"; else -> "FINISHED" },
                     style = Eyebrow, color = if (r.enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(r.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(whenLabel(r), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)

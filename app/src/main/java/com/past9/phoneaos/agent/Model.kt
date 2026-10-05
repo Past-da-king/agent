@@ -13,6 +13,10 @@ sealed interface Block {
     data class Text(val text: String) : Block
     data class ToolCall(val id: String, val name: String, val input: JSONObject) : Block
     data class ToolResult(val callId: String, val content: String, val isError: Boolean = false) : Block
+    /** A picture the user sent: a file on the phone, read and encoded only when sent to the provider. */
+    data class Image(val path: String, val mime: String = "image/jpeg") : Block {
+        fun base64(): String = android.util.Base64.encodeToString(java.io.File(path).readBytes(), android.util.Base64.NO_WRAP)
+    }
 }
 
 data class Msg(val role: Role, val blocks: List<Block>) {
@@ -25,12 +29,14 @@ data class Msg(val role: Role, val blocks: List<Block>) {
                 is Block.Text -> JSONObject().put("t", "text").put("text", b.text)
                 is Block.ToolCall -> JSONObject().put("t", "call").put("id", b.id).put("name", b.name).put("input", b.input)
                 is Block.ToolResult -> JSONObject().put("t", "result").put("id", b.callId).put("content", b.content).put("err", b.isError)
+                is Block.Image -> JSONObject().put("t", "image").put("path", b.path).put("mime", b.mime)
             })
         }
     })
 
     companion object {
         fun user(text: String) = Msg(Role.USER, listOf(Block.Text(text)))
+        fun user(text: String, images: List<String>) = Msg(Role.USER, images.filter { java.io.File(it).exists() }.map { Block.Image(it) } + Block.Text(text))
         fun fromJson(o: JSONObject): Msg {
             val arr = o.getJSONArray("blocks")
             val blocks = (0 until arr.length()).map { i ->
@@ -38,6 +44,7 @@ data class Msg(val role: Role, val blocks: List<Block>) {
                 when (b.getString("t")) {
                     "call" -> Block.ToolCall(b.getString("id"), b.getString("name"), b.optJSONObject("input") ?: JSONObject())
                     "result" -> Block.ToolResult(b.getString("id"), b.optString("content"), b.optBoolean("err"))
+                    "image" -> Block.Image(b.getString("path"), b.optString("mime", "image/jpeg"))
                     else -> Block.Text(b.optString("text"))
                 }
             }

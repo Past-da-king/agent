@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
@@ -25,9 +26,13 @@ import androidx.compose.ui.unit.dp
 
 /** Just enough markdown for chat: headings, bullets, numbered lists, **bold**, *italic*, `code`, links. */
 @Composable
-fun Markdown(text: String, modifier: Modifier = Modifier, style: TextStyle = MaterialTheme.typography.bodyLarge, color: Color = MaterialTheme.colorScheme.onSurface) {
+fun Markdown(text: String, modifier: Modifier = Modifier, style: TextStyle = MaterialTheme.typography.bodyLarge, color: Color = MaterialTheme.colorScheme.onSurface,
+             onWikiLink: ((String) -> Unit)? = null, knownPages: Set<String> = emptySet()) {
     val link = MaterialTheme.colorScheme.primary
     val codeBg = MaterialTheme.colorScheme.surfaceContainerHigh
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val known = remember(knownPages) { knownPages.map { it.lowercase() }.toSet() }
+    fun inline(s: String, l: Color, bg: Color) = inline(s, l, bg, onWikiLink, known, muted)
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         text.trim().split("\n").fold(mutableListOf<String>()) { acc, line ->
             val pureImage = line.isNotBlank() && splitImages(line).first.isEmpty()
@@ -58,15 +63,24 @@ fun Markdown(text: String, modifier: Modifier = Modifier, style: TextStyle = Mat
 
 private fun isBlockStart(l: String) = l.trimStart().let { it.startsWith("#") || Regex("^([-*•]|\\d+[.)]) ").containsMatchIn(it) }
 
-private val token = Regex("""\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)\]\((https?://[^)\s]+)\)|(?<![*\w])\*(?!\s)(.+?)(?<!\s)\*(?!\w)|(https?://[^\s)]+)""")
+private val token = Regex("""\[\[([^\]|]+)(?:\|([^\]]*))?]]|\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)\]\((https?://[^)\s]+)\)|(?<![*\w])\*(?!\s)(.+?)(?<!\s)\*(?!\w)|(https?://[^\s)]+)""")
 
-fun inline(s: String, linkColor: Color, codeBg: Color): AnnotatedString = buildAnnotatedString {
+fun inline(s: String, linkColor: Color, codeBg: Color, onWiki: ((String) -> Unit)? = null, known: Set<String> = emptySet(), muted: Color = linkColor): AnnotatedString = buildAnnotatedString {
     var i = 0
     val linkStyle = TextLinkStyles(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline))
     token.findAll(s).forEach { m ->
         append(s.substring(i, m.range.first))
-        val g = m.groupValues
+        val g0 = m.groupValues
+        // Shift so the original group numbers below stay as they were before wiki links existed.
+        val g = listOf(g0[0]) + g0.drop(3)
         when {
+            g0[1].isNotEmpty() -> {
+                val target = g0[1].trim(); val label = g0[2].ifBlank { target }
+                val exists = target.lowercase() in known
+                if (onWiki == null) withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(label) }
+                else withLink(LinkAnnotation.Clickable("wiki:$target", TextLinkStyles(SpanStyle(color = if (exists) linkColor else muted, fontWeight = FontWeight.SemiBold,
+                    textDecoration = if (exists) null else TextDecoration.Underline))) { onWiki(target) }) { append(label) }
+            }
             g[1].isNotEmpty() -> withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(g[1]) }
             g[2].isNotEmpty() -> withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = codeBg)) { append(" ${g[2]} ") }
             g[3].isNotEmpty() -> withLink(LinkAnnotation.Url(g[4], linkStyle)) { append(g[3]) }

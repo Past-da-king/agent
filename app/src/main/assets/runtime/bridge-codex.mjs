@@ -1,5 +1,5 @@
 // One turn of the user's agent through OpenAI's Codex SDK on their ChatGPT plan.
-// Sign-in: CODEX_AUTH_JSON (the user's ~/.codex/auth.json) is written to $HOME/.codex.
+// Sign-in: `codex login` run in-app leaves $HOME/.codex/auth.json (or CODEX_AUTH_JSON is pasted in).
 // The phone's tools are an MCP server Codex reaches over localhost with a bearer token.
 import { Codex } from "@openai/codex-sdk";
 import { createInterface } from "node:readline";
@@ -12,14 +12,15 @@ rl.close();
 
 const home = process.env.HOME;
 mkdirSync(`${home}/.codex`, { recursive: true });
-writeFileSync(`${home}/.codex/auth.json`, process.env.CODEX_AUTH_JSON, { mode: 0o600 });
+if (process.env.CODEX_AUTH_JSON) writeFileSync(`${home}/.codex/auth.json`, process.env.CODEX_AUTH_JSON, { mode: 0o600 });
 writeFileSync(`${home}/.codex/config.toml`, [
   `[mcp_servers.phone]`, `url = "${process.env.PHONE_MCP_URL}"`, `bearer_token_env_var = "PHONE_MCP_TOKEN"`, ``,
 ].join("\n"));
 
 try {
   const codex = new Codex({ codexPathOverride: process.env.CODEX_BIN });
-  const opts = { workingDirectory: home, skipGitRepoCheck: true, sandboxMode: "read-only", model: model || undefined };
+  // Android's app sandbox is the boundary here; Codex's own Linux sandbox (landlock/seccomp) isn't available.
+  const opts = { workingDirectory: home, skipGitRepoCheck: true, sandboxMode: "danger-full-access", approvalPolicy: "never", model: model || undefined };
   const thread = resume ? codex.resumeThread(resume, opts) : codex.startThread(opts);
   const { events } = await thread.runStreamed(`${system}\n\n---\n\n${prompt}`);
   for await (const e of events) {

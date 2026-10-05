@@ -23,10 +23,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -62,6 +64,9 @@ data class ChatActions(
     val onMenu: () -> Unit = {},
     val onBrowser: () -> Unit = {},
     val onMic: () -> Unit = {},
+    val onProfile: () -> Unit = {},
+    val onAttach: () -> Unit = {},
+    val onRemoveAttachment: (String) -> Unit = {},
 )
 
 /** Chat rows after grouping: consecutive activity lines fold into one "steps" row. */
@@ -73,7 +78,14 @@ sealed interface Row_ { val key: String
 fun group(items: List<ChatItem>): List<Row_> {
     val out = mutableListOf<Row_>(); val buf = mutableListOf<ChatItem>()
     fun flush() { if (buf.isNotEmpty()) { out += Row_.Steps(buf.toList()); buf.clear() } }
-    items.forEach { if (it.kind == "activity" && JSONObject(it.meta).optString("image").isEmpty()) buf += it else { flush(); out += Row_.Single(it) } }
+    items.forEach {
+        val m = JSONObject(it.meta)
+        when {
+            it.kind == "activity" && m.has("helper") -> {} // shown inside its helper's card
+            it.kind == "activity" && m.optString("image").isEmpty() -> buf += it
+            else -> { flush(); out += Row_.Single(it) }
+        }
+    }
     flush(); return out
 }
 
@@ -88,6 +100,7 @@ fun ChatScreen(
     onDraft: (String) -> Unit,
     actions: ChatActions,
     openCount: Int = 0,
+    attachments: List<String> = emptyList(),
 ) {
     val rows = remember(items) { group(items) }
     val list = rememberLazyListState()
@@ -97,7 +110,7 @@ fun ChatScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = { ChatTopBar(agentName, status, browserLive, waitingOnYou, openCount, actions) },
-        bottomBar = { Composer(draft, onDraft, status.working, actions) },
+        bottomBar = { Composer(draft, onDraft, status.working, actions, attachments) },
     ) { pad ->
         if (items.isEmpty()) Welcome(userName, agentName, Modifier.padding(pad), actions.onSend)
         else LazyColumn(
@@ -109,10 +122,10 @@ fun ChatScreen(
                 when (r) {
                     is Row_.Steps -> StepsRow(r.items)
                     is Row_.Single -> when (r.item.kind) {
-                        "user" -> UserBubble(r.item.text)
+                        "user" -> UserBubble(r.item)
                         "agent" -> AgentMessage(r.item)
                         "question" -> if (r.item.text.startsWith("APPROVAL|")) ApprovalCard(r.item, actions.onAnswer) else QuestionCard(r.item, actions.onAnswer, actions.onBrowser)
-                        "helper" -> HelperRow(r.item)
+                        "helper" -> HelperRow(r.item, items.filter { a -> a.kind == "activity" && JSONObject(a.meta).optLong("helper") == r.item.id })
                         "activity" -> ImageActivity(r.item)
                         else -> Notice(r.item)
                     }
@@ -127,9 +140,8 @@ fun ChatScreen(
 private fun ChatTopBar(agentName: String, status: AgentStatus, browserLive: Boolean, needsYou: Boolean, openCount: Int, actions: ChatActions) {
     Surface(color = MaterialTheme.colorScheme.surface) {
         Row(Modifier.fillMaxWidth().statusBarsPadding().padding(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = actions.onMenu) {
-                BadgedBox(badge = { if (openCount > 0) Badge { Text("$openCount") } }) { Icon(Icons.Rounded.Menu, "Menu: tasks, memory, routines, connections, settings") }
-            }
+            IconButton(onClick = actions.onMenu) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to home") }
+            Row(Modifier.weight(1f).clip(MaterialTheme.shapes.medium).clickable(onClick = actions.onProfile).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             AgentAvatar(working = status.working, needsYou = needsYou, size = 36.dp)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -142,6 +154,7 @@ private fun ChatTopBar(agentName: String, status: AgentStatus, browserLive: Bool
                 AnimatedContent(line, transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(150)) }, label = "status") {
                     Text(it, style = MaterialTheme.typography.bodySmall, color = if (needsYou) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+            }
             }
             AnimatedVisibility(browserLive, enter = scaleIn(spring(0.6f, 800f)) + fadeIn(), exit = scaleOut() + fadeOut()) {
                 FilledTonalIconButton(onClick = actions.onBrowser) { Icon(Icons.Rounded.Language, "Watch the agent's browser") }
@@ -183,7 +196,12 @@ private fun Welcome(userName: String, agentName: String, modifier: Modifier, onS
 }
 
 @Composable
-private fun UserBubble(text: String) {
+private fun UserBubble(item: ChatItem) {
+    val text = item.text
+    val images = JSONObject(item.meta).optJSONArray("images")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
+    if (images.isNotEmpty()) Box(Modifier.fillMaxWidth().padding(start = 64.dp, bottom = 6.dp), contentAlignment = Alignment.CenterEnd) {
+        com.past9.phoneaos.ui.ImageStrip(images.map { com.past9.phoneaos.ui.ChatImage(java.io.File(it).toURI().toString(), "Your photo") })
+    }
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
         Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(24.dp, 24.dp, 6.dp, 24.dp), modifier = Modifier.widthIn(max = 320.dp).padding(start = 48.dp)) {
             Text(text, Modifier.padding(horizontal = 16.dp, vertical = 11.dp), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
@@ -254,12 +272,13 @@ private fun ImageActivity(item: ChatItem) {
     }
 }
 
+/** A helper agent: one line in the chat; tap it to see every step it took and what it found. */
 @Composable
-private fun HelperRow(item: ChatItem) {
+private fun HelperRow(item: ChatItem, steps: List<ChatItem>) {
     val meta = JSONObject(item.meta); val state = meta.optString("state")
     var open by remember { mutableStateOf(false) }
     val extra = LocalExtra.current
-    AppCard(container = MaterialTheme.colorScheme.surfaceContainerLow, padding = PaddingValues(14.dp), onClick = if (state == "done") ({ open = !open }) else null) {
+    AppCard(container = MaterialTheme.colorScheme.surfaceContainerLow, padding = PaddingValues(14.dp), onClick = { open = true }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             when (state) {
                 "working" -> LoadingIndicator(Modifier.size(28.dp))
@@ -269,11 +288,37 @@ private fun HelperRow(item: ChatItem) {
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(meta.optString("label", "Helper").uppercase() + when (state) { "working" -> " · WORKING"; "done" -> " · DONE"; else -> " · FAILED" }, style = Eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(item.text, style = MaterialTheme.typography.bodyMedium, maxLines = if (open) 6 else 2, overflow = TextOverflow.Ellipsis)
+                Text(item.text, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                val last = steps.lastOrNull()
+                if (state == "working" && last != null) Text(last.text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+            if (steps.isNotEmpty()) Text("${steps.size}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 8.dp))
+            Icon(Icons.Rounded.ChevronRight, "See what it did", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        AnimatedVisibility(open) {
-            Markdown(meta.optString("result"), Modifier.padding(top = 10.dp), style = MaterialTheme.typography.bodyMedium)
+    }
+    if (open) ModalBottomSheet(onDismissRequest = { open = false }) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
+            Text(meta.optString("label", "Helper").uppercase(), style = Eyebrow, color = MaterialTheme.colorScheme.primary)
+            Text(item.text, style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(16.dp))
+            Text("WHAT IT DID", style = Eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(6.dp))
+            if (steps.isEmpty()) Text("Nothing yet.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            steps.forEach { a ->
+                Row(Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(iconFor(JSONObject(a.meta).optString("tool")), null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(10.dp))
+                    Text(a.text, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            if (state == "working") Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) { LoadingIndicator(Modifier.size(28.dp)); Spacer(Modifier.width(8.dp)); Text("Still working…", style = MaterialTheme.typography.bodyMedium) }
+            val result = meta.optString("result")
+            if (result.isNotBlank()) {
+                Spacer(Modifier.height(16.dp))
+                Text("WHAT IT FOUND", style = Eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(6.dp))
+                Markdown(result, style = MaterialTheme.typography.bodyMedium)
+            }
         }
     }
 }
@@ -377,11 +422,23 @@ private fun WorkingRow(status: AgentStatus) {
 }
 
 @Composable
-private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean, actions: ChatActions) {
+private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean, actions: ChatActions, attachments: List<String>) {
     Surface(color = MaterialTheme.colorScheme.surface) {
-        Row(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp), verticalAlignment = Alignment.Bottom) {
+      Column(Modifier.navigationBarsPadding().imePadding()) {
+        if (attachments.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            attachments.forEach { path ->
+                Box {
+                    coil.compose.AsyncImage(java.io.File(path), "Photo to send", Modifier.size(72.dp).clip(MaterialTheme.shapes.medium), contentScale = ContentScale.Crop)
+                    Surface(onClick = { actions.onRemoveAttachment(path) }, shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.inverseSurface, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(24.dp)) {
+                        Icon(Icons.Rounded.Close, "Remove photo", Modifier.padding(4.dp), tint = MaterialTheme.colorScheme.inverseOnSurface)
+                    }
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp), verticalAlignment = Alignment.Bottom) {
             Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 20.dp, end = 4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp, end = 4.dp)) {
+                    IconButton(onClick = actions.onAttach) { Icon(Icons.Rounded.AddPhotoAlternate, "Send a photo", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                     Box(Modifier.weight(1f).padding(vertical = 16.dp)) {
                         if (draft.isEmpty()) Text("Ask for anything", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         BasicTextField(draft, onDraft, textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
@@ -391,7 +448,7 @@ private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean,
                 }
             }
             Spacer(Modifier.width(8.dp))
-            val canSend = draft.isNotBlank()
+            val canSend = draft.isNotBlank() || attachments.isNotEmpty()
             MorphIconButton(
                 onClick = { if (working && !canSend) actions.onStop() else if (canSend) { actions.onSend(draft); onDraft("") } },
                 size = 56.dp,
@@ -402,5 +459,6 @@ private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean,
                 if (working && !canSend) Icon(Icons.Rounded.Stop, "Stop", tint = tint) else Icon(Icons.AutoMirrored.Rounded.ArrowForward, "Send", tint = tint)
             }
         }
+      }
     }
 }

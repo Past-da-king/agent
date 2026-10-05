@@ -15,6 +15,7 @@ import com.past9.phoneaos.tools.Toolkit
 import com.past9.phoneaos.ui.screens.*
 import com.past9.phoneaos.ui.theme.AppTheme
 import org.json.JSONArray
+import androidx.compose.foundation.layout.fillMaxSize
 import org.json.JSONObject
 import org.junit.Rule
 import org.junit.Test
@@ -117,7 +118,7 @@ class ScreensTest(private val dark: Boolean) {
             MemoryRow(3, "Thandi", "Thandi is his business partner at Guavas; invoices go to her on the 25th.", "person", source = "user", updatedAt = now - 86_400_000L),
             MemoryRow(4, "Gym", "Cancelled Virgin Active on 2 Oct; watch for a final debit.", "event", updatedAt = now - 600_000),
         )
-        shot("30-memory") { MemoryScreen(m, MemoryActions()) }
+        shot("30-memory") { MemoryScreen(m + demoMem.map { it.copy(id = it.id + 10, pinned = false) }, MemoryActions()) }
     }
 
     @Test fun routines() {
@@ -143,5 +144,36 @@ class ScreensTest(private val dark: Boolean) {
         shot("60-settings") { SettingsScreen(s, RuntimeInfo(false, 0, false, "Runtime pack not in this build"), "0.1.0", SettingsActions()) }
     }
 
-    @Test fun browserEmpty() { shot("70-browser-empty") { BrowserScreen(null, com.past9.phoneaos.browser.PageState(), {}, {}) } }
+    private val demoGoals = listOf(GoalRow(1, "Plan the Durban trip", "Long weekend, 9 to 12 Oct"), GoalRow(2, "Get the car licence renewed", ""))
+    private val demoTasks get() = listOf(
+        TaskRow(1, 1, "Book flights", status = "done", owner = "agent"), TaskRow(2, 1, "Shortlist places near uMhlanga", status = "doing", owner = "agent"),
+        TaskRow(3, 1, "Car hire for 3 days", owner = "agent"), TaskRow(7, 1, "Approve the guesthouse", owner = "user"),
+        TaskRow(8, 2, "Find the nearest DLTC with open slots", status = "blocked", owner = "agent", blocker = "The booking site needs your ID number to show slots"),
+        TaskRow(4, null, "Renew driver's licence", notes = "Bring 2 photos", dueAt = now + 3 * 86_400_000L, owner = "user"),
+        TaskRow(5, null, "Send Thandi the invoice", dueAt = now - 3_600_000L, owner = "user"), TaskRow(6, null, "Call mom back", owner = "user"),
+    )
+    private val demoMem get() = listOf(
+        MemoryRow(1, "Ayanda", "Ayanda Mokoena runs product at [[Guavas]] and lives in Johannesburg. Prefers short answers, window seats and no red-eye flights.", "person", "self, preferences", pinned = true, updatedAt = now - 86_400_000L * 3),
+        MemoryRow(2, "Thandi", "Thandi is [[Ayanda]]'s sister. She runs the books at [[Guavas]]; invoices go to her on the 25th.\n\n- Birthday: 14 March\n- Lives in [[Durban]]", "person", "family, guavas, invoices", updatedAt = now - 3_600_000),
+        MemoryRow(3, "Guavas", "A fintech company where [[Ayanda]] works. Office in Rosebank.", "company", "work", updatedAt = now - 86_400_000L),
+    )
+    private val demoHome get() = HomeState("Nova", "Ayanda", AgentStatus(true, "Browsing", 2),
+        listOf(item("agent", "Found three places in uMhlanga under R 1,200 a night. **Ocean Breeze** has the best reviews; want me to hold it?"),
+            item("question", "Which guesthouse should I book?", JSONObject().put("options", JSONArray(listOf("Ocean Breeze", "The Palms", "Show me more"))))),
+        demoGoals, demoTasks,
+        listOf(TriggerRow(1, "Morning brief", "daily", "07:00", "Brief me"), TriggerRow(2, "Bank alerts", "notification", "Capitec|", "Flag anything over R 1,000")),
+        notifications24h = 14, notifApps = 3, browserLive = true)
+
+    @Test fun home() { shot("15-home") { HomeScreen(demoHome, HomeActions()) ; androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.BottomCenter) { HomeBar("home", {}, {}) } } }
+    @Test fun profile() { shot("16-profile") { ProfileScreen(demoHome, demoMem, ProfileActions()) } }
+    @Test fun wikiPage() { shot("31-memory-page") { WikiPageScreen(demoMem[1], demoMem, {}, {}, {}, {}, {}) } }
+    @Test fun tasksAgent() { shot("22-tasks-agent") { TasksScreen(demoGoals, demoTasks, TaskActions(), startTab = 1) } }
+    @Test fun tasksMine() { shot("23-tasks-mine") { TasksScreen(demoGoals, demoTasks, TaskActions(), startTab = 0) } }
+    @Test fun notifications() {
+        val rows = listOf(NotificationRow(1, "com.capitec", "Capitec", "Payment received", "R 2,500.00 from GUAVAS PTY LTD into Savings", now - 600_000), NotificationRow(2, "com.whatsapp", "WhatsApp", "Thandi", "Did you send the invoice?", now - 3_600_000))
+        shot("52-notifications") { NotificationsScreen(false, listOf(PhoneApp("com.capitec", "Capitec", null), PhoneApp("com.whatsapp", "WhatsApp", null), PhoneApp("com.takealot", "Takealot", null)), setOf("com.capitec", "com.whatsapp"), rows, NotificationsActions()) }
+    }
+    @Test fun styleRed() { shot("17-onboarding-style-red") { OnboardingScreen(OnboardingActions(), start = OnbStep.STYLE, initialAccent = "red", initialMascot = "scout", initialUser = "Ayanda", initialAgent = "Nova") } }
+
+    @Test fun browserEmpty() { shot("70-browser-empty") { BrowserScreen(emptyMap(), listOf("Personal", "Work"), BrowserActions()) } }
 }
