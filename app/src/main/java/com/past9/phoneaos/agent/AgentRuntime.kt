@@ -92,7 +92,9 @@ class AgentRuntime(
         if (!forHelper) { list += LocationTool(context); list += NotificationsAllowTool(context, settings); list += NotificationsStopTool(settings); list += FilesPickTool(context); list += PhotosTool(context)
             list += WaitForCodeTool(db, settings, NotificationsAllowTool(context, settings)) }
         list += browserTools(context).filter { !forHelper || it !is BrowserHandoffTool }
-        if (settings.state.value.composioEnabled) {
+        if (settings.state.value.composioEnabled && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(settings.composioKey())) {
+            list += com.past9.phoneaos.tools.ComposioConnect.asTools { settings.composioKey()?.trim() }
+        } else if (settings.state.value.composioEnabled) {
             list += AppsListTool(composio); list += AppsFindToolsTool(composio)
             list += GuardedAppsRunTool(AppsRunTool(composio))
             if (!forHelper) list += AppsConnectTool(composio) { _, url -> com.past9.phoneaos.system.UiBus.openInBrowser.emit(com.past9.phoneaos.system.UiBus.OpenInBrowser(url)) }
@@ -139,6 +141,7 @@ class AgentRuntime(
             appendLine("- Your browser shares the phone's location with sites that ask (store finders, delivery), so you don't need to type the address. Sites open in your browser can send you web notifications; they arrive as notifications from 'web:<site>' and can trigger notification routines.")
             appendLine("- Facts like phone numbers, addresses, prices and opening hours must come from a page you actually read this session; name the source. If you could not verify it, say so. Never invent.")
             if (!s.composioEnabled) appendLine("- No apps are connected yet (Gmail, Calendar...). If a task needs one, tell the user they can connect apps in Connections.")
+            else if (com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(settings.composioKey())) appendLine("- Connected apps run through the COMPOSIO_* tools (Composio Connect): search for the right tool, check or start connections (if an app isn't connected, give the user the sign-in link it returns and wait for them), then execute. Actions that send, post, pay or delete ask the user first automatically.")
             else appendLine("- Connected apps run through apps_find_tools then apps_run. If the task needs an app that isn't connected, use apps_connect: it asks the user, opens the sign-in in your browser, and waits until it's done, then carry on.")
             appendLine()
             appendLine("- To show the user an image (a product photo, a map, a chart from a page), put it in your reply as markdown: ![what it is](https://...). Several images in a row become a swipeable strip.")

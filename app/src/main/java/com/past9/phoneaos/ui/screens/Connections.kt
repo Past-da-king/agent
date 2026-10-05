@@ -28,6 +28,8 @@ data class ConnectionsState(
     val connected: List<Connection> = emptyList(),
     val toolkits: List<Toolkit> = emptyList(),
     val notificationsAllowed: Boolean = true,
+    /** A consumer key (Composio Connect): apps are connected by the agent on request, not from a list here. */
+    val consumer: Boolean = false,
 )
 
 data class ConnectionsActions(
@@ -66,6 +68,17 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                 AppCard { ComposioKeyForm(actions.onSaveKey, actions.onOpenUrl) {} }
             } else {
                 if (state.error != null) item { Text(state.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(4.dp)) }
+                if (state.consumer) {
+                    item {
+                        AppCard {
+                            Text("CONNECTED THROUGH COMPOSIO CONNECT", style = com.past9.phoneaos.ui.theme.Eyebrow, color = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.height(6.dp))
+                            Text("Your agent can use every app on your Composio account. To add one, just ask it, for example \"connect my Gmail\". It sends you the sign-in link and carries on once you're done.", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                    item { TextButton(onClick = actions.onRemoveKey, modifier = Modifier.padding(top = 12.dp)) { Text("Remove Composio key", color = MaterialTheme.colorScheme.error) } }
+                    return@LazyColumn
+                }
                 val active = state.connected
                 if (active.isNotEmpty()) item {
                     AppCard(padding = PaddingValues(vertical = 4.dp)) {
