@@ -33,25 +33,68 @@ class ComposioClient(
     private fun key() = apiKey()?.trim()?.takeIf { it.isNotBlank() } ?: throw ProviderException("No Composio key yet. Add one in Connections.")
 
     /**
-     * Composio has two kinds of key and each goes in its own header: a PROJECT key (ak_...) in x-api-key,
-     * and a personal USER key (uak_..., from the dashboard or `composio login`) in x-user-api-key, which
-     * addresses the user's own developer project. Sending one in the other's header is a 401.
+     * Composio has three kinds of key, each in its own header: a PROJECT key in x-api-key, a personal
+     * USER key in x-user-api-key and an ORGANIZATION key in x-org-api-key. User and org keys may also
+     * need the project named (x-project-id). Sending a key in the wrong header is a 401, so the first
+     * call works out which one this key is and every call after reuses it.
      */
-    private fun auth(): Pair<String, String> = key().let { k -> if (k.startsWith("uak_")) "x-user-api-key" to k else "x-api-key" to k }
+    @Volatile private var auth: Pair<String, Map<String, String>>? = null
+    @Volatile private var authFor: String? = null
+    /** Until a call has proven otherwise, guess the header from how the key looks. */
+    private fun guess(k: String) = when { k.startsWith("uak_") -> "x-user-api-key"; k.startsWith("oak_") -> "x-org-api-key"; else -> "x-api-key" }
+    private fun headers(): Map<String, String> = key().let { k -> (auth?.takeIf { authFor == k } ?: (guess(k) to emptyMap())).let { (h, extra) -> mapOf(h to k) + extra } }
 
-    private suspend fun get(path: String, query: Map<String, String> = emptyMap()): JSONObject = withContext(Dispatchers.IO) {
-        val url = "$base$path".toHttpUrl().newBuilder().apply { query.forEach { (k, v) -> addQueryParameter(k, v) } }.build()
-        http.newCall(Request.Builder().url(url).header(auth().first, auth().second).build()).execute().use { res ->
-            val text = res.body?.string().orEmpty()
-            if (!res.isSuccessful) throw ProviderException("Composio ${res.code}: ${runCatching { JSONObject(text).optJSONObject("error")?.optString("message") }.getOrNull() ?: text.take(200)}", res.code)
-            JSONObject(text)
+    /** A 401/403 with an unproven key: work out its real header once, then retry. */
+    private suspend fun <T> withAuth(block: suspend () -> T): T = try { block() } catch (e: ProviderException) {
+        if ((e.status == 401 || e.status == 403) && authFor != runCatching { key() }.getOrNull() && verify() == null) block() else throw e
+    }
+
+    private suspend fun raw(url: String, hs: Map<String, String>): Pair<Int, String> = withContext(Dispatchers.IO) {
+        http.newCall(Request.Builder().url(url).apply { hs.forEach { (k, v) -> header(k, v) } }.build()).execute().use { it.code to (it.body?.string().orEmpty()) }
+    }
+    private fun message(code: Int, text: String) = "Composio $code: " + (runCatching { JSONObject(text).optJSONObject("error")?.optString("message") }.getOrNull()?.takeIf { it.isNotBlank() } ?: text.take(200))
+
+    private suspend fun get(path: String, query: Map<String, String> = emptyMap()): JSONObject = withAuth {
+        withContext(Dispatchers.IO) {
+            val url = "$base$path".toHttpUrl().newBuilder().apply { query.forEach { (k, v) -> addQueryParameter(k, v) } }.build()
+            http.newCall(Request.Builder().url(url).apply { headers().forEach { (k, v) -> header(k, v) } }.build()).execute().use { res ->
+                val text = res.body?.string().orEmpty()
+                if (!res.isSuccessful) throw ProviderException(message(res.code, text), res.code)
+                JSONObject(text)
+            }
         }
     }
 
-    private suspend fun post(path: String, body: JSONObject) = postJson(http, "$base$path", mapOf(auth()), body, attempts = 2)
+    private suspend fun post(path: String, body: JSONObject): JSONObject = withAuth { postJson(http, "$base$path", headers(), body, attempts = 2) }
 
-    /** Cheap call that proves the key works. */
-    suspend fun verify(): Boolean = runCatching { get("/toolkits", mapOf("limit" to "1")) }.isSuccess
+    /** Work out how this key authenticates. Null when it works, otherwise what Composio said. */
+    suspend fun verify(): String? {
+        val k = runCatching { key() }.getOrElse { return it.message }
+        val probe = "$base/toolkits?limit=1"
+        var last = ""
+        suspend fun ok(h: String, extra: Map<String, String> = emptyMap()): Boolean {
+            val (code, text) = raw(probe, mapOf(h to k) + extra)
+            if (code in 200..299) { auth = h to extra; authFor = k; return true }
+            last = message(code, text); return false
+        }
+        // Most likely first, by how the key looks.
+        val order = when { k.startsWith("uak_") -> listOf("x-user-api-key", "x-api-key", "x-org-api-key"); k.startsWith("oak_") || k.startsWith("org_") -> listOf("x-org-api-key", "x-api-key", "x-user-api-key"); else -> listOf("x-api-key", "x-user-api-key", "x-org-api-key") }
+        for (h in order) {
+            if (ok(h)) return null
+            // User and org keys can need the project spelled out: find it, then try again.
+            val project = when (h) {
+                "x-user-api-key" -> raw("$base/auth/session/info", mapOf(h to k)).takeIf { it.first in 200..299 }?.let { (_, t) ->
+                    JSONObject(t).optJSONObject("project")?.let { p -> p.optString("nano_id").ifBlank { p.optString("id") } } }
+                "x-org-api-key" -> listOf("$base/org/projects", base.replace("/v3.1", "/v3") + "/org/projects").firstNotNullOfOrNull { u ->
+                    raw(u, mapOf(h to k)).takeIf { it.first in 200..299 }?.let { (_, t) ->
+                        val o = runCatching { JSONObject(t) }.getOrNull(); val arr = o?.optJSONArray("items") ?: o?.optJSONArray("data") ?: runCatching { org.json.JSONArray(t) }.getOrNull()
+                        arr?.optJSONObject(0)?.let { p -> p.optString("nano_id").ifBlank { p.optString("id") } } } }
+                else -> null
+            }?.takeIf { it.isNotBlank() }
+            if (project != null && ok(h, mapOf("x-project-id" to project))) return null
+        }
+        return "Composio didn't accept that key ($last). Use a key from your project's Settings, API Keys."
+    }
 
     suspend fun toolkits(search: String = "", limit: Int = 500): List<Toolkit> {
         val q = mutableMapOf("limit" to "$limit", "sort_by" to "usage")
@@ -91,7 +134,7 @@ class ComposioClient(
     }
 
     suspend fun disconnect(connectionId: String) = withContext(Dispatchers.IO) {
-        http.newCall(Request.Builder().url("$base/connected_accounts/$connectionId").delete().header(auth().first, auth().second).build()).execute().close()
+        http.newCall(Request.Builder().url("$base/connected_accounts/$connectionId").delete().apply { headers().forEach { (k, v) -> header(k, v) } }.build()).execute().close()
     }
 
     suspend fun searchTools(query: String, toolkit: String?, limit: Int): JSONArray {

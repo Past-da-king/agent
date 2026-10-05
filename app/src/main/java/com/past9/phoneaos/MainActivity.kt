@@ -453,7 +453,7 @@ class MainActivity : ComponentActivity() {
 
     private suspend fun saveComposio(g: Graph, key: String): String? {
         g.settings.setComposioKey(key)
-        return if (g.runtime.composio.verify()) null else { g.settings.setComposioKey(null); "Composio didn't accept that key." }
+        return g.runtime.composio.verify()?.also { g.settings.setComposioKey(null) }
     }
 
     private fun notificationsAllowed() = Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
