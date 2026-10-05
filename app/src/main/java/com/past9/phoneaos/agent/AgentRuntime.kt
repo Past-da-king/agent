@@ -142,6 +142,7 @@ class AgentRuntime(
             appendLine("- NEVER use emoji, anywhere. They cheapen the app.")
             appendLine("STYLE: short and warm. Lead with the answer. Use short bullets for lists. No walls of text. Plain words. No em dashes.")
             if (background) appendLine("\nThis is a BACKGROUND run (a routine). Nobody is watching. Do the work, then finish with a short summary the user will read later. Use notify_user if something needs their attention.")
+            settings.extra("story")?.takeIf { it.isNotBlank() }?.let { appendLine("\nYOUR OWN NOTES SO FAR (written overnight; earlier chat is folded into these)\n$it") }
             if (pinned.isNotEmpty()) { appendLine("\nCORE MEMORIES (pinned)"); pinned.forEach { appendLine("- ${Recall.format(it)}") } }
             if (recalled.isNotEmpty()) { appendLine("\nPOSSIBLY RELEVANT MEMORIES"); recalled.forEach { appendLine("- ${Recall.format(it)}") } }
             if (goals.isNotEmpty() || tasks.isNotEmpty()) {
@@ -351,6 +352,35 @@ class AgentRuntime(
             db.chat().insert(ChatItem(kind = "notice", text = "Routine \"$name\" failed: $msg"))
             msg
         } finally { phone.workFinished() }
+    }
+
+    /**
+     * A run nobody sees: no chat rows, no notifications. The night shift uses it. Returns the model's
+     * final text, or null when no AI is set up.
+     */
+    suspend fun quietRun(prompt: String, withMemoryTools: Boolean): String? {
+        val sys = systemPrompt(prompt, background = true)
+        providerFactory(settings)?.let { provider ->
+            val tools = if (withMemoryTools) tools(forHelper = true).filter { it.spec.name.startsWith("memory_") || it.spec.name == "task_list" } else emptyList()
+            return AgentLoop(provider, settings.state.value.model, tools, maxSteps = 14).run(sys, mutableListOf(Msg.user(prompt)), QuietContext())
+        }
+        val engine = subscription?.takeIf { settings.state.value.mode == PowerMode.SUBSCRIPTION && it.ready } ?: return null
+        var last = ""
+        engine.turn(prompt + "\n\nDon't use any tools for this; just reply.", sys, null, mcp.url, settings.localToken()).collect { e -> if (e.optString("type") == "text") last = e.optString("text") }
+        return last.ifBlank { null }
+    }
+
+    /** Overnight: the model's transcript is folded into the running story, so each day starts clean. The chat the user sees stays. */
+    suspend fun compact() = turnLock.withLock {
+        db.chat().clearTurns("main"); settings.setExtra("claude_session", null)
+    }
+
+    private inner class QuietContext : ToolContext {
+        override val agentLabel = "overnight"
+        override suspend fun activity(text: String, meta: JSONObject): Long = 0
+        override suspend fun updateActivity(id: Long, text: String, meta: JSONObject) {}
+        override suspend fun ask(question: String, options: List<String>): String? = null
+        override suspend fun notify(title: String, body: String) {}
     }
 
     fun clearConversation() = scope.launch { db.chat().clear(); db.chat().clearTurns("main"); settings.setExtra("claude_session", null); settings.setExtra("conversation_id", null) }

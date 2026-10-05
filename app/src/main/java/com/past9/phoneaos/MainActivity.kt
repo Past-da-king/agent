@@ -63,6 +63,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        com.past9.phoneaos.triggers.Overnight.onAppOpen(this)
+    }
+
     override fun onStop() {
         super.onStop()
         // Swap the home-screen icon to the user's character only once they've left the app.
@@ -132,6 +137,11 @@ class MainActivity : ComponentActivity() {
                 nav.navigate("browser") { launchSingleTop = true }
             }
         }
+        // First open of a new day: straight to the morning screen the night shift wrote.
+        val morningNow by com.past9.phoneaos.triggers.Overnight.morning.collectAsStateWithLifecycle()
+        val brief by com.past9.phoneaos.triggers.Overnight.brief.collectAsStateWithLifecycle()
+        val preparingBrief by com.past9.phoneaos.triggers.Overnight.working.collectAsStateWithLifecycle()
+        LaunchedEffect(morningNow) { if (morningNow && route != "chat") nav.navigate("chat") { launchSingleTop = true } }
         val speakingNow by g.speaking.collectAsStateWithLifecycle()
         val incomingNow by incoming.collectAsStateWithLifecycle()
         LaunchedEffect(incomingNow) {
@@ -226,11 +236,11 @@ class MainActivity : ComponentActivity() {
                 composable("chat") {
                     ChatScreen(items, status, settings.agentName, settings.userName, browserLive, draft, { draft = it },
                         ChatActions(
-                            onSend = { g.stopSpeaking()
+                            onSend = { g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity)
                                 val docText = docs.entries.joinToString("") { (n, d) -> "\n\n[Attached document: $n]\n${d.first.take(30_000)}" }
                                 g.runtime.send(it + docText, attachments.toList() + docs.values.flatMap { d -> d.second }.take(6), docs.keys.toList())
                                 attachments.clear(); docs.clear() },
-                            onSendVoice = { g.stopSpeaking()
+                            onSendVoice = { g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity)
                                 val docText = docs.entries.joinToString("") { (n, d) -> "\n\n[Attached document: $n]\n${d.first.take(30_000)}" }
                                 g.runtime.send(it + docText, attachments.toList() + docs.values.flatMap { d -> d.second }.take(6), docs.keys.toList(), voiceReply = true)
                                 attachments.clear(); docs.clear() }, onStop = { g.runtime.stop() },
@@ -240,7 +250,10 @@ class MainActivity : ComponentActivity() {
                             onAnswer = { id, o -> g.runtime.answer(id, o) },
                             onMenu = { nav.popBackStack() }, onBrowser = { nav.navigate("browser") }, onProfile = { nav.navigate("profile") },
                             onMic = { runCatching { voice.launch(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)) } },
-                        ), openCount = tasks.count { it.status != "done" }, attachments = attachments, modelLabel = modelLabel, docs = docs.keys.toList())
+                        ), openCount = tasks.count { it.status != "done" }, attachments = attachments, modelLabel = modelLabel, docs = docs.keys.toList(),
+                        morning = if (!morningNow) null else (brief?.takeIf { it.ideas.isNotEmpty() }?.let { b ->
+                            com.past9.phoneaos.ui.screens.MorningUi(b.greeting, b.line, b.body, b.ideas.map { it.icon to it.text }, preparingBrief, { com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity) })
+                        } ?: com.past9.phoneaos.ui.screens.MorningUi(preparing = preparingBrief, onBackToChat = { com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity) })))
                 }
                 composable("tasks") {
                     TasksScreen(goals, tasks, bottomPadding = barPad, actions = TaskActions(

@@ -34,6 +34,7 @@ data class RoutineActions(
 fun whenLabel(t: TriggerRow): String = when (t.kind) {
     "at" -> parseWhen(t.spec)?.let { "Once, " + dueLabel(it) } ?: "Once"
     "daily" -> "Every day at ${t.spec}"
+    "nightly" -> "Every night while charging, from ${t.spec}"
     "interval" -> (t.spec.toIntOrNull() ?: 60).let { if (it % 60 == 0) "Every ${it / 60} h" else "Every $it min" }
     "email" -> "When a new email matches: ${t.spec}"
     "notification" -> t.spec.split("|").let { "When ${it[0]} notifies" + (it.getOrNull(1)?.takeIf { w -> w.isNotBlank() }?.let { w -> " about \"$w\"" } ?: "") }
@@ -45,7 +46,7 @@ fun inLabel(ms: Long): String = when {
     ms < 86_400_000 -> "in ${ms / 3_600_000} h ${(ms % 3_600_000) / 60_000} min"; else -> "in ${ms / 86_400_000} d"
 }
 
-private fun kindIcon(kind: String): ImageVector = when (kind) { "at" -> Icons.Rounded.Event; "daily" -> Icons.Rounded.WbSunny; "interval" -> Icons.Rounded.Autorenew; "notification" -> Icons.Rounded.NotificationsActive; else -> Icons.Rounded.Mail }
+private fun kindIcon(kind: String): ImageVector = when (kind) { "at" -> Icons.Rounded.Event; "daily" -> Icons.Rounded.WbSunny; "nightly" -> Icons.Rounded.Bedtime; "interval" -> Icons.Rounded.Autorenew; "notification" -> Icons.Rounded.NotificationsActive; else -> Icons.Rounded.Mail }
 
 @Composable
 fun RoutinesScreen(routines: List<TriggerRow>, actions: RoutineActions, now: Long = System.currentTimeMillis(), bottomPadding: androidx.compose.ui.unit.Dp = 120.dp) {

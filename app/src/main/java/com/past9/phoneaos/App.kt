@@ -23,6 +23,7 @@ class Graph(context: Context) {
         onRoutineChanged = { t -> if (t != null) Routines.schedule(app, t) }
         onRoutineDeleted = { id -> Routines.cancel(app, id) }
     }
+    init { scope.launch { runCatching { com.past9.phoneaos.triggers.Overnight.ensureRoutine(this@Graph) } } }
     val call by lazy { com.past9.phoneaos.voice.CallController(app, db, settings, runtime, scope) }
 
     private val systemVoice by lazy { com.past9.phoneaos.system.Speaker(app) }

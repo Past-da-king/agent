@@ -117,6 +117,7 @@ fun ChatScreen(
     attachments: List<String> = emptyList(),
     modelLabel: String = "",
     docs: List<String> = emptyList(),
+    morning: MorningUi? = null,
 ) {
     val rows = remember(items) { group(items) }
     val list = rememberLazyListState()
@@ -128,7 +129,7 @@ fun ChatScreen(
         topBar = { ChatTopBar(agentName, status, browserLive, waitingOnYou, openCount, actions, modelLabel) },
         bottomBar = { Composer(draft, onDraft, status.working, actions, attachments, docs) },
     ) { pad ->
-        if (items.isEmpty()) Welcome(userName, agentName, Modifier.padding(pad), actions.onSend)
+        if (items.isEmpty() || morning != null) Welcome(userName, Modifier.padding(pad), actions.onSend, morning, hasChat = items.isNotEmpty())
         else LazyColumn(
             state = list, modifier = Modifier.fillMaxSize().padding(pad),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
@@ -188,24 +189,44 @@ private fun ChatTopBar(agentName: String, status: AgentStatus, browserLive: Bool
     }
 }
 
+/** What the night shift wrote for this morning. Null fields fall back to the first-day screen. */
+data class MorningUi(
+    val greeting: String = "", val line: String = "", val body: String = "",
+    val ideas: List<Pair<String, String>> = emptyList(),
+    /** The agent is still writing today's screen. */
+    val preparing: Boolean = false,
+    val onBackToChat: () -> Unit = {},
+)
+
+private fun ideaIcon(kind: String) = when (kind) {
+    "browse" -> Icons.Rounded.TravelExplore; "plan" -> Icons.Rounded.EventNote; "routine" -> Icons.Rounded.Alarm
+    "memory" -> Icons.Rounded.Psychology; "task" -> Icons.Rounded.TaskAlt; "mail" -> Icons.Rounded.Mail
+    "call" -> Icons.Rounded.Call; else -> Icons.Rounded.Lightbulb
+}
+
 @Composable
-private fun Welcome(userName: String, agentName: String, modifier: Modifier, onSend: (String) -> Unit) {
-    Column(modifier.fillMaxSize().padding(horizontal = 24.dp), verticalArrangement = Arrangement.Center) {
-        AgentAvatar(working = false, size = 88.dp)
+private fun Welcome(userName: String, modifier: Modifier, onSend: (String) -> Unit, morning: MorningUi?, hasChat: Boolean) {
+    val greeting = morning?.greeting?.ifBlank { null } ?: if (userName.isNotBlank()) "Hi $userName." else "Hi there."
+    val line = morning?.line?.ifBlank { null } ?: "What should I take off your plate?"
+    val body = morning?.body?.ifBlank { null } ?: "I can browse for you in the background, keep your tasks, remember what matters, and run things on a schedule."
+    val ideas = morning?.ideas?.takeIf { it.isNotEmpty() }?.map { ideaIcon(it.first) to it.second } ?: listOf(
+        Icons.Rounded.TravelExplore to "Compare three phone contracts under R500 a month",
+        Icons.Rounded.EventNote to "Plan my week: what's open and what's due",
+        Icons.Rounded.Alarm to "Every morning at 7, give me the news that matters to me",
+        Icons.Rounded.Psychology to "Remember that I prefer window seats and no red-eye flights",
+    )
+    // Centred like the first-day screen, but it scrolls when the agent writes longer lines.
+    BoxWithConstraints(modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = maxHeight).padding(horizontal = 24.dp, vertical = 16.dp), verticalArrangement = Arrangement.Center) {
+        AgentAvatar(working = morning?.preparing == true, size = 88.dp)
         Spacer(Modifier.height(28.dp))
-        Text(if (userName.isNotBlank()) "Hi $userName." else "Hi there.", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.onSurface)
-        Text("What should I take off your plate?", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(greeting, style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.onSurface)
+        Text(line, style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(12.dp))
-        Text("I can browse for you in the background, keep your tasks, remember what matters, and run things on a schedule.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(body, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(28.dp))
-        Text("TRY", style = Eyebrow, color = MaterialTheme.colorScheme.primary)
+        Text(if (morning?.preparing == true) "TRY  ·  THINKING ABOUT YOUR DAY" else "TRY", style = Eyebrow, color = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(8.dp))
-        val ideas = listOf(
-            Icons.Rounded.TravelExplore to "Compare three phone contracts under R500 a month",
-            Icons.Rounded.EventNote to "Plan my week: what's open and what's due",
-            Icons.Rounded.Alarm to "Every morning at 7, give me the news that matters to me",
-            Icons.Rounded.Psychology to "Remember that I prefer window seats and no red-eye flights",
-        )
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ideas.forEach { (icon, text) ->
                 Surface(onClick = { onSend(text) }, shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
@@ -217,7 +238,14 @@ private fun Welcome(userName: String, agentName: String, modifier: Modifier, onS
                 }
             }
         }
+        if (morning != null && hasChat) {
+            Spacer(Modifier.height(12.dp))
+            TextButton(onClick = morning.onBackToChat, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                Icon(Icons.Rounded.History, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Pick up where we left off")
+            }
+        }
     }
+}
 }
 
 /** A voice note: play it, or tap "Read it" to scan the words instead. */

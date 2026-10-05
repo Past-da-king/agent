@@ -32,7 +32,7 @@ object Routines {
     /** Milliseconds until the next run, or null if it never runs again. */
     fun nextRunIn(t: TriggerRow, now: ZonedDateTime = ZonedDateTime.now()): Long? = when (t.kind) {
         "at" -> parseWhen(t.spec)?.let { it - now.toInstant().toEpochMilli() }?.takeIf { it > 0 }
-        "daily" -> runCatching {
+        "daily", Overnight.KIND -> runCatching {
             val (h, m) = t.spec.split(":").map { it.toInt() }
             var next = now.with(LocalTime.of(h, m)).withSecond(0).withNano(0)
             if (!next.isAfter(now)) next = next.plusDays(1)
@@ -54,6 +54,12 @@ object Routines {
                     PeriodicWorkRequestBuilder<RoutineWorker>(minutes, TimeUnit.MINUTES).setInputData(data).setConstraints(net).build())
             }
             "notification" -> wm.cancelUniqueWork(name(t.id))
+            Overnight.KIND -> {
+                // The night shift waits for the charger as well as the clock.
+                val delay = nextRunIn(t) ?: return
+                wm.enqueueUniqueWork(name(t.id), ExistingWorkPolicy.REPLACE, OneTimeWorkRequestBuilder<RoutineWorker>().setInitialDelay(delay, TimeUnit.MILLISECONDS)
+                    .setInputData(data).setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).setRequiresCharging(true).build()).build())
+            }
             else -> {
                 val delay = nextRunIn(t) ?: run { wm.cancelUniqueWork(name(t.id)); return }
                 wm.enqueueUniqueWork(name(t.id), ExistingWorkPolicy.REPLACE,
@@ -87,6 +93,12 @@ class RoutineWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         val manual = inputData.getBoolean("manual", false) && inputData.getString("context").isNullOrEmpty()
         if (!t.enabled && !inputData.getBoolean("manual", false)) return Result.success()
 
+        if (t.kind == Overnight.KIND) {
+            val out = runCatching { Overnight.run(g, full = true) }.getOrElse { "Overnight run failed: ${it.message}" }
+            g.db.triggers().upsert(t.copy(lastRunAt = System.currentTimeMillis(), lastResult = out.take(500)))
+            if (!manual) Routines.schedule(applicationContext, g.db.triggers().get(id)!!)
+            return Result.success()
+        }
         var prompt = inputData.getString("context").orEmpty() + t.prompt
         var cursor = t.cursor
         if (t.kind == "email" && !manual) {
