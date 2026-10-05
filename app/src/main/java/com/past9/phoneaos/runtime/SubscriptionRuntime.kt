@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
@@ -122,22 +123,35 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
             SubKind.CODEX -> listOf(File(bin, "codex").path, "login")
             SubKind.OPENCODE -> return@withContext "OpenCode sign-in isn't available yet"
         }
-        val p = ProcessBuilder(cmd).directory(dir).redirectErrorStream(true).apply { environment().putAll(env()) }.start()
+        context.assets.open("runtime/open-url-hook.cjs").use { i -> File(dir, "open-url-hook.cjs").outputStream().use { i.copyTo(it) } }
+        val opened = File(home, ".open-url").apply { delete() }
+        val p = ProcessBuilder(cmd).directory(dir).redirectErrorStream(true).apply {
+            environment().putAll(env())
+            // Claude: the CLI "opens a browser" with $BROWSER; our hook hands us that URL. It is the
+            // automatic flow, which redirects to the CLI's own server on localhost, i.e. this phone.
+            environment()["BROWSER"] = File(bin, "node").path
+            environment()["NODE_OPTIONS"] = "--require ${File(dir, "open-url-hook.cjs").path}"
+        }.start()
         loginStdin = p.outputStream.bufferedWriter()
-        var opened = false
+        var sent = false
         val lines = StringBuilder()
+        val watcher = kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+            repeat(120) {
+                if (!sent && opened.exists() && opened.length() > 20) { sent = true; onUrl(opened.readText().trim()) }
+                kotlinx.coroutines.delay(250)
+            }
+        }
         try {
             p.inputStream.bufferedReader().forEachLine { line ->
                 lines.appendLine(line); progress(line.take(200))
                 val url = Regex("https://\\S+").find(line)?.value?.trimEnd('.', ')')
-                if (!opened && url != null && (url.contains("oauth") || url.contains("authorize"))) {
-                    opened = true; onUrl(url)
-                    if (kind == SubKind.CLAUDE && url.contains("code%2Fcallback")) needsCode()
-                }
+                // Codex prints a localhost-redirect URL itself. Claude's printed one is the manual flow,
+                // which needs a TTY to paste into, so for Claude we wait for the hook's URL instead.
+                if (kind == SubKind.CODEX && !sent && url != null && (url.contains("oauth") || url.contains("authorize"))) { sent = true; onUrl(url) }
             }
             val code = p.waitFor()
-            if (code == 0 && signedIn) null else "Sign-in didn't finish (exit $code). ${lines.lines().lastOrNull { it.isNotBlank() }.orEmpty().take(200)}"
-        } finally { loginStdin = null; runCatching { p.destroy() } }
+            if (code == 0 && signedIn) null else "Sign-in didn't finish. ${lines.lines().lastOrNull { it.isNotBlank() && !it.startsWith("http") }.orEmpty().take(200)}"
+        } finally { watcher.cancel(); loginStdin = null; runCatching { p.destroy() } }
     }
 
     fun cancelLogin() { runCatching { loginStdin?.close() } }

@@ -86,7 +86,9 @@ fun SubSetupScreen(kind: SubKind, signInHelp: String, info: RuntimeInfo, install
                 // 2b. Waiting on the browser (ChatGPT/Codex comes back by itself)
                 signingIn -> AppCard {
                     Text("IN YOUR BROWSER", style = Eyebrow, color = cs.primary)
-                    Text("Sign in and approve, then come back", style = MaterialTheme.typography.titleLarge)
+                    Text("Tap Authorize, then come back", style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(6.dp))
+                    Text("No code to copy. This screen finishes by itself once you've approved.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                     Spacer(Modifier.height(12.dp)); LinearWavyProgressIndicator(Modifier.fillMaxWidth())
                 }
                 // 2. Sign in
@@ -94,7 +96,7 @@ fun SubSetupScreen(kind: SubKind, signInHelp: String, info: RuntimeInfo, install
                     Text("ONE STEP", style = Eyebrow, color = cs.primary)
                     Text("Sign in with your ${kind.label} account", style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.height(8.dp))
-                    Text(if (kind == SubKind.CLAUDE) "Your browser opens. Approve, copy the code Claude shows, and paste it here." else "Your browser opens. Approve, and you're brought back automatically.",
+                    Text("Your browser opens. Tap Authorize there, then come back here. That's it.",
                         style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                     Spacer(Modifier.height(14.dp))
                     Button(onClick = onSignIn, modifier = Modifier.fillMaxWidth().height(56.dp), shapes = ButtonDefaults.shapes()) { Text("Sign in with ${kind.label}") }
