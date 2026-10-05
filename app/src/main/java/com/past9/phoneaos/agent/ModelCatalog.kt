@@ -46,7 +46,9 @@ object ModelCatalog {
         val dev = catalogue(context)?.optJSONObject(devIds[p] ?: "")?.optJSONObject("models")
         val base = baseUrl.ifBlank { p.baseUrl }.trimEnd('/')
         val req = Request.Builder().url("$base/models").apply {
+            header("User-Agent", USER_AGENT)
             if (p == Provider.ANTHROPIC) { header("x-api-key", key); header("anthropic-version", "2023-06-01") } else header("Authorization", "Bearer $key")
+            if (p == Provider.OPENCODE_GO || p == Provider.OPENCODE_ZEN) header("x-opencode-session", "models-" + java.util.UUID.randomUUID())
         }.build()
         val ids = runCatching {
             sharedHttp.newCall(req).execute().use { r ->

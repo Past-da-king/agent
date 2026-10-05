@@ -72,6 +72,8 @@ data class OnboardingActions(
     val requestNotifications: () -> Unit = {},
     val openUrl: (String) -> Unit = {},
     val openSubSetup: () -> Unit = {},
+    /** The real install + sign-in flow for Claude / ChatGPT, shown full screen inside onboarding. */
+    val subSetup: (@Composable (SubKind, back: () -> Unit, next: () -> Unit) -> Unit)? = null,
     val finish: () -> Unit = {},
 )
 
@@ -124,7 +126,8 @@ fun OnboardingScreen(actions: OnboardingActions, start: OnbStep = OnbStep.HELLO,
                                 if (k == SubKind.OPENCODE) { provider = Provider.OPENCODE_GO; actions.choosePower(PowerMode.API_KEY); step = OnbStep.KEY }
                                 else { sub = k; actions.chooseSub(k); actions.choosePower(PowerMode.SUBSCRIPTION); step = OnbStep.SUB } })
                         OnbStep.KEY -> KeyStep(provider, { provider = it }, actions) { step = OnbStep.APPS }
-                        OnbStep.SUB -> SubStep(sub, actions.subAvailable(sub), onUseKey = { actions.choosePower(PowerMode.API_KEY); step = OnbStep.KEY }, onSetup = actions.openSubSetup) { step = OnbStep.APPS }
+                        OnbStep.SUB -> if (actions.subAvailable(sub) && actions.subSetup != null) actions.subSetup.invoke(sub, { step = OnbStep.POWER }) { step = OnbStep.APPS }
+                            else SubStep(sub, actions.subAvailable(sub), onUseKey = { actions.choosePower(PowerMode.API_KEY); step = OnbStep.KEY }, onSetup = actions.openSubSetup) { step = OnbStep.APPS }
                         OnbStep.APPS -> AppsStep(actions) { step = OnbStep.READY }
                         OnbStep.READY -> ReadyStep(user, actions)
                     }

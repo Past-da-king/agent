@@ -14,6 +14,9 @@ import java.util.concurrent.TimeUnit
 
 private val JSON = "application/json".toMediaType()
 
+/** Our own client name: some providers (OpenCode Go) refuse generic HTTP-library user agents. */
+const val USER_AGENT = "phone-agent/0.3 (Android)"
+
 val sharedHttp: OkHttpClient by lazy {
     OkHttpClient.Builder().connectTimeout(20, TimeUnit.SECONDS).readTimeout(180, TimeUnit.SECONDS).writeTimeout(60, TimeUnit.SECONDS).build()
 }
@@ -50,7 +53,7 @@ class AnthropicProvider(private val apiKey: String, private val baseUrl: String 
         if (tools.isNotEmpty()) body.put("tools", JSONArray().apply {
             tools.forEach { put(JSONObject().put("name", it.name).put("description", it.description).put("input_schema", it.schema)) }
         })
-        val res = postJson(http, "$baseUrl/messages", mapOf("x-api-key" to apiKey, "anthropic-version" to "2023-06-01"), body)
+        val res = postJson(http, "$baseUrl/messages", mapOf("x-api-key" to apiKey, "anthropic-version" to "2023-06-01", "User-Agent" to USER_AGENT), body)
         val content = res.optJSONArray("content") ?: JSONArray()
         val blocks = (0 until content.length()).mapNotNull { i ->
             val b = content.getJSONObject(i)
@@ -71,6 +74,7 @@ class AnthropicProvider(private val apiKey: String, private val baseUrl: String 
                     is Block.Text -> if (b.text.isNotEmpty()) put(JSONObject().put("type", "text").put("text", b.text))
                     is Block.ToolCall -> put(JSONObject().put("type", "tool_use").put("id", b.id).put("name", b.name).put("input", b.input))
                     is Block.ToolResult -> put(JSONObject().put("type", "tool_result").put("tool_use_id", b.callId).put("content", b.content).put("is_error", b.isError))
+                    is Block.Reasoning -> {}
                     is Block.Image -> if (java.io.File(b.path).exists()) put(JSONObject().put("type", "image").put("source", JSONObject().put("type", "base64").put("media_type", b.mime).put("data", b.base64())))
                 }
             }
@@ -80,7 +84,9 @@ class AnthropicProvider(private val apiKey: String, private val baseUrl: String 
 /** OpenAI Chat Completions shape: OpenAI, OpenRouter and Gemini's OpenAI-compatible endpoint. */
 class OpenAiCompatProvider(override val name: String, private val apiKey: String, private val baseUrl: String, private val http: OkHttpClient = sharedHttp,
                            /** Provider-specific body fields, e.g. DeepSeek's thinking switch. */
-                           private val extra: JSONObject = JSONObject()) : LlmProvider {
+                           private val extra: JSONObject = JSONObject(),
+                           /** Provider-specific headers, e.g. OpenCode Go's per-conversation session id. */
+                           private val extraHeaders: () -> Map<String, String> = { emptyMap() }) : LlmProvider {
 
     override suspend fun complete(system: String, messages: List<Msg>, tools: List<ToolSpec>, model: String, maxTokens: Int): Completion {
         val wire = JSONArray().put(JSONObject().put("role", "system").put("content", system))
@@ -90,12 +96,14 @@ class OpenAiCompatProvider(override val name: String, private val apiKey: String
         if (tools.isNotEmpty()) body.put("tools", JSONArray().apply {
             tools.forEach { put(JSONObject().put("type", "function").put("function", JSONObject().put("name", it.name).put("description", it.description).put("parameters", it.schema))) }
         })
-        val headers = mutableMapOf("Authorization" to "Bearer $apiKey")
+        val headers = mutableMapOf("Authorization" to "Bearer $apiKey", "User-Agent" to USER_AGENT)
+        headers.putAll(extraHeaders())
         if (name == "openrouter") headers["X-Title"] = "Phone agent"
         val res = postJson(http, "${baseUrl.trimEnd('/')}/chat/completions", headers, body)
         val choice = res.optJSONArray("choices")?.optJSONObject(0) ?: throw ProviderException("No choices in response")
         val msg = choice.getJSONObject("message")
         val blocks = mutableListOf<Block>()
+        msg.optString("reasoning_content").takeIf { it.isNotBlank() && it != "null" }?.let { blocks += Block.Reasoning(it) }
         msg.optString("content").takeIf { it.isNotBlank() && it != "null" }?.let { blocks += Block.Text(it) }
         msg.optJSONArray("tool_calls")?.let { calls ->
             for (i in 0 until calls.length()) {
@@ -111,6 +119,8 @@ class OpenAiCompatProvider(override val name: String, private val apiKey: String
     private fun toWire(m: Msg): List<JSONObject> {
         if (m.role == Role.ASSISTANT) {
             val o = JSONObject().put("role", "assistant").put("content", m.text.ifEmpty { JSONObject.NULL })
+            // Reasoning models behind OpenAI-style APIs (DeepSeek, OpenCode) want their reasoning back on tool turns.
+            m.blocks.filterIsInstance<Block.Reasoning>().joinToString("\n") { it.text }.takeIf { it.isNotBlank() }?.let { o.put("reasoning_content", it) }
             if (m.toolCalls.isNotEmpty()) o.put("tool_calls", JSONArray().apply {
                 m.toolCalls.forEach { put(JSONObject().put("id", it.id).put("type", "function").put("function", JSONObject().put("name", it.name).put("arguments", it.input.toString()))) }
             })

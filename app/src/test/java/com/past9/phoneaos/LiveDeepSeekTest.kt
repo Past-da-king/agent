@@ -28,12 +28,15 @@ import java.io.File
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class LiveDeepSeekTest {
-    @Test fun realAgentUsesToolsAndRemembers() = runBlocking {
-        val key = System.getenv("DEEPSEEK_KEY").orEmpty()
-        assumeTrue("no DEEPSEEK_KEY", key.isNotBlank())
+    @Test fun openCodeGoWithTools() = live(Provider.OPENCODE_GO, System.getenv("OPENCODE_KEY").orEmpty(), "opencode")
+
+    @Test fun realAgentUsesToolsAndRemembers() = live(Provider.DEEPSEEK, System.getenv("DEEPSEEK_KEY").orEmpty(), "deepseek")
+
+    private fun live(provider: Provider, key: String, tag: String) = runBlocking {
+        assumeTrue("no key for $tag", key.isNotBlank())
         val app = ApplicationProvider.getApplicationContext<android.content.Context>()
         val db = AppDb.inMemory(app); val s = SettingsStore(app)
-        s.setMode(PowerMode.API_KEY); s.setProvider(Provider.DEEPSEEK); s.setApiKey(Provider.DEEPSEEK, key); s.setUserName("Ayanda")
+        s.setMode(PowerMode.API_KEY); s.setProvider(provider); s.setApiKey(provider, key); s.setUserName("Ayanda")
         val rt = AgentRuntime(app, db, s, CoroutineScope(SupervisorJob() + Dispatchers.IO), FakePhone())
 
         rt.send("Remember that my favourite colour is teal. Also add a task: renew my driver's licence by Friday.")
@@ -43,7 +46,7 @@ class LiveDeepSeekTest {
 
         val chat = db.chat().all().first()
         File("build/live").mkdirs()
-        File("build/live/deepseek.txt").writeText(chat.joinToString("\n") { "[${it.kind}] ${it.text}" })
+        File("build/live/$tag.txt").writeText(chat.joinToString("\n") { "[${it.kind}] ${it.text}" })
         assertTrue("memory saved", db.memory().list().any { it.body.contains("teal", true) })
         assertTrue("task added", db.tasks().openTasks().any { it.title.contains("licence", true) || it.title.contains("license", true) })
         val lastAgent = chat.last { it.kind == "agent" }.text

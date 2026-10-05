@@ -294,27 +294,8 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 composable("sub") {
-                    var info by remember { mutableStateOf(sub.info()) }
-                    val log = remember { mutableStateListOf<String>() }
-                    var installing by remember { mutableStateOf(false) }
-                    var signingIn by remember { mutableStateOf(false) }
-                    var signErr by remember { mutableStateOf<String?>(null) }
-                    var needsCode by remember { mutableStateOf(false) }
-                    var verifying by remember { mutableStateOf(false) }
-                    SubSetupScreen(sub.kind, sub.spec.signInHelp, info, sub.installed, log, installing, onBack = { nav.popBackStack() },
-                        signingIn = signingIn, signInError = signErr, needsCode = needsCode, verifying = verifying,
-                        onCode = { c -> verifying = true; needsCode = false; sub.submitCode(c) },
-                        onDone = { nav.navigate("chat") { popUpTo("home") } }, modelLabel = modelLabel, onModel = { openModels() },
-                        onSignIn = { scope.launch { signingIn = true; signErr = null
-                            // While you're in the browser this app is in the background, and Android cuts a
-                            // background app's network. A foreground service keeps it online for the hand-back.
-                            g.phone.workStarted()
-                            val err = try { sub.login(onUrl = { url -> runOnUiThread { open(url) } }, progress = { l -> scope.launch { log += l } }, needsCode = { needsCode = true }) } finally { g.phone.workFinished() }
-                            signingIn = false; needsCode = false; verifying = false; info = sub.info()
-                            if (sub.signedIn) g.settings.setMode(PowerMode.SUBSCRIPTION) else signErr = err ?: "Sign-in didn't finish. Tap Sign in to try again." } },
-                        onInstall = { scope.launch { installing = true; runCatching { sub.install { l -> scope.launch { log += l } } }.onFailure { log += "Failed: ${it.message}" }; installing = false; info = sub.info() } },
-                        onSaveToken = { t -> runCatching { sub.setToken(t); g.settings.setMode(PowerMode.SUBSCRIPTION) }.onFailure { signErr = it.message }; info = sub.info() },
-                        onUseKey = { g.settings.setMode(PowerMode.API_KEY); nav.navigate("key") })
+                    SubSetupFlow(g, settings.subKind, onBack = { nav.popBackStack() }, onDone = { nav.navigate("chat") { popUpTo("home") } },
+                        onUseKey = { g.settings.setMode(PowerMode.API_KEY); nav.navigate("key") }, modelLabel = modelLabel, onModel = { openModels() })
                 }
                 composable("style") {
                     com.past9.phoneaos.ui.SubScreen("Make it yours", "Colour and sidekick", { nav.popBackStack() }) { pad ->
@@ -346,11 +327,40 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** The whole subscription setup (install, sign in, done), shared by Settings and onboarding. */
+    @Composable
+    private fun SubSetupFlow(g: Graph, kind: com.past9.phoneaos.data.SubKind, onBack: () -> Unit, onDone: () -> Unit, onUseKey: () -> Unit, modelLabel: String = "", onModel: () -> Unit = {}) {
+        val scope = rememberCoroutineScope()
+        val sub = remember(kind) { com.past9.phoneaos.runtime.SubscriptionRuntime(this, kind) }
+        var info by remember(kind) { mutableStateOf(sub.info()) }
+        val log = remember(kind) { mutableStateListOf<String>() }
+        var installing by remember { mutableStateOf(false) }
+        var signingIn by remember { mutableStateOf(false) }
+        var signErr by remember { mutableStateOf<String?>(null) }
+        var needsCode by remember { mutableStateOf(false) }
+        var verifying by remember { mutableStateOf(false) }
+        SubSetupScreen(sub.kind, sub.spec.signInHelp, info, sub.installed, log, installing, onBack = onBack,
+            signingIn = signingIn, signInError = signErr, needsCode = needsCode, verifying = verifying,
+            onCode = { c -> verifying = true; needsCode = false; sub.submitCode(c) },
+            onDone = onDone, modelLabel = modelLabel, onModel = onModel,
+            onSignIn = { scope.launch { signingIn = true; signErr = null
+                // While you're in the browser this app is in the background, and Android cuts a
+                // background app's network. A foreground service keeps it online for the hand-back.
+                g.phone.workStarted()
+                val err = try { sub.login(onUrl = { url -> runOnUiThread { open(url) } }, progress = { l -> scope.launch { log += l } }, needsCode = { needsCode = true }) } finally { g.phone.workFinished() }
+                signingIn = false; needsCode = false; verifying = false; info = sub.info()
+                if (sub.signedIn) { g.settings.setSubKind(kind); g.settings.setMode(PowerMode.SUBSCRIPTION) } else signErr = err ?: "Sign-in didn't finish. Tap Sign in to try again." } },
+            onInstall = { scope.launch { installing = true; runCatching { sub.install { l -> scope.launch { log += l } } }.onFailure { log += "Failed: ${it.message}" }; installing = false; info = sub.info() } },
+            onSaveToken = { t -> runCatching { sub.setToken(t); g.settings.setSubKind(kind); g.settings.setMode(PowerMode.SUBSCRIPTION) }.onFailure { signErr = it.message }; info = sub.info() },
+            onUseKey = onUseKey)
+    }
+
     @Composable
     private fun Onboarding(g: Graph) {
         val notifPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
         val st = g.settings.state.value
         OnboardingScreen(onboardingActions(g).copy(
+            subSetup = { kind, back, next -> SubSetupFlow(g, kind, onBack = back, onDone = next, onUseKey = back) },
             requestNotifications = { if (Build.VERSION.SDK_INT >= 33) notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS) },
             finish = { g.settings.setOnboarded(true) },
         ), initialAccent = st.accent, initialMascot = st.mascot, initialUser = st.userName, initialAgent = if (st.agentName == "Your agent") "" else st.agentName)

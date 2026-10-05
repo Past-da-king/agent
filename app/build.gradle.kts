@@ -12,8 +12,8 @@ android {
     applicationId = "com.past9.phoneaos"
     minSdk = 29
     targetSdk = 36
-    versionCode = 16
-    versionName = "0.3.3"
+    versionCode = 17
+    versionName = "0.3.4"
     // The runtime pack (node, codex, ripgrep) is arm64 only, like every phone we target.
     ndk { abiFilters += listOf("arm64-v8a") }
   }
@@ -44,6 +44,7 @@ android {
         it.maxHeapSize = "3g"
         // Live provider tests run only when a key is passed in the environment (never stored in the repo).
         it.environment("DEEPSEEK_KEY", System.getenv("DEEPSEEK_KEY") ?: "")
+        it.environment("OPENCODE_KEY", System.getenv("OPENCODE_KEY") ?: "")
       }
     }
   }
