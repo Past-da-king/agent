@@ -44,6 +44,8 @@ class BrowserEngine(private val context: Context, val profile: String = "Persona
     private val stack = ArrayList<WebView>()
     private var container: ViewGroup? = null
     @Volatile var lastUsed = System.currentTimeMillis(); private set
+    /** Something the agent should know about the page that the page itself won't say (a blocked sign-in, a download). */
+    @Volatile var notice: String? = null
     val attached: Boolean get() = container != null
     fun touch() { lastUsed = System.currentTimeMillis() }
 
@@ -95,18 +97,67 @@ class BrowserEngine(private val context: Context, val profile: String = "Persona
                 return true
             }
             override fun onCloseWindow(window: WebView) { pop(window) }
+            // <input type=file>: the phone's own picker, so uploads work like in Chrome.
+            override fun onShowFileChooser(view: WebView, callback: android.webkit.ValueCallback<Array<android.net.Uri>>, params: FileChooserParams): Boolean {
+                val types = params.acceptTypes.orEmpty().map { it.trim() }.filter { it.isNotEmpty() && it.contains('/') }.ifEmpty { listOf("*/*") }.toTypedArray()
+                com.past9.phoneaos.App.graph(context).scope.launch {
+                    val r = com.past9.phoneaos.tools.FilePickBroker.Request(types)
+                    com.past9.phoneaos.tools.FilePickBroker.pending.value = r
+                    val uris = kotlinx.coroutines.withTimeoutOrNull(300_000) { r.result.await() }
+                    main.post { callback.onReceiveValue(uris?.takeIf { it.isNotEmpty() }?.toTypedArray()) }
+                }
+                return true
+            }
+        }
+        // Downloads land in the phone's Downloads folder, with this profile's cookies so signed-in files work.
+        setDownloadListener { url, userAgent, disposition, mime, _ ->
+            if (!url.startsWith("http")) return@setDownloadListener
+            runCatching {
+                val name = android.webkit.URLUtil.guessFileName(url, disposition, mime)
+                val req = android.app.DownloadManager.Request(android.net.Uri.parse(url))
+                    .addRequestHeader("Cookie", cookies.getCookie(url) ?: "").addRequestHeader("User-Agent", userAgent)
+                    .setMimeType(mime).setTitle(name)
+                    .setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    .setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, name)
+                context.getSystemService(android.app.DownloadManager::class.java).enqueue(req)
+                notice = "Downloading $name to the phone's Downloads folder."
+            }
         }
         // Web notifications: WebView has none, so give pages one that hands them to the app.
         addJavascriptInterface(WebNotifications(context, profile), "__aosWeb")
         if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT))
             runCatching { androidx.webkit.WebViewCompat.addDocumentStartJavaScript(this, WebNotifications.SHIM, setOf("*")) }
         webViewClient = object : WebViewClient() {
+            // Links into other apps (intent://, market://, mailto:) used to load as a blank error page.
+            override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
+                val url = request.url.toString()
+                val scheme = request.url.scheme?.lowercase() ?: return false
+                if (scheme in setOf("http", "https", "about", "data", "blob", "javascript", "file")) return false
+                if (scheme == "intent") {
+                    val intent = runCatching { android.content.Intent.parseUri(url, android.content.Intent.URI_INTENT_SCHEME) }.getOrNull() ?: return true
+                    intent.getStringExtra("browser_fallback_url")?.takeIf { it.startsWith("http") }?.let { view.loadUrl(it); return true }
+                    if (attached) runCatching {
+                        intent.addCategory(android.content.Intent.CATEGORY_BROWSABLE); intent.component = null; intent.selector = null
+                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK); context.startActivity(intent)
+                    }
+                    else notice = "This link wants to open another app (${intent.`package` ?: "an app"}). Skip it or ask the user."
+                    return true
+                }
+                if (attached) runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, request.url).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                else notice = "This link opens another app ($scheme:). Skip it or ask the user."
+                return true
+            }
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-                if (view === web) _page.value = PageState(url, view.title ?: "", true)
+                if (view === web) { _page.value = PageState(url, view.title ?: "", true); notice = null }
                 if (!androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)) view.evaluateJavascript(WebNotifications.SHIM, null)
             }
             override fun onPageFinished(view: WebView, url: String) {
                 if (view === web) { _page.value = PageState(url, view.title ?: "", false); pageDone?.complete(Unit) }
+                // Google says so in words when it refuses a sign-in here; surface it instead of a dead end.
+                if (url.contains("accounts.google.com")) view.evaluateJavascript("(document.body&&document.body.innerText||'').slice(0,4000)") { t ->
+                    if (t != null && Regex("disallowed_useragent|may not be secure|Couldn.t sign you in|isn.t secure", RegexOption.IGNORE_CASE).containsMatchIn(t))
+                        notice = "Google refused this sign-in inside this browser. Use the site's email or password option instead, or hand the browser to the user (browser_handoff) to try."
+                }
             }
         }
     }
@@ -180,7 +231,8 @@ class BrowserEngine(private val context: Context, val profile: String = "Persona
     /** Number every visible interactive element and return a compact, readable outline of the page. */
     suspend fun snapshot(maxChars: Int = 14_000): String {
         val raw = js(SNAPSHOT_JS)
-        return runCatching {
+        val note = notice?.let { "NOTE: $it\n\n" }.orEmpty()
+        return note + runCatching {
             val o = JSONObject(raw)
             buildString {
                 appendLine("URL: ${o.optString("url")}"); appendLine("Title: ${o.optString("title")}")

@@ -385,14 +385,45 @@ private fun PowerStep(available: (SubKind) -> Boolean, onKey: () -> Unit, onSub:
 }
 
 val keySteps = mapOf(
-    Provider.ANTHROPIC to ("https://console.anthropic.com/settings/keys" to listOf("Open console.anthropic.com and sign in.", "Go to Settings, then API keys, then Create key.", "Add a little credit under Billing (pay as you go).", "Copy the key (it starts with sk-ant-) and paste it below.")),
-    Provider.OPENAI to ("https://platform.openai.com/api-keys" to listOf("Open platform.openai.com and sign in.", "Go to API keys, then Create new secret key.", "Add credit under Billing.", "Copy the key (it starts with sk-) and paste it below.")),
-    Provider.GEMINI to ("https://aistudio.google.com/app/apikey" to listOf("Open aistudio.google.com with your Google account.", "Tap Get API key, then Create API key.", "Gemini has a free tier to start with.", "Copy the key (it starts with AIza) and paste it below.")),
-    Provider.DEEPSEEK to ("https://platform.deepseek.com/api_keys" to listOf("Open platform.deepseek.com and sign in.", "Go to API keys, then Create new API key.", "Top up a few dollars under Billing; it goes a long way.", "Copy the key (it starts with sk-) and paste it below.")),
-    Provider.OPENCODE_GO to ("https://opencode.ai/auth" to listOf("Open opencode.ai and sign in.", "Go to your Zen or Go plan's API keys and create one.", "Copy it and paste it below. That's it: no sign-in needed.")),
-    Provider.OPENCODE_ZEN to ("https://opencode.ai/auth" to listOf("Open opencode.ai and sign in.", "Go to your Zen plan's API keys and create one.", "Copy it and paste it below.")),
-    Provider.OPENROUTER to ("https://openrouter.ai/settings/keys" to listOf("Open openrouter.ai and sign in.", "Go to Keys, then Create key.", "Add credits to use paid models.", "Copy the key (it starts with sk-or-) and paste it below.")),
-    Provider.CUSTOM to ("https://platform.openai.com/docs/api-reference/chat" to listOf("Any service that speaks the OpenAI chat API works: Groq, Together, Mistral, a local server...", "Enter its base URL (usually ending in /v1) and the model name.", "Paste its API key below.")),
+    Provider.ANTHROPIC to ("https://console.anthropic.com/settings/keys" to listOf(
+        "Tap Open below. It opens Anthropic's console in your browser. Sign up or sign in.",
+        "Go to Billing and add a little credit. It's pay as you go, and a few dollars lasts a long time.",
+        "Go to API keys and tap Create key. Name it anything, like Agent.",
+        "Tap Copy, come back to this app, paste the key in the box above and tap Check key.")),
+    Provider.OPENAI to ("https://platform.openai.com/api-keys" to listOf(
+        "Tap Open below. It opens OpenAI's platform in your browser. Sign up or sign in. (This is separate from a ChatGPT subscription.)",
+        "Go to Billing and add a little credit. A few dollars lasts a long time.",
+        "Go to API keys and tap Create new secret key. Name it anything, like Agent.",
+        "Tap Copy (you can only see the key once), come back here, paste it above and tap Check key.")),
+    Provider.GEMINI to ("https://aistudio.google.com/app/apikey" to listOf(
+        "Tap Open below. It opens Google AI Studio. Sign in with any Google account.",
+        "Tap Create API key. If it asks you to pick a project, choose the one it suggests.",
+        "It's free to start, no card needed.",
+        "Tap the copy button next to your new key, come back here, paste it above and tap Check key.")),
+    Provider.DEEPSEEK to ("https://platform.deepseek.com/api_keys" to listOf(
+        "Tap Open below. It opens DeepSeek's platform. Sign up or sign in.",
+        "Go to Top up and add a few dollars. DeepSeek is cheap, so it goes a long way.",
+        "Go to API keys and tap Create new API key. Name it anything.",
+        "Tap Copy (you can only see the key once), come back here, paste it above and tap Check key.")),
+    Provider.OPENCODE_GO to ("https://opencode.ai/auth" to listOf(
+        "Tap Open below. It opens OpenCode. Sign in.",
+        "Subscribe to the Go plan if you haven't yet.",
+        "Find API keys in your account and create one.",
+        "Copy it, come back here, paste it above and tap Check key.")),
+    Provider.OPENCODE_ZEN to ("https://opencode.ai/auth" to listOf(
+        "Tap Open below. It opens OpenCode. Sign in.",
+        "Add credit to Zen (pay as you go).",
+        "Find API keys in your account and create one.",
+        "Copy it, come back here, paste it above and tap Check key.")),
+    Provider.OPENROUTER to ("https://openrouter.ai/settings/keys" to listOf(
+        "Tap Open below. It opens OpenRouter. Sign up or sign in.",
+        "Add credits to use paid models. Some models are free and need no credit.",
+        "Go to Keys and tap Create key. Name it anything.",
+        "Copy it (you can only see it once), come back here, paste it above and tap Check key.")),
+    Provider.CUSTOM to ("https://platform.openai.com/docs/api-reference/chat" to listOf(
+        "Any service with an OpenAI-style chat API works: Groq, Together, Mistral, or a server on your own computer.",
+        "In the boxes above, enter its base URL (it usually ends in /v1) and the exact model name from its docs.",
+        "Paste its API key and tap Check key.")),
 )
 
 @Composable
