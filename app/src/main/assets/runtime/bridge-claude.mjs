@@ -9,11 +9,22 @@ const out = (o) => process.stdout.write(JSON.stringify(o) + "\n");
 const rl = createInterface({ input: process.stdin });
 const line = await new Promise((res) => rl.once("line", res));
 rl.close();
-const { prompt, system, resume, model } = JSON.parse(line);
+const { prompt, system, resume, model, images = [] } = JSON.parse(line);
+import { readFileSync } from "node:fs";
+// Photos and scanned pages the user sent: Claude sees them as images in the same message.
+const userInput = images.length === 0 ? prompt : (async function* () {
+  yield {
+    type: "user", parent_tool_use_id: null, session_id: "",
+    message: { role: "user", content: [
+      ...images.map((p) => ({ type: "image", source: { type: "base64", media_type: p.endsWith(".png") ? "image/png" : "image/jpeg", data: readFileSync(p).toString("base64") } })),
+      { type: "text", text: prompt },
+    ] },
+  };
+})();
 
 try {
   for await (const m of query({
-    prompt,
+    prompt: userInput,
     options: {
       systemPrompt: system,
       resume: resume || undefined,

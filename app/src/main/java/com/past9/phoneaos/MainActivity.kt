@@ -21,6 +21,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.*
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -95,6 +96,12 @@ class MainActivity : ComponentActivity() {
         val scope = rememberCoroutineScope()
         var draft by rememberSaveable { mutableStateOf("") }
         val attachments = remember { mutableStateListOf<String>() }
+        // Documents attached in chat: name -> (extracted text, page images)
+        val docs = remember { mutableStateMapOf<String, Pair<String, List<String>>>() }
+        val docPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+            val reader = com.past9.phoneaos.tools.FilesPickTool(this@MainActivity)
+            scope.launch { uris.forEach { u -> val name = reader.displayName(u); docs[name] = reader.readDocument(u) } }
+        }
         var modelSheet by remember { mutableStateOf(false) }
         var modelList by remember { mutableStateOf<List<com.past9.phoneaos.agent.ModelInfo>?>(null) }
         var modelErr by remember { mutableStateOf<String?>(null) }
@@ -135,10 +142,12 @@ class MainActivity : ComponentActivity() {
         var lastSpoken by remember { mutableLongStateOf(items.lastOrNull()?.id ?: 0L) }
         LaunchedEffect(items.lastOrNull()?.id) {
             val last = items.lastOrNull() ?: return@LaunchedEffect
-            if (last.id > lastSpoken && last.kind == "agent" && settings.speakReplies) speaker.say(last.text)
+            if (last.id > lastSpoken && last.kind == "agent" && settings.speakReplies) g.speak(last.text)
             lastSpoken = maxOf(lastSpoken, last.id)
         }
 
+        val micPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) nav.navigate("call") }
+        fun startCall() { if (androidx.core.content.ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) nav.navigate("call") else micPerm.launch(Manifest.permission.RECORD_AUDIO) }
         val notifPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { conn = conn.copy(notificationsAllowed = it) }
         // The agent asked for a permission mid-task: show Android's prompt and hand the answer back.
         val permReq by com.past9.phoneaos.system.PermissionBroker.pending.collectAsStateWithLifecycle()
@@ -180,7 +189,7 @@ class MainActivity : ComponentActivity() {
                             onAnswer = { id, o -> g.runtime.answer(id, o) },
                             onToggleTask = { t -> scope.launch { g.db.tasks().updateTask(t.copy(status = if (t.status == "done") "todo" else "done", updatedAt = System.currentTimeMillis())) } },
                             onTasks = { go("tasks") }, onGoal = { nav.navigate("profile") }, onRoutines = { go("routines") },
-                            onSettings = { nav.navigate("settings") }, onBrowser = { nav.navigate("browser") }, onNotifications = { nav.navigate("notifications") },
+                            onSettings = { nav.navigate("settings") }, onCall = if (settings.liveEnabled) ({ startCall() }) else null, onBrowser = { nav.navigate("browser") }, onNotifications = { nav.navigate("notifications") },
                         ), bottomPadding = barPad + 24.dp)
                     }
                 }
@@ -211,13 +220,17 @@ class MainActivity : ComponentActivity() {
                 composable("chat") {
                     ChatScreen(items, status, settings.agentName, settings.userName, browserLive, draft, { draft = it },
                         ChatActions(
-                            onSend = { g.runtime.send(it, attachments.toList()); attachments.clear() }, onStop = { g.runtime.stop() },
+                            onSend = {
+                                val docText = docs.entries.joinToString("") { (n, d) -> "\n\n[Attached document: $n]\n${d.first.take(30_000)}" }
+                                g.runtime.send(it + docText, attachments.toList() + docs.values.flatMap { d -> d.second }.take(6), docs.keys.toList())
+                                attachments.clear(); docs.clear() }, onStop = { g.runtime.stop() },
+                            onAttachDoc = { docPicker.launch(arrayOf("*/*")) }, onRemoveDoc = { docs.remove(it) },
                             onAttach = { picker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-                            onRemoveAttachment = { attachments.remove(it) }, onModel = { openModels() },
+                            onRemoveAttachment = { attachments.remove(it) }, onModel = { openModels() }, onCall = if (settings.liveEnabled) ({ startCall() }) else null,
                             onAnswer = { id, o -> g.runtime.answer(id, o) },
                             onMenu = { nav.popBackStack() }, onBrowser = { nav.navigate("browser") }, onProfile = { nav.navigate("profile") },
                             onMic = { runCatching { voice.launch(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)) } },
-                        ), openCount = tasks.count { it.status != "done" }, attachments = attachments, modelLabel = modelLabel)
+                        ), openCount = tasks.count { it.status != "done" }, attachments = attachments, modelLabel = modelLabel, docs = docs.keys.toList())
                 }
                 composable("tasks") {
                     TasksScreen(goals, tasks, bottomPadding = barPad, actions = TaskActions(
@@ -276,6 +289,10 @@ class MainActivity : ComponentActivity() {
                         onChangeKey = { nav.navigate("key") }, setSpeak = g.settings::setSpeakReplies,
                         onClaudeSetup = { nav.navigate("sub") }, onDeleteRuntime = { sub.delete(); info = sub.info() }, onStyle = { nav.navigate("style") },
                         onModel = { openModels() },
+                        voice = VoiceActions(
+                            setTts = { p, v -> g.settings.setTts(p, v) }, setKey = { p, k -> g.settings.setVoiceKey(p, k) },
+                            hasKey = { p -> g.settings.voiceKey(p) != null }, setSpeak = g.settings::setSpeakReplies, setLive = g.settings::setLive,
+                            preview = { g.speak("Hi ${settings.userName.ifBlank { "there" }}, this is how I sound.") }),
                         onChooseSub = { k ->
                             if (k == com.past9.phoneaos.data.SubKind.OPENCODE) { g.settings.setProvider(Provider.OPENCODE_GO); nav.navigate("key") }
                             else { g.settings.setSubKind(k); g.settings.setMode(PowerMode.SUBSCRIPTION); nav.navigate("sub") } },
@@ -296,6 +313,10 @@ class MainActivity : ComponentActivity() {
                 composable("sub") {
                     SubSetupFlow(g, settings.subKind, onBack = { nav.popBackStack() }, onDone = { nav.navigate("chat") { popUpTo("home") } },
                         onUseKey = { g.settings.setMode(PowerMode.API_KEY); nav.navigate("key") }, modelLabel = modelLabel, onModel = { openModels() })
+                }
+                composable("call") {
+                    val cst by g.call.state.collectAsStateWithLifecycle()
+                    CallScreen(settings.agentName, cst, onMute = { g.call.toggleMute() }, onEnd = { g.call.end(); nav.popBackStack() }, onStart = { g.call.start() })
                 }
                 composable("style") {
                     com.past9.phoneaos.ui.SubScreen("Make it yours", "Colour and sidekick", { nav.popBackStack() }) { pad ->

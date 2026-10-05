@@ -28,7 +28,7 @@ interface SubscriptionEngine {
     val ready: Boolean
     /** The stored sign-in was rejected: forget it so Settings asks the user to sign in again. */
     fun forgetBadSignIn() {}
-    fun turn(prompt: String, system: String, resume: String?, mcpUrl: String, mcpToken: String): kotlinx.coroutines.flow.Flow<JSONObject>
+    fun turn(prompt: String, system: String, resume: String?, mcpUrl: String, mcpToken: String, images: List<String> = emptyList()): kotlinx.coroutines.flow.Flow<JSONObject>
 }
 
 /** What the top bar shows. */
@@ -88,6 +88,7 @@ class AgentRuntime(
             NotificationsTool(db.notifications()) { settings.state.value.notifApps },
             RunCodeTool(context),
         )
+        if (!forHelper) list += VoiceNoteTool(context, settings, db.chat())
         if (!forHelper) { list += LocationTool(context); list += NotificationsAllowTool(context, settings); list += NotificationsStopTool(settings); list += FilesPickTool(context); list += PhotosTool(context)
             list += WaitForCodeTool(db, settings, NotificationsAllowTool(context, settings)) }
         list += browserTools(context).filter { !forHelper || it !is BrowserHandoffTool }
@@ -151,10 +152,10 @@ class AgentRuntime(
 
     // ---- the main conversation --------------------------------------------------------------
 
-    fun send(text: String, images: List<String> = emptyList()) {
-        val clean = text.trim().ifEmpty { if (images.isNotEmpty()) "What do you make of this?" else "" }; if (clean.isEmpty()) return
+    fun send(text: String, images: List<String> = emptyList(), files: List<String> = emptyList()) {
+        val clean = text.trim().ifEmpty { if (images.isNotEmpty() || files.isNotEmpty()) "What do you make of this?" else "" }; if (clean.isEmpty()) return
         job = scope.launch {
-            db.chat().insert(ChatItem(kind = "user", text = clean, meta = JSONObject().put("images", org.json.JSONArray(images)).toString()))
+            db.chat().insert(ChatItem(kind = "user", text = clean, meta = JSONObject().put("images", org.json.JSONArray(images.filter { !it.contains("/pdf-") })).put("files", org.json.JSONArray(files)).toString()))
             turnLock.withLock { runTurn(clean, images) }
         }
     }
@@ -213,7 +214,7 @@ class AgentRuntime(
     }
 
     private suspend fun runTurn(userText: String, images: List<String> = emptyList()) {
-        if (settings.state.value.mode == PowerMode.SUBSCRIPTION && subscription?.ready == true) return runSubscriptionTurn(userText, subscription!!)
+        if (settings.state.value.mode == PowerMode.SUBSCRIPTION && subscription?.ready == true) return runSubscriptionTurn(userText, subscription!!, images)
         val provider = providerFactory(settings)
         if (provider == null) {
             db.chat().insert(ChatItem(kind = "notice", text = if (settings.state.value.mode == PowerMode.SUBSCRIPTION)
@@ -248,13 +249,13 @@ class AgentRuntime(
         }
     }
 
-    private suspend fun runSubscriptionTurn(userText: String, engine: SubscriptionEngine) {
+    private suspend fun runSubscriptionTurn(userText: String, engine: SubscriptionEngine, images: List<String> = emptyList()) {
         _status.value = AgentStatus(true, "Thinking"); phone.workStarted()
         try {
             var resume = settings.extra("claude_session")
             for (attempt in 1..2) {
                 var newSession: String? = null; var ok = false; var retry = false
-                engine.turn(userText, systemPrompt(userText), resume, mcp.url, settings.localToken()).collect { e ->
+                engine.turn(userText, systemPrompt(userText), resume, mcp.url, settings.localToken(), images).collect { e ->
                     when (e.optString("type")) {
                         "session" -> newSession = e.optString("id")
                         "text" -> e.optString("text").takeIf { !it.contains("API Error: 401") && !it.startsWith("Failed to authenticate") }

@@ -49,6 +49,11 @@ data class AgentSettings(
     val browserProfiles: List<String> = listOf("Personal"),
     /** Model for the subscription path ("" = the CLI's default). */
     val subModel: String = "",
+    /** Voice: who speaks the agent's replies and voice notes (system | gemini | openai | elevenlabs). */
+    val ttsProvider: String = "system",
+    val ttsVoice: String = "",
+    /** Live voice calls with the agent (needs a provider with a realtime model, e.g. Gemini Live). */
+    val liveEnabled: Boolean = false,
 ) {
     val ready: Boolean get() = when (mode) {
         PowerMode.API_KEY -> hasKey
@@ -95,6 +100,9 @@ class SettingsStore(context: Context) {
             accent = prefs.getString("accent", "iris") ?: "iris",
             mascot = prefs.getString("mascot", "scout") ?: "scout",
             subModel = prefs.getString("subModel_" + (prefs.getString("subKind", "CLAUDE") ?: "CLAUDE"), null) ?: "",
+            ttsProvider = prefs.getString("ttsProvider", "system") ?: "system",
+            ttsVoice = prefs.getString("ttsVoice", "") ?: "",
+            liveEnabled = prefs.getBoolean("liveEnabled", false),
             notifApps = prefs.getStringSet("notifApps", emptySet()) ?: emptySet(),
             browserProfiles = (prefs.getString("browserProfiles", null) ?: "Personal").split("\n").filter { it.isNotBlank() }.ifEmpty { listOf("Personal") },
             subKind = runCatching { SubKind.valueOf(prefs.getString("subKind", "CLAUDE")!!) }.getOrDefault(SubKind.CLAUDE),
@@ -110,6 +118,13 @@ class SettingsStore(context: Context) {
     fun addBrowserProfile(name: String) = edit { putString("browserProfiles", (_state.value.browserProfiles + name.trim()).distinct().joinToString("\n")) }
     fun removeBrowserProfile(name: String) = edit { putString("browserProfiles", _state.value.browserProfiles.filter { it != name }.ifEmpty { listOf("Personal") }.joinToString("\n")) }
     fun setSubModel(m: String) = edit { putString("subModel_" + _state.value.subKind.name, m) }
+    fun setTts(provider: String, voice: String) = edit { putString("ttsProvider", provider); putString("ttsVoice", voice) }
+    fun setLive(on: Boolean) = edit { putBoolean("liveEnabled", on) }
+    /** A voice key: its own, or the user's main API key when it's the same provider. */
+    fun voiceKey(provider: String): String? = secrets.getString("voice_$provider", null)?.takeIf { it.isNotBlank() } ?: when (provider) {
+        "gemini" -> apiKey(Provider.GEMINI); "openai" -> apiKey(Provider.OPENAI); else -> null
+    }
+    fun setVoiceKey(provider: String, key: String?) { secrets.edit().apply { if (key.isNullOrBlank()) remove("voice_$provider") else putString("voice_$provider", key.trim()) }.apply(); _state.value = read() }
     fun setSubKind(k: SubKind) = edit { putString("subKind", k.name) }
     fun setAccent(a: String) = edit { putString("accent", a) }
     fun setMascot(m: String) = edit { putString("mascot", m) }

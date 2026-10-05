@@ -7,7 +7,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 
 const out = (o) => process.stdout.write(JSON.stringify(o) + "\n");
 const rl = createInterface({ input: process.stdin });
-const { prompt, system, resume, model } = JSON.parse(await new Promise((r) => rl.once("line", r)));
+const { prompt, system, resume, model, images = [] } = JSON.parse(await new Promise((r) => rl.once("line", r)));
 rl.close();
 
 const home = process.env.HOME;
@@ -22,7 +22,10 @@ try {
   // Android's app sandbox is the boundary here; Codex's own Linux sandbox (landlock/seccomp) isn't available.
   const opts = { workingDirectory: home, skipGitRepoCheck: true, sandboxMode: "danger-full-access", approvalPolicy: "never", model: model || undefined };
   const thread = resume ? codex.resumeThread(resume, opts) : codex.startThread(opts);
-  const { events } = await thread.runStreamed(`${system}\n\n---\n\n${prompt}`);
+  // Photos the user sent go to Codex as local images alongside the text.
+  const text = `${system}\n\n---\n\n${prompt}`;
+  const input = images.length ? [{ type: "text", text }, ...images.map((path) => ({ type: "local_image", path }))] : text;
+  const { events } = await thread.runStreamed(input);
   for await (const e of events) {
     if (e.type === "thread.started") out({ type: "session", id: e.thread_id });
     else if (e.type === "item.completed" && e.item.type === "agent_message") out({ type: "text", text: e.item.text });

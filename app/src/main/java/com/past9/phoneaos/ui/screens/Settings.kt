@@ -34,6 +34,7 @@ data class SettingsActions(
     val onModel: () -> Unit = {},
     /** Claude / ChatGPT open their sign-in; OpenCode goes to the key screen. */
     val onChooseSub: (com.past9.phoneaos.data.SubKind) -> Unit = {},
+    val voice: VoiceActions = VoiceActions(),
     val onDeleteRuntime: () -> Unit = {},
     val onClearChat: () -> Unit = {},
     val onResetAll: () -> Unit = {},
@@ -48,6 +49,8 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
     var editValue by remember { mutableStateOf("") }
     var confirmReset by remember { mutableStateOf(false) }
     var pickSub by remember { mutableStateOf(false) }
+    var voiceSheet by remember { mutableStateOf(false) }
+    if (voiceSheet) VoiceSheet(s, actions.voice) { voiceSheet = false }
     SubScreen("Settings", null, actions.onBack) { pad ->
         Column(Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 48.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             SectionHeader("You", "How your agent knows you", Modifier.padding(start = 4.dp, top = 4.dp))
@@ -77,7 +80,9 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
             }
             SectionHeader("Voice", "Talking instead of typing", Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
-                Line(Icons.Rounded.RecordVoiceOver, "Read replies aloud", "Your agent speaks its answers", trailing = { Switch(s.speakReplies, actions.setSpeak) }) { actions.setSpeak(!s.speakReplies) }
+                Line(Icons.Rounded.RecordVoiceOver, "Voice", listOf(
+                    mapOf("system" to "Phone voice", "gemini" to "Google voice", "openai" to "OpenAI voice", "elevenlabs" to "ElevenLabs voice")[s.ttsProvider] ?: "Phone voice",
+                    if (s.speakReplies) "reads replies" else null, if (s.liveEnabled) "live calls on" else null).filterNotNull().joinToString(" · ")) { voiceSheet = true }
             }
             SectionHeader("Background", "So routines and browsing keep going", Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {

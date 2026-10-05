@@ -10,6 +10,7 @@ import com.past9.phoneaos.triggers.Routines
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /** Everything long-lived, built once per process. */
 class Graph(context: Context) {
@@ -22,6 +23,17 @@ class Graph(context: Context) {
         onRoutineChanged = { t -> if (t != null) Routines.schedule(app, t) }
         onRoutineDeleted = { id -> Routines.cancel(app, id) }
     }
+    val call by lazy { com.past9.phoneaos.voice.CallController(app, db, settings, runtime, scope) }
+
+    private val systemVoice by lazy { com.past9.phoneaos.system.Speaker(app) }
+    fun speakSystem(text: String) = systemVoice.say(text)
+
+    /** Speak a reply with the user's chosen voice (cloud key if set, else the phone's own). */
+    fun speak(text: String) = scope.launch {
+        val f = if (settings.state.value.ttsProvider == "system") null else com.past9.phoneaos.voice.Tts.synth(app, settings, text)
+        if (f != null) com.past9.phoneaos.voice.Tts.play(f) else systemVoice.say(text)
+    }
+
     /** The runtime for whichever subscription the user picked (Claude, ChatGPT/Codex, OpenCode). */
     fun subRuntime() = com.past9.phoneaos.runtime.SubscriptionRuntime(app, settings.state.value.subKind)
     init {
@@ -29,7 +41,7 @@ class Graph(context: Context) {
         runtime.subscription = object : com.past9.phoneaos.agent.SubscriptionEngine {
             override val ready get() = subRuntime().let { it.available && it.installed && it.signedIn }
             override fun forgetBadSignIn() { subRuntime().setToken(null) }
-            override fun turn(prompt: String, system: String, resume: String?, mcpUrl: String, mcpToken: String) = subRuntime().turn(prompt, system, resume, settings.state.value.subModel.ifBlank { null }, mcpUrl, mcpToken)
+            override fun turn(prompt: String, system: String, resume: String?, mcpUrl: String, mcpToken: String, images: List<String>) = subRuntime().turn(prompt, system, resume, settings.state.value.subModel.ifBlank { null }, mcpUrl, mcpToken, images)
         }
     }
 }

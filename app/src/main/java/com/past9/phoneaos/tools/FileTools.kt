@@ -39,12 +39,23 @@ class FilesPickTool(private val context: Context) : Tool {
         return withContext(Dispatchers.IO) { uris.map { read(it) }.map { ocrPages(it) }.joinToString("\n\n") }.also { ctx.activity("Read ${uris.size} file${if (uris.size > 1) "s" else ""} you picked", JSONObject().put("tool", "files")) }
     }
 
+    /** A document the user attached in chat: its text (OCR'd if scanned) plus any page images. */
+    suspend fun readDocument(uri: Uri): Pair<String, List<String>> = withContext(Dispatchers.IO) {
+        val text = ocrPages(read(uri))
+        val imgs = com.past9.phoneaos.agent.imageMarker.findAll(text).map { it.groupValues[1] }.toList()
+        com.past9.phoneaos.agent.imageMarker.replace(text, "").trim() to imgs
+    }
+
+    fun displayName(uri: Uri): String = runCatching {
+        context.contentResolver.query(uri, null, null, null, null)?.use { c -> c.moveToFirst(); c.getString(c.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME)) }
+    }.getOrNull() ?: uri.lastPathSegment ?: "file"
+
     private fun read(uri: Uri): String {
         val cr = context.contentResolver
         val (name, size) = cr.query(uri, null, null, null, null)?.use { c ->
             c.moveToFirst(); c.getString(c.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME)) to c.getLong(c.getColumnIndexOrThrow(OpenableColumns.SIZE))
         } ?: ("file" to 0L)
-        val type = cr.getType(uri).orEmpty()
+        val type = cr.getType(uri).orEmpty().ifBlank { android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(name.substringAfterLast('.', "").lowercase()).orEmpty() }
         val head = "## $name ($type, ${size / 1024} KB)"
         return when {
             type.startsWith("text/") || type.contains("json") || type.contains("csv") || type.contains("xml") || name.endsWith(".md") ->
@@ -58,6 +69,14 @@ class FilesPickTool(private val context: Context) : Tool {
                 cr.openInputStream(uri)?.use { i -> f.outputStream().use { i.copyTo(it) } }
                 "$head\n[[image:${f.path}]]"
             }
+            // Word documents: the text lives in word/document.xml inside the zip.
+            name.endsWith(".docx", true) || type.contains("wordprocessingml") -> head + "\n" + runCatching {
+                java.util.zip.ZipInputStream(cr.openInputStream(uri)!!).use { z ->
+                    generateSequence { z.nextEntry }.firstOrNull { it.name == "word/document.xml" }?.let {
+                        z.readBytes().decodeToString().replace("</w:p>", "\n").replace(Regex("<[^>]+>"), "").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+                    }.orEmpty()
+                }
+            }.getOrDefault("").take(30_000)
             else -> "$head\n(Can't read this kind of file as text.)"
         }
     }

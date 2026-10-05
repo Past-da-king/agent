@@ -3,6 +3,10 @@ package com.past9.phoneaos.ui.screens
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -66,8 +70,11 @@ data class ChatActions(
     val onMic: () -> Unit = {},
     val onProfile: () -> Unit = {},
     val onAttach: () -> Unit = {},
+    val onAttachDoc: () -> Unit = {},
+    val onRemoveDoc: (String) -> Unit = {},
     val onRemoveAttachment: (String) -> Unit = {},
     val onModel: () -> Unit = {},
+    val onCall: (() -> Unit)? = null,
 )
 
 /** Chat rows after grouping: consecutive activity lines fold into one "steps" row. */
@@ -103,6 +110,7 @@ fun ChatScreen(
     openCount: Int = 0,
     attachments: List<String> = emptyList(),
     modelLabel: String = "",
+    docs: List<String> = emptyList(),
 ) {
     val rows = remember(items) { group(items) }
     val list = rememberLazyListState()
@@ -112,7 +120,7 @@ fun ChatScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = { ChatTopBar(agentName, status, browserLive, waitingOnYou, openCount, actions, modelLabel) },
-        bottomBar = { Composer(draft, onDraft, status.working, actions, attachments) },
+        bottomBar = { Composer(draft, onDraft, status.working, actions, attachments, docs) },
     ) { pad ->
         if (items.isEmpty()) Welcome(userName, agentName, Modifier.padding(pad), actions.onSend)
         else LazyColumn(
@@ -127,6 +135,7 @@ fun ChatScreen(
                         "user" -> UserBubble(r.item)
                         "agent" -> AgentMessage(r.item)
                         "question" -> if (r.item.text.startsWith("APPROVAL|")) ApprovalCard(r.item, actions.onAnswer) else QuestionCard(r.item, actions.onAnswer, actions.onBrowser)
+                        "voice" -> VoiceBubble(r.item)
                         "helper" -> HelperRow(r.item, items.filter { a -> a.kind == "activity" && JSONObject(a.meta).optLong("helper") == r.item.id })
                         "activity" -> ImageActivity(r.item)
                         else -> Notice(r.item)
@@ -164,6 +173,7 @@ private fun ChatTopBar(agentName: String, status: AgentStatus, browserLive: Bool
                     Icon(Icons.Rounded.ArrowDropDown, "Switch model", Modifier.size(20.dp))
                 }
             }
+            if (actions.onCall != null) IconButton(onClick = actions.onCall) { Icon(Icons.Rounded.Call, "Call your agent") }
             AnimatedVisibility(browserLive, enter = scaleIn(spring(0.6f, 800f)) + fadeIn(), exit = scaleOut() + fadeOut()) {
                 FilledTonalIconButton(onClick = actions.onBrowser) { Icon(Icons.Rounded.Language, "Watch the agent's browser") }
             }
@@ -203,6 +213,39 @@ private fun Welcome(userName: String, agentName: String, modifier: Modifier, onS
     }
 }
 
+/** A voice note: play it, or tap "Read it" to scan the words instead. */
+@Composable
+private fun VoiceBubble(item: ChatItem) {
+    val cs = MaterialTheme.colorScheme
+    val path = JSONObject(item.meta).optString("path")
+    var playing by remember { mutableStateOf(false) }
+    var showText by remember { mutableStateOf(false) }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val t = rememberInfiniteTransition(label = "voice")
+    val wave by t.animateFloat(0f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "wave")
+    Column(Modifier.fillMaxWidth().padding(end = 48.dp)) {
+        Surface(shape = RoundedCornerShape(28.dp), color = cs.primaryContainer) {
+            Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                MorphIconButton(onClick = {
+                    if (playing) { com.past9.phoneaos.voice.Tts.stop(); playing = false }
+                    else if (path.isNotBlank() && java.io.File(path).exists()) { com.past9.phoneaos.voice.Tts.play(java.io.File(path)) { playing = false }; playing = true }
+                    else { com.past9.phoneaos.App.graph(ctx).speakSystem(item.text); playing = false }
+                }, size = 48.dp, container = cs.primary) { Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing) "Pause" else "Play", tint = cs.onPrimary) }
+                Spacer(Modifier.width(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    repeat(18) { i ->
+                        val h = (8 + ((i * 37) % 17)) * (if (playing) 0.6f + 0.6f * ((wave + i * 0.13f) % 1f) else 1f)
+                        Box(Modifier.width(3.dp).height(h.dp).clip(RoundedCornerShape(50)).background(cs.onPrimaryContainer.copy(alpha = if (playing) 0.9f else 0.5f)))
+                    }
+                }
+                Spacer(Modifier.width(10.dp))
+                TextButton(onClick = { showText = !showText }) { Text(if (showText) "Hide" else "Read it", color = cs.onPrimaryContainer) }
+            }
+        }
+        AnimatedVisibility(showText) { Markdown(item.text, Modifier.padding(top = 8.dp, start = 4.dp), style = MaterialTheme.typography.bodyMedium) }
+    }
+}
+
 @Composable
 private fun UserBubble(item: ChatItem) {
     val text = item.text
@@ -210,9 +253,20 @@ private fun UserBubble(item: ChatItem) {
     if (images.isNotEmpty()) Box(Modifier.fillMaxWidth().padding(start = 64.dp, bottom = 6.dp), contentAlignment = Alignment.CenterEnd) {
         com.past9.phoneaos.ui.ImageStrip(images.map { com.past9.phoneaos.ui.ChatImage(java.io.File(it).toURI().toString(), "Your photo") })
     }
+    val files = JSONObject(item.meta).optJSONArray("files")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
+    if (files.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(start = 48.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
+        files.forEach { f ->
+            Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Description, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary); Spacer(Modifier.width(6.dp))
+                    Text(f, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 200.dp))
+                }
+            }
+        }
+    }
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
         Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(24.dp, 24.dp, 6.dp, 24.dp), modifier = Modifier.widthIn(max = 320.dp).padding(start = 48.dp)) {
-            Text(text, Modifier.padding(horizontal = 16.dp, vertical = 11.dp), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            Text(text.substringBefore("\n\n[Attached document:").ifBlank { "Here's a document." }, Modifier.padding(horizontal = 16.dp, vertical = 11.dp), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
         }
     }
 }
@@ -430,9 +484,28 @@ private fun WorkingRow(status: AgentStatus) {
 }
 
 @Composable
-private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean, actions: ChatActions, attachments: List<String>) {
+private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean, actions: ChatActions, attachments: List<String>, docs: List<String> = emptyList()) {
+    var attachMenu by remember { mutableStateOf(false) }
+    if (attachMenu) ModalBottomSheet(onDismissRequest = { attachMenu = false }) {
+        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+            listOf(Triple(Icons.Rounded.Image, "Photo", "From your gallery") to actions.onAttach, Triple(Icons.Rounded.Description, "Document", "PDF, Word, text, CSV, scans") to actions.onAttachDoc).forEach { (t, act) ->
+                Surface(onClick = { attachMenu = false; act() }, shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(t.first, null, tint = MaterialTheme.colorScheme.primary); Spacer(Modifier.width(14.dp))
+                        Column { Text(t.second, style = MaterialTheme.typography.titleMedium); Text(t.third, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    }
+                }
+            }
+        }
+    }
     Surface(color = MaterialTheme.colorScheme.surface) {
       Column(Modifier.navigationBarsPadding().imePadding()) {
+        if (docs.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            docs.forEach { name ->
+                InputChip(selected = false, onClick = { actions.onRemoveDoc(name) }, label = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 180.dp)) },
+                    leadingIcon = { Icon(Icons.Rounded.Description, null, Modifier.size(18.dp)) }, trailingIcon = { Icon(Icons.Rounded.Close, "Remove", Modifier.size(16.dp)) }, shape = RoundedCornerShape(50))
+            }
+        }
         if (attachments.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             attachments.forEach { path ->
                 Box {
@@ -446,7 +519,7 @@ private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean,
         Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp), verticalAlignment = Alignment.Bottom) {
             Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp, end = 4.dp)) {
-                    IconButton(onClick = actions.onAttach) { Icon(Icons.Rounded.AddPhotoAlternate, "Send a photo", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    IconButton(onClick = { attachMenu = true }) { Icon(Icons.Rounded.AttachFile, "Attach a photo or document", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                     Box(Modifier.weight(1f).padding(vertical = 16.dp)) {
                         if (draft.isEmpty()) Text("Ask for anything", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         BasicTextField(draft, onDraft, textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
@@ -456,7 +529,7 @@ private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean,
                 }
             }
             Spacer(Modifier.width(8.dp))
-            val canSend = draft.isNotBlank() || attachments.isNotEmpty()
+            val canSend = draft.isNotBlank() || attachments.isNotEmpty() || docs.isNotEmpty()
             MorphIconButton(
                 onClick = { if (working && !canSend) actions.onStop() else if (canSend) { actions.onSend(draft); onDraft("") } },
                 size = 56.dp,

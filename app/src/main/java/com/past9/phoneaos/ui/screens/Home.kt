@@ -68,6 +68,8 @@ data class HomeActions(
     val onSettings: () -> Unit = {},
     val onBrowser: () -> Unit = {},
     val onNotifications: () -> Unit = {},
+    /** Live voice call with the agent; null when live calls are off. */
+    val onCall: (() -> Unit)? = null,
 )
 
 /** What the agent is doing right now, in one human line. */
@@ -129,6 +131,12 @@ fun HomeScreen(s: HomeState, actions: HomeActions, bottomPadding: Dp = 120.dp) {
                         }
                         Spacer(Modifier.height(8.dp))
                         LinearWavyProgressIndicator(progress = { if (gt.isEmpty()) 0f else done / gt.size.toFloat() }, modifier = Modifier.fillMaxWidth(), color = cs.onPrimaryContainer, trackColor = cs.onPrimaryContainer.copy(alpha = 0.2f))
+                    }
+                    if (actions.onCall != null) {
+                        Spacer(Modifier.height(14.dp))
+                        Button(onClick = actions.onCall, shapes = ButtonDefaults.shapes(), colors = ButtonDefaults.buttonColors(containerColor = cs.onPrimaryContainer, contentColor = cs.primaryContainer)) {
+                            Icon(Icons.Rounded.Call, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Call ${s.agentName.takeIf { it != "Your agent" } ?: "your agent"}")
+                        }
                     }
                     if (s.browserLive) {
                         Spacer(Modifier.height(14.dp))
