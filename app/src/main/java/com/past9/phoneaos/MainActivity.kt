@@ -80,6 +80,10 @@ class MainActivity : ComponentActivity() {
     private fun handle(i: Intent?) {
         if (i == null) return
         // adb hook for checking how notifications look: am start -n <pkg>/.MainActivity --es open testnotify
+        // adb hook for checking sites in the agent's browser: am start -n <pkg>/.MainActivity --es open browser --es url https://...
+        i.getStringExtra("url")?.takeIf { i.getStringExtra("open") == "browser" }?.let { u ->
+            App.graph(this).scope.launch { runCatching { BrowserService.await(this@MainActivity, "main", App.graph(this@MainActivity).settings.state.value.browserProfiles.first()).goto(u) } }
+        }
         if (i.getStringExtra("open") == "testnotify") {
             App.graph(this).phone.notify("Checking in", "This is how my messages look on your phone.")
             moveTaskToBack(true); return

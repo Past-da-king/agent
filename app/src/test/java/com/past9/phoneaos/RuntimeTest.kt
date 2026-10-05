@@ -97,7 +97,8 @@ class RuntimeTest {
         rt.send("Email Lerato that I'll see her at 6")
         withTimeout(5000) { while (db.chat().all().first().none { it.kind == "question" }) delay(50) }
         assertEquals("Waiting for you", rt.status.value.label)
-        assertTrue(phone.notes.any { it.startsWith("Approve?|Send email to Lerato") })
+        // The notification is posted just after the question row; give it a moment.
+        withTimeout(2000) { while (phone.notes.none { it.startsWith("Approve?|Send email to Lerato") }) delay(20) }
         val q = db.chat().all().first().first { it.kind == "question" }
         assertTrue(q.text.startsWith("APPROVAL|Send email to Lerato|"))
         assertEquals(1, p.seen.size) // the model has NOT been called again while we wait

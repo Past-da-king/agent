@@ -40,49 +40,93 @@ class BrowserEngine(private val context: Context, val profile: String = "Persona
     private val width = 1080
     private val height = 2340
 
+    /** The main page plus any popups it opened (OAuth "Sign in with Google" windows). The top one is live. */
+    private val stack = ArrayList<WebView>()
+    private var container: ViewGroup? = null
+    @Volatile var lastUsed = System.currentTimeMillis(); private set
+    val attached: Boolean get() = container != null
+    fun touch() { lastUsed = System.currentTimeMillis() }
+
     @SuppressLint("SetJavaScriptEnabled")
     fun create() = main.post {
         if (web != null) return@post
-        web = WebView(context.applicationContext).apply {
-            // Each profile is its own cookie jar: work and personal accounts stay signed in side by side.
-            if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.MULTI_PROFILE)) runCatching {
-                androidx.webkit.ProfileStore.getInstance().getOrCreateProfile(profile)
-                androidx.webkit.WebViewCompat.setProfile(this, profile)
-            }
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.loadWithOverviewMode = true
-            settings.useWideViewPort = true
-            settings.setSupportMultipleWindows(false)
-            settings.setGeolocationEnabled(true)
-            // Sites that ask for the location (store finders, delivery) get the phone's, once the app has it.
-            webChromeClient = object : android.webkit.WebChromeClient() {
-                override fun onGeolocationPermissionsShowPrompt(origin: String, callback: android.webkit.GeolocationPermissions.Callback) {
-                    val g = com.past9.phoneaos.App.graph(context)
-                    g.scope.launch {
-                        val ok = com.past9.phoneaos.system.PermissionBroker.request(context, arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION)) {}
-                        main.post { callback.invoke(origin, ok, ok) }
-                    }
-                }
-            }
-            // Web notifications: WebView has none, so give pages one that hands them to the app.
-            addJavascriptInterface(WebNotifications(context, profile), "__aosWeb")
-            if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT))
-                runCatching { androidx.webkit.WebViewCompat.addDocumentStartJavaScript(this, WebNotifications.SHIM, setOf("*")) }
-            val cookies = if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.MULTI_PROFILE))
-                runCatching { androidx.webkit.WebViewCompat.getProfile(this).cookieManager }.getOrNull() ?: CookieManager.getInstance() else CookieManager.getInstance()
-            cookies.setAcceptCookie(true)
-            cookies.setAcceptThirdPartyCookies(this, true)
-            webViewClient = object : WebViewClient() {
-                override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-                    _page.value = PageState(url, view.title ?: "", true)
-                    if (!androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)) view.evaluateJavascript(WebNotifications.SHIM, null)
-                }
-                override fun onPageFinished(view: WebView, url: String) { _page.value = PageState(url, view.title ?: "", false); pageDone?.complete(Unit) }
-            }
-            layoutOffscreen(this)
-            loadUrl("about:blank")
+        web = newWebView().also { stack += it; layoutOffscreen(it); it.loadUrl("about:blank") }
+    }
+
+    /** Every window, main or popup, gets the same profile, settings and handlers. */
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun newWebView(): WebView = WebView(context.applicationContext).apply {
+        // Each profile is its own cookie jar: work and personal accounts stay signed in side by side.
+        if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.MULTI_PROFILE)) runCatching {
+            androidx.webkit.ProfileStore.getInstance().getOrCreateProfile(profile)
+            androidx.webkit.WebViewCompat.setProfile(this, profile)
         }
+        settings.javaScriptEnabled = true
+        settings.domStorageEnabled = true
+        settings.loadWithOverviewMode = true
+        settings.useWideViewPort = true
+        // Sign-in popups (window.open + opener.postMessage) need real windows to open into.
+        settings.setSupportMultipleWindows(true)
+        settings.javaScriptCanOpenWindowsAutomatically = true
+        settings.setGeolocationEnabled(true)
+        // Look like Chrome, not an embedded WebView: Google refuses sign-in to "; wv" user agents.
+        settings.userAgentString = settings.userAgentString.replace("; wv", "").replace(Regex("Version/\\d+(\\.\\d+)* "), "")
+        if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST))
+            runCatching { androidx.webkit.WebSettingsCompat.setRequestedWithHeaderOriginAllowList(settings, emptySet()) }
+        if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.WEB_AUTHENTICATION))
+            runCatching { androidx.webkit.WebSettingsCompat.setWebAuthenticationSupport(settings, androidx.webkit.WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_FOR_BROWSER) }
+        val cookies = if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.MULTI_PROFILE))
+            runCatching { androidx.webkit.WebViewCompat.getProfile(this).cookieManager }.getOrNull() ?: CookieManager.getInstance() else CookieManager.getInstance()
+        cookies.setAcceptCookie(true)
+        cookies.setAcceptThirdPartyCookies(this, true)
+        webChromeClient = object : android.webkit.WebChromeClient() {
+            // Sites that ask for the location (store finders, delivery) get the phone's, once the app has it.
+            override fun onGeolocationPermissionsShowPrompt(origin: String, callback: android.webkit.GeolocationPermissions.Callback) {
+                com.past9.phoneaos.App.graph(context).scope.launch {
+                    val ok = com.past9.phoneaos.system.PermissionBroker.request(context, arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION)) {}
+                    main.post { callback.invoke(origin, ok, ok) }
+                }
+            }
+            override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message): Boolean {
+                val child = newWebView()
+                push(child)
+                (resultMsg.obj as WebView.WebViewTransport).webView = child
+                resultMsg.sendToTarget()
+                return true
+            }
+            override fun onCloseWindow(window: WebView) { pop(window) }
+        }
+        // Web notifications: WebView has none, so give pages one that hands them to the app.
+        addJavascriptInterface(WebNotifications(context, profile), "__aosWeb")
+        if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT))
+            runCatching { androidx.webkit.WebViewCompat.addDocumentStartJavaScript(this, WebNotifications.SHIM, setOf("*")) }
+        webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+                if (view === web) _page.value = PageState(url, view.title ?: "", true)
+                if (!androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)) view.evaluateJavascript(WebNotifications.SHIM, null)
+            }
+            override fun onPageFinished(view: WebView, url: String) {
+                if (view === web) { _page.value = PageState(url, view.title ?: "", false); pageDone?.complete(Unit) }
+            }
+        }
+    }
+
+    /** A popup opened: it becomes the live window (for the user watching and for the agent's tools). */
+    private fun push(child: WebView) {
+        val prev = stack.lastOrNull()
+        stack += child; web = child
+        container?.let { c -> prev?.let { c.removeView(it) }; c.addView(child, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)) } ?: layoutOffscreen(child)
+        _page.value = PageState(child.url ?: "", child.title ?: "", true)
+    }
+
+    /** The popup closed itself (sign-in done): back to the page that opened it. */
+    private fun pop(window: WebView) {
+        if (stack.size <= 1 || !stack.remove(window)) return
+        container?.removeView(window)
+        window.destroy()
+        val top = stack.last(); web = top
+        container?.let { c -> if (top.parent == null) c.addView(top, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)) }
+        _page.value = PageState(top.url ?: "", top.title ?: "", false)
     }
 
     private fun layoutOffscreen(v: WebView) {
@@ -90,15 +134,20 @@ class BrowserEngine(private val context: Context, val profile: String = "Persona
         v.layout(0, 0, width, height)
     }
 
-    fun destroy() = main.post { web?.let { (it.parent as? ViewGroup)?.removeView(it); it.destroy() }; web = null }
+    fun destroy() = main.post { stack.forEach { (it.parent as? ViewGroup)?.removeView(it); it.destroy() }; stack.clear(); web = null; container = null }
 
     /** For the Browser screen: hand the live WebView to a container, and take it back after. */
     fun attachTo(parent: ViewGroup) {
         val v = web ?: return
+        container = parent; touch()
         (v.parent as? ViewGroup)?.removeView(v)
         parent.addView(v, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
     }
-    fun detachFrom(parent: ViewGroup) { web?.let { if (it.parent === parent) { parent.removeView(it); layoutOffscreen(it) } } }
+    fun detachFrom(parent: ViewGroup) {
+        if (container === parent) container = null
+        touch()
+        web?.let { if (it.parent === parent) { parent.removeView(it); layoutOffscreen(it) } }
+    }
 
     private suspend fun <T> onMain(block: (WebView, (T) -> Unit) -> Unit): T? = withTimeoutOrNull(25_000) {
         suspendCancellableCoroutine { cont ->
