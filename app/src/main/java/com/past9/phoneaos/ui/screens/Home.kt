@@ -314,7 +314,8 @@ private fun ComingLine(icon: ImageVector, title: String, line: String, urgent: B
 /** The floating bar: where you are, and one big button to talk to your agent. */
 @Composable
 fun HomeBar(current: String, onGo: (String) -> Unit, onTalk: () -> Unit, modifier: Modifier = Modifier) {
-    val tabs = listOf(Triple("home", Icons.Rounded.Home, "Home"), Triple("tasks", Icons.Rounded.TaskAlt, "Tasks"), Triple("routines", Icons.Rounded.Schedule, "Routines"), Triple("connections", Icons.Rounded.Apps, "Apps"))
+    val tabs = listOf(Triple("home", Icons.Rounded.Home, "Home"), Triple("tasks", Icons.Rounded.TaskAlt, "Tasks"), Triple("memory", Icons.Rounded.Psychology, "Memory"),
+        Triple("routines", Icons.Rounded.Schedule, "Routines"), Triple("connections", Icons.Rounded.Apps, "Apps"))
     HorizontalFloatingToolbar(
         expanded = true,
         floatingActionButton = { FloatingToolbarDefaults.VibrantFloatingActionButton(onClick = onTalk, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) { Icon(Icons.AutoMirrored.Rounded.Chat, "Talk to your agent") } },
@@ -326,8 +327,8 @@ fun HomeBar(current: String, onGo: (String) -> Unit, onTalk: () -> Unit, modifie
             ToggleButton(checked = on, onCheckedChange = { onGo(route) }, colors = ToggleButtonDefaults.colors(
                 containerColor = androidx.compose.ui.graphics.Color.Transparent, contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 checkedContainerColor = MaterialTheme.colorScheme.onPrimaryContainer, checkedContentColor = MaterialTheme.colorScheme.primaryContainer)) {
+                // Five places + the talk button: icons only, so the bar fits a phone without clipping.
                 Icon(icon, label)
-                if (on) { Spacer(Modifier.width(6.dp)); Text(label, style = MaterialTheme.typography.labelLarge) }
             }
         }
     }

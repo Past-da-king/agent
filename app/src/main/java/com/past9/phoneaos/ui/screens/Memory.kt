@@ -46,7 +46,7 @@ fun summaryOf(body: String) = body.lineSequence().map { it.trim() }.firstOrNull 
     .replace(Regex("""\[\[([^\]|]+)(?:\|([^\]]*))?]]""")) { it.groupValues[2].ifBlank { it.groupValues[1] } }.replace(Regex("[*_`]"), "").removePrefix("- ")
 
 @Composable
-fun MemoryScreen(memories: List<MemoryRow>, actions: MemoryActions) {
+fun MemoryScreen(memories: List<MemoryRow>, actions: MemoryActions, bottomPadding: androidx.compose.ui.unit.Dp = 120.dp) {
     var query by remember { mutableStateOf("") }
     var kind by remember { mutableStateOf<String?>(null) }
     var adding by remember { mutableStateOf(false) }
@@ -56,8 +56,8 @@ fun MemoryScreen(memories: List<MemoryRow>, actions: MemoryActions) {
         if (query.isBlank()) k else Recall.rank(query, k, 200)
     }
     SubScreen("Memory", "${memories.size} pages your agent keeps about your world", actions.onBack,
-        fab = { ExtendedFloatingActionButton(onClick = { adding = true }, icon = { Icon(Icons.Rounded.Add, null) }, text = { Text("New page") }) }) { pad ->
-        LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 120.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        fab = { ExtendedFloatingActionButton(onClick = { adding = true }, icon = { Icon(Icons.Rounded.Add, null) }, text = { Text("New page") }, modifier = Modifier.padding(bottom = (bottomPadding - 40.dp).coerceAtLeast(0.dp))) }) { pad ->
+        LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomPadding + 60.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
                 OutlinedTextField(query, { query = it }, placeholder = { Text("Search people, places, anything") }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true,
                     modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge)

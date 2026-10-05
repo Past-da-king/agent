@@ -164,7 +164,7 @@ class ScreensTest(private val dark: Boolean) {
         listOf(TriggerRow(1, "Morning brief", "daily", "07:00", "Brief me"), TriggerRow(2, "Bank alerts", "notification", "Capitec|", "Flag anything over R 1,000")),
         notifications24h = 14, notifApps = 3, browserLive = true)
 
-    @Test fun home() { shot("15-home") { HomeScreen(demoHome, HomeActions()) ; androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.BottomCenter) { HomeBar("home", {}, {}) } } }
+    @Test fun home() { shot("15-home") { HomeScreen(demoHome, HomeActions()) ; androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.BottomCenter) { HomeBar("memory", {}, {}) } } }
     @Test fun profile() { shot("16-profile") { ProfileScreen(demoHome, demoMem, ProfileActions()) } }
     @Test fun wikiPage() { shot("31-memory-page") { WikiPageScreen(demoMem[1], demoMem, {}, {}, {}, {}, {}) } }
     @Test fun tasksAgent() { shot("22-tasks-agent") { TasksScreen(demoGoals, demoTasks, TaskActions(), startTab = 1) } }

@@ -29,6 +29,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
@@ -213,14 +214,16 @@ private fun Hello(next: () -> Unit) {
 }
 
 @Composable
-private fun BigField(value: String, onChange: (String) -> Unit, placeholder: String, big: Boolean) {
+private fun BigField(value: String, onChange: (String) -> Unit, placeholder: String, big: Boolean, autoFocus: Boolean = false) {
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(Unit) { if (autoFocus) runCatching { focus.requestFocus() } }
     val style = if (big) MaterialTheme.typography.displaySmall else MaterialTheme.typography.headlineSmall
     val focused = remember { mutableStateOf(false) }
     Column {
         Box {
             if (value.isEmpty()) Text(placeholder, style = style, color = MaterialTheme.colorScheme.outline)
             BasicTextField(value, onChange, singleLine = true, textStyle = style.copy(color = MaterialTheme.colorScheme.onSurface), cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words), modifier = Modifier.fillMaxWidth())
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words), modifier = Modifier.fillMaxWidth().focusRequester(focus))
         }
         Spacer(Modifier.height(8.dp))
         Box(Modifier.fillMaxWidth().height(if (value.isNotEmpty()) 3.dp else 2.dp).clip(CircleShape).background(if (value.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant))
@@ -230,7 +233,7 @@ private fun BigField(value: String, onChange: (String) -> Unit, placeholder: Str
 @Composable
 private fun NameStep(user: String, agent: String, onUser: (String) -> Unit, onAgent: (String) -> Unit, next: () -> Unit) {
     StepPage("About you", "First, what should I call you?", null, bottom = { BigButton("Continue", enabled = user.isNotBlank(), onClick = next) }) {
-        BigField(user, onUser, "Your name", big = true)
+        BigField(user, onUser, "Your name", big = true, autoFocus = true)
         Spacer(Modifier.height(36.dp))
         Text("AND WHAT SHOULD YOU CALL ME?", style = Eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(10.dp))
@@ -296,12 +299,12 @@ fun StylePicker(user: String, agent: String, accent: String, mascot: String, onA
                 val selected = a.id == accent
                 val p by animateFloatAsState(if (selected) 1f else 0f, spring(0.6f, 800f), label = "sw")
                 val morph = remember { Morph(MaterialShapes.Circle.unit(), MaterialShapes.Cookie9Sided.unit()) }
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(56.dp).clickable { onAccent(a.id) }) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(64.dp).clickable { onAccent(a.id) }) {
                     Box(Modifier.size(52.dp).graphicsLayer { rotationZ = p * 20f; val s = 1f + 0.08f * p; scaleX = s; scaleY = s }.clip(MorphShape(morph, p)).background(if (dark) a.dP else a.lP), contentAlignment = Alignment.Center) {
                         if (selected) Icon(Icons.Rounded.Check, "${a.label}, selected", tint = if (dark) a.dOnP else a.lOnP, modifier = Modifier.graphicsLayer { rotationZ = -p * 20f })
                     }
                     Spacer(Modifier.height(4.dp))
-                    Text(a.label, style = MaterialTheme.typography.labelMedium, color = if (selected) cs.onSurface else cs.onSurfaceVariant)
+                    Text(a.label, style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false, color = if (selected) cs.onSurface else cs.onSurfaceVariant)
                 }
             }
         }
@@ -332,7 +335,7 @@ fun StylePicker(user: String, agent: String, accent: String, mascot: String, onA
 private fun subMark(k: SubKind): Pair<Color, RoundedPolygon> = when (k) {
     SubKind.CLAUDE -> Color(0xFFD97757) to MaterialShapes.Burst
     SubKind.CODEX -> Color(0xFF10A37F) to MaterialShapes.Cookie6Sided
-    SubKind.OPENCODE -> Color(0xFF2B2A33) to MaterialShapes.Square
+    SubKind.OPENCODE -> Color(0xFF8E8C99) to MaterialShapes.Square
 }
 
 @Composable

@@ -168,7 +168,7 @@ class MainActivity : ComponentActivity() {
         fun go(r: String) { if (r == "home") nav.popBackStack("home", false) else nav.navigate(r) { popUpTo("home"); launchSingleTop = true } }
         val home = HomeState(settings.agentName, settings.userName, status, items, goals, tasks, routines,
             notifRows.count { it.postedAt > System.currentTimeMillis() - 86_400_000L }, settings.notifApps.size, browserLive)
-        val barRoutes = setOf("home", "tasks", "routines", "connections")
+        val barRoutes = setOf("home", "tasks", "memory", "routines", "connections")
         val barPad = 112.dp
 
         androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
@@ -229,7 +229,7 @@ class MainActivity : ComponentActivity() {
                     ))
                 }
                 composable("memory") {
-                    MemoryScreen(memories, MemoryActions(
+                    MemoryScreen(memories, bottomPadding = barPad, actions = MemoryActions(
                         onBack = { nav.popBackStack() },
                         onOpen = { m -> nav.navigate("page/${m.id}") },
                         onSave = { m -> scope.launch { if (m.id == 0L) g.db.memory().insert(m) else g.db.memory().update(m) } },
