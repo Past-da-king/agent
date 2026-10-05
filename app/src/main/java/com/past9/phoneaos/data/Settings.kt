@@ -18,14 +18,14 @@ enum class SubKind(val label: String, val plan: String, val line: String) {
 }
 
 enum class Provider(val label: String, val defaultModel: String, val helperModel: String, val baseUrl: String, val keyHint: String) {
-    ANTHROPIC("Anthropic", "claude-sonnet-5-5", "claude-haiku-4-5-20251001", "https://api.anthropic.com/v1", "sk-ant-..."),
-    OPENAI("OpenAI", "gpt-5", "gpt-5-mini", "https://api.openai.com/v1", "sk-..."),
-    GEMINI("Google Gemini", "gemini-flash-latest", "gemini-flash-lite-latest", "https://generativelanguage.googleapis.com/v1beta/openai", "AIza..."),
-    DEEPSEEK("DeepSeek", "deepseek-flash", "deepseek-flash", "https://api.deepseek.com/v1", "sk-..."),
-    OPENCODE_GO("OpenCode Go", "deepseek-v4.1-flash", "deepseek-v4.1-flash", "https://opencode.ai/zen/go/v1", "Your OpenCode key"),
-    OPENCODE_ZEN("OpenCode Zen", "claude-haiku-4-5", "claude-haiku-4-5", "https://opencode.ai/zen/v1", "Your OpenCode key"),
-    OPENROUTER("OpenRouter", "openrouter/auto", "openrouter/auto", "https://openrouter.ai/api/v1", "sk-or-..."),
-    CUSTOM("Other (OpenAI-compatible)", "", "", "", "Key for that service"),
+    ANTHROPIC("Anthropic", "claude-sonnet-5-5", "claude-haiku-4-5-20251001", "https://api.anthropic.com/v1", "Paste your key here"),
+    OPENAI("OpenAI", "gpt-5", "gpt-5-mini", "https://api.openai.com/v1", "Paste your key here"),
+    GEMINI("Google Gemini", "gemini-flash-latest", "gemini-flash-lite-latest", "https://generativelanguage.googleapis.com/v1beta/openai", "Paste your key here"),
+    DEEPSEEK("DeepSeek", "deepseek-flash", "deepseek-flash", "https://api.deepseek.com/v1", "Paste your key here"),
+    OPENCODE_GO("OpenCode Go", "deepseek-v4.1-flash", "deepseek-v4.1-flash", "https://opencode.ai/zen/go/v1", "Paste your key here"),
+    OPENCODE_ZEN("OpenCode Zen", "claude-haiku-4-5", "claude-haiku-4-5", "https://opencode.ai/zen/v1", "Paste your key here"),
+    OPENROUTER("OpenRouter", "openrouter/auto", "openrouter/auto", "https://openrouter.ai/api/v1", "Paste your key here"),
+    CUSTOM("Other (OpenAI-compatible)", "", "", "", "Paste your key here"),
 }
 
 data class AgentSettings(
