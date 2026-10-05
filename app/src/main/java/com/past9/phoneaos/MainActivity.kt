@@ -195,6 +195,7 @@ class MainActivity : ComponentActivity() {
             val has = g.settings.composioKey() != null
             conn = conn.copy(hasKey = has, loading = has, error = null, notificationsAllowed = notificationsAllowed())
             if (!has) return@launch
+            if (com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(g.settings.composioKey())) { conn = conn.copy(consumer = true, loading = false); return@launch }
             try {
                 val c = g.runtime.composio.connections(); conn = conn.copy(connected = c)
                 val t = g.runtime.composio.toolkits(); conn = conn.copy(toolkits = t, loading = false)
@@ -453,7 +454,8 @@ class MainActivity : ComponentActivity() {
 
     private suspend fun saveComposio(g: Graph, key: String): String? {
         g.settings.setComposioKey(key)
-        return g.runtime.composio.verify()?.also { g.settings.setComposioKey(null) }
+        val err = if (com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(key)) com.past9.phoneaos.tools.ComposioConnect.load(key.trim()) else g.runtime.composio.verify()
+        return err?.also { g.settings.setComposioKey(null) }
     }
 
     private fun notificationsAllowed() = Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED

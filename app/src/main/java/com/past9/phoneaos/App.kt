@@ -23,7 +23,11 @@ class Graph(context: Context) {
         onRoutineChanged = { t -> if (t != null) Routines.schedule(app, t) }
         onRoutineDeleted = { id -> Routines.cancel(app, id) }
     }
-    init { scope.launch { runCatching { com.past9.phoneaos.triggers.Overnight.ensureRoutine(this@Graph) } } }
+    init {
+        scope.launch { runCatching { com.past9.phoneaos.triggers.Overnight.ensureRoutine(this@Graph) } }
+        // A consumer (ck_) Composio key: fetch Composio Connect's tools so the agent has them.
+        settings.composioKey()?.takeIf { com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(it) }?.let { k -> scope.launch { com.past9.phoneaos.tools.ComposioConnect.load(k.trim()) } }
+    }
     val call by lazy { com.past9.phoneaos.voice.CallController(app, db, settings, runtime, scope) }
 
     private val systemVoice by lazy { com.past9.phoneaos.system.Speaker(app) }
