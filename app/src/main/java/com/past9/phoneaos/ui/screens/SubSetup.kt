@@ -28,7 +28,7 @@ import com.past9.phoneaos.ui.theme.LocalExtra
 @Composable
 fun SubSetupScreen(kind: SubKind, signInHelp: String, info: RuntimeInfo, installed: Boolean, log: List<String>, installing: Boolean, onBack: () -> Unit, onInstall: () -> Unit, onSaveToken: (String) -> Unit, onUseKey: () -> Unit,
                    onSignIn: () -> Unit = {}, signingIn: Boolean = false, signInError: String? = null, needsCode: Boolean = false, onCode: (String) -> Unit = {},
-                   verifying: Boolean = false, onDone: () -> Unit = {}) {
+                   verifying: Boolean = false, onDone: () -> Unit = {}, modelLabel: String = "", onModel: () -> Unit = {}) {
     val cs = MaterialTheme.colorScheme
     var showToken by remember { mutableStateOf(false) }
     var showLog by remember { mutableStateOf(false) }
@@ -62,6 +62,16 @@ fun SubSetupScreen(kind: SubKind, signInHelp: String, info: RuntimeInfo, install
                     }
                     Spacer(Modifier.height(8.dp))
                     Text("Your agent now runs on your ${kind.label} plan.", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(12.dp))
+                    Surface(onClick = onModel, shape = MaterialTheme.shapes.large, color = cs.surface, modifier = Modifier.fillMaxWidth()) {
+                        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("MODEL", style = Eyebrow, color = cs.primary)
+                                Text(modelLabel.ifBlank { "Default" }, style = MaterialTheme.typography.titleMedium)
+                            }
+                            Text("Change", style = MaterialTheme.typography.labelLarge, color = cs.primary)
+                        }
+                    }
                     Spacer(Modifier.height(14.dp))
                     Button(onClick = onDone, modifier = Modifier.fillMaxWidth().height(52.dp), shapes = ButtonDefaults.shapes()) { Text("Start chatting") }
                 }

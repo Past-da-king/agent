@@ -95,6 +95,20 @@ class MainActivity : ComponentActivity() {
         val scope = rememberCoroutineScope()
         var draft by rememberSaveable { mutableStateOf("") }
         val attachments = remember { mutableStateListOf<String>() }
+        var modelSheet by remember { mutableStateOf(false) }
+        var modelList by remember { mutableStateOf<List<com.past9.phoneaos.agent.ModelInfo>?>(null) }
+        var modelErr by remember { mutableStateOf<String?>(null) }
+        val onSub = settings.mode == PowerMode.SUBSCRIPTION
+        fun openModels() {
+            modelSheet = true; modelList = null; modelErr = null
+            scope.launch {
+                runCatching {
+                    modelList = if (onSub) com.past9.phoneaos.agent.ModelCatalog.forSubscription(this@MainActivity, settings.subKind)
+                    else com.past9.phoneaos.agent.ModelCatalog.forKey(this@MainActivity, settings.provider, g.settings.apiKey(settings.provider).orEmpty(), settings.baseUrl)
+                }.onFailure { modelErr = "Couldn't load models: ${it.message}" }
+            }
+        }
+        val modelLabel = if (onSub) settings.subModel.ifBlank { "Default" }.replaceFirstChar { it.uppercase() } else settings.model.substringAfterLast('/')
         val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(4)) { uris ->
             scope.launch { uris.forEach { u -> importImage(u)?.let { attachments += it } } }
         }
@@ -199,11 +213,11 @@ class MainActivity : ComponentActivity() {
                         ChatActions(
                             onSend = { g.runtime.send(it, attachments.toList()); attachments.clear() }, onStop = { g.runtime.stop() },
                             onAttach = { picker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-                            onRemoveAttachment = { attachments.remove(it) },
+                            onRemoveAttachment = { attachments.remove(it) }, onModel = { openModels() },
                             onAnswer = { id, o -> g.runtime.answer(id, o) },
                             onMenu = { nav.popBackStack() }, onBrowser = { nav.navigate("browser") }, onProfile = { nav.navigate("profile") },
                             onMic = { runCatching { voice.launch(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)) } },
-                        ), openCount = tasks.count { it.status != "done" }, attachments = attachments)
+                        ), openCount = tasks.count { it.status != "done" }, attachments = attachments, modelLabel = modelLabel)
                 }
                 composable("tasks") {
                     TasksScreen(goals, tasks, bottomPadding = barPad, actions = TaskActions(
@@ -261,6 +275,7 @@ class MainActivity : ComponentActivity() {
                         setMode = g.settings::setMode, setProvider = g.settings::setProvider, setModel = g.settings::setModel, setHelperModel = g.settings::setHelperModel,
                         onChangeKey = { nav.navigate("key") }, setSpeak = g.settings::setSpeakReplies,
                         onClaudeSetup = { nav.navigate("sub") }, onDeleteRuntime = { sub.delete(); info = sub.info() }, onStyle = { nav.navigate("style") },
+                        onModel = { openModels() },
                         onPinHome = { com.past9.phoneaos.system.Identity.pinNamedShortcut(this@MainActivity, settings.agentName, settings.mascot, settings.accent) },
                         onClearChat = { g.runtime.clearConversation() },
                         onResetAll = { scope.launch { g.runtime.stop(); g.db.clearAllTables(); g.settings.resetAll() } },
@@ -286,7 +301,7 @@ class MainActivity : ComponentActivity() {
                     SubSetupScreen(sub.kind, sub.spec.signInHelp, info, sub.installed, log, installing, onBack = { nav.popBackStack() },
                         signingIn = signingIn, signInError = signErr, needsCode = needsCode, verifying = verifying,
                         onCode = { c -> verifying = true; needsCode = false; sub.submitCode(c) },
-                        onDone = { nav.navigate("chat") { popUpTo("home") } },
+                        onDone = { nav.navigate("chat") { popUpTo("home") } }, modelLabel = modelLabel, onModel = { openModels() },
                         onSignIn = { scope.launch { signingIn = true; signErr = null
                             // While you're in the browser this app is in the background, and Android cuts a
                             // background app's network. A foreground service keeps it online for the hand-back.
@@ -318,6 +333,9 @@ class MainActivity : ComponentActivity() {
                     ))
                 }
             }
+            if (modelSheet) ModelPickerSheet(if (onSub) "${settings.subKind.label} model" else "${settings.provider.label} model", modelList,
+                if (onSub) settings.subModel else settings.model, modelErr,
+                onPick = { m -> if (onSub) g.settings.setSubModel(m.id) else g.settings.setModel(m.id); modelSheet = false }, onDismiss = { modelSheet = false })
             androidx.compose.animation.AnimatedVisibility(route in barRoutes, modifier = androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
                 enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut()) {
                 HomeBar(route, ::go, onTalk = { nav.navigate("chat") })
@@ -345,6 +363,8 @@ class MainActivity : ComponentActivity() {
         saveKey = { p, k -> if (g.settings.state.value.provider != p) g.settings.setProvider(p); g.settings.setApiKey(p, k) },
         testKey = { p, k -> testKey(p, k) },
         saveComposio = { k -> saveComposio(g, k) },
+        listModels = { p, k -> com.past9.phoneaos.agent.ModelCatalog.forKey(this, p, k, if (p == Provider.CUSTOM) g.settings.state.value.baseUrl else p.baseUrl) },
+        saveModel = { m -> g.settings.setModel(m) },
         openUrl = ::open,
     )
 

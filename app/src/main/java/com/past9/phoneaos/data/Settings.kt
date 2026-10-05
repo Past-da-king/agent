@@ -47,6 +47,8 @@ data class AgentSettings(
     val notifApps: Set<String> = emptySet(),
     /** Browser profiles: separate cookie jars so work and personal accounts both stay signed in. */
     val browserProfiles: List<String> = listOf("Personal"),
+    /** Model for the subscription path ("" = the CLI's default). */
+    val subModel: String = "",
 ) {
     val ready: Boolean get() = when (mode) {
         PowerMode.API_KEY -> hasKey
@@ -92,6 +94,7 @@ class SettingsStore(context: Context) {
             baseUrl = prefs.getString("baseUrl", null) ?: provider.baseUrl,
             accent = prefs.getString("accent", "iris") ?: "iris",
             mascot = prefs.getString("mascot", "scout") ?: "scout",
+            subModel = prefs.getString("subModel_" + (prefs.getString("subKind", "CLAUDE") ?: "CLAUDE"), null) ?: if ((prefs.getString("subKind", "CLAUDE") ?: "CLAUDE") == "CLAUDE") "sonnet" else "",
             notifApps = prefs.getStringSet("notifApps", emptySet()) ?: emptySet(),
             browserProfiles = (prefs.getString("browserProfiles", null) ?: "Personal").split("\n").filter { it.isNotBlank() }.ifEmpty { listOf("Personal") },
             subKind = runCatching { SubKind.valueOf(prefs.getString("subKind", "CLAUDE")!!) }.getOrDefault(SubKind.CLAUDE),
@@ -106,6 +109,7 @@ class SettingsStore(context: Context) {
     fun setNotifApp(pkg: String, on: Boolean) = edit { putStringSet("notifApps", (_state.value.notifApps.toMutableSet().apply { if (on) add(pkg) else remove(pkg) })) }
     fun addBrowserProfile(name: String) = edit { putString("browserProfiles", (_state.value.browserProfiles + name.trim()).distinct().joinToString("\n")) }
     fun removeBrowserProfile(name: String) = edit { putString("browserProfiles", _state.value.browserProfiles.filter { it != name }.ifEmpty { listOf("Personal") }.joinToString("\n")) }
+    fun setSubModel(m: String) = edit { putString("subModel_" + _state.value.subKind.name, m) }
     fun setSubKind(k: SubKind) = edit { putString("subKind", k.name) }
     fun setAccent(a: String) = edit { putString("accent", a) }
     fun setMascot(m: String) = edit { putString("mascot", m) }

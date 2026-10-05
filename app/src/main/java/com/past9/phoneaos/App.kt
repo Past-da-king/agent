@@ -29,7 +29,7 @@ class Graph(context: Context) {
         runtime.subscription = object : com.past9.phoneaos.agent.SubscriptionEngine {
             override val ready get() = subRuntime().let { it.available && it.installed && it.signedIn }
             override fun forgetBadSignIn() { subRuntime().setToken(null) }
-            override fun turn(prompt: String, system: String, resume: String?, mcpUrl: String, mcpToken: String) = subRuntime().turn(prompt, system, resume, null, mcpUrl, mcpToken)
+            override fun turn(prompt: String, system: String, resume: String?, mcpUrl: String, mcpToken: String) = subRuntime().turn(prompt, system, resume, settings.state.value.subModel.ifBlank { null }, mcpUrl, mcpToken)
         }
     }
 }

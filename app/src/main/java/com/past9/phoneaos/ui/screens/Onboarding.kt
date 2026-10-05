@@ -66,6 +66,9 @@ data class OnboardingActions(
     /** Makes one tiny call with the key the user typed. Returns null on success, else the reason. */
     val testKey: suspend (Provider, String) -> String? = { _, _ -> null },
     val saveComposio: suspend (String) -> String? = { null },
+    /** Models this key can use, newest first (live from the provider). */
+    val listModels: suspend (Provider, String) -> List<com.past9.phoneaos.agent.ModelInfo> = { _, _ -> emptyList() },
+    val saveModel: (String) -> Unit = {},
     val requestNotifications: () -> Unit = {},
     val openUrl: (String) -> Unit = {},
     val openSubSetup: () -> Unit = {},
@@ -397,10 +400,15 @@ fun KeyStep(provider: Provider, onProvider: (Provider) -> Unit, actions: Onboard
     val scope = rememberCoroutineScope()
     val extra = LocalExtra.current
     val custom = provider == Provider.CUSTOM
+    var models by remember(provider) { mutableStateOf<List<com.past9.phoneaos.agent.ModelInfo>?>(null) }
+    var picked by remember(provider) { mutableStateOf<com.past9.phoneaos.agent.ModelInfo?>(null) }
+    var picking by remember { mutableStateOf(false) }
+    // The moment the key works, show what it can run: pick a model right there.
+    LaunchedEffect(result) { if (result == "" && !custom) { models = null; picking = true; models = runCatching { actions.listModels(provider, key) }.getOrDefault(emptyList()) } }
     val ready = key.length > 10 && (!custom || (baseUrl.startsWith("http") && model.isNotBlank()))
     StepPage("API key", "Paste your key", "Stored encrypted on this phone. Only ever sent to ${if (custom) "the service you enter" else provider.label}.", bottom = {
         BigButton(if (result == "") "Continue" else if (busy) "Checking…" else "Check key", enabled = ready && !busy, icon = if (result == "") Icons.AutoMirrored.Rounded.ArrowForward else null) {
-            if (result == "") { actions.saveKey(provider, key); next() }
+            if (result == "") { actions.saveKey(provider, key); (picked ?: models?.firstOrNull())?.let { actions.saveModel(it.id) }; next() }
             else scope.launch {
                 busy = true
                 if (custom) actions.saveCustom(baseUrl, model)
@@ -431,6 +439,19 @@ fun KeyStep(provider: Provider, onProvider: (Provider) -> Unit, actions: Onboard
                 "" -> ({ Text("Key works.", color = extra.success) })
                 else -> ({ Text(result!!, color = MaterialTheme.colorScheme.error) })
             })
+        if (result == "" && !custom) {
+            Spacer(Modifier.height(8.dp))
+            Surface(onClick = { picking = true }, shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("MODEL", style = Eyebrow, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text(picked?.name ?: models?.firstOrNull()?.name ?: provider.defaultModel, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    }
+                    Text("Change", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                }
+            }
+        }
+        if (picking) ModelPickerSheet("Pick your model", models, picked?.id ?: "", null, onPick = { picked = it; actions.saveModel(it.id); picking = false }, onDismiss = { picking = false })
         Spacer(Modifier.height(16.dp))
         val (url, steps) = keySteps.getValue(provider)
         Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {

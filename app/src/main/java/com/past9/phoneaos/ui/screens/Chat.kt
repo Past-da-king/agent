@@ -67,6 +67,7 @@ data class ChatActions(
     val onProfile: () -> Unit = {},
     val onAttach: () -> Unit = {},
     val onRemoveAttachment: (String) -> Unit = {},
+    val onModel: () -> Unit = {},
 )
 
 /** Chat rows after grouping: consecutive activity lines fold into one "steps" row. */
@@ -101,6 +102,7 @@ fun ChatScreen(
     actions: ChatActions,
     openCount: Int = 0,
     attachments: List<String> = emptyList(),
+    modelLabel: String = "",
 ) {
     val rows = remember(items) { group(items) }
     val list = rememberLazyListState()
@@ -109,7 +111,7 @@ fun ChatScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
-        topBar = { ChatTopBar(agentName, status, browserLive, waitingOnYou, openCount, actions) },
+        topBar = { ChatTopBar(agentName, status, browserLive, waitingOnYou, openCount, actions, modelLabel) },
         bottomBar = { Composer(draft, onDraft, status.working, actions, attachments) },
     ) { pad ->
         if (items.isEmpty()) Welcome(userName, agentName, Modifier.padding(pad), actions.onSend)
@@ -137,7 +139,7 @@ fun ChatScreen(
 }
 
 @Composable
-private fun ChatTopBar(agentName: String, status: AgentStatus, browserLive: Boolean, needsYou: Boolean, openCount: Int, actions: ChatActions) {
+private fun ChatTopBar(agentName: String, status: AgentStatus, browserLive: Boolean, needsYou: Boolean, openCount: Int, actions: ChatActions, modelLabel: String = "") {
     Surface(color = MaterialTheme.colorScheme.surface) {
         Row(Modifier.fillMaxWidth().statusBarsPadding().padding(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = actions.onMenu) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to home") }
@@ -155,6 +157,12 @@ private fun ChatTopBar(agentName: String, status: AgentStatus, browserLive: Bool
                     Text(it, style = MaterialTheme.typography.bodySmall, color = if (needsYou) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+            }
+            if (modelLabel.isNotBlank()) Surface(onClick = actions.onModel, shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.padding(end = 6.dp)) {
+                Row(Modifier.padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(modelLabel, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 110.dp))
+                    Icon(Icons.Rounded.ArrowDropDown, "Switch model", Modifier.size(20.dp))
+                }
             }
             AnimatedVisibility(browserLive, enter = scaleIn(spring(0.6f, 800f)) + fadeIn(), exit = scaleOut() + fadeOut()) {
                 FilledTonalIconButton(onClick = actions.onBrowser) { Icon(Icons.Rounded.Language, "Watch the agent's browser") }

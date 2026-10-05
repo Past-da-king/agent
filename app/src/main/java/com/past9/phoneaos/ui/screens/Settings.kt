@@ -31,6 +31,7 @@ data class SettingsActions(
     val onClaudeSetup: () -> Unit = {},
     val onStyle: () -> Unit = {},
     val onPinHome: () -> Unit = {},
+    val onModel: () -> Unit = {},
     val onDeleteRuntime: () -> Unit = {},
     val onClearChat: () -> Unit = {},
     val onResetAll: () -> Unit = {},
@@ -62,12 +63,13 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
             }
             if (s.mode == PowerMode.API_KEY) AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 Line(Icons.Rounded.Hub, "Provider", s.provider.label) { actions.onChangeKey() }
-                Line(Icons.Rounded.Psychology, "Model", s.model) { editValue = s.model; edit = "Model" to actions.setModel }
+                Line(Icons.Rounded.Psychology, "Model", s.model + " · tap to switch") { actions.onModel() }
                 Line(Icons.Rounded.Groups, "Helper model", s.helperModel + " (used by helper agents)") { editValue = s.helperModel; edit = "Helper model" to actions.setHelperModel }
                 Line(Icons.Rounded.Password, "Change key", "Paste a new key or switch provider") { actions.onChangeKey() }
             }
             if (s.mode == PowerMode.SUBSCRIPTION || runtime.installedBytes > 0) AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 Line(Icons.Rounded.Terminal, "${s.subKind.label} runtime", runtime.note) { actions.onClaudeSetup() }
+                if (s.mode == PowerMode.SUBSCRIPTION) Line(Icons.Rounded.Psychology, "Model", s.subModel.ifBlank { "Default" }.replaceFirstChar { it.uppercase() } + " · tap to switch") { actions.onModel() }
                 if (runtime.installedBytes > 0) Line(Icons.Rounded.DeleteSweep, "Delete runtime data", "Frees ${runtime.installedBytes / 1_000_000} MB. You can set it up again later.") { actions.onDeleteRuntime() }
             }
             SectionHeader("Voice", "Talking instead of typing", Modifier.padding(start = 4.dp, top = 12.dp))
