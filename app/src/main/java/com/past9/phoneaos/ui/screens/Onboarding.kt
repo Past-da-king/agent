@@ -581,10 +581,10 @@ fun ComposioKeyForm(save: suspend (String) -> String?, openUrl: (String) -> Unit
             Column(Modifier.padding(20.dp)) {
                 Text("GET YOUR KEY IN A MINUTE", style = Eyebrow, color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(10.dp))
-                NumberedLine(1, "Open platform.composio.dev and sign up (free).")
-                NumberedLine(2, "Open your project's Settings, then API Keys.")
-                NumberedLine(3, "Create a key and copy it.")
-                NumberedLine(4, "Paste it below. Then pick your apps in Connections.")
+                NumberedLine(1, "Tap the button below. It opens Composio. Sign up, it's free.")
+                NumberedLine(2, "Open your project's Settings, then API Keys, and create a key. Your personal user key from your account settings works too.")
+                NumberedLine(3, "Copy the key, come back here and paste it below.")
+                NumberedLine(4, "Then pick the apps you want (Gmail, Calendar...) in Connections.")
                 Spacer(Modifier.height(10.dp))
                 FilledTonalButton(onClick = { openUrl("https://platform.composio.dev") }, shapes = ButtonDefaults.shapes()) {
                     Icon(Icons.Rounded.OpenInNew, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Open Composio")
