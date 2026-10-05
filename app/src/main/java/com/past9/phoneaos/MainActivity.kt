@@ -431,13 +431,20 @@ class MainActivity : ComponentActivity() {
         openUrl = ::open,
     )
 
-    private suspend fun testKey(p: Provider, key: String): String? = try {
-        val st = App.graph(this).settings.state.value
+    private suspend fun testKey(p: Provider, key: String): String? {
+        val g = App.graph(this)
+        val st = g.settings.state.value
         val model = if (st.provider == p && st.model.isNotBlank()) st.model else p.defaultModel
-        com.past9.phoneaos.agent.AgentRuntime.providerFor(p, key, if (p == Provider.CUSTOM) st.baseUrl else p.baseUrl).complete("Reply with OK.", listOf(Msg.user("ping")), emptyList(), model, 16); null
-    } catch (e: com.past9.phoneaos.agent.ProviderException) {
-        when (e.status) { 401, 403 -> "That key was rejected."; 404 -> "Key works but model ${p.defaultModel} isn't available. You can change the model in Settings."; 429 -> "Key works but has no credit or is rate-limited."; else -> e.message }
-    } catch (e: Exception) { "Couldn't check: ${e.message}" }
+        val provider = com.past9.phoneaos.agent.AgentRuntime.providerFor(p, key, if (p == Provider.CUSTOM) st.baseUrl else p.baseUrl)
+        suspend fun ping(m: String) = provider.complete("Reply with OK.", listOf(Msg.user("ping")), emptyList(), m, 16)
+        return try { ping(model); null } catch (e: com.past9.phoneaos.agent.ProviderException) {
+            // A retired model (Google refuses Gemini 2.5 to new keys) shouldn't block setup: switch to the provider's default.
+            if (e.status == 404 && model != p.defaultModel) {
+                try { ping(p.defaultModel); g.settings.setModel(p.defaultModel); return null } catch (_: Exception) {}
+            }
+            when (e.status) { 401, 403 -> "That key was rejected."; 404 -> "Key works, but the model $model isn't available to this key. Pick another model."; 429 -> "Key works but has no credit or is rate-limited."; else -> e.message }
+        } catch (e: Exception) { "Couldn't check: ${e.message}" }
+    }
 
     private suspend fun saveComposio(g: Graph, key: String): String? {
         g.settings.setComposioKey(key)

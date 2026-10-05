@@ -56,7 +56,10 @@ object ModelCatalog {
                 (0 until arr.length()).map { arr.getJSONObject(it).optString("id").removePrefix("models/") }
             }
         }.getOrDefault(emptyList()).ifEmpty { dev?.keys()?.asSequence()?.toList().orEmpty() }
-        ids.filter { it.isNotBlank() && !notChat.containsMatchIn(it) }.distinct()
+        // Google still LISTS Gemini 2.5 but refuses it for new keys ("no longer available to new users"),
+        // so picking it from the list failed the key check. Offer the always-current aliases instead.
+        val usable = if (p == Provider.GEMINI) listOf("gemini-flash-latest", "gemini-flash-lite-latest", "gemini-pro-latest") + ids.filter { !it.startsWith("gemini-2.") && !it.startsWith("gemini-1.") } else ids
+        usable.filter { it.isNotBlank() && !notChat.containsMatchIn(it) }.distinct()
             .map { info(it, dev?.optJSONObject(it)) }
             .sortedWith(compareByDescending<ModelInfo> { it.released }.thenBy { it.id })
     }
