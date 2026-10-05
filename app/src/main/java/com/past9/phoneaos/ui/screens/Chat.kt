@@ -544,20 +544,23 @@ private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean,
             val threshold = with(density) { 56.dp.toPx() }
             val voiceMode = canSend && lift > threshold
             LaunchedEffect(voiceMode) { if (voiceMode) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress) }
-            Box(Modifier.graphicsLayer { translationY = -lift.coerceAtMost(threshold * 1.4f) * 0.5f }
+            // The button never moves (moving it clipped it against the composer); it grows a little and
+            // turns into headphones once the swipe is far enough.
+            Box(Modifier.graphicsLayer { val sc = 1f + 0.12f * (lift / threshold).coerceIn(0f, 1f); scaleX = sc; scaleY = sc }
                 .pointerInput(canSend, working, draft) {
                     awaitEachGesture {
                         val down = awaitFirstDown()
                         var dy = 0f; lift = 0f
-                        while (true) {
-                            val e = awaitPointerEvent()
-                            val c = e.changes.firstOrNull { it.id == down.id } ?: break
-                            if (!c.pressed) break
-                            dy = down.position.y - c.position.y; lift = dy.coerceAtLeast(0f)
-                            if (dy > 8f) c.consume()
-                        }
+                        try {
+                            while (true) {
+                                val e = awaitPointerEvent()
+                                val c = e.changes.firstOrNull { it.id == down.id } ?: break
+                                if (!c.pressed) break
+                                dy = down.position.y - c.position.y; lift = dy.coerceAtLeast(0f)
+                                if (dy > 8f) c.consume()
+                            }
+                        } finally { lift = 0f }
                         val wasVoice = canSend && dy > threshold
-                        lift = 0f
                         when {
                             wasVoice -> { actions.onSendVoice(draft); onDraft("") }
                             dy < 24f && working && !canSend -> actions.onStop()
