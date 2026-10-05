@@ -56,7 +56,7 @@ fun linksIn(body: String) = wikiLink.findAll(body).map { it.groupValues[1].trim(
  * written in markdown, with [[Name]] links to other pages and tags for search.
  */
 class MemorySaveTool(private val dao: MemoryDao) : Tool {
-    override val spec = ToolSpec("memory_save", "Write or update a wiki page in your memory about ONE thing: a person, company, place, project, plan or preference. Title = its name (e.g. 'Thandi', 'Guavas', 'Seat preferences'). Body = markdown, detailed but no padding; refer to other people/companies/places as [[Name]] links (e.g. 'Thandi is [[Ayanda]]'s sister and works at [[Guavas]]'). If a page with the title exists your body REPLACES it, so memory_get it first and merge. Always add tags.",
+    override val spec = ToolSpec("memory_save", "Write or update a wiki page in your memory about ONE thing: a person, company, place, project, plan or preference. Title = its name (e.g. 'Lerato', 'Acme', 'Seat preferences'). Body = markdown, detailed but no padding; refer to other people/companies/places as [[Name]] links (e.g. 'Lerato is [[Sam]]'s sister and works at [[Acme]]'). If a page with the title exists your body REPLACES it, so memory_get it first and merge. Always add tags.",
         schema(listOf("title", "body", "tags"),
             "title" to str("The thing's name"), "body" to str("Markdown page with [[links]]"),
             "kind" to enumOf("What it is", "person", "company", "place", "project", "preference", "fact", "event", "how-to"),

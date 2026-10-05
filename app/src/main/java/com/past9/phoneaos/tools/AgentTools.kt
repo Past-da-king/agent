@@ -36,7 +36,7 @@ class DelegateTool(private val runHelper: suspend (task: String, label: String, 
 /** A hard stop before anything goes out in the user's name or costs money. */
 class ApprovalTool : Tool {
     override val spec = ToolSpec("request_approval", "Show the user EXACTLY what you are about to do (send this email, book this, pay this) and wait for Approve or Decline. Required before sending, posting, buying, deleting or anything in their name.",
-        schema(listOf("action", "details"), "action" to str("Short verb phrase, e.g. 'Send email to Thandi'"), "details" to str("Exactly what will happen: recipient, subject, full text, amount")))
+        schema(listOf("action", "details"), "action" to str("Short verb phrase, e.g. 'Send email to Lerato'"), "details" to str("Exactly what will happen: recipient, subject, full text, amount")))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val a = ctx.ask("APPROVAL|${input.optString("action")}|${input.optString("details")}", listOf("Approve", "Decline"))
         return when (a) { "Approve" -> "APPROVED. Go ahead."; null -> "No answer (background run). Do NOT do it; leave it for the user."; else -> "DECLINED. Do not do it." }

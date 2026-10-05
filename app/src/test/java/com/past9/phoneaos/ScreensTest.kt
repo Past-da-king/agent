@@ -56,16 +56,16 @@ class ScreensTest(private val dark: Boolean) {
         item("activity", "Clicked Search flights", JSONObject().put("tool", "browser")),
         item("activity", "Remembered: Prefers window seats", JSONObject().put("tool", "memory")),
         item("agent", "Here's what I found for **Friday 9 October**, before noon:\n\n1. **FlySafair 06:05**, R 899 (window seats left)\n2. **Lift 07:30**, R 1,020\n3. **FlySafair 09:40**, R 1,049\n\nSources: flysafair.co.za and lift.co.za, checked just now. Want me to hold the 06:05?"),
-        item("question", "APPROVAL|Book FlySafair FA 151, Fri 9 Oct 06:05|Passenger: Ayanda Mokoena\nSeat: 14A (window)\nFare: R 899 incl. taxes\nPaid with: card ending 4421"),
+        item("question", "APPROVAL|Book FlySafair FA 151, Fri 9 Oct 06:05|Passenger: Sam Dlamini\nSeat: 14A (window)\nFare: R 899 incl. taxes\nPaid with: card ending 4421"),
     )
 
     @Test fun onboarding() { shot("01-onboarding-hello") { OnboardingScreen(OnboardingActions()) } }
     @Test fun onboardingPower() { shot("02-onboarding-power") { OnboardingScreen(OnboardingActions(), start = OnbStep.POWER) } }
     @Test fun onboardingKey() { shot("03-onboarding-key") { OnboardingScreen(OnboardingActions(), start = OnbStep.KEY) } }
-    @Test fun onboardingName() { shot("06-onboarding-name") { OnboardingScreen(OnboardingActions(), start = OnbStep.NAME, initialUser = "Ayanda", initialAgent = "Nova") } }
-    @Test fun onboardingStyle() { shot("07-onboarding-style") { OnboardingScreen(OnboardingActions(), start = OnbStep.STYLE, initialAccent = "teal", initialMascot = "ghost", initialUser = "Ayanda", initialAgent = "Nova") } }
+    @Test fun onboardingName() { shot("06-onboarding-name") { OnboardingScreen(OnboardingActions(), start = OnbStep.NAME, initialUser = "Sam", initialAgent = "Nova") } }
+    @Test fun onboardingStyle() { shot("07-onboarding-style") { OnboardingScreen(OnboardingActions(), start = OnbStep.STYLE, initialAccent = "teal", initialMascot = "ghost", initialUser = "Sam", initialAgent = "Nova") } }
     @Test fun onboardingSub() { shot("08-onboarding-sub") { OnboardingScreen(OnboardingActions(), start = OnbStep.SUB, initialSub = SubKind.CODEX) } }
-    @Test fun onboardingReady() { shot("09-onboarding-ready") { OnboardingScreen(OnboardingActions(), start = OnbStep.READY, initialAccent = "ember", initialUser = "Ayanda") } }
+    @Test fun onboardingReady() { shot("09-onboarding-ready") { OnboardingScreen(OnboardingActions(), start = OnbStep.READY, initialAccent = "ember", initialUser = "Sam") } }
     @Test fun chatImages() {
         val files = listOf(0xFF4A3FD1.toInt() to (1200 to 800), 0xFF00696B.toInt() to (800 to 1200), 0xFFB0410C.toInt() to (1000 to 1000)).mapIndexed { i, (c, wh) ->
             val bmp = android.graphics.Bitmap.createBitmap(wh.first, wh.second, android.graphics.Bitmap.Config.ARGB_8888).apply { eraseColor(c) }
@@ -84,20 +84,20 @@ class ScreensTest(private val dark: Boolean) {
         coil.Coil.setImageLoader(coil.ImageLoader.Builder(ctx).dispatcher(kotlinx.coroutines.Dispatchers.Unconfined)
             .interceptorDispatcher(kotlinx.coroutines.Dispatchers.Unconfined).fetcherDispatcher(kotlinx.coroutines.Dispatchers.Unconfined)
             .decoderDispatcher(kotlinx.coroutines.Dispatchers.Unconfined).transformationDispatcher(kotlinx.coroutines.Dispatchers.Unconfined).crossfade(false).build())
-        shot("14-chat-images") { ChatScreen(items, AgentStatus(), "Nova", "Ayanda", false, "", {}, ChatActions()) }
+        shot("14-chat-images") { ChatScreen(items, AgentStatus(), "Nova", "Sam", false, "", {}, ChatActions()) }
     }
     @Test fun onboardingApps() { shot("04-onboarding-apps") { OnboardingScreen(OnboardingActions(), start = OnbStep.APPS) } }
 
-    @Test fun chatEmpty() { shot("10-chat-empty") { ChatScreen(emptyList(), AgentStatus(), "Your agent", "Ayanda", false, "", {}, ChatActions()) } }
-    @Test fun chatBusy() { shot("11-chat-working") { ChatScreen(conversation.dropLast(1), AgentStatus(true, "Browsing", 1), "Nova", "Ayanda", true, "", {}, ChatActions(), openCount = 3) } }
-    @Test fun chatApproval() { shot("12-chat-approval") { ChatScreen(conversation, AgentStatus(true, "Waiting for you"), "Nova", "Ayanda", true, "Also check", {}, ChatActions(), openCount = 3) } }
+    @Test fun chatEmpty() { shot("10-chat-empty") { ChatScreen(emptyList(), AgentStatus(), "Your agent", "Sam", false, "", {}, ChatActions()) } }
+    @Test fun chatBusy() { shot("11-chat-working") { ChatScreen(conversation.dropLast(1), AgentStatus(true, "Browsing", 1), "Nova", "Sam", true, "", {}, ChatActions(), openCount = 3) } }
+    @Test fun chatApproval() { shot("12-chat-approval") { ChatScreen(conversation, AgentStatus(true, "Waiting for you"), "Nova", "Sam", true, "Also check", {}, ChatActions(), openCount = 3) } }
     @Test fun chatQuestion() {
         val items = listOf(
             item("user", "Every morning at 7, give me the news that matters to me"),
             item("activity", "New routine: Morning brief", JSONObject().put("tool", "routines")),
             item("question", "Which topics should the brief cover?", JSONObject().put("options", JSONArray(listOf("SA business + tech", "Just tech", "Let me type it")))),
         )
-        shot("13-chat-question") { ChatScreen(items, AgentStatus(true, "Waiting for you"), "Your agent", "Ayanda", false, "", {}, ChatActions()) }
+        shot("13-chat-question") { ChatScreen(items, AgentStatus(true, "Waiting for you"), "Your agent", "Sam", false, "", {}, ChatActions()) }
     }
 
     @Test fun tasks() {
@@ -105,7 +105,7 @@ class ScreensTest(private val dark: Boolean) {
         val tasks = listOf(
             TaskRow(1, 1, "Book flights", status = "done"), TaskRow(2, 1, "Book a place near uMhlanga", status = "doing"), TaskRow(3, 1, "Car hire for 3 days"),
             TaskRow(4, null, "Renew driver's licence", notes = "Bring 2 photos", dueAt = now + 3 * 86_400_000L, status = "blocked"),
-            TaskRow(5, null, "Send Thandi the invoice", dueAt = now + 86_400_000L), TaskRow(6, null, "Cancel the old gym debit order", status = "done"),
+            TaskRow(5, null, "Send Lerato the invoice", dueAt = now + 86_400_000L), TaskRow(6, null, "Cancel the old gym debit order", status = "done"),
         )
         shot("20-tasks") { TasksScreen(goals, tasks, TaskActions()) }
     }
@@ -113,9 +113,9 @@ class ScreensTest(private val dark: Boolean) {
 
     @Test fun memory() {
         val m = listOf(
-            MemoryRow(1, "Name", "His name is Ayanda; he goes by Ayanda.", "fact", pinned = true, updatedAt = now - 86_400_000L * 3),
+            MemoryRow(1, "Name", "His name is Sam; he goes by Sam.", "fact", pinned = true, updatedAt = now - 86_400_000L * 3),
             MemoryRow(2, "Seat preference", "Prefers window seats and no red-eye flights.", "preference", updatedAt = now - 3_600_000),
-            MemoryRow(3, "Thandi", "Thandi is his business partner at Guavas; invoices go to her on the 25th.", "person", source = "user", updatedAt = now - 86_400_000L),
+            MemoryRow(3, "Lerato", "Lerato is his business partner at Acme; invoices go to her on the 25th.", "person", source = "user", updatedAt = now - 86_400_000L),
             MemoryRow(4, "Gym", "Cancelled Virgin Active on 2 Oct; watch for a final debit.", "event", updatedAt = now - 600_000),
         )
         shot("30-memory") { MemoryScreen(m + demoMem.map { it.copy(id = it.id + 10, pinned = false) }, MemoryActions()) }
@@ -124,7 +124,7 @@ class ScreensTest(private val dark: Boolean) {
     @Test fun routines() {
         val r = listOf(
             TriggerRow(1, "Morning brief", "daily", "07:00", "Brief me on SA business and tech news, my calendar and anything due today.", lastRunAt = now - 3_600_000 * 5, lastResult = "3 stories, 2 meetings, 1 task due (licence renewal)."),
-            TriggerRow(2, "Bank alerts", "email", "from:noreply@capitecbank.co.za", "Tell me what changed and flag anything over R 1,000."),
+            TriggerRow(2, "Bank alerts", "email", "from:alerts@mybank.co.za", "Tell me what changed and flag anything over R 1,000."),
             TriggerRow(3, "Check flight price", "interval", "180", "Check FlySafair JNB-DUR Fri 9 Oct 06:05 and tell me if it drops below R 800.", enabled = false),
             TriggerRow(5, "Overnight: tidy up and plan your morning", "nightly", "02:00", "While your phone charges: go over the day, save what I learned to memory, tidy the chat, and get your morning screen ready.", lastRunAt = now - 3_600_000 * 17, lastResult = "Morning screen ready: Want me to chase the Uber refund?"),
             TriggerRow(6, "Sunday plan", "daily", "18:00", "If it's Sunday, plan my week from my open tasks."),
@@ -134,7 +134,7 @@ class ScreensTest(private val dark: Boolean) {
 
     @Test fun connectionsNoKey() { shot("50-connections-nokey") { ConnectionsScreen(ConnectionsState(hasKey = false), ConnectionsActions()) } }
     @Test fun connections() {
-        val st = ConnectionsState(hasKey = true, connected = listOf(Connection("1", "gmail", "ACTIVE", "ayanda@example.com"), Connection("2", "googlecalendar", "INITIATED", "googlecalendar")),
+        val st = ConnectionsState(hasKey = true, connected = listOf(Connection("1", "gmail", "ACTIVE", "sam@example.com"), Connection("2", "googlecalendar", "INITIATED", "googlecalendar")),
             toolkits = listOf(Toolkit("gmail", "Gmail", "Read, search, draft and send email", "", 40, false, true), Toolkit("googlecalendar", "Google Calendar", "Events, invites and free time", "", 30, false, true),
                 Toolkit("googledrive", "Google Drive", "Find, read and share files", "", 35, false, true), Toolkit("slack", "Slack", "Messages, channels and threads", "", 60, false, true), Toolkit("notion", "Notion", "Pages and databases", "", 25, false, true)),
             notificationsAllowed = false)
@@ -142,7 +142,7 @@ class ScreensTest(private val dark: Boolean) {
     }
 
     @Test fun settings() {
-        val s = AgentSettings(mode = PowerMode.API_KEY, provider = Provider.ANTHROPIC, model = "claude-sonnet-5-5", helperModel = "claude-haiku-4-5-20251001", hasKey = true, userName = "Ayanda", agentName = "Nova", onboarded = true)
+        val s = AgentSettings(mode = PowerMode.API_KEY, provider = Provider.ANTHROPIC, model = "claude-sonnet-5-5", helperModel = "claude-haiku-4-5-20251001", hasKey = true, userName = "Sam", agentName = "Nova", onboarded = true)
         shot("60-settings") { SettingsScreen(s, RuntimeInfo(false, 0, false, "Runtime pack not in this build"), "0.1.0", SettingsActions()) }
     }
 
@@ -152,18 +152,18 @@ class ScreensTest(private val dark: Boolean) {
         TaskRow(3, 1, "Car hire for 3 days", owner = "agent"), TaskRow(7, 1, "Approve the guesthouse", owner = "user"),
         TaskRow(8, 2, "Find the nearest DLTC with open slots", status = "blocked", owner = "agent", blocker = "The booking site needs your ID number to show slots"),
         TaskRow(4, null, "Renew driver's licence", notes = "Bring 2 photos", dueAt = now + 3 * 86_400_000L, owner = "user"),
-        TaskRow(5, null, "Send Thandi the invoice", dueAt = now - 3_600_000L, owner = "user"), TaskRow(6, null, "Call mom back", owner = "user"),
+        TaskRow(5, null, "Send Lerato the invoice", dueAt = now - 3_600_000L, owner = "user"), TaskRow(6, null, "Call mom back", owner = "user"),
     )
     private val demoMem get() = listOf(
-        MemoryRow(1, "Ayanda", "Ayanda Mokoena runs product at [[Guavas]] and lives in Johannesburg. Prefers short answers, window seats and no red-eye flights.", "person", "self, preferences", pinned = true, updatedAt = now - 86_400_000L * 3),
-        MemoryRow(2, "Thandi", "Thandi is [[Ayanda]]'s sister. She runs the books at [[Guavas]]; invoices go to her on the 25th.\n\n- Birthday: 14 March\n- Lives in [[Durban]]", "person", "family, guavas, invoices", updatedAt = now - 3_600_000),
-        MemoryRow(3, "Guavas", "A fintech company where [[Ayanda]] works. Office in Rosebank.", "company", "work", updatedAt = now - 86_400_000L),
+        MemoryRow(1, "Sam", "Sam Dlamini runs product at [[Acme]] and lives in Johannesburg. Prefers short answers, window seats and no red-eye flights.", "person", "self, preferences", pinned = true, updatedAt = now - 86_400_000L * 3),
+        MemoryRow(2, "Lerato", "Lerato is [[Sam]]'s sister. She runs the books at [[Acme]]; invoices go to her on the 25th.\n\n- Birthday: 14 March\n- Lives in [[Durban]]", "person", "family, acme, invoices", updatedAt = now - 3_600_000),
+        MemoryRow(3, "Acme", "A fintech company where [[Sam]] works. Office in Rosebank.", "company", "work", updatedAt = now - 86_400_000L),
     )
-    private val demoHome get() = HomeState("Nova", "Ayanda", AgentStatus(true, "Browsing", 2),
+    private val demoHome get() = HomeState("Nova", "Sam", AgentStatus(true, "Browsing", 2),
         listOf(item("agent", "Found three places in uMhlanga under R 1,200 a night. **Ocean Breeze** has the best reviews; want me to hold it?"),
             item("question", "Which guesthouse should I book?", JSONObject().put("options", JSONArray(listOf("Ocean Breeze", "The Palms", "Show me more"))))),
         demoGoals, demoTasks,
-        listOf(TriggerRow(1, "Morning brief", "daily", "07:00", "Brief me"), TriggerRow(2, "Bank alerts", "notification", "Capitec|", "Flag anything over R 1,000")),
+        listOf(TriggerRow(1, "Morning brief", "daily", "07:00", "Brief me"), TriggerRow(2, "Bank alerts", "notification", "MyBank|", "Flag anything over R 1,000")),
         notifications24h = 14, notifApps = 3, browserLive = true)
 
     @Test fun home() { shot("15-home") { HomeScreen(demoHome, HomeActions()) ; androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.BottomCenter) { HomeBar("memory", {}, {}) } } }
@@ -172,19 +172,19 @@ class ScreensTest(private val dark: Boolean) {
     @Test fun tasksAgent() { shot("22-tasks-agent") { TasksScreen(demoGoals, demoTasks, TaskActions(), startTab = 1) } }
     @Test fun tasksMine() { shot("23-tasks-mine") { TasksScreen(demoGoals, demoTasks, TaskActions(), startTab = 0) } }
     @Test fun notifications() {
-        val rows = listOf(NotificationRow(1, "com.capitec", "Capitec", "Payment received", "R 2,500.00 from GUAVAS PTY LTD into Savings", now - 600_000), NotificationRow(2, "com.whatsapp", "WhatsApp", "Thandi", "Did you send the invoice?", now - 3_600_000))
-        shot("52-notifications") { NotificationsScreen(false, listOf(PhoneApp("com.capitec", "Capitec", null), PhoneApp("com.whatsapp", "WhatsApp", null), PhoneApp("com.takealot", "Takealot", null)), setOf("com.capitec", "com.whatsapp"), rows, NotificationsActions()) }
+        val rows = listOf(NotificationRow(1, "com.mybank", "MyBank", "Payment received", "R 2,500.00 from ACME PTY LTD into Savings", now - 600_000), NotificationRow(2, "com.whatsapp", "WhatsApp", "Lerato", "Did you send the invoice?", now - 3_600_000))
+        shot("52-notifications") { NotificationsScreen(false, listOf(PhoneApp("com.mybank", "MyBank", null), PhoneApp("com.whatsapp", "WhatsApp", null), PhoneApp("com.takealot", "Takealot", null)), setOf("com.mybank", "com.whatsapp"), rows, NotificationsActions()) }
     }
-    @Test fun styleRed() { shot("17-onboarding-style-red") { OnboardingScreen(OnboardingActions(), start = OnbStep.STYLE, initialAccent = "red", initialMascot = "scout", initialUser = "Ayanda", initialAgent = "Nova") } }
+    @Test fun styleRed() { shot("17-onboarding-style-red") { OnboardingScreen(OnboardingActions(), start = OnbStep.STYLE, initialAccent = "red", initialMascot = "scout", initialUser = "Sam", initialAgent = "Nova") } }
 
     private fun sheet(name: String, content: @Composable () -> Unit) = shot(name) {
         androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.LocalSheetPreview provides true) { content() }
     }
     @Test fun sheetTask() { sheet("80-sheet-task") { AddTaskSheet({}, {}) { _, _ -> } } }
-    @Test fun sheetMemory() { sheet("81-sheet-memory") { PageEditor(MemoryRow(id = 3, title = "Thandi", body = "Thandi is his business partner at Guavas. Invoices go to her on the 25th.", kind = "person", topics = "work, guavas"), {}, {}, {}) } }
+    @Test fun sheetMemory() { sheet("81-sheet-memory") { PageEditor(MemoryRow(id = 3, title = "Lerato", body = "Lerato is his business partner at Acme. Invoices go to her on the 25th.", kind = "person", topics = "work, acme"), {}, {}, {}) } }
     @Test fun sheetMemoryNew() { sheet("82-sheet-memory-new") { PageEditor(MemoryRow(id = 0, title = "", body = "", source = "user"), {}, {}) } }
     @Test fun sheetRoutineNew() { sheet("83-sheet-routine-new") { RoutineEditor(TriggerRow(name = "", kind = "daily", spec = "07:00", prompt = ""), {}, {}, null, null) } }
-    @Test fun sheetRoutineEdit() { sheet("84-sheet-routine-edit") { RoutineEditor(TriggerRow(id = 4, name = "Bank alerts", kind = "email", spec = "from:noreply@capitecbank.co.za", prompt = "Tell me what changed and flag anything over R 1,000."), {}, {}, {}, {}) } }
+    @Test fun sheetRoutineEdit() { sheet("84-sheet-routine-edit") { RoutineEditor(TriggerRow(id = 4, name = "Bank alerts", kind = "email", spec = "from:alerts@mybank.co.za", prompt = "Tell me what changed and flag anything over R 1,000."), {}, {}, {}, {}) } }
     @Test fun sheetRoutineWeekly() { sheet("85-sheet-routine-weekly") { RoutineEditor(TriggerRow(id = 7, name = "Sunday week planning", kind = "weekly", spec = "SUN 18:00", prompt = "Look at my open tasks and the week ahead and give me a simple plan."), {}, {}, {}, {}) } }
     @Test fun browserEmpty() { shot("70-browser-empty") { BrowserScreen(emptyMap(), listOf("Personal", "Work"), BrowserActions()) } }
 }

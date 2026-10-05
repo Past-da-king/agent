@@ -36,7 +36,7 @@ class LiveDeepSeekTest {
         assumeTrue("no key for $tag", key.isNotBlank())
         val app = ApplicationProvider.getApplicationContext<android.content.Context>()
         val db = AppDb.inMemory(app); val s = SettingsStore(app)
-        s.setMode(PowerMode.API_KEY); s.setProvider(provider); s.setApiKey(provider, key); s.setUserName("Ayanda")
+        s.setMode(PowerMode.API_KEY); s.setProvider(provider); s.setApiKey(provider, key); s.setUserName("Sam")
         val rt = AgentRuntime(app, db, s, CoroutineScope(SupervisorJob() + Dispatchers.IO), FakePhone())
 
         rt.send("Remember that my favourite colour is teal. Also add a task: renew my driver's licence by Friday.")

@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "PhoneAos"
+rootProject.name = "Agent"
 
 include(":app")

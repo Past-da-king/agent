@@ -57,7 +57,7 @@ class RuntimeTest {
     @Before fun setUp() {
         val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
         db = AppDb.inMemory(ctx); settings = SettingsStore(ctx)
-        settings.setMode(PowerMode.API_KEY); settings.setProvider(Provider.ANTHROPIC); settings.setApiKey(Provider.ANTHROPIC, "sk-test"); settings.setUserName("Ayanda")
+        settings.setMode(PowerMode.API_KEY); settings.setProvider(Provider.ANTHROPIC); settings.setApiKey(Provider.ANTHROPIC, "sk-test"); settings.setUserName("Sam")
     }
 
     private fun runtime(p: ScriptedProvider) = AgentRuntime(ApplicationProvider.getApplicationContext(), db, settings, CoroutineScope(SupervisorJob() + Dispatchers.IO), phone, { p })
@@ -66,7 +66,7 @@ class RuntimeTest {
 
     @Test fun remembersAndAnswers() = runBlocking {
         val p = ScriptedProvider(
-            call("memory_save", JSONObject().put("title", "Seat preference").put("body", "Ayanda prefers window seats").put("kind", "preference")),
+            call("memory_save", JSONObject().put("title", "Seat preference").put("body", "Sam prefers window seats").put("kind", "preference")),
             say("Got it, window seats from now on."))
         val rt = runtime(p)
         rt.send("Remember I like window seats")
@@ -77,7 +77,7 @@ class RuntimeTest {
         assertEquals(listOf("user", "activity", "agent"), kinds)
         // The second call saw the tool result, and the system prompt knows his name and the time.
         val (system, msgs) = p.seen[1]
-        assertTrue(system.contains("The user's name is Ayanda"))
+        assertTrue(system.contains("The user's name is Sam"))
         assertTrue(msgs.last().blocks.single() is Block.ToolResult)
 
         // Next turn: the saved memory is recalled into the system prompt by relevance.
@@ -91,15 +91,15 @@ class RuntimeTest {
 
     @Test fun approvalBlocksUntilTheUserAnswers() = runBlocking {
         val p = ScriptedProvider(
-            call("request_approval", JSONObject().put("action", "Send email to Thandi").put("details", "Subject: Friday\nSee you at 6.")),
+            call("request_approval", JSONObject().put("action", "Send email to Lerato").put("details", "Subject: Friday\nSee you at 6.")),
             say("Sent."))
         val rt = runtime(p)
-        rt.send("Email Thandi that I'll see her at 6")
+        rt.send("Email Lerato that I'll see her at 6")
         withTimeout(5000) { while (db.chat().all().first().none { it.kind == "question" }) delay(50) }
         assertEquals("Waiting for you", rt.status.value.label)
-        assertTrue(phone.notes.any { it.startsWith("Approve?|Send email to Thandi") })
+        assertTrue(phone.notes.any { it.startsWith("Approve?|Send email to Lerato") })
         val q = db.chat().all().first().first { it.kind == "question" }
-        assertTrue(q.text.startsWith("APPROVAL|Send email to Thandi|"))
+        assertTrue(q.text.startsWith("APPROVAL|Send email to Lerato|"))
         assertEquals(1, p.seen.size) // the model has NOT been called again while we wait
         rt.answer(q.id, "Approve")
         waitIdle(rt)

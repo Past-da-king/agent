@@ -161,7 +161,7 @@ private data class Template(val name: String, val kind: String, val spec: String
 private val templates = listOf(
     Template("Morning brief", "daily", "07:00", "Brief me on today: my calendar, what's due, and news that matters to me. Keep it short.", Icons.Rounded.WbSunny),
     Template("Sunday plan", "weekly", "SUN 18:00", "Look at my open tasks and the week ahead and give me a simple plan for the week.", Icons.Rounded.EventNote),
-    Template("Bank watch", "email", "from:noreply@capitecbank.co.za", "Tell me what changed and flag anything over R 1,000.", Icons.Rounded.AccountBalance),
+    Template("Bank watch", "email", "from:alerts@mybank.co.za", "Tell me what changed and flag anything over R 1,000.", Icons.Rounded.AccountBalance),
     Template("Price drop", "interval", "180", "Check the price of the thing I'm watching and tell me if it drops below my target.", Icons.Rounded.TrendingDown),
 )
 
@@ -242,7 +242,7 @@ internal fun RoutineEditor(r: TriggerRow, onDismiss: () -> Unit, onSave: (Trigge
             "interval", "watch" -> com.past9.phoneaos.ui.ChoiceChips(listOf("15" to "15 min", "60" to "Every hour", "180" to "3 hours", "360" to "6 hours", "720" to "12 hours", "1440" to "Daily").let { l -> if (l.any { it.first == spec }) l else l + (spec to "$spec min") }.map { Triple(it.first, it.second, null) }, spec, { spec = it }, label = "How often")
             "at" -> com.past9.phoneaos.ui.SheetField(spec, { spec = it }, "Date and time", "2026-10-06T07:30", singleLine = true)
             else -> {
-                com.past9.phoneaos.ui.SheetField(spec, { spec = it }, "Gmail search", "from:bank@capitec.co.za", singleLine = true)
+                com.past9.phoneaos.ui.SheetField(spec, { spec = it }, "Gmail search", "from:bank@mybank.co.za", singleLine = true)
                 Text("Needs Gmail connected in Connections.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, top = 6.dp))
             }
         }
