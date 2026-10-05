@@ -42,7 +42,8 @@ class LocalProxy {
         if (first.size < 2) return
         if (first[0].equals("CONNECT", true)) {
             val host = first[1].substringBeforeLast(':'); val port = first[1].substringAfterLast(':').toIntOrNull() ?: 443
-            val up = Socket().apply { connect(InetSocketAddress(host, port), 20_000) }
+            val up = try { Socket().apply { connect(InetSocketAddress(host, port), 20_000) } }
+                catch (e: Exception) { cout.write("HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n".toByteArray()); cout.flush(); return }
             cout.write("HTTP/1.1 200 Connection established\r\n\r\n".toByteArray()); cout.flush()
             pipe(cin, cout, up)
         } else {

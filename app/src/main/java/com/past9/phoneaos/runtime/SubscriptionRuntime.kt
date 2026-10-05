@@ -172,18 +172,20 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
 
     fun env(): Map<String, String> {
         linkBins()
-        val proxy = "http://127.0.0.1:${proxy.start().port}"
-        return mapOf(
+        val base = mapOf(
             "HOME" to home.path, "TMPDIR" to context.cacheDir.path, "SHELL" to "/system/bin/sh",
             "PATH" to "${bin.path}:/system/bin", "LD_LIBRARY_PATH" to libDir.path, "NODE_PATH" to File(dir, "node_modules").path,
             // Termux's OpenSSL looks for CAs under Termux's own prefix; hand it ours.
             "SSL_CERT_FILE" to File(dir, "cacert.pem").path, "NODE_EXTRA_CA_CERTS" to File(dir, "cacert.pem").path, "SSL_CERT_DIR" to File(dir, "certs").apply { mkdirs() }.path,
             "USE_BUILTIN_RIPGREP" to "0", "DISABLE_AUTOUPDATER" to "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC" to "1",
             "CODEX_HOME" to File(home, ".codex").path, "CODEX_BIN" to File(bin, "codex").path,
-            // Codex (static musl) can't resolve DNS on Android; it reaches the internet through our proxy.
-            "HTTPS_PROXY" to proxy, "HTTP_PROXY" to proxy, "https_proxy" to proxy, "http_proxy" to proxy,
-            "NO_PROXY" to "127.0.0.1,localhost", "no_proxy" to "127.0.0.1,localhost",
         )
+        // Only Codex needs the proxy: it is static musl and can't resolve DNS on Android. Node (bionic)
+        // resolves fine on its own, and routing Claude's sign-in through the proxy broke it.
+        if (kind != SubKind.CODEX) return base
+        val proxy = "http://127.0.0.1:${proxy.start().port}"
+        return base + mapOf("HTTPS_PROXY" to proxy, "HTTP_PROXY" to proxy, "https_proxy" to proxy, "http_proxy" to proxy,
+            "NO_PROXY" to "127.0.0.1,localhost", "no_proxy" to "127.0.0.1,localhost")
     }
 
     private fun exec(cmd: List<String>, progress: (String) -> Unit): Int {
