@@ -46,6 +46,9 @@ class BrowserEngine(private val context: Context, val profile: String = "Persona
     @Volatile var lastUsed = System.currentTimeMillis(); private set
     /** Something the agent should know about the page that the page itself won't say (a blocked sign-in, a download). */
     @Volatile var notice: String? = null
+    /** Files the agent wants to hand to the next file picker a page opens (browser_upload). */
+    @Volatile var pendingUpload: List<android.net.Uri>? = null
+    @Volatile var uploadsServed = 0
     val attached: Boolean get() = container != null
     fun touch() { lastUsed = System.currentTimeMillis() }
 
@@ -99,6 +102,7 @@ class BrowserEngine(private val context: Context, val profile: String = "Persona
             override fun onCloseWindow(window: WebView) { pop(window) }
             // <input type=file>: the phone's own picker, so uploads work like in Chrome.
             override fun onShowFileChooser(view: WebView, callback: android.webkit.ValueCallback<Array<android.net.Uri>>, params: FileChooserParams): Boolean {
+                pendingUpload?.let { files -> pendingUpload = null; uploadsServed++; callback.onReceiveValue(files.toTypedArray()); return true }
                 val types = params.acceptTypes.orEmpty().map { it.trim() }.filter { it.isNotEmpty() && it.contains('/') }.ifEmpty { listOf("*/*") }.toTypedArray()
                 com.past9.phoneaos.App.graph(context).scope.launch {
                     val r = com.past9.phoneaos.tools.FilePickBroker.Request(types)

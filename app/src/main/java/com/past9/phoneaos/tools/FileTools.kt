@@ -46,6 +46,15 @@ class FilesPickTool(private val context: Context) : Tool {
         com.past9.phoneaos.agent.imageMarker.replace(text, "").trim() to imgs
     }
 
+    /** Keep a copy in the workspace so the agent can upload the original file somewhere later. */
+    suspend fun keepCopy(uri: Uri, name: String): java.io.File? = withContext(Dispatchers.IO) {
+        runCatching {
+            val dir = java.io.File(context.filesDir, "workspace/attachments").apply { mkdirs() }
+            val f = java.io.File(dir, name.replace(Regex("[\\\\/:*?\"<>|]"), "_"))
+            context.contentResolver.openInputStream(uri)!!.use { i -> f.outputStream().use { i.copyTo(it) } }; f
+        }.getOrNull()
+    }
+
     fun displayName(uri: Uri): String = runCatching {
         context.contentResolver.query(uri, null, null, null, null)?.use { c -> c.moveToFirst(); c.getString(c.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME)) }
     }.getOrNull() ?: uri.lastPathSegment ?: "file"

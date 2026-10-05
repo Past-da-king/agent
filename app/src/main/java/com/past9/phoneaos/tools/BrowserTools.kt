@@ -119,4 +119,23 @@ class BrowserHandoffTool(c: Context) : BrowserTool(c) {
     }
 }
 
-fun browserTools(c: Context): List<Tool> = listOf(BrowserOpenTool(c), BrowserReadTool(c), BrowserClickTool(c), BrowserTypeTool(c), BrowserKeyTool(c), BrowserWaitTool(c), BrowserScrollTool(c), BrowserBackTool(c), BrowserScreenshotTool(c), BrowserLookTool(c), BrowserHandoffTool(c))
+class BrowserUploadTool(c: Context) : BrowserTool(c) {
+    override val spec = ToolSpec("browser_upload", "Upload a file from the phone into the page: give the file's path, and the upload button or file field (by [number], selector or text). Works with your workspace files (run_code output), documents the user attached in chat, and photos. Tip: if you can't read a file well yourself, upload it to a site that can (e.g. gemini.google.com, signed in) and ask there.",
+        schema(listOf("path"), "path" to str("Full path, or a path inside your workspace"), "ref" to str("Element number from the outline"), "selector" to str("CSS selector"), "text" to str("Visible text of the upload button")))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String {
+        val raw = input.optString("path")
+        val ws = java.io.File(context.filesDir, "workspace")
+        val f = listOf(java.io.File(raw), java.io.File(ws, raw), java.io.File(ws, "attachments/$raw")).firstOrNull { it.isFile }
+            ?: return "No such file: $raw. Files in your workspace: " + ws.walkTopDown().filter { it.isFile && !it.name.startsWith(".") }.take(30).joinToString { it.relativeTo(ws).path }
+        val e = engine(ctx)
+        val before = e.uploadsServed
+        e.pendingUpload = listOf(android.net.Uri.fromFile(f))
+        val ref = input.optString("ref").ifBlank { null }; val sel = input.optString("selector").ifBlank { null }; val txt = input.optString("text").ifBlank { null }
+        e.click(ref, sel ?: if (ref == null && txt == null) "input[type=file]" else null, txt)
+        repeat(20) { if (e.uploadsServed > before) return "Uploaded ${f.name} (${f.length() / 1024} KB). Read the page to confirm it was accepted.".also { ctx.activity("Uploaded ${f.name}", JSONObject().put("tool", "browser")) }; kotlinx.coroutines.delay(200) }
+        e.pendingUpload = null
+        return "That click didn't open a file picker. Find the real upload button or the input[type=file] in the outline and try again."
+    }
+}
+
+fun browserTools(c: Context): List<Tool> = listOf(BrowserUploadTool(c), BrowserOpenTool(c), BrowserReadTool(c), BrowserClickTool(c), BrowserTypeTool(c), BrowserKeyTool(c), BrowserWaitTool(c), BrowserScrollTool(c), BrowserBackTool(c), BrowserScreenshotTool(c), BrowserLookTool(c), BrowserHandoffTool(c))
