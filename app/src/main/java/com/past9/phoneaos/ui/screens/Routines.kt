@@ -37,6 +37,7 @@ data class RoutineActions(
 fun whenLabel(t: TriggerRow): String = when (t.kind) {
     "at" -> parseWhen(t.spec)?.let { "Once, " + dueLabel(it) } ?: "Once"
     "daily" -> "Every day at ${t.spec}"
+    "weekly" -> Routines.weeklyLabel(t.spec)
     "nightly" -> "Every night while charging, from ${t.spec}"
     "watch" -> (t.spec.toIntOrNull() ?: 1440).let { m -> "Checks " + when { m >= 1440 && m % 1440 == 0 -> if (m == 1440) "daily" else "every ${m / 1440} days"; m % 60 == 0 -> "every ${m / 60} h"; else -> "every $m min" } + ", wakes your agent only when it fires" }
     "interval" -> (t.spec.toIntOrNull() ?: 60).let { if (it % 60 == 0) "Every ${it / 60} h" else "Every $it min" }
@@ -50,7 +51,7 @@ fun inLabel(ms: Long): String = when {
     ms < 86_400_000 -> "in ${ms / 3_600_000} h ${(ms % 3_600_000) / 60_000} min"; else -> "in ${ms / 86_400_000} d"
 }
 
-private fun kindIcon(kind: String): ImageVector = when (kind) { "at" -> Icons.Rounded.Event; "daily" -> Icons.Rounded.WbSunny; "nightly" -> Icons.Rounded.Bedtime; "watch" -> Icons.Rounded.TrackChanges; "interval" -> Icons.Rounded.Autorenew; "notification" -> Icons.Rounded.NotificationsActive; else -> Icons.Rounded.Mail }
+private fun kindIcon(kind: String): ImageVector = when (kind) { "at" -> Icons.Rounded.Event; "daily" -> Icons.Rounded.WbSunny; "weekly" -> Icons.Rounded.EventRepeat; "nightly" -> Icons.Rounded.Bedtime; "watch" -> Icons.Rounded.TrackChanges; "interval" -> Icons.Rounded.Autorenew; "notification" -> Icons.Rounded.NotificationsActive; else -> Icons.Rounded.Mail }
 
 private val routineShapes = listOf(MaterialShapes.Cookie6Sided, MaterialShapes.Clover4Leaf, MaterialShapes.Sunny, MaterialShapes.Pill, MaterialShapes.Cookie9Sided)
 
@@ -58,7 +59,7 @@ private val routineShapes = listOf(MaterialShapes.Cookie6Sided, MaterialShapes.C
 fun RoutinesScreen(routines: List<TriggerRow>, actions: RoutineActions, now: Long = System.currentTimeMillis(), bottomPadding: androidx.compose.ui.unit.Dp = 120.dp) {
     var editing by remember { mutableStateOf<TriggerRow?>(null) }
     val zNow = java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneId.systemDefault())
-    val clock = setOf("daily", "at", "interval", "nightly")
+    val clock = setOf("daily", "weekly", "at", "interval", "nightly")
     val running = routines.filter { it.enabled }
     val next = running.filter { it.kind in clock }.mapNotNull { r -> Routines.nextRunIn(r, zNow)?.let { r to it } }.minByOrNull { it.second }
     SubScreen("Routines", if (running.isEmpty()) "Things your agent does on its own" else "${running.size} running on their own", actions.onBack,
@@ -159,7 +160,7 @@ private fun RoutineRow(r: TriggerRow, actions: RoutineActions, now: java.time.Zo
 private data class Template(val name: String, val kind: String, val spec: String, val prompt: String, val icon: ImageVector)
 private val templates = listOf(
     Template("Morning brief", "daily", "07:00", "Brief me on today: my calendar, what's due, and news that matters to me. Keep it short.", Icons.Rounded.WbSunny),
-    Template("Sunday plan", "daily", "18:00", "If it's Sunday, look at my open tasks and the week ahead and give me a simple plan for the week. Otherwise do nothing.", Icons.Rounded.EventNote),
+    Template("Sunday plan", "weekly", "SUN 18:00", "Look at my open tasks and the week ahead and give me a simple plan for the week.", Icons.Rounded.EventNote),
     Template("Bank watch", "email", "from:noreply@capitecbank.co.za", "Tell me what changed and flag anything over R 1,000.", Icons.Rounded.AccountBalance),
     Template("Price drop", "interval", "180", "Check the price of the thing I'm watching and tell me if it drops below my target.", Icons.Rounded.TrendingDown),
 )
@@ -171,7 +172,7 @@ internal fun RoutineEditor(r: TriggerRow, onDismiss: () -> Unit, onSave: (Trigge
     var kind by remember { mutableStateOf(r.kind) }
     var spec by remember { mutableStateOf(r.spec) }
     val valid = name.isNotBlank() && prompt.isNotBlank() && when (kind) {
-        "daily", "nightly" -> Regex("^\\d{1,2}:\\d{2}$").matches(spec.trim()); "interval", "watch" -> (spec.trim().toIntOrNull() ?: 0) >= 15
+        "daily", "nightly" -> Regex("^\\d{1,2}:\\d{2}$").matches(spec.trim()); "weekly" -> Routines.parseWeekly(spec) != null; "interval", "watch" -> (spec.trim().toIntOrNull() ?: 0) >= 15
         "at" -> (parseWhen(spec) ?: 0) > System.currentTimeMillis(); else -> spec.isNotBlank()
     }
     com.past9.phoneaos.ui.AppSheet(kindIcon(kind), if (r.id == 0L) "Runs on its own" else whenLabel(r.copy(kind = kind, spec = spec)), if (r.id == 0L) "New routine" else "Edit routine", onDismiss,
@@ -201,14 +202,15 @@ internal fun RoutineEditor(r: TriggerRow, onDismiss: () -> Unit, onSave: (Trigge
         val kinds = buildList {
             if (r.kind == "nightly") add(Triple("nightly", "Overnight", "While the phone charges"))
             if (r.kind == "watch") add(Triple("watch", "Watcher", "A script checks, no agent needed"))
-            add(Triple("daily", "Every day", "At a time you pick")); add(Triple("at", "Once", "On one date and time"))
+            add(Triple("daily", "Every day", "At a time you pick")); add(Triple("weekly", "Weekly", "On the days you pick"))
+            add(Triple("at", "Once", "On one date and time"))
             add(Triple("interval", "Repeat", "Every few minutes or hours")); add(Triple("email", "On email", "When a matching email lands"))
         }
         kinds.chunked(2).forEach { pair ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 pair.forEach { (k, t, l) ->
                     com.past9.phoneaos.ui.ChoiceCard(kindIcon(k), t, l, kind == k, {
-                        if (kind != k) { kind = k; spec = when (k) { "daily" -> "07:00"; "nightly" -> "02:00"; "interval" -> "60"; "at" -> java.time.LocalDate.now().plusDays(1).toString() + "T09:00"; else -> "" } }
+                        if (kind != k) { kind = k; spec = when (k) { "daily" -> "07:00"; "weekly" -> "SUN 18:00"; "nightly" -> "02:00"; "interval" -> "60"; "at" -> java.time.LocalDate.now().plusDays(1).toString() + "T09:00"; else -> "" } }
                     }, Modifier.weight(1f))
                 }
                 if (pair.size == 1) Spacer(Modifier.weight(1f))
@@ -218,6 +220,25 @@ internal fun RoutineEditor(r: TriggerRow, onDismiss: () -> Unit, onSave: (Trigge
         Spacer(Modifier.height(8.dp))
         when (kind) {
             "daily", "nightly" -> com.past9.phoneaos.ui.ChoiceChips(listOf("06:00", "07:00", "08:00", "12:00", "18:00", "21:00").let { if (spec in it) it else it + spec }.map { Triple(it, it, null) }, spec, { spec = it }, label = "Time")
+            "weekly" -> {
+                val parsed = Routines.parseWeekly(spec)
+                val days = parsed?.first ?: setOf(7)
+                val time = parsed?.let { "%02d:%02d".format(it.second, it.third) } ?: "18:00"
+                val codes = listOf("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
+                fun put(d: Set<Int>, t: String) { spec = d.sorted().joinToString(",") { codes[it - 1] } + " " + t }
+                Text("DAYS", style = Eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("M", "T", "W", "T", "F", "S", "S").forEachIndexed { i, l ->
+                        val on = (i + 1) in days
+                        Surface(onClick = { val n = if (on) days - (i + 1) else days + (i + 1); if (n.isNotEmpty()) put(n, time) }, shape = androidx.compose.foundation.shape.CircleShape,
+                            color = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.weight(1f).aspectRatio(1f)) {
+                            Box(contentAlignment = Alignment.Center) { Text(l, style = MaterialTheme.typography.titleSmall, color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface) }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+                com.past9.phoneaos.ui.ChoiceChips(listOf("07:00", "08:00", "12:00", "17:00", "18:00", "20:00").let { if (time in it) it else it + time }.map { Triple(it, it, null) }, time, { put(days, it) }, label = "Time")
+            }
             "interval", "watch" -> com.past9.phoneaos.ui.ChoiceChips(listOf("15" to "15 min", "60" to "Every hour", "180" to "3 hours", "360" to "6 hours", "720" to "12 hours", "1440" to "Daily").let { l -> if (l.any { it.first == spec }) l else l + (spec to "$spec min") }.map { Triple(it.first, it.second, null) }, spec, { spec = it }, label = "How often")
             "at" -> com.past9.phoneaos.ui.SheetField(spec, { spec = it }, "Date and time", "2026-10-06T07:30", singleLine = true)
             else -> {

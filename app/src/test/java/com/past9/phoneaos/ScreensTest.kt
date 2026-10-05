@@ -185,5 +185,6 @@ class ScreensTest(private val dark: Boolean) {
     @Test fun sheetMemoryNew() { sheet("82-sheet-memory-new") { PageEditor(MemoryRow(id = 0, title = "", body = "", source = "user"), {}, {}) } }
     @Test fun sheetRoutineNew() { sheet("83-sheet-routine-new") { RoutineEditor(TriggerRow(name = "", kind = "daily", spec = "07:00", prompt = ""), {}, {}, null, null) } }
     @Test fun sheetRoutineEdit() { sheet("84-sheet-routine-edit") { RoutineEditor(TriggerRow(id = 4, name = "Bank alerts", kind = "email", spec = "from:noreply@capitecbank.co.za", prompt = "Tell me what changed and flag anything over R 1,000."), {}, {}, {}, {}) } }
+    @Test fun sheetRoutineWeekly() { sheet("85-sheet-routine-weekly") { RoutineEditor(TriggerRow(id = 7, name = "Sunday week planning", kind = "weekly", spec = "SUN 18:00", prompt = "Look at my open tasks and the week ahead and give me a simple plan."), {}, {}, {}, {}) } }
     @Test fun browserEmpty() { shot("70-browser-empty") { BrowserScreen(emptyMap(), listOf("Personal", "Work"), BrowserActions()) } }
 }

@@ -26,6 +26,25 @@ import java.util.concurrent.TimeUnit
  * routines survive the app being closed and the phone restarting.
  */
 object Routines {
+    private val dayNames = listOf("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
+
+    /** Weekly spec: "SUN 18:00" or "MON,WED,FRI 07:30" -> (days 1..7, hour, minute), or null if it doesn't parse. */
+    fun parseWeekly(spec: String): Triple<Set<Int>, Int, Int>? = runCatching {
+        val (d, t) = spec.trim().split(Regex("\\s+"), limit = 2)
+        val days = d.split(",").map { x -> dayNames.indexOfFirst { x.trim().uppercase().startsWith(it) } + 1 }.toSet()
+        val (h, m) = t.split(":").map { it.toInt() }
+        if (days.any { it < 1 } || days.isEmpty() || h !in 0..23 || m !in 0..59) null else Triple(days, h, m)
+    }.getOrNull()
+
+    fun weeklyLabel(spec: String): String = parseWeekly(spec)?.let { (days, h, m) ->
+        val long = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+        val d = when {
+            days == setOf(1, 2, 3, 4, 5) -> "weekday"; days == setOf(6, 7) -> "weekend day"; days.size == 1 -> long[days.first() - 1]
+            else -> days.sorted().joinToString(", ") { long[it - 1].take(3) }
+        }
+        "Every $d at %02d:%02d".format(h, m)
+    } ?: "Weekly"
+
     private fun name(id: Long) = "routine-$id"
     private val net = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
 
@@ -38,6 +57,10 @@ object Routines {
             if (!next.isAfter(now)) next = next.plusDays(1)
             Duration.between(now, next).toMillis()
         }.getOrNull()
+        "weekly" -> parseWeekly(t.spec)?.let { (days, h, m) ->
+            (0..7).asSequence().map { now.toLocalDate().plusDays(it.toLong()).atTime(h, m).atZone(now.zone) }
+                .firstOrNull { it.isAfter(now) && it.dayOfWeek.value in days }?.let { Duration.between(now, it).toMillis() }
+        }
         "interval", Watchers.KIND -> t.lastRunAt?.let { (it + (t.spec.toLongOrNull() ?: 60) * 60_000 - now.toInstant().toEpochMilli()).coerceAtLeast(0) } ?: ((t.spec.toLongOrNull() ?: 60) * 60_000)
         "email" -> 15 * 60_000L
         else -> null // "notification" fires on arrival, not on a clock
@@ -120,7 +143,7 @@ class RoutineWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         val out = g.runtime.runBackground(t.name, prompt)
         g.db.triggers().upsert(t.copy(lastRunAt = System.currentTimeMillis(), lastResult = out.take(500), cursor = cursor,
             enabled = if (t.kind == "at" && !manual) false else t.enabled))
-        if (t.kind == "daily" && !manual) Routines.schedule(applicationContext, g.db.triggers().get(id)!!)
+        if ((t.kind == "daily" || t.kind == "weekly") && !manual) Routines.schedule(applicationContext, g.db.triggers().get(id)!!)
         return Result.success()
     }
 }
