@@ -178,7 +178,8 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
             // Termux's OpenSSL looks for CAs under Termux's own prefix; hand it ours.
             "SSL_CERT_FILE" to File(dir, "cacert.pem").path, "NODE_EXTRA_CA_CERTS" to File(dir, "cacert.pem").path, "SSL_CERT_DIR" to File(dir, "certs").apply { mkdirs() }.path,
             "USE_BUILTIN_RIPGREP" to "0", "DISABLE_AUTOUPDATER" to "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC" to "1",
-            "CODEX_HOME" to File(home, ".codex").path, "CODEX_BIN" to File(bin, "codex").path,
+            // Codex refuses to start if its home folder doesn't exist yet.
+            "CODEX_HOME" to File(home, ".codex").apply { mkdirs() }.path, "CODEX_BIN" to File(bin, "codex").path,
         )
         // Only Codex needs the proxy: it is static musl and can't resolve DNS on Android. Node (bionic)
         // resolves fine on its own, and routing Claude's sign-in through the proxy broke it.
