@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="icon_bg_iris">#FFE4E0FF</color>
+    <color name="icon_bg_ocean">#FFD6E4FF</color>
+    <color name="icon_bg_teal">#FFB9F0EE</color>
+    <color name="icon_bg_forest">#FFC6EFBC</color>
+    <color name="icon_bg_ember">#FFFFDBCB</color>
+    <color name="icon_bg_rose">#FFFFD9E2</color>
+    <color name="icon_bg_red">#FFFFDAD6</color>
+    <color name="icon_bg_tangerine">#FFFFDCC4</color>
+    <color name="icon_bg_sunflower">#FFFFE08A</color>
+    <color name="icon_bg_lime">#FFD2F5A6</color>
+    <color name="icon_bg_mint">#FFB2F2DF</color>
+    <color name="icon_bg_sky">#FFCDE5FF</color>
+    <color name="icon_bg_violet">#FFEADDFF</color>
+    <color name="icon_bg_magenta">#FFFFD8EA</color>
+    <color name="icon_bg_graphite">#FFE3E1E8</color>
+</resources>
