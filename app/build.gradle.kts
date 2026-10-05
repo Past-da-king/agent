@@ -12,8 +12,12 @@ android {
     applicationId = "com.past9.phoneaos"
     minSdk = 29
     targetSdk = 36
-    versionCode = 24
-    versionName = "0.4.3"
+    versionCode = 25
+    versionName = "0.4.4"
+    // Android never lets an installed app rename itself or change the icon Samsung shows on
+    // notifications, so a personal build bakes the owner's agent in: -PagentName=Hina -PagentIcon=ic_app_heart_red
+    resValue("string", "app_name", (project.findProperty("agentName") as String?) ?: "Agent")
+    manifestPlaceholders["appIcon"] = "@mipmap/" + ((project.findProperty("agentIcon") as String?) ?: "ic_launcher")
     // The runtime pack (node, codex, ripgrep) is arm64 only, like every phone we target.
     ndk { abiFilters += listOf("arm64-v8a") }
   }
@@ -30,6 +34,7 @@ android {
     targetCompatibility = JavaVersion.VERSION_17
   }
   buildFeatures {
+    resValues = true
     compose = true
     buildConfig = true
   }

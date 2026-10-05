@@ -27,8 +27,9 @@ class BrowserService : Service() {
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "Background browsing", NotificationManager.IMPORTANCE_LOW))
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java).putExtra("open", "browser"), PendingIntent.FLAG_IMMUTABLE)
-        val n = Notification.Builder(this, CHANNEL).setContentTitle("Your agent is browsing").setContentText("Tap to watch or take over")
-            .setSmallIcon(com.past9.phoneaos.system.Identity.statIcon(this, com.past9.phoneaos.App.graph(this).settings.state.value.mascot)).setOngoing(true).setContentIntent(open).build()
+        val st = com.past9.phoneaos.App.graph(this).settings.state.value
+        val n = Notification.Builder(this, CHANNEL).setContentTitle("${st.agentName.ifBlank { "Your agent" }} is browsing").setContentText("Tap to watch or take over")
+            .setSmallIcon(com.past9.phoneaos.system.Identity.statIcon(this, st.mascot)).setOngoing(true).setContentIntent(open).build()
         if (Build.VERSION.SDK_INT >= 34) startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(ID, n)
         _running.value = true
     }
