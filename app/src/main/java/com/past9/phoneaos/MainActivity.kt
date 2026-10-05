@@ -113,9 +113,10 @@ class MainActivity : ComponentActivity() {
         val attachments = remember { mutableStateListOf<String>() }
         // Documents attached in chat: name -> (extracted text, page images)
         val docs = remember { mutableStateMapOf<String, Pair<String, List<String>>>() }
+        val docPaths = remember { mutableStateMapOf<String, String>() }
         val docPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
             val reader = com.past9.phoneaos.tools.FilesPickTool(this@MainActivity)
-            scope.launch { uris.forEach { u -> val name = reader.displayName(u); docs[name] = reader.readDocument(u) } }
+            scope.launch { uris.forEach { u -> val name = reader.displayName(u); reader.keepCopy(u, name)?.let { docPaths[name] = it.path }; docs[name] = reader.readDocument(u) } }
         }
         var modelSheet by remember { mutableStateOf(false) }
         var modelList by remember { mutableStateOf<List<com.past9.phoneaos.agent.ModelInfo>?>(null) }
@@ -246,11 +247,11 @@ class MainActivity : ComponentActivity() {
                     ChatScreen(items, status, settings.agentName, settings.userName, browserLive, draft, { draft = it },
                         ChatActions(
                             onSend = { g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity)
-                                val docText = docs.entries.joinToString("") { (n, d) -> "\n\n[Attached document: $n]\n${d.first.take(30_000)}" }
+                                val docText = docs.entries.joinToString("") { (n, d) -> "\n\n[Attached document: $n${docPaths[n]?.let { p -> ", file saved at $p (you can upload it with browser_upload)" }.orEmpty()}]\n${d.first.take(30_000)}" }
                                 g.runtime.send(it + docText, attachments.toList() + docs.values.flatMap { d -> d.second }.take(6), docs.keys.toList())
                                 attachments.clear(); docs.clear() },
                             onSendVoice = { g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity)
-                                val docText = docs.entries.joinToString("") { (n, d) -> "\n\n[Attached document: $n]\n${d.first.take(30_000)}" }
+                                val docText = docs.entries.joinToString("") { (n, d) -> "\n\n[Attached document: $n${docPaths[n]?.let { p -> ", file saved at $p (you can upload it with browser_upload)" }.orEmpty()}]\n${d.first.take(30_000)}" }
                                 g.runtime.send(it + docText, attachments.toList() + docs.values.flatMap { d -> d.second }.take(6), docs.keys.toList(), voiceReply = true)
                                 attachments.clear(); docs.clear() }, onStop = { g.runtime.stop() },
                             onAttachDoc = { docPicker.launch(arrayOf("*/*")) }, onRemoveDoc = { docs.remove(it) },

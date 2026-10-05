@@ -109,7 +109,7 @@ class OpenAiCompatProvider(override val name: String, private val apiKey: String
             for (i in 0 until calls.length()) {
                 val c = calls.getJSONObject(i); val f = c.getJSONObject("function")
                 val args = runCatching { JSONObject(f.optString("arguments").ifBlank { "{}" }) }.getOrDefault(JSONObject())
-                blocks += Block.ToolCall(c.optString("id").ifBlank { "call_$i" }, f.getString("name"), args)
+                blocks += Block.ToolCall(c.optString("id").ifBlank { "call_$i" }, f.getString("name"), args, c.optJSONObject("extra_content"))
             }
         }
         val u = res.optJSONObject("usage")
@@ -122,7 +122,15 @@ class OpenAiCompatProvider(override val name: String, private val apiKey: String
             // Reasoning models behind OpenAI-style APIs (DeepSeek, OpenCode) want their reasoning back on tool turns.
             m.blocks.filterIsInstance<Block.Reasoning>().joinToString("\n") { it.text }.takeIf { it.isNotBlank() }?.let { o.put("reasoning_content", it) }
             if (m.toolCalls.isNotEmpty()) o.put("tool_calls", JSONArray().apply {
-                m.toolCalls.forEach { put(JSONObject().put("id", it.id).put("type", "function").put("function", JSONObject().put("name", it.name).put("arguments", it.input.toString()))) }
+                m.toolCalls.forEach { c ->
+                    val o2 = JSONObject().put("id", c.id).put("type", "function").put("function", JSONObject().put("name", c.name).put("arguments", c.input.toString()))
+                    // Gemini 3 rejects a tool call sent back without its thought_signature. Echo the real one;
+                    // for calls saved before we kept it (or made by another model), Google's documented
+                    // placeholder tells it to skip the check instead of failing the whole conversation.
+                    val sig = c.extra ?: if (name == "gemini") JSONObject().put("google", JSONObject().put("thought_signature", "skip_thought_signature_validator")) else null
+                    sig?.let { o2.put("extra_content", it) }
+                    put(o2)
+                }
             })
             return listOf(o)
         }

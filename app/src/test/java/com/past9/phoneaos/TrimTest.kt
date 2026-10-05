@@ -19,3 +19,12 @@ class TrimTest {
         assertEquals(401, h.size)
     }
 }
+
+class SignatureTest {
+    @Test fun geminiSignatureSurvivesStorage() {
+        val sig = org.json.JSONObject().put("google", org.json.JSONObject().put("thought_signature", "abc"))
+        val m = Msg(Role.ASSISTANT, listOf(Block.ToolCall("c1", "now", org.json.JSONObject(), sig)))
+        val back = Msg.fromJson(org.json.JSONObject(m.toJson().toString()))
+        assertEquals("abc", (back.blocks.single() as Block.ToolCall).extra!!.getJSONObject("google").getString("thought_signature"))
+    }
+}

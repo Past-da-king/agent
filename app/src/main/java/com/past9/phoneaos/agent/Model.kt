@@ -11,7 +11,8 @@ enum class Role { USER, ASSISTANT }
 
 sealed interface Block {
     data class Text(val text: String) : Block
-    data class ToolCall(val id: String, val name: String, val input: JSONObject) : Block
+    /** `extra`: provider data that must travel back with the call untouched (Gemini's thought_signature). */
+    data class ToolCall(val id: String, val name: String, val input: JSONObject, val extra: JSONObject? = null) : Block
     data class ToolResult(val callId: String, val content: String, val isError: Boolean = false) : Block
     /** The model's private reasoning (DeepSeek-style). Never shown; echoed back where the provider requires it. */
     data class Reasoning(val text: String) : Block
@@ -29,7 +30,7 @@ data class Msg(val role: Role, val blocks: List<Block>) {
         blocks.forEach { b ->
             put(when (b) {
                 is Block.Text -> JSONObject().put("t", "text").put("text", b.text)
-                is Block.ToolCall -> JSONObject().put("t", "call").put("id", b.id).put("name", b.name).put("input", b.input)
+                is Block.ToolCall -> JSONObject().put("t", "call").put("id", b.id).put("name", b.name).put("input", b.input).apply { b.extra?.let { put("extra", it) } }
                 is Block.ToolResult -> JSONObject().put("t", "result").put("id", b.callId).put("content", b.content).put("err", b.isError)
                 is Block.Image -> JSONObject().put("t", "image").put("path", b.path).put("mime", b.mime)
                 is Block.Reasoning -> JSONObject().put("t", "reasoning").put("text", b.text)
@@ -45,7 +46,7 @@ data class Msg(val role: Role, val blocks: List<Block>) {
             val blocks = (0 until arr.length()).map { i ->
                 val b = arr.getJSONObject(i)
                 when (b.getString("t")) {
-                    "call" -> Block.ToolCall(b.getString("id"), b.getString("name"), b.optJSONObject("input") ?: JSONObject())
+                    "call" -> Block.ToolCall(b.getString("id"), b.getString("name"), b.optJSONObject("input") ?: JSONObject(), b.optJSONObject("extra"))
                     "result" -> Block.ToolResult(b.getString("id"), b.optString("content"), b.optBoolean("err"))
                     "image" -> Block.Image(b.getString("path"), b.optString("mime", "image/jpeg"))
                     "reasoning" -> Block.Reasoning(b.optString("text"))
