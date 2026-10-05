@@ -287,7 +287,10 @@ class MainActivity : ComponentActivity() {
                         onCode = { c -> verifying = true; needsCode = false; sub.submitCode(c) },
                         onDone = { nav.navigate("chat") { popUpTo("home") } },
                         onSignIn = { scope.launch { signingIn = true; signErr = null
-                            val err = sub.login(onUrl = { url -> runOnUiThread { open(url) } }, progress = { l -> scope.launch { log += l } }, needsCode = { needsCode = true })
+                            // While you're in the browser this app is in the background, and Android cuts a
+                            // background app's network. A foreground service keeps it online for the hand-back.
+                            g.phone.workStarted()
+                            val err = try { sub.login(onUrl = { url -> runOnUiThread { open(url) } }, progress = { l -> scope.launch { log += l } }, needsCode = { needsCode = true }) } finally { g.phone.workFinished() }
                             signingIn = false; needsCode = false; verifying = false; info = sub.info()
                             if (sub.signedIn) g.settings.setMode(PowerMode.SUBSCRIPTION) else signErr = err ?: "Sign-in didn't finish. Tap Sign in to try again." } },
                         onInstall = { scope.launch { installing = true; runCatching { sub.install { l -> scope.launch { log += l } } }.onFailure { log += "Failed: ${it.message}" }; installing = false; info = sub.info() } },

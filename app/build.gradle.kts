@@ -12,8 +12,8 @@ android {
     applicationId = "com.past9.phoneaos"
     minSdk = 29
     targetSdk = 36
-    versionCode = 11
-    versionName = "0.2.9"
+    versionCode = 12
+    versionName = "0.2.10"
     // The runtime pack (node, codex, ripgrep) is arm64 only, like every phone we target.
     ndk { abiFilters += listOf("arm64-v8a") }
   }
