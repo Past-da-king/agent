@@ -199,14 +199,25 @@ fun HomeScreen(s: HomeState, actions: HomeActions, bottomPadding: Dp = 120.dp) {
                 }
             }
         }
-        if (lastAgent != null) {
+        val latest = s.items.lastOrNull { it.kind == "agent" || it.kind == "voice" }
+        if (latest != null) {
             item { SectionHeader("Latest", "The last thing your agent told you", Modifier.padding(start = 4.dp, top = 6.dp)) }
             item {
                 Surface(onClick = actions.onChat, shape = MaterialTheme.shapes.extraLarge, color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(18.dp)) {
-                        Text(lastAgent.text.replace(Regex("!\\[[^]]*]\\([^)]*\\)"), "").replace(Regex("[*#`]"), "").trim(), style = MaterialTheme.typography.bodyLarge, maxLines = 4, overflow = TextOverflow.Ellipsis)
-                        Spacer(Modifier.height(8.dp))
-                        Text("Open chat", style = MaterialTheme.typography.labelLarge, color = cs.primary)
+                    Row(Modifier.padding(18.dp), verticalAlignment = Alignment.Top) {
+                        AgentAvatar(working = false, size = 36.dp)
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text((if (latest.kind == "voice") "VOICE NOTE · " else "") + com.past9.phoneaos.ui.relativeTime(latest.createdAt).uppercase(), style = Eyebrow, color = cs.primary)
+                            Spacer(Modifier.height(4.dp))
+                            // The real message, rendered (bold, lists, links), cut to a few lines; no raw markdown.
+                            Box(Modifier.heightIn(max = 112.dp)) {
+                                com.past9.phoneaos.ui.Markdown(com.past9.phoneaos.voice.Tts.stripEmoji(latest.text).replace(Regex("!\\[[^]]*]\\([^)]*\\)"), "").lines().filter { it.isNotBlank() }.take(4).joinToString("\n"),
+                                    style = MaterialTheme.typography.bodyMedium)
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Text("Continue in chat", style = MaterialTheme.typography.labelLarge, color = cs.primary)
+                        }
                     }
                 }
             }

@@ -52,6 +52,22 @@ class Graph(context: Context) {
         }
     }
 
+    /** Earphones in (wired, USB or Bluetooth)? Then voice can play without disturbing anyone. */
+    fun earphonesIn(): Boolean {
+        val am = app.getSystemService(android.media.AudioManager::class.java)
+        val kinds = setOf(android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET, android.media.AudioDeviceInfo.TYPE_WIRED_HEADPHONES, android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+            android.media.AudioDeviceInfo.TYPE_USB_HEADSET, 26 /* BLE_HEADSET */, 27 /* BLE_SPEAKER */)
+        return am.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS).any { it.type in kinds }
+    }
+
+    /** Play a voice note the agent just sent, once. */
+    fun autoPlayVoice(path: String, id: Long) {
+        if (!spoken.add(id)) return
+        val f = java.io.File(path); if (!f.exists()) return
+        stopSpeaking(); _speaking.value = true
+        com.past9.phoneaos.voice.Tts.play(f) { _speaking.value = false }
+    }
+
     fun stopSpeaking() { speakJob?.cancel(); com.past9.phoneaos.voice.Tts.stop(); systemVoice.stop(); _speaking.value = false }
 
     /** The runtime for whichever subscription the user picked (Claude, ChatGPT/Codex, OpenCode). */

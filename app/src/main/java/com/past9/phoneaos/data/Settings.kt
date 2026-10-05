@@ -54,6 +54,8 @@ data class AgentSettings(
     val ttsVoice: String = "",
     /** Live voice calls with the agent (needs a provider with a realtime model, e.g. Gemini Live). */
     val liveEnabled: Boolean = false,
+    /** Play voice notes (and read replies) automatically while earphones are in. */
+    val autoPlayEarphones: Boolean = true,
 ) {
     val ready: Boolean get() = when (mode) {
         PowerMode.API_KEY -> hasKey
@@ -103,6 +105,7 @@ class SettingsStore(context: Context) {
             ttsProvider = prefs.getString("ttsProvider", "system") ?: "system",
             ttsVoice = prefs.getString("ttsVoice", "") ?: "",
             liveEnabled = prefs.getBoolean("liveEnabled", false),
+            autoPlayEarphones = prefs.getBoolean("autoPlayEarphones", true),
             notifApps = prefs.getStringSet("notifApps", emptySet()) ?: emptySet(),
             browserProfiles = (prefs.getString("browserProfiles", null) ?: "Personal").split("\n").filter { it.isNotBlank() }.ifEmpty { listOf("Personal") },
             subKind = runCatching { SubKind.valueOf(prefs.getString("subKind", "CLAUDE")!!) }.getOrDefault(SubKind.CLAUDE),
@@ -119,6 +122,7 @@ class SettingsStore(context: Context) {
     fun removeBrowserProfile(name: String) = edit { putString("browserProfiles", _state.value.browserProfiles.filter { it != name }.ifEmpty { listOf("Personal") }.joinToString("\n")) }
     fun setSubModel(m: String) = edit { putString("subModel_" + _state.value.subKind.name, m) }
     fun setTts(provider: String, voice: String) = edit { putString("ttsProvider", provider); putString("ttsVoice", voice) }
+    fun setAutoPlayEarphones(on: Boolean) = edit { putBoolean("autoPlayEarphones", on) }
     fun setLive(on: Boolean) = edit { putBoolean("liveEnabled", on) }
     /** A voice key: its own, or the user's main API key when it's the same provider. */
     fun voiceKey(provider: String): String? = secrets.getString("voice_$provider", null)?.takeIf { it.isNotBlank() } ?: when (provider) {

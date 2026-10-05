@@ -31,6 +31,7 @@ data class VoiceActions(
     val preview: () -> Unit = {},
     val setSpeak: (Boolean) -> Unit = {},
     val setLive: (Boolean) -> Unit = {},
+    val setAutoPlay: (Boolean) -> Unit = {},
 )
 
 /** Slide-up: who speaks for your agent, with which key, and whether you can call it. */
@@ -80,6 +81,14 @@ fun VoiceSheet(s: AgentSettings, actions: VoiceActions, onDismiss: () -> Unit) {
                 }
                 Switch(s.speakReplies, actions.setSpeak)
             }
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Auto-play with earphones in", style = MaterialTheme.typography.titleSmall)
+                    Text("Voice notes and replies play by themselves when you're wearing earphones", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                }
+                Switch(s.autoPlayEarphones, actions.setAutoPlay)
+            }
             Spacer(Modifier.height(16.dp))
             Surface(shape = MaterialTheme.shapes.extraLarge, color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(18.dp)) {
@@ -104,7 +113,7 @@ fun VoiceSheet(s: AgentSettings, actions: VoiceActions, onDismiss: () -> Unit) {
 
 /** The call: the character, big, breathing with whoever is talking. */
 @Composable
-fun CallScreen(name: String, st: CallState, onMute: () -> Unit, onEnd: () -> Unit, onStart: () -> Unit) {
+fun CallScreen(name: String, st: CallState, onMute: () -> Unit, onEnd: () -> Unit, onStart: () -> Unit, actions: List<String> = emptyList()) {
     val cs = MaterialTheme.colorScheme
     val level by animateFloatAsState(maxOf(st.mine, st.theirs), spring(0.6f, 800f), label = "lvl")
     LaunchedEffect(Unit) { if (!st.active) onStart() }
@@ -121,6 +130,21 @@ fun CallScreen(name: String, st: CallState, onMute: () -> Unit, onEnd: () -> Uni
                 Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.Bolt, null, Modifier.size(16.dp), tint = cs.primary); Spacer(Modifier.width(6.dp))
                     Text("Working on: ${st.delegated.take(60)}", style = MaterialTheme.typography.labelLarge, color = cs.onSurface, maxLines = 1)
+                }
+            }
+            // What the main agent is doing while you talk.
+            if (actions.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                Surface(shape = MaterialTheme.shapes.extraLarge, color = cs.surface.copy(alpha = 0.85f), modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                        Text("WHAT IT'S DOING", style = Eyebrow, color = cs.primary)
+                        actions.takeLast(4).forEach { a ->
+                            Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Rounded.CheckCircle, null, Modifier.size(14.dp), tint = cs.primary); Spacer(Modifier.width(8.dp))
+                                Text(a, style = MaterialTheme.typography.bodySmall, color = cs.onSurface, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
                 }
             }
             Spacer(Modifier.height(12.dp))

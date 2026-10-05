@@ -58,12 +58,24 @@ class CallController(private val context: Context, private val db: AppDb, privat
             When you get an update from the main agent, tell the user the part that matters in a sentence or two. Never invent results.
         """.trimIndent()
         _state.value = CallState(active = true, phase = "connecting")
+        scope.launch { begin(key, system) }
+    }
+
+    /** Gives the voice the last stretch of the chat and the user's pinned facts, so it picks up mid-thread. */
+    private suspend fun begin(key: String, base: String) {
+        val s = settings.state.value
+        val recent = db.chat().all().first().filter { it.kind == "user" || it.kind == "agent" }.takeLast(10)
+            .joinToString("\n") { (if (it.kind == "user") "User: " else "You: ") + it.text.take(400) }
+        val pinned = db.memory().pinned().joinToString("\n") { "- ${it.title}: ${it.body.take(200)}" }
+        val system = base + (if (pinned.isNotBlank()) "\n\nWhat you know about them:\n$pinned" else "") +
+            (if (recent.isNotBlank()) "\n\nThe chat so far (this call continues it):\n$recent" else "")
+        callStart = System.currentTimeMillis(); callLines.clear()
         live = LiveSession(key, "gemini-3.1-flash-live-preview", s.ttsVoice.takeIf { s.ttsProvider == "gemini" && it.isNotBlank() } ?: "Kore", system, tools = tools) { e -> onEvent(e) }.also { it.start() }
         // Read the main agent's new messages and questions into the call.
         watcher = scope.launch {
             var last = db.chat().all().first().lastOrNull()?.id ?: 0L
             db.chat().all().collect { items ->
-                items.filter { it.id > last }.forEach { i ->
+                items.filter { it.id > last && !JSONObject(it.meta).optBoolean("call") }.forEach { i ->
                     when (i.kind) {
                         "agent" -> live?.announce("[Update from the main agent, tell the user briefly] ${i.text.take(1200)}")
                         "question" -> live?.announce("[The main agent needs the user to decide] ${i.text.removePrefix("APPROVAL|").take(600)}. Ask them; they can also answer in the app.")
@@ -74,17 +86,43 @@ class CallController(private val context: Context, private val db: AppDb, privat
         }
     }
 
+    var callStart = 0L
+        private set
+    /** The whole call as said, in order, for the main agent and for the chat. */
+    private val callLines = mutableListOf<Pair<String, String>>()
+    private var bufWho = ""; private val buf = StringBuilder()
+
+    /** A speaker finished a stretch: put it in the chat as one bubble, like any message. */
+    private fun flush() {
+        val text = buf.toString().trim(); val who = bufWho
+        buf.clear(); bufWho = ""
+        if (text.isBlank()) return
+        callLines += who to text
+        scope.launch {
+            db.chat().insert(com.past9.phoneaos.data.ChatItem(kind = if (who == "in") "user" else "agent", text = text,
+                meta = JSONObject().put("call", true).toString()))
+        }
+    }
+
+    private fun transcript(lastN: Int = 40) = callLines.takeLast(lastN).joinToString("\n") { (w, t) -> (if (w == "in") "User: " else "Voice: ") + t }
+
     private fun onEvent(e: LiveSession.Event) {
         val st = _state.value
         when (e) {
             is LiveSession.Event.SetupComplete -> { live?.openAudio(context.getSystemService(AudioManager::class.java)); _state.value = st.copy(phase = "listening") }
-            is LiveSession.Event.Speaking -> _state.value = st.copy(phase = if (e.on) "speaking" else "listening")
+            is LiveSession.Event.Speaking -> { if (!e.on && bufWho == "out") flush(); _state.value = st.copy(phase = if (e.on) "speaking" else "listening") }
             is LiveSession.Event.Level -> _state.value = if (e.mine) st.copy(mine = e.value) else st.copy(theirs = e.value)
-            is LiveSession.Event.Transcript -> _state.value = st.copy(lines = (st.lines + (e.who to e.text)).takeLast(6))
+            is LiveSession.Event.Transcript -> {
+                if (bufWho.isNotEmpty() && bufWho != e.who) flush()
+                bufWho = e.who; buf.append(e.text)
+                _state.value = st.copy(lines = (st.lines + (e.who to e.text)).takeLast(6))
+            }
             is LiveSession.Event.ToolCall -> when (e.name) {
                 "delegate_to_agent" -> {
                     val task = e.args.optString("task")
-                    runtime.send(task)
+                    flush()
+                    // The main agent gets the user's own words from the call, not just the voice's summary.
+                    runtime.send("Task from our voice call: $task\n\nWhat was said on the call so far:\n${transcript()}", fromCall = task)
                     _state.value = st.copy(delegated = task)
                     live?.sendToolResult(e.id, e.name, JSONObject().put("status", "started").put("note", "The main agent is working on it. You'll get an update."))
                 }
@@ -105,5 +143,11 @@ class CallController(private val context: Context, private val db: AppDb, privat
 
     fun end() { live?.stop(); _state.value = _state.value.copy(active = false, phase = "ended"); cleanup() }
 
-    private fun cleanup() { watcher?.cancel(); watcher = null; live = null }
+    private fun cleanup() {
+        flush()
+        // The call becomes part of the conversation: the main agent remembers what was said.
+        if (callLines.isNotEmpty()) runtime.rememberCall(transcript(80))
+        callLines.clear()
+        watcher?.cancel(); watcher = null; live = null
+    }
 }

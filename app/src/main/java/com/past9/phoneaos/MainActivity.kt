@@ -146,7 +146,12 @@ class MainActivity : ComponentActivity() {
         LaunchedEffect(items.lastOrNull()?.id) {
             if (!primed) { g.markHeard(g.db.chat().all().first().map { it.id }); primed = true; return@LaunchedEffect }
             val last = items.lastOrNull() ?: return@LaunchedEffect
-            if (last.kind == "agent" && settings.speakReplies) g.speak(last.text, last.id)
+            if (org.json.JSONObject(last.meta).optBoolean("call")) return@LaunchedEffect // already heard it on the call
+            val ears = settings.autoPlayEarphones && g.earphonesIn()
+            when {
+                last.kind == "voice" && ears -> g.autoPlayVoice(org.json.JSONObject(last.meta).optString("path"), last.id)
+                last.kind == "agent" && (settings.speakReplies || ears) -> g.speak(last.text, last.id)
+            }
         }
 
         val micPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) nav.navigate("call") }
@@ -226,6 +231,10 @@ class MainActivity : ComponentActivity() {
                             onSend = { g.stopSpeaking()
                                 val docText = docs.entries.joinToString("") { (n, d) -> "\n\n[Attached document: $n]\n${d.first.take(30_000)}" }
                                 g.runtime.send(it + docText, attachments.toList() + docs.values.flatMap { d -> d.second }.take(6), docs.keys.toList())
+                                attachments.clear(); docs.clear() },
+                            onSendVoice = { g.stopSpeaking()
+                                val docText = docs.entries.joinToString("") { (n, d) -> "\n\n[Attached document: $n]\n${d.first.take(30_000)}" }
+                                g.runtime.send(it + docText, attachments.toList() + docs.values.flatMap { d -> d.second }.take(6), docs.keys.toList(), voiceReply = true)
                                 attachments.clear(); docs.clear() }, onStop = { g.runtime.stop() },
                             onAttachDoc = { docPicker.launch(arrayOf("*/*")) }, onRemoveDoc = { docs.remove(it) },
                             onAttach = { picker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
@@ -294,7 +303,7 @@ class MainActivity : ComponentActivity() {
                         onModel = { openModels() },
                         voice = VoiceActions(
                             setTts = { p, v -> g.settings.setTts(p, v) }, setKey = { p, k -> g.settings.setVoiceKey(p, k) },
-                            hasKey = { p -> g.settings.voiceKey(p) != null }, setSpeak = g.settings::setSpeakReplies, setLive = g.settings::setLive,
+                            hasKey = { p -> g.settings.voiceKey(p) != null }, setSpeak = g.settings::setSpeakReplies, setLive = g.settings::setLive, setAutoPlay = g.settings::setAutoPlayEarphones,
                             preview = { g.speak("Hi ${settings.userName.ifBlank { "there" }}, this is how I sound.") }),
                         onChooseSub = { k ->
                             if (k == com.past9.phoneaos.data.SubKind.OPENCODE) { g.settings.setProvider(Provider.OPENCODE_GO); nav.navigate("key") }
@@ -319,7 +328,8 @@ class MainActivity : ComponentActivity() {
                 }
                 composable("call") {
                     val cst by g.call.state.collectAsStateWithLifecycle()
-                    CallScreen(settings.agentName, cst, onMute = { g.call.toggleMute() }, onEnd = { g.call.end(); nav.popBackStack() }, onStart = { g.call.start() })
+                    CallScreen(settings.agentName, cst, onMute = { g.call.toggleMute() }, onEnd = { g.call.end(); nav.popBackStack() }, onStart = { g.call.start() },
+                        actions = items.filter { it.kind == "activity" && it.createdAt >= g.call.callStart && g.call.callStart > 0 }.map { it.text })
                 }
                 composable("style") {
                     com.past9.phoneaos.ui.SubScreen("Make it yours", "Colour and sidekick", { nav.popBackStack() }) { pad ->

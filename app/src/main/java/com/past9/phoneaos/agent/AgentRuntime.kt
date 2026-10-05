@@ -138,6 +138,8 @@ class AgentRuntime(
             else appendLine("- Connected apps run through apps_find_tools then apps_run. If the task needs an app that isn't connected, use apps_connect: it asks the user, opens the sign-in in your browser, and waits until it's done, then carry on.")
             appendLine()
             appendLine("- To show the user an image (a product photo, a map, a chart from a page), put it in your reply as markdown: ![what it is](https://...). Several images in a row become a swipeable strip.")
+            appendLine("- voice_note scripts are plain spoken words: no emoji, no markdown, no lists, no URLs. After sending one, don't repeat it as text.")
+            appendLine("- NEVER use emoji, anywhere. They cheapen the app.")
             appendLine("STYLE: short and warm. Lead with the answer. Use short bullets for lists. No walls of text. Plain words. No em dashes.")
             if (background) appendLine("\nThis is a BACKGROUND run (a routine). Nobody is watching. Do the work, then finish with a short summary the user will read later. Use notify_user if something needs their attention.")
             if (pinned.isNotEmpty()) { appendLine("\nCORE MEMORIES (pinned)"); pinned.forEach { appendLine("- ${Recall.format(it)}") } }
@@ -152,12 +154,26 @@ class AgentRuntime(
 
     // ---- the main conversation --------------------------------------------------------------
 
-    fun send(text: String, images: List<String> = emptyList(), files: List<String> = emptyList()) {
+    /**
+     * @param voiceReply the user swiped up to send: answer with a voice note.
+     * @param fromCall the voice agent handed this over mid-call: no user bubble (the call transcript is
+     *   already in the chat), just a line saying the work started.
+     */
+    fun send(text: String, images: List<String> = emptyList(), files: List<String> = emptyList(), voiceReply: Boolean = false, fromCall: String? = null) {
         val clean = text.trim().ifEmpty { if (images.isNotEmpty() || files.isNotEmpty()) "What do you make of this?" else "" }; if (clean.isEmpty()) return
         job = scope.launch {
-            db.chat().insert(ChatItem(kind = "user", text = clean, meta = JSONObject().put("images", org.json.JSONArray(images.filter { !it.contains("/pdf-") })).put("files", org.json.JSONArray(files)).toString()))
-            turnLock.withLock { runTurn(clean, images) }
+            if (fromCall != null) db.chat().insert(ChatItem(kind = "activity", text = "On it: $fromCall", meta = JSONObject().put("tool", "call").toString()))
+            else db.chat().insert(ChatItem(kind = "user", text = clean, meta = JSONObject().put("images", org.json.JSONArray(images.filter { !it.contains("/pdf-") }))
+                .put("files", org.json.JSONArray(files)).put("voiceReply", voiceReply).toString()))
+            val forModel = if (voiceReply) "$clean\n\n(The user is on the move: answer with a voice_note, then at most one short line of text. Don't repeat the voice note as text.)" else clean
+            turnLock.withLock { runTurn(forModel, images) }
         }
+    }
+
+    /** A finished voice call goes into the agent's own history, so the chat carries on from it. */
+    fun rememberCall(transcript: String) = scope.launch {
+        if (transcript.isBlank()) return@launch
+        db.chat().insertTurn(TurnRow(thread = "main", json = Msg.user("[Earlier, on a voice call with you]\n$transcript").toJson().toString()))
     }
 
     /** Wait for the current turn to finish (tests, and routines that must not overlap a turn). */

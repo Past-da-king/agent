@@ -29,7 +29,7 @@ object Tts {
 
     suspend fun synth(context: Context, s: SettingsStore, text: String): File? = withContext(Dispatchers.IO) {
         val st = s.state.value
-        val clean = text.replace(Regex("[*_#`>]"), "").replace(Regex("\\[\\[([^\\]|]+)(?:\\|[^\\]]*)?]]"), "$1").take(4000)
+        val clean = stripEmoji(text).replace(Regex("[*_#`>]"), "").replace(Regex("\\[\\[([^\\]|]+)(?:\\|[^\\]]*)?]]"), "$1").take(4000)
         val out = File(context.cacheDir, "voice/${System.currentTimeMillis()}").apply { parentFile?.mkdirs() }
         runCatching {
             when (st.ttsProvider) {
@@ -46,14 +46,28 @@ object Tts {
         sharedHttp.newCall(req).execute().use { r -> check(r.isSuccessful) { "TTS ${r.code}: ${r.body?.string()?.take(200)}" }; return r.body!!.bytes() }
     }
 
+    /**
+     * Plain text only: Gemini TTS reads any "Say this:" preamble aloud, and the older preview model
+     * sometimes answered the text instead of reading it (the clipped "What do you need?").
+     * Free models are tried newest first; each project's quota is per model.
+     */
     private fun gemini(key: String, text: String, voice: String, f: File): File {
-        val body = JSONObject().put("contents", JSONArray().put(JSONObject().put("parts", JSONArray().put(JSONObject().put("text", text)))))
+        val body = JSONObject().put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", text)))))
             .put("generationConfig", JSONObject().put("responseModalities", JSONArray().put("AUDIO"))
                 .put("speechConfig", JSONObject().put("voiceConfig", JSONObject().put("prebuiltVoiceConfig", JSONObject().put("voiceName", voice)))))
-        val res = JSONObject(String(post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=$key", emptyMap(), body)))
-        val b64 = res.getJSONArray("candidates").getJSONObject(0).getJSONObject("content").getJSONArray("parts").getJSONObject(0).getJSONObject("inlineData").getString("data")
-        writeWav(f, android.util.Base64.decode(b64, android.util.Base64.DEFAULT), 24000)
-        return f
+        var last: Exception? = null
+        for (model in listOf("gemini-3.8-flash-tts", "gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts")) {
+            try {
+                val res = JSONObject(String(post("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$key", emptyMap(), body)))
+                val b64 = res.getJSONArray("candidates").getJSONObject(0).getJSONObject("content").getJSONArray("parts").getJSONObject(0).getJSONObject("inlineData").getString("data")
+                var audio = android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
+                // Some models send a whole WAV, others raw 24 kHz PCM: keep only the samples.
+                if (audio.size > 44 && String(audio, 0, 4) == "RIFF") audio = audio.copyOfRange(44, audio.size)
+                writeWav(f, audio, 24000)
+                return f
+            } catch (e: Exception) { last = e }
+        }
+        throw last ?: IllegalStateException("No Gemini voice model answered")
     }
 
     private fun openai(key: String, text: String, voice: String, f: File): File {
@@ -67,6 +81,9 @@ object Tts {
             JSONObject().put("text", text).put("model_id", "eleven_flash_v2_5")))
         return f
     }
+
+    private val emoji = Regex("[\\x{1F000}-\\x{1FAFF}\\x{2600}-\\x{27BF}\\x{FE0F}\\x{200D}]")
+    fun stripEmoji(s: String) = emoji.replace(s, "").replace(Regex(" {2,}"), " ").trim()
 
     /** Raw 16-bit mono PCM -> a playable .wav. */
     fun writeWav(f: File, pcm: ByteArray, rate: Int) {

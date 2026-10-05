@@ -20,6 +20,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -29,6 +30,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
@@ -63,6 +65,8 @@ import java.io.File
 
 data class ChatActions(
     val onSend: (String) -> Unit = {},
+    /** Swipe-up send: the agent answers with a voice note. */
+    val onSendVoice: (String) -> Unit = {},
     val onStop: () -> Unit = {},
     val onAnswer: (Long, String) -> Unit = { _, _ -> },
     val onMenu: () -> Unit = {},
@@ -285,7 +289,7 @@ private fun AgentMessage(item: ChatItem) {
                 Text("ROUTINE · ${routine.uppercase()}", style = Eyebrow, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        Markdown(item.text)
+        Markdown(com.past9.phoneaos.voice.Tts.stripEmoji(item.text))
     }
 }
 
@@ -533,14 +537,43 @@ private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean,
             }
             Spacer(Modifier.width(8.dp))
             val canSend = draft.isNotBlank() || attachments.isNotEmpty() || docs.isNotEmpty()
-            MorphIconButton(
-                onClick = { if (working && !canSend) actions.onStop() else if (canSend) { actions.onSend(draft); onDraft("") } },
-                size = 56.dp,
-                container = if (canSend || working) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
-                rest = if (working && !canSend) MaterialShapes.Square else MaterialShapes.Circle, pressed = MaterialShapes.Cookie6Sided,
-            ) {
-                val tint = if (canSend || working) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                if (working && !canSend) Icon(Icons.Rounded.Stop, "Stop", tint = tint) else Icon(Icons.AutoMirrored.Rounded.ArrowForward, "Send", tint = tint)
+            // Swipe up on Send = "answer me with a voice note" (for walking). A tap sends as usual.
+            var lift by remember { mutableFloatStateOf(0f) }
+            val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            val threshold = with(density) { 56.dp.toPx() }
+            val voiceMode = canSend && lift > threshold
+            LaunchedEffect(voiceMode) { if (voiceMode) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress) }
+            Box(Modifier.graphicsLayer { translationY = -lift.coerceAtMost(threshold * 1.4f) * 0.5f }
+                .pointerInput(canSend, working, draft) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown()
+                        var dy = 0f; lift = 0f
+                        while (true) {
+                            val e = awaitPointerEvent()
+                            val c = e.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!c.pressed) break
+                            dy = down.position.y - c.position.y; lift = dy.coerceAtLeast(0f)
+                            if (dy > 8f) c.consume()
+                        }
+                        val wasVoice = canSend && dy > threshold
+                        lift = 0f
+                        when {
+                            wasVoice -> { actions.onSendVoice(draft); onDraft("") }
+                            dy < 24f && working && !canSend -> actions.onStop()
+                            dy < 24f && canSend -> { actions.onSend(draft); onDraft("") }
+                        }
+                    }
+                }) {
+                val bg = if (voiceMode) MaterialTheme.colorScheme.tertiary else if (canSend || working) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
+                val tint = if (voiceMode) MaterialTheme.colorScheme.onTertiary else if (canSend || working) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                Box(Modifier.size(56.dp).clip(if (working && !canSend) RoundedCornerShape(16.dp) else CircleShape).background(bg), contentAlignment = Alignment.Center) {
+                    when {
+                        voiceMode -> Icon(Icons.Rounded.Headphones, "Send, reply with a voice note", tint = tint)
+                        working && !canSend -> Icon(Icons.Rounded.Stop, "Stop", tint = tint)
+                        else -> Icon(Icons.AutoMirrored.Rounded.ArrowForward, "Send (swipe up for a voice reply)", tint = tint)
+                    }
+                }
             }
         }
       }
