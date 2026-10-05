@@ -62,10 +62,11 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
         SubKind.OPENCODE -> false
     }
 
-    fun token(): String? = tokenFile.takeIf { it.exists() }?.readText()?.trim()?.takeIf { it.length > 20 }
+    fun token(): String? = tokenFile.takeIf { it.exists() }?.readText()?.trim()?.takeIf { it.length > 20 && (kind != SubKind.CLAUDE || it.startsWith("sk-ant-")) }
     fun setToken(t: String?) {
         if (t == null) { tokenFile.delete(); return }
         dir.mkdirs()
+        if (kind == SubKind.CLAUDE && !t.trim().startsWith("sk-ant-")) error("That isn't a Claude token. It starts with sk-ant-. Use Sign in with Claude instead.")
         if (kind == SubKind.CODEX && t.trim().startsWith("{")) { File(home, ".codex").mkdirs(); File(home, ".codex/auth.json").writeText(t.trim()); return }
         tokenFile.writeText(t.trim()); tokenFile.setReadable(false, false); tokenFile.setReadable(true, true)
     }

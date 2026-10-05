@@ -281,13 +281,17 @@ class MainActivity : ComponentActivity() {
                     var signingIn by remember { mutableStateOf(false) }
                     var signErr by remember { mutableStateOf<String?>(null) }
                     var needsCode by remember { mutableStateOf(false) }
+                    var verifying by remember { mutableStateOf(false) }
                     SubSetupScreen(sub.kind, sub.spec.signInHelp, info, sub.installed, log, installing, onBack = { nav.popBackStack() },
-                        signingIn = signingIn, signInError = signErr, needsCode = needsCode, onCode = { c -> sub.submitCode(c); needsCode = false },
+                        signingIn = signingIn, signInError = signErr, needsCode = needsCode, verifying = verifying,
+                        onCode = { c -> verifying = true; needsCode = false; sub.submitCode(c) },
+                        onDone = { nav.navigate("chat") { popUpTo("home") } },
                         onSignIn = { scope.launch { signingIn = true; signErr = null
-                            signErr = sub.login(onUrl = { url -> runOnUiThread { open(url) } }, progress = { l -> scope.launch { log += l } }, needsCode = { needsCode = true })
-                            signingIn = false; needsCode = false; info = sub.info(); if (sub.signedIn) g.settings.setMode(PowerMode.SUBSCRIPTION) } },
+                            val err = sub.login(onUrl = { url -> runOnUiThread { open(url) } }, progress = { l -> scope.launch { log += l } }, needsCode = { needsCode = true })
+                            signingIn = false; needsCode = false; verifying = false; info = sub.info()
+                            if (sub.signedIn) g.settings.setMode(PowerMode.SUBSCRIPTION) else signErr = err ?: "Sign-in didn't finish. Tap Sign in to try again." } },
                         onInstall = { scope.launch { installing = true; runCatching { sub.install { l -> scope.launch { log += l } } }.onFailure { log += "Failed: ${it.message}" }; installing = false; info = sub.info() } },
-                        onSaveToken = { t -> sub.setToken(t); g.settings.setMode(PowerMode.SUBSCRIPTION); info = sub.info() },
+                        onSaveToken = { t -> runCatching { sub.setToken(t); g.settings.setMode(PowerMode.SUBSCRIPTION) }.onFailure { signErr = it.message }; info = sub.info() },
                         onUseKey = { g.settings.setMode(PowerMode.API_KEY); nav.navigate("key") })
                 }
                 composable("style") {

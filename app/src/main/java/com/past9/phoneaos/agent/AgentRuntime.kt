@@ -26,6 +26,8 @@ import java.util.concurrent.ConcurrentHashMap
 /** The Claude-subscription engine: runs a whole turn itself (Agent SDK), our tools over MCP. */
 interface SubscriptionEngine {
     val ready: Boolean
+    /** The stored sign-in was rejected: forget it so Settings asks the user to sign in again. */
+    fun forgetBadSignIn() {}
     fun turn(prompt: String, system: String, resume: String?, mcpUrl: String, mcpToken: String): kotlinx.coroutines.flow.Flow<JSONObject>
 }
 
@@ -249,13 +251,34 @@ class AgentRuntime(
     private suspend fun runSubscriptionTurn(userText: String, engine: SubscriptionEngine) {
         _status.value = AgentStatus(true, "Thinking"); phone.workStarted()
         try {
-            engine.turn(userText, systemPrompt(userText), settings.extra("claude_session"), mcp.url, settings.localToken()).collect { e ->
-                when (e.optString("type")) {
-                    "session" -> settings.setExtra("claude_session", e.optString("id"))
-                    "text" -> db.chat().insert(ChatItem(kind = "agent", text = e.optString("text")))
-                    "tool" -> _status.value = _status.value.copy(label = labelFor(e.optString("name")))
-                    "error" -> db.chat().insert(ChatItem(kind = "notice", text = "Claude: " + e.optString("message").take(300), meta = JSONObject().put("error", true).toString()))
+            var resume = settings.extra("claude_session")
+            for (attempt in 1..2) {
+                var newSession: String? = null; var ok = false; var retry = false
+                engine.turn(userText, systemPrompt(userText), resume, mcp.url, settings.localToken()).collect { e ->
+                    when (e.optString("type")) {
+                        "session" -> newSession = e.optString("id")
+                        "text" -> e.optString("text").takeIf { !it.contains("API Error: 401") && !it.startsWith("Failed to authenticate") }
+                            ?.let { db.chat().insert(ChatItem(kind = "agent", text = it)) }
+                        "tool" -> _status.value = _status.value.copy(label = labelFor(e.optString("name")))
+                        "done" -> ok = e.optBoolean("ok", true)
+                        "error" -> {
+                            val m = e.optString("message")
+                            when {
+                                // The saved conversation is gone (new install, cleared data): start a fresh one.
+                                m.contains("No conversation found", true) && resume != null -> { retry = true }
+                                m.contains("Invalid bearer token", true) || m.contains("authentication_error", true) || m.contains("401") -> {
+                                    engine.forgetBadSignIn(); settings.setExtra("claude_session", null)
+                                    db.chat().insert(ChatItem(kind = "notice", text = "Your ${settings.state.value.subKind.label} sign-in didn't work. Open Settings, Subscription, and sign in again.", meta = JSONObject().put("error", true).toString()))
+                                }
+                                m.isNotBlank() && !m.matches(Regex("exit \\d+")) -> db.chat().insert(ChatItem(kind = "notice", text = "${settings.state.value.subKind.label}: " + m.take(300), meta = JSONObject().put("error", true).toString()))
+                            }
+                        }
+                    }
                 }
+                // Only remember a conversation that actually worked, so a failed first turn can't poison the next.
+                if (ok && newSession != null) settings.setExtra("claude_session", newSession)
+                if (retry && attempt == 1) { settings.setExtra("claude_session", null); resume = null; continue }
+                break
             }
         } catch (e: CancellationException) {
             db.chat().insert(ChatItem(kind = "notice", text = "Stopped."))

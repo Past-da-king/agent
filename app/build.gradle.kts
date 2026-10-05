@@ -12,8 +12,8 @@ android {
     applicationId = "com.past9.phoneaos"
     minSdk = 29
     targetSdk = 36
-    versionCode = 7
-    versionName = "0.2.5"
+    versionCode = 9
+    versionName = "0.2.7"
     // The runtime pack (node, codex, ripgrep) is arm64 only, like every phone we target.
     ndk { abiFilters += listOf("arm64-v8a") }
   }
@@ -82,6 +82,8 @@ dependencies {
   implementation(libs.androidx.graphics.shapes)
   implementation(libs.coil.compose)
   implementation(libs.coil.svg)
+  // On-device OCR (bundled model, works offline): scans and photos become text for any AI model.
+  implementation(libs.mlkit.text)
   implementation(libs.androidx.webkit)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.androidx.credentials)

@@ -124,7 +124,8 @@ class PhotosTool(private val context: Context) : Tool {
                 java.io.File(context.filesDir, "uploads/gallery-${System.nanoTime()}.jpg").apply { parentFile?.mkdirs(); outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, it) } }.path
             }.getOrNull() } ?: return@mapNotNull null
             ctx.activity("Looked at $name", JSONObject().put("tool", "photos").put("image", path))
-            "$name, added ${java.time.Instant.ofEpochSecond(added).atZone(java.time.ZoneId.systemDefault()).toLocalDateTime()}: [[image:$path]]"
+            val words = Ocr.text(path).take(4000)
+            "$name, added ${java.time.Instant.ofEpochSecond(added).atZone(java.time.ZoneId.systemDefault()).toLocalDateTime()}: [[image:$path]]" + if (words.isNotBlank()) "\nText in it: $words" else ""
         }
         return lines.joinToString("\n")
     }

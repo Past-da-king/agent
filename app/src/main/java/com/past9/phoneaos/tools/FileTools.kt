@@ -36,7 +36,7 @@ class FilesPickTool(private val context: Context) : Tool {
         ctx.notify("Pick a file", "Open the app to choose ${input.optString("reason")}")
         val uris = withTimeoutOrNull(300_000) { r.result.await() }.orEmpty()
         if (uris.isEmpty()) return "No files picked."
-        return withContext(Dispatchers.IO) { uris.joinToString("\n\n") { read(it) } }.also { ctx.activity("Read ${uris.size} file${if (uris.size > 1) "s" else ""} you picked", JSONObject().put("tool", "files")) }
+        return withContext(Dispatchers.IO) { uris.map { read(it) }.map { ocrPages(it) }.joinToString("\n\n") }.also { ctx.activity("Read ${uris.size} file${if (uris.size > 1) "s" else ""} you picked", JSONObject().put("tool", "files")) }
     }
 
     private fun read(uri: Uri): String {
@@ -53,16 +53,28 @@ class FilesPickTool(private val context: Context) : Tool {
                 // A scanned PDF has no text layer: show the model the pages as pictures instead.
                 if (t.startsWith("(This PDF has no readable text")) "Scanned PDF, here are its pages:\n" + pdfPages(uri).joinToString("\n") { "[[image:$it]]" } else t
             }
-            type.startsWith("image/") -> "$head\n(An image. Ask the user to send it in the chat with the photo button so you can look at it.)"
+            type.startsWith("image/") -> {
+                val f = java.io.File(context.filesDir, "uploads/pick-${System.nanoTime()}.jpg").apply { parentFile?.mkdirs() }
+                cr.openInputStream(uri)?.use { i -> f.outputStream().use { i.copyTo(it) } }
+                "$head\n[[image:${f.path}]]"
+            }
             else -> "$head\n(Can't read this kind of file as text.)"
         }
+    }
+
+    /** Every picture also gets its words read on the phone, so text-only models can use it too. */
+    private suspend fun ocrPages(chunk: String): String {
+        val imgs = com.past9.phoneaos.agent.imageMarker.findAll(chunk).map { it.groupValues[1] }.toList()
+        if (imgs.isEmpty()) return chunk
+        val text = imgs.mapIndexed { i, p -> val t = Ocr.text(p); if (t.isBlank()) "" else "--- page/image ${i + 1} text (read on the phone) ---\n$t" }.filter { it.isNotBlank() }
+        return chunk + if (text.isNotEmpty()) "\n" + text.joinToString("\n").take(30_000) else ""
     }
 
     /** Render up to 3 pages of a PDF to JPEGs the model can look at. */
     private fun pdfPages(uri: Uri): List<String> = runCatching {
         context.contentResolver.openFileDescriptor(uri, "r")!!.use { fd ->
             android.graphics.pdf.PdfRenderer(fd).use { r ->
-                (0 until minOf(3, r.pageCount)).map { i ->
+                (0 until minOf(6, r.pageCount)).map { i ->
                     r.openPage(i).use { pg ->
                         val scale = 1400f / maxOf(pg.width, pg.height)
                         val bmp = android.graphics.Bitmap.createBitmap((pg.width * scale).toInt(), (pg.height * scale).toInt(), android.graphics.Bitmap.Config.ARGB_8888)
