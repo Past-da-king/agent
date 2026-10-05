@@ -108,7 +108,7 @@ class MainActivity : ComponentActivity() {
                 }.onFailure { modelErr = "Couldn't load models: ${it.message}" }
             }
         }
-        val modelLabel = if (onSub) settings.subModel.ifBlank { "Default" }.replaceFirstChar { it.uppercase() } else settings.model.substringAfterLast('/')
+        val modelLabel = if (onSub) prettyModel(settings.subModel) else settings.model.substringAfterLast('/')
         val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(4)) { uris ->
             scope.launch { uris.forEach { u -> importImage(u)?.let { attachments += it } } }
         }
@@ -276,6 +276,9 @@ class MainActivity : ComponentActivity() {
                         onChangeKey = { nav.navigate("key") }, setSpeak = g.settings::setSpeakReplies,
                         onClaudeSetup = { nav.navigate("sub") }, onDeleteRuntime = { sub.delete(); info = sub.info() }, onStyle = { nav.navigate("style") },
                         onModel = { openModels() },
+                        onChooseSub = { k ->
+                            if (k == com.past9.phoneaos.data.SubKind.OPENCODE) { g.settings.setProvider(Provider.OPENCODE_GO); nav.navigate("key") }
+                            else { g.settings.setSubKind(k); g.settings.setMode(PowerMode.SUBSCRIPTION); nav.navigate("sub") } },
                         onPinHome = { com.past9.phoneaos.system.Identity.pinNamedShortcut(this@MainActivity, settings.agentName, settings.mascot, settings.accent) },
                         onClearChat = { g.runtime.clearConversation() },
                         onResetAll = { scope.launch { g.runtime.stop(); g.db.clearAllTables(); g.settings.resetAll() } },
@@ -395,6 +398,14 @@ class MainActivity : ComponentActivity() {
             f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, it) }
             f.path
         }.getOrNull()
+    }
+
+    /** "claude-opus-5-5" -> "Opus 5.5", "sonnet" -> "Sonnet", "" -> "Default". */
+    private fun prettyModel(id: String): String {
+        if (id.isBlank()) return "Default"
+        val m = Regex("claude-([a-z]+)-(\\d+)(?:-(\\d+))?").find(id) ?: return id.replaceFirstChar { it.uppercase() }
+        val (tier, a, b) = m.destructured
+        return tier.replaceFirstChar { it.uppercase() } + " " + a + (if (b.isNotBlank() && b.length <= 2) ".$b" else "")
     }
 
     private fun open(url: String) { runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }

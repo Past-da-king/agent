@@ -59,12 +59,37 @@ object ModelCatalog {
             .sortedWith(compareByDescending<ModelInfo> { it.released }.thenBy { it.id })
     }
 
+    /**
+     * Every Claude model the user's own subscription can use, straight from Anthropic, with the
+     * OAuth token Claude Code saved when they signed in (the same way A.O.S fills its picker).
+     */
+    private suspend fun claudeLive(context: Context): List<ModelInfo>? = withContext(Dispatchers.IO) {
+        val home = File(context.filesDir, "runtime/home")
+        val token = runCatching { JSONObject(File(home, ".claude/.credentials.json").readText()).getJSONObject("claudeAiOauth").getString("accessToken") }.getOrNull()
+            ?: runCatching { File(context.filesDir, "runtime/.token-claude").readText().trim().takeIf { it.startsWith("sk-ant-") } }.getOrNull()
+            ?: return@withContext null
+        runCatching {
+            val req = Request.Builder().url("https://api.anthropic.com/v1/models?limit=50").header("Authorization", "Bearer $token")
+                .header("anthropic-version", "2023-06-01").header("anthropic-beta", "oauth-2025-04-20").build()
+            sharedHttp.newCall(req).execute().use { r ->
+                if (!r.isSuccessful) return@use null
+                val arr = JSONObject(r.body!!.string()).optJSONArray("data") ?: return@use null
+                listOf(ModelInfo("", "Default", true, "", "Whatever Claude Code picks for your plan")) + (0 until arr.length()).map { i ->
+                    val m = arr.getJSONObject(i)
+                    ModelInfo(m.optString("id"), m.optString("display_name").ifBlank { m.optString("id") }, true, m.optString("created_at").take(10))
+                }
+            }
+        }.getOrNull()
+    }
+
     /** Subscriptions: Claude Code takes aliases that always point at the newest model of each tier. */
     suspend fun forSubscription(context: Context, kind: SubKind): List<ModelInfo> = when (kind) {
-        SubKind.CLAUDE -> listOf(
-            ModelInfo("opus", "Opus", true, "", "Most capable. Uses your limits fastest"),
-            ModelInfo("sonnet", "Sonnet", true, "", "The everyday choice: smart and quick"),
-            ModelInfo("haiku", "Haiku", true, "", "Fastest and lightest on your limits"),
+        SubKind.CLAUDE -> claudeLive(context) ?: listOf(
+            ModelInfo("", "Default", true, "", "Whatever Claude Code picks for your plan"),
+            ModelInfo("opus", "Opus (latest)", true, "", "Most capable. Uses your limits fastest"),
+            ModelInfo("sonnet", "Sonnet (latest)", true, "", "The everyday choice: smart and quick"),
+            ModelInfo("fable", "Fable (latest)", true, "", ""),
+            ModelInfo("haiku", "Haiku (latest)", true, "", "Fastest and lightest on your limits"),
         )
         SubKind.CODEX -> {
             val dev = catalogue(context)?.optJSONObject("openai")?.optJSONObject("models")

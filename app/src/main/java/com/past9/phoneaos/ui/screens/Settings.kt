@@ -32,6 +32,8 @@ data class SettingsActions(
     val onStyle: () -> Unit = {},
     val onPinHome: () -> Unit = {},
     val onModel: () -> Unit = {},
+    /** Claude / ChatGPT open their sign-in; OpenCode goes to the key screen. */
+    val onChooseSub: (com.past9.phoneaos.data.SubKind) -> Unit = {},
     val onDeleteRuntime: () -> Unit = {},
     val onClearChat: () -> Unit = {},
     val onResetAll: () -> Unit = {},
@@ -45,6 +47,7 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
     var edit by remember { mutableStateOf<Pair<String, (String) -> Unit>?>(null) }
     var editValue by remember { mutableStateOf("") }
     var confirmReset by remember { mutableStateOf(false) }
+    var pickSub by remember { mutableStateOf(false) }
     SubScreen("Settings", null, actions.onBack) { pad ->
         Column(Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 48.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             SectionHeader("You", "How your agent knows you", Modifier.padding(start = 4.dp, top = 4.dp))
@@ -59,7 +62,7 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
                 Line(Icons.Rounded.Key, "API key", if (s.mode == PowerMode.API_KEY) "${s.provider.label}${if (s.hasKey) " · key saved" else " · no key yet"}" else "Not in use",
                     trailing = { RadioButton(s.mode == PowerMode.API_KEY, { actions.setMode(PowerMode.API_KEY) }) }) { actions.setMode(PowerMode.API_KEY) }
                 Line(Icons.Rounded.AutoAwesome, "Subscription", if (s.mode == PowerMode.SUBSCRIPTION) "${s.subKind.label} ${s.subKind.plan} · ${runtime.note}" else "Claude, ChatGPT or OpenCode plan",
-                    trailing = { RadioButton(s.mode == PowerMode.SUBSCRIPTION, { actions.setMode(PowerMode.SUBSCRIPTION) }) }) { actions.setMode(PowerMode.SUBSCRIPTION) }
+                    trailing = { RadioButton(s.mode == PowerMode.SUBSCRIPTION, { pickSub = true }) }) { pickSub = true }
             }
             if (s.mode == PowerMode.API_KEY) AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 Line(Icons.Rounded.Hub, "Provider", s.provider.label) { actions.onChangeKey() }
@@ -90,6 +93,22 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
         }
     }
     // Slide-up sheets, never pop-up dialogs.
+    if (pickSub) ModalBottomSheet(onDismissRequest = { pickSub = false }) {
+        Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
+            Text("Which subscription?", style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.height(12.dp))
+            com.past9.phoneaos.data.SubKind.entries.forEach { k ->
+                Surface(onClick = { pickSub = false; actions.onChooseSub(k) }, shape = MaterialTheme.shapes.large,
+                    color = if (s.mode == PowerMode.SUBSCRIPTION && s.subKind == k) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("${k.label} ${k.plan}", style = MaterialTheme.typography.titleMedium)
+                        Text(if (k == com.past9.phoneaos.data.SubKind.OPENCODE) "Paste your OpenCode key" else "Sign in with your ${k.label} account", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+    }
     edit?.let { (label, save) ->
         ModalBottomSheet(onDismissRequest = { edit = null }) {
             Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp)) {

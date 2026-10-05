@@ -94,7 +94,7 @@ class SettingsStore(context: Context) {
             baseUrl = prefs.getString("baseUrl", null) ?: provider.baseUrl,
             accent = prefs.getString("accent", "iris") ?: "iris",
             mascot = prefs.getString("mascot", "scout") ?: "scout",
-            subModel = prefs.getString("subModel_" + (prefs.getString("subKind", "CLAUDE") ?: "CLAUDE"), null) ?: if ((prefs.getString("subKind", "CLAUDE") ?: "CLAUDE") == "CLAUDE") "sonnet" else "",
+            subModel = prefs.getString("subModel_" + (prefs.getString("subKind", "CLAUDE") ?: "CLAUDE"), null) ?: "",
             notifApps = prefs.getStringSet("notifApps", emptySet()) ?: emptySet(),
             browserProfiles = (prefs.getString("browserProfiles", null) ?: "Personal").split("\n").filter { it.isNotBlank() }.ifEmpty { listOf("Personal") },
             subKind = runCatching { SubKind.valueOf(prefs.getString("subKind", "CLAUDE")!!) }.getOrDefault(SubKind.CLAUDE),
