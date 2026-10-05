@@ -314,7 +314,7 @@ private fun ComingLine(icon: ImageVector, title: String, line: String, urgent: B
 /** The floating bar: where you are, and one big button to talk to your agent. */
 @Composable
 fun HomeBar(current: String, onGo: (String) -> Unit, onTalk: () -> Unit, modifier: Modifier = Modifier) {
-    val tabs = listOf(Triple("home", Icons.Rounded.Home, "Home"), Triple("tasks", Icons.Rounded.TaskAlt, "Tasks"), Triple("memory", com.past9.phoneaos.ui.BrainIcon, "Memory"),
+    val tabs = listOf(Triple("home", Icons.Rounded.Home, "Home"), Triple("tasks", Icons.Rounded.TaskAlt, "Tasks"), Triple("memory", Icons.Rounded.Hub, "Memory"),
         Triple("routines", Icons.Rounded.Schedule, "Routines"), Triple("connections", Icons.Rounded.Apps, "Apps"))
     HorizontalFloatingToolbar(
         expanded = true,
