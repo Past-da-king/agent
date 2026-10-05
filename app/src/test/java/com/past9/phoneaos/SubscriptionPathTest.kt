@@ -65,7 +65,7 @@ class SubscriptionPathTest {
         val rt = AgentRuntime(app, db, settings, CoroutineScope(SupervisorJob() + Dispatchers.IO), FakePhone(), { null })
         rt.subscription = object : SubscriptionEngine {
             override val ready = true
-            override fun turn(prompt: String, system: String, resume: String?, mcpUrl: String, mcpToken: String) = flow {
+            override fun turn(prompt: String, system: String, resume: String?, mcpUrl: String, mcpToken: String, images: List<String>) = flow {
                 seen += resume
                 assertTrue(mcpUrl.startsWith("http://127.0.0.1:")); assertEquals(settings.localToken(), mcpToken)
                 emit(JSONObject().put("type", "session").put("id", "sess-1"))

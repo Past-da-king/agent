@@ -75,6 +75,8 @@ data class ChatActions(
     val onRemoveAttachment: (String) -> Unit = {},
     val onModel: () -> Unit = {},
     val onCall: (() -> Unit)? = null,
+    /** Non-null while a reply is being read aloud: tap to stop it. */
+    val onStopSpeaking: (() -> Unit)? = null,
 )
 
 /** Chat rows after grouping: consecutive activity lines fold into one "steps" row. */
@@ -173,6 +175,7 @@ private fun ChatTopBar(agentName: String, status: AgentStatus, browserLive: Bool
                     Icon(Icons.Rounded.ArrowDropDown, "Switch model", Modifier.size(20.dp))
                 }
             }
+            if (actions.onStopSpeaking != null) FilledTonalIconButton(onClick = actions.onStopSpeaking) { Icon(Icons.Rounded.VolumeOff, "Stop reading aloud") }
             if (actions.onCall != null) IconButton(onClick = actions.onCall) { Icon(Icons.Rounded.Call, "Call your agent") }
             AnimatedVisibility(browserLive, enter = scaleIn(spring(0.6f, 800f)) + fadeIn(), exit = scaleOut() + fadeOut()) {
                 FilledTonalIconButton(onClick = actions.onBrowser) { Icon(Icons.Rounded.Language, "Watch the agent's browser") }
@@ -219,8 +222,8 @@ private fun VoiceBubble(item: ChatItem) {
     val cs = MaterialTheme.colorScheme
     val path = JSONObject(item.meta).optString("path")
     var playing by remember { mutableStateOf(false) }
-    var showText by remember { mutableStateOf(false) }
-    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val hasAudio = path.isNotBlank() && java.io.File(path).exists()
+    var showText by remember { mutableStateOf(!hasAudio) }
     val t = rememberInfiniteTransition(label = "voice")
     val wave by t.animateFloat(0f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "wave")
     Column(Modifier.fillMaxWidth().padding(end = 48.dp)) {
@@ -228,9 +231,9 @@ private fun VoiceBubble(item: ChatItem) {
             Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 MorphIconButton(onClick = {
                     if (playing) { com.past9.phoneaos.voice.Tts.stop(); playing = false }
-                    else if (path.isNotBlank() && java.io.File(path).exists()) { com.past9.phoneaos.voice.Tts.play(java.io.File(path)) { playing = false }; playing = true }
-                    else { com.past9.phoneaos.App.graph(ctx).speakSystem(item.text); playing = false }
-                }, size = 48.dp, container = cs.primary) { Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing) "Pause" else "Play", tint = cs.onPrimary) }
+                    else if (hasAudio) { com.past9.phoneaos.voice.Tts.play(java.io.File(path)) { playing = false }; playing = true }
+                }, size = 48.dp, container = if (hasAudio) cs.primary else cs.surfaceContainerHigh, enabled = hasAudio) {
+                    Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing) "Pause" else "Play", tint = if (hasAudio) cs.onPrimary else cs.onSurfaceVariant) }
                 Spacer(Modifier.width(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
                     repeat(18) { i ->

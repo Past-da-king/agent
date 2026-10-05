@@ -20,6 +20,6 @@ class VoiceNoteTool(private val context: Context, private val settings: Settings
         val script = input.optString("script").trim()
         val f = Tts.synth(context, settings, script)
         chat.insert(ChatItem(kind = "voice", text = script, meta = JSONObject().put("path", f?.path ?: "").toString()))
-        return if (f != null) "Voice note sent." else "Voice note sent (played with the phone's own voice; the user can add a voice key in Settings for a better one)."
+        return if (f != null) "Voice note sent." else "No voice is set up (Settings, Voice), so it went as text only."
     }
 }

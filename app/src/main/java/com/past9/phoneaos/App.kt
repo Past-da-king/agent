@@ -26,13 +26,33 @@ class Graph(context: Context) {
     val call by lazy { com.past9.phoneaos.voice.CallController(app, db, settings, runtime, scope) }
 
     private val systemVoice by lazy { com.past9.phoneaos.system.Speaker(app) }
-    fun speakSystem(text: String) = systemVoice.say(text)
+    fun speakSystem(text: String) {}
 
-    /** Speak a reply with the user's chosen voice (cloud key if set, else the phone's own). */
-    fun speak(text: String) = scope.launch {
-        val f = if (settings.state.value.ttsProvider == "system") null else com.past9.phoneaos.voice.Tts.synth(app, settings, text)
-        if (f != null) com.past9.phoneaos.voice.Tts.play(f) else systemVoice.say(text)
+    /** Replies already read out (or that existed before), so nothing is ever spoken twice. */
+    private val spoken = java.util.Collections.synchronizedSet(mutableSetOf<Long>())
+    private val _speaking = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val speaking: kotlinx.coroutines.flow.StateFlow<Boolean> = _speaking
+    private var speakJob: kotlinx.coroutines.Job? = null
+
+    /** Mark everything already in the chat as heard (call once at start). */
+    fun markHeard(ids: List<Long>) { spoken.addAll(ids) }
+
+    /**
+     * Read a reply aloud with the user's cloud voice. Never the robotic phone voice: with no voice
+     * set up we stay quiet. Each message is spoken at most once.
+     */
+    fun speak(text: String, id: Long? = null) {
+        if (id != null && !spoken.add(id)) return
+        if (settings.state.value.ttsProvider == "system") return
+        stopSpeaking()
+        speakJob = scope.launch {
+            val f = com.past9.phoneaos.voice.Tts.synth(app, settings, text) ?: return@launch
+            _speaking.value = true
+            com.past9.phoneaos.voice.Tts.play(f) { _speaking.value = false }
+        }
     }
+
+    fun stopSpeaking() { speakJob?.cancel(); com.past9.phoneaos.voice.Tts.stop(); systemVoice.stop(); _speaking.value = false }
 
     /** The runtime for whichever subscription the user picked (Claude, ChatGPT/Codex, OpenCode). */
     fun subRuntime() = com.past9.phoneaos.runtime.SubscriptionRuntime(app, settings.state.value.subKind)

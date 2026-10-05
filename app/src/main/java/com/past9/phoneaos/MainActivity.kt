@@ -46,6 +46,7 @@ import com.past9.phoneaos.ui.screens.*
 import com.past9.phoneaos.ui.theme.AppTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 
 class MainActivity : ComponentActivity() {
     /** Text shared in from another app, or a route asked for by a notification. */
@@ -131,6 +132,7 @@ class MainActivity : ComponentActivity() {
                 nav.navigate("browser") { launchSingleTop = true }
             }
         }
+        val speakingNow by g.speaking.collectAsStateWithLifecycle()
         val incomingNow by incoming.collectAsStateWithLifecycle()
         LaunchedEffect(incomingNow) {
             val (text, open) = incomingNow
@@ -139,11 +141,12 @@ class MainActivity : ComponentActivity() {
             if (text != null || open != null) incoming.value = null to null
         }
         // Read new replies aloud when the user asked for that.
-        var lastSpoken by remember { mutableLongStateOf(items.lastOrNull()?.id ?: 0L) }
+        // Only replies that arrive from now on are read out; the history never is.
+        var primed by remember { mutableStateOf(false) }
         LaunchedEffect(items.lastOrNull()?.id) {
+            if (!primed) { g.markHeard(g.db.chat().all().first().map { it.id }); primed = true; return@LaunchedEffect }
             val last = items.lastOrNull() ?: return@LaunchedEffect
-            if (last.id > lastSpoken && last.kind == "agent" && settings.speakReplies) g.speak(last.text)
-            lastSpoken = maxOf(lastSpoken, last.id)
+            if (last.kind == "agent" && settings.speakReplies) g.speak(last.text, last.id)
         }
 
         val micPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) nav.navigate("call") }
@@ -220,13 +223,13 @@ class MainActivity : ComponentActivity() {
                 composable("chat") {
                     ChatScreen(items, status, settings.agentName, settings.userName, browserLive, draft, { draft = it },
                         ChatActions(
-                            onSend = {
+                            onSend = { g.stopSpeaking()
                                 val docText = docs.entries.joinToString("") { (n, d) -> "\n\n[Attached document: $n]\n${d.first.take(30_000)}" }
                                 g.runtime.send(it + docText, attachments.toList() + docs.values.flatMap { d -> d.second }.take(6), docs.keys.toList())
                                 attachments.clear(); docs.clear() }, onStop = { g.runtime.stop() },
                             onAttachDoc = { docPicker.launch(arrayOf("*/*")) }, onRemoveDoc = { docs.remove(it) },
                             onAttach = { picker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-                            onRemoveAttachment = { attachments.remove(it) }, onModel = { openModels() }, onCall = if (settings.liveEnabled) ({ startCall() }) else null,
+                            onRemoveAttachment = { attachments.remove(it) }, onModel = { openModels() }, onCall = if (settings.liveEnabled) ({ startCall() }) else null, onStopSpeaking = if (speakingNow) ({ g.stopSpeaking() }) else null,
                             onAnswer = { id, o -> g.runtime.answer(id, o) },
                             onMenu = { nav.popBackStack() }, onBrowser = { nav.navigate("browser") }, onProfile = { nav.navigate("profile") },
                             onMic = { runCatching { voice.launch(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)) } },
