@@ -76,8 +76,22 @@ class BrowserEngine(private val context: Context, val profile: String = "Persona
         settings.setGeolocationEnabled(true)
         // Look like Chrome, not an embedded WebView: Google refuses sign-in to "; wv" user agents.
         settings.userAgentString = settings.userAgentString.replace("; wv", "").replace(Regex("Version/\\d+(\\.\\d+)* "), "")
-        if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST))
-            runCatching { androidx.webkit.WebSettingsCompat.setRequestedWithHeaderOriginAllowList(settings, emptySet()) }
+        val xrw = androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)
+        if (xrw) runCatching { androidx.webkit.WebSettingsCompat.setRequestedWithHeaderOriginAllowList(settings, emptySet()) }
+            .onFailure { android.util.Log.w("AgentBrowser", "X-Requested-With allow-list failed", it) }
+        // The UA string alone leaves the client hints saying "Android WebView" (Sec-CH-UA), which
+        // Google reads too: present the same Chrome brands Chrome itself sends.
+        val uam = androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.USER_AGENT_METADATA)
+        if (uam) runCatching {
+            val cur = androidx.webkit.WebSettingsCompat.getUserAgentMetadata(settings)
+            val full = Regex("Chrome/([\\d.]+)").find(settings.userAgentString)?.groupValues?.get(1) ?: cur.fullVersion ?: "143.0.0.0"
+            val major = full.substringBefore('.')
+            fun brand(b: String, v: String, f: String) = androidx.webkit.UserAgentMetadata.BrandVersion.Builder().setBrand(b).setMajorVersion(v).setFullVersion(f).build()
+            androidx.webkit.WebSettingsCompat.setUserAgentMetadata(settings, androidx.webkit.UserAgentMetadata.Builder(cur)
+                .setBrandVersionList(listOf(brand("Google Chrome", major, full), brand("Chromium", major, full), brand("Not.A/Brand", "99", "99.0.0.0")))
+                .setFullVersion(full).setMobile(true).setPlatform("Android").build())
+        }.onFailure { android.util.Log.w("AgentBrowser", "UA metadata failed", it) }
+        android.util.Log.i("AgentBrowser", "X-Requested-With removable=$xrw, UA metadata=$uam, UA=${settings.userAgentString}")
         if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.WEB_AUTHENTICATION))
             runCatching { androidx.webkit.WebSettingsCompat.setWebAuthenticationSupport(settings, androidx.webkit.WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_FOR_BROWSER) }
         val cookies = if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.MULTI_PROFILE))
