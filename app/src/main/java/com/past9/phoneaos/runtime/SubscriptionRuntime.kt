@@ -94,10 +94,7 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
         progress("Unpacking")
         context.assets.list("runtime")?.filter { it != "node_modules.zip" }?.forEach { name -> context.assets.open("runtime/$name").use { i -> File(dir, name).outputStream().use { i.copyTo(it) } } }
         if (!installed) context.assets.open("runtime/node_modules.zip").use { unzip(it, dir) }
-        mapOf("node" to "libnode.so", "rg" to "librg.so", "codex" to "libcodex.so").forEach { (name, lib) ->
-            val target = File(libDir, lib); val link = File(bin, name)
-            if (target.exists()) { link.delete(); android.system.Os.symlink(target.path, link.path) }
-        }
+        linkBins()
         progress("Checking Node")
         val out = StringBuilder()
         val code = exec(listOf(File(bin, "node").path, "-e", "console.log('node ' + process.version)")) { out.appendLine(it); progress(it) }
@@ -141,7 +138,22 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
 
     fun cancelLogin() { runCatching { loginStdin?.close() } }
 
+    /**
+     * bin/node, bin/rg, bin/codex point into nativeLibraryDir, and that path CHANGES on every app
+     * update (/data/app/~~random/...). Re-point them before every run or they dangle.
+     */
+    private fun linkBins() {
+        bin.mkdirs()
+        mapOf("node" to "libnode.so", "rg" to "librg.so", "codex" to "libcodex.so").forEach { (name, lib) ->
+            val target = File(libDir, lib); val link = File(bin, name)
+            if (target.exists() && runCatching { android.system.Os.readlink(link.path) }.getOrNull() != target.path) {
+                link.delete(); runCatching { android.system.Os.symlink(target.path, link.path) }
+            }
+        }
+    }
+
     private fun env(): Map<String, String> {
+        linkBins()
         val proxy = "http://127.0.0.1:${proxy.start().port}"
         return mapOf(
             "HOME" to home.path, "TMPDIR" to context.cacheDir.path, "SHELL" to "/system/bin/sh",
@@ -165,6 +177,8 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
 
     /** Run one turn. Emits the bridge's JSON events: session, text, tool, done, error. Cancelling kills the process. */
     fun turn(prompt: String, system: String, resume: String?, model: String?, mcpUrl: String, mcpToken: String): Flow<JSONObject> = callbackFlow {
+        // Bridges ship in the APK; refresh them so an app update takes effect without reinstalling the runtime.
+        runCatching { context.assets.open("runtime/${spec.bridge}").use { i -> File(dir, spec.bridge).outputStream().use { i.copyTo(it) } } }
         val pb = ProcessBuilder(node.path, File(dir, spec.bridge).path).directory(dir).redirectErrorStream(false)
         pb.environment().putAll(env())
         token()?.let { pb.environment()[spec.tokenEnv] = it } ?: check(signedIn) { "Not signed in to ${kind.label}" }

@@ -49,11 +49,31 @@ class FilesPickTool(private val context: Context) : Tool {
         return when {
             type.startsWith("text/") || type.contains("json") || type.contains("csv") || type.contains("xml") || name.endsWith(".md") ->
                 head + "\n" + (cr.openInputStream(uri)?.use { it.readBytes().decodeToString() } ?: "").take(30_000)
-            type == "application/pdf" -> head + "\n" + pdfText(uri)
+            type == "application/pdf" -> head + "\n" + pdfText(uri).let { t ->
+                // A scanned PDF has no text layer: show the model the pages as pictures instead.
+                if (t.startsWith("(This PDF has no readable text")) "Scanned PDF, here are its pages:\n" + pdfPages(uri).joinToString("\n") { "[[image:$it]]" } else t
+            }
             type.startsWith("image/") -> "$head\n(An image. Ask the user to send it in the chat with the photo button so you can look at it.)"
             else -> "$head\n(Can't read this kind of file as text.)"
         }
     }
+
+    /** Render up to 3 pages of a PDF to JPEGs the model can look at. */
+    private fun pdfPages(uri: Uri): List<String> = runCatching {
+        context.contentResolver.openFileDescriptor(uri, "r")!!.use { fd ->
+            android.graphics.pdf.PdfRenderer(fd).use { r ->
+                (0 until minOf(3, r.pageCount)).map { i ->
+                    r.openPage(i).use { pg ->
+                        val scale = 1400f / maxOf(pg.width, pg.height)
+                        val bmp = android.graphics.Bitmap.createBitmap((pg.width * scale).toInt(), (pg.height * scale).toInt(), android.graphics.Bitmap.Config.ARGB_8888)
+                        bmp.eraseColor(android.graphics.Color.WHITE)
+                        pg.render(bmp, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        java.io.File(context.filesDir, "uploads/pdf-${System.nanoTime()}-$i.jpg").apply { parentFile?.mkdirs(); outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, it) } }.path
+                    }
+                }
+            }
+        }
+    }.getOrDefault(emptyList())
 
     /** PDFs: pull the text layer out of the raw stream (works for most statements and invoices). */
     private fun pdfText(uri: Uri): String {
