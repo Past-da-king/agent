@@ -99,10 +99,16 @@ fun mascotOf(id: String) = Mascots.firstOrNull { it.id == id } ?: Mascots.first(
 fun AgentAvatar(working: Boolean, modifier: Modifier = Modifier, size: Dp = 40.dp, needsYou: Boolean = false, mascot: String? = null, color: Color? = null) {
     val m = mascotOf(mascot ?: com.past9.phoneaos.ui.theme.LocalMascot.current)
     val morph = remember(m) { Morph(m.rest.unit(), m.busy.unit()) }
-    val t = rememberInfiniteTransition(label = "avatar")
-    val spin by t.animateFloat(0f, 360f, infiniteRepeatable(tween(9000, easing = LinearEasing)), label = "spin")
-    val breathe by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1400), RepeatMode.Reverse), label = "breathe")
     val amount by animateFloatAsState(if (working) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = 380f), label = "work")
+    // Battery: the endless spin/breathe only exists while the agent works (or is settling back to rest).
+    // Idle avatars used to redraw every frame on every screen.
+    val animating = working || amount > 0.001f
+    val (spin, breathe) = if (animating) {
+        val t = rememberInfiniteTransition(label = "avatar")
+        val sp by t.animateFloat(0f, 360f, infiniteRepeatable(tween(9000, easing = LinearEasing)), label = "spin")
+        val br by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1400), RepeatMode.Reverse), label = "breathe")
+        sp to br
+    } else 0f to 0f
     val fill = color ?: if (needsYou) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
     val eye = if (needsYou && color == null) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onPrimary
     Box(modifier.size(size), contentAlignment = Alignment.Center) {

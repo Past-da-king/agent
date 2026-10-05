@@ -13,6 +13,7 @@ import android.os.IBinder
 import com.past9.phoneaos.MainActivity
 import com.past9.phoneaos.R
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -33,11 +34,23 @@ class BrowserService : Service() {
             .setSmallIcon(com.past9.phoneaos.system.Identity.statIcon(this, st.mascot)).setOngoing(true).setContentIntent(open), "", "I'm browsing. Tap to watch or take over.").build()
         if (Build.VERSION.SDK_INT >= 34) startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(ID, n)
         _running.value = true
+        // Battery: a browser left open after a task kept a WebView and this service alive forever.
+        // Close everything once nothing has used it for a few minutes; the next browse reopens it,
+        // and sign-ins survive because cookies live in the profile, not the window.
+        idle = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+            while (true) {
+                kotlinx.coroutines.delay(30_000)
+                val st = com.past9.phoneaos.App.graph(this@BrowserService).runtime.status.value
+                val quiet = engines.values.none { it.attached || System.currentTimeMillis() - it.lastUsed < IDLE_MS }
+                if (quiet && !st.working && st.helpers == 0) { stopSelf(); break }
+            }
+        }
     }
+    private var idle: kotlinx.coroutines.Job? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_NOT_STICKY
 
-    override fun onDestroy() { engines.values.forEach { it.destroy() }; engines.clear(); _engines.value = emptyMap(); _running.value = false; super.onDestroy() }
+    override fun onDestroy() { idle?.cancel(); engines.values.forEach { it.destroy() }; engines.clear(); _engines.value = emptyMap(); _running.value = false; super.onDestroy() }
 
     companion object {
         private const val CHANNEL = "browser"
@@ -50,6 +63,7 @@ class BrowserService : Service() {
         private val _running = MutableStateFlow(false)
         val running: StateFlow<Boolean> = _running
         private const val MAX = 4
+        private const val IDLE_MS = 3 * 60_000L
 
         fun start(context: Context) { context.startForegroundService(Intent(context, BrowserService::class.java)) }
         fun stop(context: Context) { context.stopService(Intent(context, BrowserService::class.java)) }
@@ -57,7 +71,7 @@ class BrowserService : Service() {
         /** Start the service if needed and get (or open) the browser for this agent. */
         suspend fun await(context: Context, owner: String = "main", profile: String = "Personal"): BrowserEngine {
             val key = "$owner/$profile"
-            engines[key]?.let { return it }
+            engines[key]?.let { it.touch(); return it }
             if (!_running.value) { start(context); repeat(50) { if (_running.value) return@repeat; kotlinx.coroutines.delay(100) } }
             check(_running.value) { "The browser did not start" }
             check(engines.size < MAX) { "Too many browsers open at once ($MAX). Finish one first." }
