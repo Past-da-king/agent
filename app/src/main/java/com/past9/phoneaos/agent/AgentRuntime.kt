@@ -14,6 +14,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -69,6 +70,14 @@ class AgentRuntime(
 
     val composio = ComposioClient({ settings.composioKey() }, settings.installId())
 
+    init {
+        // A fresh process has no live helpers: anything still marked working was cut off.
+        scope.launch {
+            db.chat().all().first().filter { it.kind == "helper" && JSONObject(it.meta).optString("state") == "working" }
+                .forEach { db.chat().update(it.copy(meta = JSONObject(it.meta).put("state", "failed").put("result", "Interrupted when the app closed.").toString())) }
+        }
+    }
+
     fun tools(forHelper: Boolean = false): List<Tool> {
         val list = mutableListOf<Tool>(
             NowTool(), WebFetchTool(),
@@ -76,7 +85,8 @@ class AgentRuntime(
             TaskListTool(db.tasks()), TaskAddTool(db.tasks()), TaskUpdateTool(db.tasks()), GoalCreateTool(db.tasks()),
             NotificationsTool(db.notifications()) { settings.state.value.notifApps },
         )
-        if (!forHelper) { list += LocationTool(context); list += NotificationsAllowTool(context, settings); list += NotificationsStopTool(settings); list += FilesPickTool(context) }
+        if (!forHelper) { list += LocationTool(context); list += NotificationsAllowTool(context, settings); list += NotificationsStopTool(settings); list += FilesPickTool(context); list += PhotosTool(context)
+            list += WaitForCodeTool(db, settings, NotificationsAllowTool(context, settings)) }
         list += browserTools(context).filter { !forHelper || it !is BrowserHandoffTool }
         if (settings.state.value.composioEnabled) {
             list += AppsListTool(composio); list += AppsFindToolsTool(composio)
@@ -112,7 +122,7 @@ class AgentRuntime(
             appendLine("- Before anything goes out in their name, costs money, or deletes something: request_approval with the exact content. Never skip this.")
             appendLine("- Memory is your wiki about the user's life: one page per person, company, place, project or preference, in markdown, linking other pages as [[Name]], always tagged. When you learn something durable, save or update the page right away (memory_get first to merge). Search memory before asking anything they may have told you. Keep pages accurate; fix wrong ones.")
             appendLine("- The user uses you as their to-do list. Things THEY must do or asked to be reminded of go on their list (task_add owner user). Your own working steps live under goals (goal_create) and you tick them off as you go; when stuck, mark the step blocked and say what would unblock it.")
-            appendLine("- Phone permissions are OFF until you need one. Need their location (delivery, 'near me')? Use location_get. Need a document from their phone? files_pick. Need to keep an eye on an app's notifications? notifications_allow, then a 'notification' routine, and notifications_stop when done. Don't ask for things you don't need.")
+            appendLine("- Phone permissions are OFF until you need one. Need their location (delivery, 'near me')? Use location_get. Need a document from their phone? files_pick. Their latest photo or screenshot? photos_recent. A site sent a one-time code during sign-in? notifications_wait_code picks it up so you can finish on your own. Need to keep an eye on an app's notifications? notifications_allow, then a 'notification' routine, and notifications_stop when done. Don't ask for things you don't need.")
             if (s.notifApps.isNotEmpty()) appendLine("- You can read the phone's notifications from the apps the user allowed (notifications_read): bank alerts, messages, deliveries. Check them when they would help.")
             appendLine("- For parallel research or many pages, use delegate to run helper agents at once.")
             appendLine("- The browser_* tools drive your own background browser; it keeps going while the user is in other apps. If a page needs them (sign-in, captcha) use browser_handoff.")
@@ -166,7 +176,35 @@ class AgentRuntime(
         val msgs = rows.mapNotNull { runCatching { Msg.fromJson(JSONObject(it.json)) }.getOrNull() }.toMutableList()
         // Never start mid tool-exchange: the first message must be a real user message.
         while (msgs.isNotEmpty() && !(msgs.first().role == Role.USER && msgs.first().blocks.any { it is Block.Text })) msgs.removeAt(0)
-        return msgs
+        return Repair.repair(msgs)
+    }
+
+    object Repair {
+        /**
+         * A run cut short (app killed, phone restarted, user stopped it) can leave tool calls with no
+         * results, and every provider rejects that forever after. Give each orphaned call a result
+         * saying it was interrupted, so the conversation always stays valid.
+         */
+        fun repair(msgs: List<Msg>): MutableList<Msg> {
+            val out = mutableListOf<Msg>()
+            var i = 0
+            while (i < msgs.size) {
+                val m = msgs[i]; out += m
+                val calls = if (m.role == Role.ASSISTANT) m.toolCalls else emptyList()
+                if (calls.isNotEmpty()) {
+                    val next = msgs.getOrNull(i + 1)
+                    val answered = next?.takeIf { it.role == Role.USER }?.blocks?.filterIsInstance<Block.ToolResult>()?.map { it.callId }?.toSet() ?: emptySet()
+                    val missing = calls.filter { it.id !in answered }
+                    if (missing.isNotEmpty()) {
+                        val fill = missing.map { Block.ToolResult(it.id, "Interrupted before it finished (the app was closed or stopped).", true) }
+                        if (next != null && next.role == Role.USER && answered.isNotEmpty()) { out += Msg(Role.USER, next.blocks + fill); i += 2; continue }
+                        out += Msg(Role.USER, fill)
+                    }
+                }
+                i++
+            }
+            return out
+        }
     }
 
     private suspend fun runTurn(userText: String, images: List<String> = emptyList()) {

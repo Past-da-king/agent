@@ -105,26 +105,41 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
         progress("Installed")
     }
 
+    /** While a Claude sign-in waits for the code the user copies from claude.ai. */
+    private var loginStdin: java.io.Writer? = null
+    fun submitCode(code: String) { runCatching { loginStdin?.apply { write(code.trim() + "\n"); flush() } } }
+
     /**
-     * Sign in with the user's own account, the way the CLI does it on a computer: the CLI starts a
-     * callback server on localhost and prints a URL; we open that URL in the phone's browser and
-     * the provider redirects back to localhost, which is this phone. Returns null on success.
+     * Sign in with the user's own account the way the CLI does on a computer. The CLI prints a
+     * URL; we open it in the phone's browser. Codex then gets the redirect on localhost (this
+     * phone). Claude shows a code on its page instead: [needsCode] tells the screen to ask for it,
+     * and [submitCode] types it into the waiting CLI. Returns null on success, else the reason.
      */
-    suspend fun login(onUrl: (String) -> Unit, progress: (String) -> Unit): String? = withContext(Dispatchers.IO) {
+    suspend fun login(onUrl: (String) -> Unit, progress: (String) -> Unit, needsCode: () -> Unit = {}): String? = withContext(Dispatchers.IO) {
         val cmd = when (kind) {
             SubKind.CLAUDE -> listOf(File(bin, "node").path, File(dir, "node_modules/@anthropic-ai/claude-agent-sdk/cli.js").path, "auth", "login", "--claudeai")
             SubKind.CODEX -> listOf(File(bin, "codex").path, "login")
             SubKind.OPENCODE -> return@withContext "OpenCode sign-in isn't available yet"
         }
+        val p = ProcessBuilder(cmd).directory(dir).redirectErrorStream(true).apply { environment().putAll(env()) }.start()
+        loginStdin = p.outputStream.bufferedWriter()
         var opened = false
         val lines = StringBuilder()
-        val code = exec(cmd) { line ->
-            lines.appendLine(line); progress(line)
-            val url = Regex("https://\\S+").find(line)?.value?.trimEnd('.', ')')
-            if (!opened && url != null && (url.contains("oauth") || url.contains("authorize") || url.contains("login"))) { opened = true; onUrl(url) }
-        }
-        if (code == 0 && signedIn) null else "Sign-in didn't finish (exit $code). ${lines.lines().lastOrNull { it.isNotBlank() }.orEmpty().take(200)}"
+        try {
+            p.inputStream.bufferedReader().forEachLine { line ->
+                lines.appendLine(line); progress(line.take(200))
+                val url = Regex("https://\\S+").find(line)?.value?.trimEnd('.', ')')
+                if (!opened && url != null && (url.contains("oauth") || url.contains("authorize"))) {
+                    opened = true; onUrl(url)
+                    if (kind == SubKind.CLAUDE && url.contains("code%2Fcallback")) needsCode()
+                }
+            }
+            val code = p.waitFor()
+            if (code == 0 && signedIn) null else "Sign-in didn't finish (exit $code). ${lines.lines().lastOrNull { it.isNotBlank() }.orEmpty().take(200)}"
+        } finally { loginStdin = null; runCatching { p.destroy() } }
     }
+
+    fun cancelLogin() { runCatching { loginStdin?.close() } }
 
     private fun env(): Map<String, String> {
         val proxy = "http://127.0.0.1:${proxy.start().port}"
@@ -132,7 +147,7 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
             "HOME" to home.path, "TMPDIR" to context.cacheDir.path, "SHELL" to "/system/bin/sh",
             "PATH" to "${bin.path}:/system/bin", "LD_LIBRARY_PATH" to libDir.path, "NODE_PATH" to File(dir, "node_modules").path,
             // Termux's OpenSSL looks for CAs under Termux's own prefix; hand it ours.
-            "SSL_CERT_FILE" to File(dir, "cacert.pem").path, "NODE_EXTRA_CA_CERTS" to File(dir, "cacert.pem").path,
+            "SSL_CERT_FILE" to File(dir, "cacert.pem").path, "NODE_EXTRA_CA_CERTS" to File(dir, "cacert.pem").path, "SSL_CERT_DIR" to File(dir, "certs").apply { mkdirs() }.path,
             "USE_BUILTIN_RIPGREP" to "0", "DISABLE_AUTOUPDATER" to "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC" to "1",
             "CODEX_HOME" to File(home, ".codex").path, "CODEX_BIN" to File(bin, "codex").path,
             // Codex (static musl) can't resolve DNS on Android; it reaches the internet through our proxy.
@@ -143,7 +158,8 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
 
     private fun exec(cmd: List<String>, progress: (String) -> Unit): Int {
         val p = ProcessBuilder(cmd).directory(dir).redirectErrorStream(true).apply { environment().putAll(env()) }.start()
-        p.inputStream.bufferedReader().forEachLine { progress(it.take(400)) }
+        // Full lines: sign-in URLs run to 500+ characters and a cut one fails ("missing state").
+        p.inputStream.bufferedReader().forEachLine { progress(it) }
         return p.waitFor()
     }
 

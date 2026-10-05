@@ -317,7 +317,7 @@ fun HomeBar(current: String, onGo: (String) -> Unit, onTalk: () -> Unit, modifie
     val tabs = listOf(Triple("home", Icons.Rounded.Home, "Home"), Triple("tasks", Icons.Rounded.TaskAlt, "Tasks"), Triple("routines", Icons.Rounded.Schedule, "Routines"), Triple("connections", Icons.Rounded.Apps, "Apps"))
     HorizontalFloatingToolbar(
         expanded = true,
-        floatingActionButton = { FloatingToolbarDefaults.VibrantFloatingActionButton(onClick = onTalk) { Icon(Icons.AutoMirrored.Rounded.Chat, "Talk to your agent") } },
+        floatingActionButton = { FloatingToolbarDefaults.VibrantFloatingActionButton(onClick = onTalk, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) { Icon(Icons.AutoMirrored.Rounded.Chat, "Talk to your agent") } },
         colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
         modifier = modifier.navigationBarsPadding().padding(bottom = 16.dp),
     ) {

@@ -38,6 +38,8 @@ sealed interface AgentEvent {
  * `history` is mutated in place: every assistant message and tool-result message is appended,
  * so the caller can persist exactly what the model saw.
  */
+val imageMarker = Regex("""\[\[image:([^\]]+)]]""")
+
 class AgentLoop(
     private val provider: LlmProvider,
     private val model: String,
@@ -75,7 +77,9 @@ class AgentLoop(
                 onEvent(AgentEvent.ToolFinished(call, clipped, err))
                 Block.ToolResult(call.id, clipped, err)
             }
-            val resultMsg = Msg(Role.USER, results)
+            // Tools can hand the model pictures by writing [[image:/path]] lines (e.g. photos from the gallery).
+            val images = results.flatMap { r -> imageMarker.findAll(r.content).map { Block.Image(it.groupValues[1]) }.toList() }.filter { java.io.File(it.path).exists() }
+            val resultMsg = Msg(Role.USER, results + images)
             history += resultMsg; onAppend(resultMsg)
         }
         return lastText.ifBlank { "I stopped after $maxSteps steps without finishing. Tell me to carry on and I will pick it up." }

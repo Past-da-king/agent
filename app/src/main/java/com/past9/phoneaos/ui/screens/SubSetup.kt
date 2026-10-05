@@ -18,7 +18,7 @@ import com.past9.phoneaos.ui.theme.LocalExtra
 /** Set up Claude Code inside the app and sign in with the user's Claude subscription. */
 @Composable
 fun SubSetupScreen(kind: com.past9.phoneaos.data.SubKind, signInHelp: String, info: RuntimeInfo, installed: Boolean, log: List<String>, installing: Boolean, onBack: () -> Unit, onInstall: () -> Unit, onSaveToken: (String) -> Unit, onUseKey: () -> Unit,
-                   onSignIn: () -> Unit = {}, signingIn: Boolean = false, signInError: String? = null) {
+                   onSignIn: () -> Unit = {}, signingIn: Boolean = false, signInError: String? = null, needsCode: Boolean = false, onCode: (String) -> Unit = {}) {
     var token by remember { mutableStateOf("") }
     SubScreen("${kind.label} ${kind.plan}", info.note, onBack) { pad ->
         Column(Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 48.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -46,6 +46,15 @@ fun SubSetupScreen(kind: com.past9.phoneaos.data.SubKind, signInHelp: String, in
                 else {
                     Button(onClick = onSignIn, enabled = installed && !signingIn, modifier = Modifier.fillMaxWidth().height(56.dp), shapes = ButtonDefaults.shapes()) {
                         Text(if (signingIn) "Finish signing in, in your browser…" else "Sign in with ${kind.label}")
+                    }
+                    if (needsCode) {
+                        var code by remember { mutableStateOf("") }
+                        Spacer(Modifier.height(16.dp))
+                        Text("After you approve, Claude shows a code. Copy it and paste it here.", style = MaterialTheme.typography.bodyMedium)
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(code, { code = it.trim() }, label = { Text("Code from Claude") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
+                        Spacer(Modifier.height(8.dp))
+                        Button(onClick = { onCode(code) }, enabled = code.length > 10, modifier = Modifier.fillMaxWidth().height(52.dp), shapes = ButtonDefaults.shapes()) { Text("Finish sign-in") }
                     }
                     if (signInError != null) { Spacer(Modifier.height(8.dp)); Text(signInError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                     Spacer(Modifier.height(16.dp))

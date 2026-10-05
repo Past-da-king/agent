@@ -5,6 +5,7 @@ import com.past9.phoneaos.agent.Tool
 import com.past9.phoneaos.agent.ToolContext
 import com.past9.phoneaos.agent.ToolSpec
 import com.past9.phoneaos.agent.bool
+import com.past9.phoneaos.agent.enumOf
 import com.past9.phoneaos.agent.schema
 import com.past9.phoneaos.agent.str
 import com.past9.phoneaos.browser.BrowserEngine
@@ -64,6 +65,20 @@ class BrowserTypeTool(c: Context) : BrowserTool(c) {
     }
 }
 
+class BrowserKeyTool(c: Context) : BrowserTool(c) {
+    override val spec = ToolSpec("browser_press_key", "Press a key in the page: Enter, Tab or Escape.", schema(listOf("key"), "key" to enumOf("Key", "Enter", "Tab", "Escape")))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String { val e = engine(ctx); return e.pressKey(input.optString("key", "Enter")) + "\n\n" + e.snapshot(8_000) }
+}
+
+class BrowserWaitTool(c: Context) : BrowserTool(c) {
+    override val spec = ToolSpec("browser_wait_for", "Wait until the page shows some text (up to 30 seconds), for slow pages and sign-in steps.",
+        schema(listOf("text"), "text" to str("Text to wait for"), "seconds" to com.past9.phoneaos.agent.int("Max seconds, default 15")))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String {
+        val e = engine(ctx); val ok = e.waitForText(input.optString("text"), input.optInt("seconds", 15).coerceIn(1, 30))
+        return (if (ok) "It's there." else "Didn't appear in time.") + "\n\n" + e.snapshot(8_000)
+    }
+}
+
 class BrowserScrollTool(c: Context) : BrowserTool(c) {
     override val spec = ToolSpec("browser_scroll", "Scroll the page down (or up) one screen and return the new outline.", schema(emptyList(), "up" to bool("Scroll up instead")))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String { val e = engine(ctx); e.scroll(!input.optBoolean("up")); return e.snapshot(8_000) }
@@ -95,4 +110,4 @@ class BrowserHandoffTool(c: Context) : BrowserTool(c) {
     }
 }
 
-fun browserTools(c: Context): List<Tool> = listOf(BrowserOpenTool(c), BrowserReadTool(c), BrowserClickTool(c), BrowserTypeTool(c), BrowserScrollTool(c), BrowserBackTool(c), BrowserScreenshotTool(c), BrowserHandoffTool(c))
+fun browserTools(c: Context): List<Tool> = listOf(BrowserOpenTool(c), BrowserReadTool(c), BrowserClickTool(c), BrowserTypeTool(c), BrowserKeyTool(c), BrowserWaitTool(c), BrowserScrollTool(c), BrowserBackTool(c), BrowserScreenshotTool(c), BrowserHandoffTool(c))

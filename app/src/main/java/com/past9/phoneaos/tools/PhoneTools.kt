@@ -90,3 +90,74 @@ class NotificationsStopTool(private val settings: SettingsStore) : Tool {
         return if (match.isEmpty()) "Wasn't reading that app." else "Stopped reading ${match.joinToString()}."
     }
 }
+
+/** Look at the user's latest photos, with their yes. The model sees them as images. */
+class PhotosTool(private val context: Context) : Tool {
+    override val spec = ToolSpec("photos_recent", "Look at the user's most recent photos or screenshots from their gallery (asks first). Use when they say 'my last photo', 'the screenshot I just took'.",
+        schema(emptyList(), "count" to com.past9.phoneaos.agent.int("How many, 1 to 4 (default 1)"), "screenshots_only" to com.past9.phoneaos.agent.bool("Only screenshots")))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String {
+        val perm = if (Build.VERSION.SDK_INT >= 33) arrayOf(Manifest.permission.READ_MEDIA_IMAGES) else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        if (!PermissionBroker.granted(context, perm)) {
+            val a = ctx.ask("Can I look at your latest photos?", listOf("Allow", "No"))
+            if (a != "Allow") return "The user said no. Ask them to send the photo with the photo button instead."
+            if (!PermissionBroker.request(context, perm) { ctx.notifyBlocking("Allow photos?", "Open the app to let your agent see your photos") }) return "Photo access wasn't granted."
+        }
+        val n = input.optInt("count", 1).coerceIn(1, 4)
+        val shotsOnly = input.optBoolean("screenshots_only")
+        val uris = withContext(Dispatchers.IO) {
+            val col = android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+            val sel = if (shotsOnly) "${android.provider.MediaStore.Images.Media.RELATIVE_PATH} LIKE ?" else null
+            val args = if (shotsOnly) arrayOf("%Screenshots%") else null
+            context.contentResolver.query(col, arrayOf(android.provider.MediaStore.Images.Media._ID, android.provider.MediaStore.Images.Media.DATE_ADDED, android.provider.MediaStore.Images.Media.DISPLAY_NAME),
+                sel, args, "${android.provider.MediaStore.Images.Media.DATE_ADDED} DESC")?.use { c ->
+                val out = mutableListOf<Triple<android.net.Uri, Long, String>>()
+                while (c.moveToNext() && out.size < n) out += Triple(android.content.ContentUris.withAppendedId(col, c.getLong(0)), c.getLong(1), c.getString(2))
+                out
+            }.orEmpty()
+        }
+        if (uris.isEmpty()) return "No photos found."
+        val lines = uris.mapNotNull { (uri, added, name) ->
+            val path = withContext(Dispatchers.IO) { runCatching {
+                val bmp = android.graphics.ImageDecoder.decodeBitmap(android.graphics.ImageDecoder.createSource(context.contentResolver, uri)) { d, info, _ ->
+                    val sc = minOf(1f, 1568f / maxOf(info.size.width, info.size.height)); d.setTargetSize((info.size.width * sc).toInt().coerceAtLeast(1), (info.size.height * sc).toInt().coerceAtLeast(1))
+                    d.allocator = android.graphics.ImageDecoder.ALLOCATOR_SOFTWARE }
+                java.io.File(context.filesDir, "uploads/gallery-${System.nanoTime()}.jpg").apply { parentFile?.mkdirs(); outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, it) } }.path
+            }.getOrNull() } ?: return@mapNotNull null
+            ctx.activity("Looked at $name", JSONObject().put("tool", "photos").put("image", path))
+            "$name, added ${java.time.Instant.ofEpochSecond(added).atZone(java.time.ZoneId.systemDefault()).toLocalDateTime()}: [[image:$path]]"
+        }
+        return lines.joinToString("\n")
+    }
+}
+
+/**
+ * Sign-in codes: when a site sends a one-time code, the agent waits for it to land in the
+ * notifications (SMS app, authenticator, the site's own app) and carries on by itself.
+ */
+class WaitForCodeTool(private val db: com.past9.phoneaos.data.AppDb, private val settings: SettingsStore, private val allow: NotificationsAllowTool) : Tool {
+    override val spec = ToolSpec("notifications_wait_code", "After triggering a one-time code (SMS, app, email notification) during a sign-in, wait for it to arrive in the phone's notifications and get the code. Name the app it comes through (e.g. Messages, Uber, Gmail).",
+        schema(listOf("app"), "app" to str("App the code arrives through"), "seconds" to com.past9.phoneaos.agent.int("How long to wait, default 90")))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String {
+        val start = System.currentTimeMillis() - 30_000
+        val app = input.optString("app")
+        if (settings.state.value.notifApps.isEmpty() || db.notifications().since(0).none { it.app.contains(app, true) }) {
+            val r = allow.run(JSONObject().put("app", app).put("reason", "catch the sign-in code and finish logging in"), ctx)
+            if (r.startsWith("The user said no") || r.startsWith("No app")) return r
+        }
+        val id = ctx.activity("Waiting for the code from $app", JSONObject().put("tool", "notifications"))
+        val deadline = System.currentTimeMillis() + input.optInt("seconds", 90).coerceIn(10, 300) * 1000L
+        val code = Regex("""(?<![\d-])(\d{4,8})(?![\d-])""")
+        while (System.currentTimeMillis() < deadline) {
+            db.notifications().since(start).filter { app.isBlank() || it.app.contains(app, true) || it.text.contains(app, true) || it.title.contains(app, true) }
+                .forEach { n ->
+                    val text = n.title + " " + n.text
+                    if (Regex("(?i)code|otp|verif|pin|one-time|login|sign").containsMatchIn(text)) code.find(text)?.let {
+                        ctx.updateActivity(id, "Got the code from ${n.app}"); return "Code: ${it.groupValues[1]} (from ${n.app}: \"${text.take(160)}\")"
+                    }
+                }
+            kotlinx.coroutines.delay(2000)
+        }
+        ctx.updateActivity(id, "No code arrived")
+        return "No code arrived in time. Ask the user for it (ask_user), or use browser_handoff."
+    }
+}
