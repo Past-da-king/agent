@@ -148,10 +148,8 @@ class MainActivity : ComponentActivity() {
             val last = items.lastOrNull() ?: return@LaunchedEffect
             if (org.json.JSONObject(last.meta).optBoolean("call")) return@LaunchedEffect // already heard it on the call
             val ears = settings.autoPlayEarphones && g.earphonesIn()
-            when {
-                last.kind == "voice" && ears -> g.autoPlayVoice(org.json.JSONObject(last.meta).optString("path"), last.id)
-                last.kind == "agent" && (settings.speakReplies || ears) -> g.speak(last.text, last.id)
-            }
+            // Text replies are never read out (his ruling 5 Oct 17:49): voice comes as voice notes only.
+            if (last.kind == "voice" && ears) g.autoPlayVoice(org.json.JSONObject(last.meta).optString("path"), last.id)
         }
 
         val micPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) nav.navigate("call") }

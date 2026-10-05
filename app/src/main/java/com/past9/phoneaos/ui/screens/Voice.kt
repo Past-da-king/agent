@@ -74,18 +74,11 @@ fun VoiceSheet(s: AgentSettings, actions: VoiceActions, onDismiss: () -> Unit) {
                 OutlinedButton(onClick = actions.preview, enabled = has, shapes = ButtonDefaults.shapes()) { Icon(Icons.Rounded.PlayArrow, null); Spacer(Modifier.width(6.dp)); Text("Hear it") }
             }
             Spacer(Modifier.height(20.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Read replies aloud", style = MaterialTheme.typography.titleSmall)
-                    Text("Every answer is spoken as it arrives", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                }
-                Switch(s.speakReplies, actions.setSpeak)
-            }
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Auto-play with earphones in", style = MaterialTheme.typography.titleSmall)
-                    Text("Voice notes and replies play by themselves when you're wearing earphones", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    Text("Voice notes play by themselves when you're wearing earphones", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
                 Switch(s.autoPlayEarphones, actions.setAutoPlay)
             }

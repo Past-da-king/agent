@@ -82,7 +82,7 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 Line(Icons.Rounded.RecordVoiceOver, "Voice", listOf(
                     mapOf("system" to "Phone voice", "gemini" to "Google voice", "openai" to "OpenAI voice", "elevenlabs" to "ElevenLabs voice")[s.ttsProvider] ?: "Phone voice",
-                    if (s.speakReplies) "reads replies" else null, if (s.liveEnabled) "live calls on" else null).filterNotNull().joinToString(" · ")) { voiceSheet = true }
+                    if (s.liveEnabled) "live calls on" else null).filterNotNull().joinToString(" · ")) { voiceSheet = true }
             }
             SectionHeader("Background", "So routines and browsing keep going", Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
