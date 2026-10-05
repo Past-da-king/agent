@@ -76,7 +76,7 @@ object Identity {
         val agent = publishAgentShortcut(context, st.agentName.ifBlank { "Your agent" }, st.mascot, st.accent)
         val me = androidx.core.app.Person.Builder().setName(st.userName.ifBlank { "You" }).setKey("me").build()
         return b.setStyle(androidx.core.app.NotificationCompat.MessagingStyle(me).addMessage(if (title.isBlank()) body else "$title\n$body", System.currentTimeMillis(), agent))
-            .setShortcutId("agent").setLargeIcon(avatar(context, st.mascot, st.accent, 192))
+            .setShortcutId("agent").setLargeIcon(avatar(context, st.mascot, st.accent, 192)).setCategory(androidx.core.app.NotificationCompat.CATEGORY_MESSAGE)
     }
 
     fun statIcon(context: Context, mascot: String): Int =

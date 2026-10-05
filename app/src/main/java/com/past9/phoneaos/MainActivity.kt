@@ -79,6 +79,11 @@ class MainActivity : ComponentActivity() {
 
     private fun handle(i: Intent?) {
         if (i == null) return
+        // adb hook for checking how notifications look: am start -n <pkg>/.MainActivity --es open testnotify
+        if (i.getStringExtra("open") == "testnotify") {
+            App.graph(this).phone.notify("Checking in", "This is how my messages look on your phone.")
+            moveTaskToBack(true); return
+        }
         val shared = if (i.action == Intent.ACTION_SEND) listOfNotNull(i.getStringExtra(Intent.EXTRA_SUBJECT), i.getStringExtra(Intent.EXTRA_TEXT)).joinToString("\n").ifBlank { null } else null
         incoming.value = shared to i.getStringExtra("open")
     }
