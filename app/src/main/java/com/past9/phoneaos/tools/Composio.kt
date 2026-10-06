@@ -151,15 +151,15 @@ class ComposioClient(
         }
     }
 
-    suspend fun execute(slug: String, args: JSONObject): JSONObject =
-        post("/tools/execute/$slug", JSONObject().put("user_id", userId).put("arguments", args))
+    suspend fun execute(slug: String, args: JSONObject, account: String? = null): JSONObject =
+        post("/tools/execute/$slug", JSONObject().put("user_id", userId).put("arguments", args).apply { if (!account.isNullOrBlank()) put("connected_account_id", account) })
 }
 
 class AppsListTool(private val c: ComposioClient) : Tool {
     override val spec = ToolSpec("apps_connected", "List the user's connected apps (Gmail, Calendar, Drive, Slack... via Composio).", schema())
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val list = c.connections()
-        return if (list.isEmpty()) "No apps connected yet. Use apps_connect to offer one." else list.joinToString("\n") { "${it.toolkit}: ${it.status}" }
+        return if (list.isEmpty()) "No apps connected yet. Use apps_connect to offer one." else list.joinToString("\n") { "${it.toolkit}: ${it.status} · ${it.label} · account ${it.id}" }
     }
 }
 
@@ -202,11 +202,12 @@ class AppsFindToolsTool(private val c: ComposioClient) : Tool {
 
 class AppsRunTool(private val c: ComposioClient) : Tool {
     override val spec = ToolSpec("apps_run", "Run one action in a connected app by its tool slug (from apps_find_tools), e.g. GMAIL_FETCH_EMAILS. Sending messages or changing things on the user's behalf needs their yes first (ask_user).",
-        schema(listOf("slug", "arguments"), "slug" to str("Tool slug"), "arguments" to JSONObject().put("type", "object").put("description", "Arguments per the tool's parameters")))
+        schema(listOf("slug", "arguments"), "slug" to str("Tool slug"), "arguments" to JSONObject().put("type", "object").put("description", "Arguments per the tool's parameters"),
+            "account" to str("Which account, when the app has several connected: the account id from apps_connected")))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val slug = input.optString("slug")
         val id = ctx.activity("Using ${slug.substringBefore('_').lowercase()}: ${slug.substringAfter('_').lowercase().replace('_', ' ')}", JSONObject().put("tool", "apps"))
-        val res = c.execute(slug, input.optJSONObject("arguments") ?: JSONObject())
+        val res = c.execute(slug, input.optJSONObject("arguments") ?: JSONObject(), input.optString("account").takeIf { it.isNotBlank() })
         val ok = res.optBoolean("successful", true)
         ctx.updateActivity(id, (if (ok) "Used " else "Failed: ") + slug.lowercase().replace('_', ' '))
         return if (ok) (res.opt("data") ?: res).toString() else "Error: ${res.optString("error")}"

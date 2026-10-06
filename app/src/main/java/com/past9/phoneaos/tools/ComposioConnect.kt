@@ -115,27 +115,34 @@ object ComposioConnect {
         return o.optJSONObject("data") ?: JSONObject()
     }
 
-    /** Connection status per app: ACTIVE, INITIATED (sign-in started, not finished) or "" (never connected). */
-    suspend fun statuses(key: String, slugs: List<String>): Map<String, Pair<String, String>> {
+    /** One signed-in account of an app (a person can have several Gmails). */
+    data class Account(val id: String, val slug: String, val status: String, val email: String, val alias: String, val isDefault: Boolean) {
+        val label get() = alias.ifBlank { email }
+    }
+
+    /** Every account per app, active ones first. Apps never connected map to an empty list. */
+    suspend fun accounts(key: String, slugs: List<String>): Map<String, List<Account>> {
         if (slugs.isEmpty()) return emptyMap()
-        val out = mutableMapOf<String, Pair<String, String>>()
+        val out = mutableMapOf<String, List<Account>>()
         // Composio caps how many toolkits one call may carry; ask in chunks.
         slugs.distinct().chunked(50).forEach { chunk ->
             val res = data(key, "COMPOSIO_MANAGE_CONNECTIONS", JSONObject().put("toolkits", JSONArray().apply { chunk.forEach { put(JSONObject().put("name", it).put("action", "list")) } }))
                 .optJSONObject("results") ?: JSONObject()
             chunk.forEach { slug ->
-                val accounts = res.optJSONObject(slug)?.optJSONArray("accounts") ?: JSONArray()
-                val list = (0 until accounts.length()).mapNotNull { accounts.optJSONObject(it) }
-                val active = list.firstOrNull { it.optString("status").equals("active", true) }
-                out[slug] = when {
-                    active != null -> "ACTIVE" to active.optString("id")
-                    list.isNotEmpty() -> "INITIATED" to list.first().optString("id")
-                    else -> "" to ""
-                }
+                val arr = res.optJSONObject(slug)?.optJSONArray("accounts") ?: JSONArray()
+                out[slug] = (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }.map { a ->
+                    val info = a.optJSONObject("user_info")
+                    Account(a.optString("id"), slug, if (a.optString("status").equals("active", true)) "ACTIVE" else "INITIATED",
+                        info?.optString("email")?.takeIf { it.isNotBlank() && it != "null" } ?: "", a.optString("alias").takeIf { it != "null" } ?: "", a.optBoolean("is_default"))
+                }.sortedBy { if (it.status == "ACTIVE") 0 else 1 }
             }
         }
         return out
     }
+
+    /** Connection status per app: ACTIVE, INITIATED (sign-in started, not finished) or "" (never connected), with an account id. */
+    suspend fun statuses(key: String, slugs: List<String>): Map<String, Pair<String, String>> =
+        accounts(key, slugs).mapValues { (_, l) -> l.firstOrNull()?.let { it.status to it.id } ?: ("" to "") }
 
     /** Start connecting an app; returns the sign-in link (valid about 10 minutes). */
     suspend fun connectLink(key: String, slug: String): String {
@@ -170,8 +177,9 @@ object ComposioConnect {
         val out = StringBuilder()
         for (slug in adds) {
             val req = ConnectRequest.of(slug, reason)
-            if (statuses(k, listOf(slug))[slug]?.first == "ACTIVE") { out.appendLine("${req.name} is already connected."); continue }
-            val a = ctx.ask(req.text, ConnectRequest.OPTIONS)
+            // Already connected: the agent wants ANOTHER account (a second Gmail), so say so on the card.
+            val before = accounts(k, listOf(slug))[slug].orEmpty().count { it.status == "ACTIVE" }
+            val a = ctx.ask(if (before > 0) req.copy(reason = "add another ${req.name} account" + if (req.reason.isNotBlank()) ", so I can ${req.reason.removePrefix("so I can ")}" else "").text else req.text, ConnectRequest.OPTIONS)
             if (a == null) { out.appendLine("Nobody is around to connect ${req.name}. Tell the user they can connect it from Connections in the app."); continue }
             if (a != "Connect") { out.appendLine("The user declined connecting ${req.name}${if (a != "Decline") " and said: $a" else ""}. Don't send a link; carry on without it."); continue }
             val link = runCatching { connectLink(k, slug) }.getOrElse { out.appendLine("Couldn't start connecting ${req.name}: ${it.message}"); continue }
@@ -181,7 +189,7 @@ object ComposioConnect {
             var done = false
             while (System.currentTimeMillis() < deadline) {
                 kotlinx.coroutines.delay(4000)
-                if (runCatching { statuses(k, listOf(slug))[slug]?.first }.getOrNull() == "ACTIVE") { done = true; break }
+                if ((runCatching { accounts(k, listOf(slug))[slug].orEmpty().count { it.status == "ACTIVE" } }.getOrNull() ?: 0) > before) { done = true; break }
             }
             ctx.updateActivity(id, if (done) "${req.name} connected" else "${req.name} sign-in not finished")
             out.appendLine(if (done) "${req.name} ($slug) is connected now. Carry on with the task." else "The user hasn't finished signing in to ${req.name} yet. Don't paste a link; say you'll continue once it's connected (they can also connect it from Connections).")

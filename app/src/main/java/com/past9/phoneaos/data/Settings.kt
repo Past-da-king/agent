@@ -162,6 +162,10 @@ class SettingsStore(context: Context) {
         secrets.edit().putString("local_token", it).apply()
     }
 
+    /** Encrypted storage for other secrets (machine passwords and keys). */
+    fun secret(key: String): String? = secrets.getString("s_$key", null)
+    fun setSecret(key: String, value: String?) { secrets.edit().apply { if (value.isNullOrEmpty()) remove("s_$key") else putString("s_$key", value) }.apply() }
+
     fun extra(key: String): String? = prefs.getString("x_$key", null)
     fun setExtra(key: String, value: String?) { prefs.edit().apply { if (value == null) remove("x_$key") else putString("x_$key", value) }.apply() }
 

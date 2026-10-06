@@ -202,8 +202,9 @@ class MainActivity : ComponentActivity() {
                 val apps = (com.past9.phoneaos.tools.AppCatalog.popular + conn.toolkits).distinctBy { it.slug }
                 conn = conn.copy(consumer = true, toolkits = apps)
                 try {
-                    val st = cc.statuses(ck, apps.map { it.slug })
-                    conn = conn.copy(loading = false, connected = st.filter { it.value.first == "ACTIVE" }.map { (slug, v) -> com.past9.phoneaos.tools.Connection(v.second, slug, v.first, slug) })
+                    val st = cc.accounts(ck, apps.map { it.slug })
+                    // One row per signed-in account: four Gmails show as four lines, each with its email.
+                    conn = conn.copy(loading = false, connected = st.values.flatten().filter { it.status == "ACTIVE" }.map { a -> com.past9.phoneaos.tools.Connection(a.id, a.slug, a.status, a.label.ifBlank { a.slug }) })
                     // A started-but-unfinished sign-in is just an expired link here: the app stays in the list with Connect.
                 } catch (e: Exception) { conn = conn.copy(loading = false, error = "Couldn't reach Composio: ${e.message}") }
                 return@launch
@@ -315,7 +316,8 @@ class MainActivity : ComponentActivity() {
                 }
                 composable("connections") {
                     LaunchedEffect(Unit) { refreshConnections() }
-                    ConnectionsScreen(conn, bottomPadding = barPad + 24.dp, actions = ConnectionsActions(
+                    val machines by g.runtime.machines.store.machines.collectAsStateWithLifecycle()
+                    ConnectionsScreen(conn.copy(machines = machines), bottomPadding = barPad + 24.dp, actions = ConnectionsActions(
                         onNotifications = { nav.navigate("notifications") },
                         onBack = { nav.popBackStack() },
                         onSaveKey = { k -> saveComposio(g, k).also { if (it == null) refreshConnections() } },
@@ -323,11 +325,12 @@ class MainActivity : ComponentActivity() {
                         onConnect = { slug -> scope.launch {
                             val ck = g.settings.composioKey()?.trim()
                             if (ck != null && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(ck)) {
+                                val before = conn.connected.count { it.toolkit == slug && it.status == "ACTIVE" }
                                 runCatching { com.past9.phoneaos.tools.ComposioConnect.connectLink(ck, slug) }.onSuccess { open(it) }.onFailure { conn = conn.copy(error = it.message) }
-                                // Pick up the new connection as soon as the sign-in finishes, without a manual refresh.
-                                repeat(60) { kotlinx.coroutines.delay(5000); if (conn.connected.any { it.toolkit == slug && it.status == "ACTIVE" }) return@launch
+                                // Pick up the new account as soon as the sign-in finishes, without a manual refresh.
+                                repeat(60) { kotlinx.coroutines.delay(5000)
                                     val now = runCatching { com.past9.phoneaos.tools.ComposioConnect.statuses(ck, listOf(slug))[slug] }.getOrNull()
-                                    if (now?.first == "ACTIVE") { refreshConnections(); return@launch } }
+                                    if (now?.first == "ACTIVE" && runCatching { com.past9.phoneaos.tools.ComposioConnect.accounts(ck, listOf(slug))[slug].orEmpty().count { it.status == "ACTIVE" } }.getOrDefault(0) > before) { refreshConnections(); return@launch } }
                             } else runCatching { g.runtime.composio.connect(slug) }.onSuccess { open(it) }.onFailure { conn = conn.copy(error = it.message) }
                         } },
                         onDisconnect = { c -> scope.launch {
@@ -335,6 +338,7 @@ class MainActivity : ComponentActivity() {
                             if (ck != null && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(ck)) runCatching { com.past9.phoneaos.tools.ComposioConnect.disconnect(ck, c.toolkit, c.id) }.onFailure { conn = conn.copy(error = it.message) }
                             else runCatching { g.runtime.composio.disconnect(c.id) }
                             refreshConnections() } },
+                        machine = machineActions(g),
                         onSearchAll = { q -> scope.launch {
                             val ck = g.settings.composioKey()?.trim() ?: return@launch
                             conn = conn.copy(searching = true, error = null)
@@ -469,6 +473,29 @@ class MainActivity : ComponentActivity() {
         saveModel = { m -> g.settings.setModel(m) },
         openUrl = ::open,
     )
+
+    private fun machineActions(g: Graph): MachineActions {
+        val store = g.runtime.machines.store
+        return MachineActions(
+            onSave = { m, pw, key, pass, newKey ->
+                store.save(m)
+                when (m.auth) {
+                    com.past9.phoneaos.machines.MachineAuth.PASSWORD -> if (pw.isNotEmpty()) store.setCredentials(m.id, pw, null, null)
+                    com.past9.phoneaos.machines.MachineAuth.KEY -> if (key.isNotBlank()) store.setCredentials(m.id, null, key.trim(), pass.ifEmpty { null })
+                    com.past9.phoneaos.machines.MachineAuth.NEW_KEY -> if (newKey) {
+                        val (priv, pub) = com.past9.phoneaos.machines.Crypto.newKey("agent-" + m.name.lowercase().replace(Regex("[^a-z0-9]+"), "-"))
+                        store.setCredentials(m.id, null, priv, null); store.setPublicKey(m.id, pub)
+                    }
+                }
+                store.get(m.id) ?: m
+            },
+            onTest = { m -> g.runtime.machines.test(m) },
+            onDelete = { id -> store.remove(id) },
+            onCopy = { t -> (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Public key", t)) },
+            publicKey = { id -> store.publicKey(id) },
+            reload = { id -> store.get(id) },
+        )
+    }
 
     private suspend fun testKey(p: Provider, key: String): String? {
         val g = App.graph(this)
