@@ -13,11 +13,12 @@ import java.io.File
 class MachineService(val store: MachineStore) {
     fun creds(m: Machine) = Creds(store.password(m.id), store.privateKey(m.id), store.passphrase(m.id))
 
-    fun open(m: Machine): Ssh.Session {
+    /** Network: always off the main thread (Android refuses sockets there). */
+    suspend fun open(m: Machine): Ssh.Session = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val via = m.via?.let { store.get(it) }?.let { it to creds(it) }
         val s = Ssh.open(m, creds(m), via)
         if (m.hostKey == null && s.hostKey.isNotBlank()) store.update(m.id) { it.copy(hostKey = s.hostKey) }
-        return s
+        s
     }
 
     /** Connect, sign in and find out what the machine is. Null when it worked, otherwise why not. */
@@ -32,7 +33,13 @@ class MachineService(val store: MachineStore) {
 
     fun need(ref: String): Machine = store.find(ref) ?: throw SshException("No machine called \"$ref\". Machines: ${store.machines.value.joinToString { it.name }.ifBlank { "none yet (the user adds them in Connections)" }}.")
 
-    suspend fun <T> with(ref: String, block: suspend (Machine, Ssh.Session) -> T): T { val m = need(ref); return open(m).use { block(m, it) } }
+    suspend fun <T> with(ref: String, block: suspend (Machine, Ssh.Session) -> T): T {
+        val m = need(ref)
+        // Errors go to the model: name the machine, never its address or account.
+        return try { open(m).use { block(m, it) } } catch (e: SshException) {
+            throw SshException((e.message ?: "").replace("${m.host}:${m.port}", m.name).replace(m.host, m.name).replace(" for ${m.user}", ""))
+        }
+    }
 }
 
 /**
@@ -77,7 +84,8 @@ private suspend fun approve(ctx: ToolContext, m: Machine, what: String, details:
 class MachineListTool(private val svc: MachineService) : Tool {
     override val spec = ToolSpec("machine_list", "List the computers and servers the user connected (Machines in Connections): name, address, what they are, and whether commands need approval.", schema())
     override suspend fun run(input: JSONObject, ctx: ToolContext): String = svc.store.machines.value.ifEmpty { return "No machines yet. The user can add any server or computer they have SSH access to in Connections > Machines." }
-        .joinToString("\n") { "${it.name}: ${it.address}${if (it.about.isNotBlank()) " · ${it.about}" else ""}${it.via?.let { v -> " · through ${svc.store.get(v)?.name ?: v}" } ?: ""} · ${if (it.trusted) "trusted (no approval needed)" else "changes need approval"}" }
+        // Names only: addresses, usernames and credentials never reach the model.
+        .joinToString("\n") { "${it.name}${if (it.about.isNotBlank()) ": ${it.about}" else ""} · ${if (it.trusted) "runs without asking" else "changes need the user's yes"}" }
 }
 
 class MachineRunTool(private val svc: MachineService) : Tool {

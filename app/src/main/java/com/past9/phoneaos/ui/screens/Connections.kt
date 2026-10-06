@@ -51,19 +51,27 @@ data class ConnectionsActions(
     val onAllowNotifications: () -> Unit = {},
     /** Search every Composio app (not just the popular list) for this name. */
     val onSearchAll: (String) -> Unit = {},
-    /** Open a machine (null = add one). */
-    val onMachine: (String?) -> Unit = {},
+    /** Machines: add, test, edit, remove. */
+    val machine: MachineActions = MachineActions(),
     val onNotifications: () -> Unit = {},
 )
 
 @Composable
-fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bottomPadding: androidx.compose.ui.unit.Dp = 48.dp) {
+fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bottomPadding: androidx.compose.ui.unit.Dp = 48.dp, initialSheet: String? = null) {
     var query by remember { mutableStateOf("") }
+    // Machines: "list", "new", or a machine id being edited.
+    var sheet by remember { mutableStateOf(initialSheet) }
+    when (val sh = sheet) {
+        null -> {}
+        "list" -> MachinesSheet(state.machines, actions.machine, onDismiss = { sheet = null }, onOpen = { sheet = it ?: "new" })
+        else -> MachineSheet(state.machines.firstOrNull { it.id == sh }, state.machines, actions.machine.copy(onDelete = { actions.machine.onDelete(it); sheet = "list" }),
+            onDismiss = { sheet = "list" }, onDone = { sheet = "list" })
+    }
     val activeCount = state.connected.count { it.status == "ACTIVE" }
     SubScreen("Connections", if (state.hasKey) (if (activeCount == 1) "1 app connected" else "$activeCount apps connected") else "Connect your apps", actions.onBack,
         actions = { if (state.hasKey) IconButton(onClick = actions.onRefresh) { Icon(Icons.Rounded.Refresh, "Refresh") } }) { pad ->
         LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            item { SectionHeader("On this phone", "Built in, nothing to set up", Modifier.padding(start = 4.dp, top = 4.dp)) }
+            item { SectionHeader("Built in", "On this phone, plus the machines you add", Modifier.padding(start = 4.dp, top = 4.dp)) }
             item {
                 AppCard(padding = PaddingValues(vertical = 4.dp)) {
                     PhoneLine(Icons.Rounded.Language, "Background browser", "Your agent's own browser keeps working while you use other apps", true, null)
@@ -73,9 +81,9 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                     Surface(onClick = actions.onNotifications, color = androidx.compose.ui.graphics.Color.Transparent) {
                         PhoneLine(Icons.Rounded.MarkEmailUnread, "Read my notifications", "Pick the apps your agent may learn from", false, null)
                     }
+                    MachinesLine(state.machines) { sheet = "list" }
                 }
             }
-            machinesSection(state.machines, actions.onMachine)
             item { SectionHeader("Your apps", if (state.consumer) "Tap Connect and sign in. Your agent can use it straight away." else "Gmail, Calendar, Drive, Slack and 250+ more, through Composio with your own key", Modifier.padding(start = 4.dp, top = 16.dp)) }
             if (!state.hasKey) item {
                 AppCard { ComposioKeyForm(actions.onSaveKey, actions.onOpenUrl) {} }
