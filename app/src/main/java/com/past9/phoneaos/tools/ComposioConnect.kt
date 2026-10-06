@@ -31,14 +31,27 @@ object ComposioConnect {
 
     fun isConsumerKey(key: String?) = key?.trim()?.startsWith("ck_") == true
 
-    private suspend fun send(key: String, body: JSONObject): JSONObject? = withContext(Dispatchers.IO) {
+    @Volatile private var protocol = "2025-06-18"
+
+    /** Composio Connect sits behind Cloudflare: a 502/503/504 is their server hiccuping, so retry a few times. */
+    private suspend fun send(key: String, body: JSONObject): JSONObject? {
+        var last: Exception? = null
+        for (attempt in 0 until 3) {
+            try { return sendOnce(key, body) } catch (e: ServerBusy) { last = e; kotlinx.coroutines.delay(2000L * (attempt + 1)) }
+        }
+        throw IllegalStateException("Composio Connect isn't answering right now (${last?.message}). Their server is having trouble; try again in a few minutes.")
+    }
+    private class ServerBusy(code: Int) : Exception("error $code")
+
+    private suspend fun sendOnce(key: String, body: JSONObject): JSONObject? = withContext(Dispatchers.IO) {
         val req = Request.Builder().url(URL).post(body.toString().toRequestBody("application/json".toMediaType()))
             .header("x-consumer-api-key", key).header("Accept", "application/json, text/event-stream")
-            .header("MCP-Protocol-Version", "2025-06-18")
+            .header("MCP-Protocol-Version", protocol)
             .apply { session?.let { header("Mcp-Session-Id", it) } }.build()
         sharedHttp.newCall(req).execute().use { res ->
             res.header("Mcp-Session-Id")?.let { session = it }
             val text = res.body?.string().orEmpty()
+            if (res.code in 500..599) throw ServerBusy(res.code)
             if (!res.isSuccessful) throw IllegalStateException("Composio Connect ${res.code}: " +
                 (res.header("X-Mcp-Auth-Failure-Reason") ?: runCatching { JSONObject(text).optJSONObject("error")?.optString("message") }.getOrNull() ?: text.take(200)))
             if (!body.has("id")) return@use null
@@ -54,10 +67,15 @@ object ComposioConnect {
     private fun rpc(method: String, params: JSONObject = JSONObject()) = JSONObject().put("jsonrpc", "2.0").put("id", ids.getAndIncrement()).put("method", method).put("params", params)
 
     private suspend fun ensureSession(key: String) {
-        if (session != null && sessionKey == key) return
+        // Their server is stateless (no Mcp-Session-Id), so "initialised for this key" is what we track.
+        if (sessionKey == key) return
         session = null
-        send(key, rpc("initialize", JSONObject().put("protocolVersion", "2025-06-18").put("capabilities", JSONObject())
-            .put("clientInfo", JSONObject().put("name", "Agent").put("version", "1"))))
+        fun init(v: String) = rpc("initialize", JSONObject().put("protocolVersion", v).put("capabilities", JSONObject())
+            .put("clientInfo", JSONObject().put("name", "Agent").put("version", "1")))
+        // Newest protocol first; if their server falls over on it, try the previous one.
+        try { protocol = "2025-06-18"; send(key, init(protocol)) }
+        catch (e: IllegalStateException) { protocol = "2025-03-26"; session = null; send(key, init(protocol)) }
+        sessionKey = key
         send(key, JSONObject().put("jsonrpc", "2.0").put("method", "notifications/initialized"))
         sessionKey = key
     }
@@ -74,7 +92,7 @@ object ComposioConnect {
             } while (cursor != null && all.size < 200)
             tools = all
             if (all.isEmpty()) "Composio Connect accepted the key but offered no tools." else null
-        }.getOrElse { session = null; it.message ?: "Couldn't reach Composio Connect" }
+        }.getOrElse { session = null; sessionKey = null; it.message ?: "Couldn't reach Composio Connect" }
     }
 
     suspend fun call(key: String, name: String, args: JSONObject): String = lock.withLock {
@@ -86,7 +104,7 @@ object ComposioConnect {
             return (if (r.optBoolean("isError")) "Error: " else "") + text.ifBlank { r.toString().take(4000) }
         }
         // Sessions expire: start a fresh one once before giving up.
-        runCatching { once() }.getOrElse { session = null; runCatching { once() }.getOrElse { "Error: ${it.message}" } }
+        runCatching { once() }.getOrElse { session = null; sessionKey = null; runCatching { once() }.getOrElse { "Error: ${it.message}" } }
     }
 
     private val writeWords = Regex("(SEND|REPLY|FORWARD|CREATE|DELETE|REMOVE|TRASH|UPDATE|PATCH|POST|PUBLISH|PAY|PURCHASE|ARCHIVE|MOVE|INVITE|SHARE|INSERT|UPLOAD|ACCEPT|DECLINE|CANCEL)")
