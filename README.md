@@ -47,7 +47,7 @@ Onboarding walks you through this. In order:
    | Option | What you need | Notes |
    |---|---|---|
    | API key | A key from DeepSeek, OpenRouter, Gemini, Anthropic, OpenAI or OpenCode Zen/Go | Runs on the app's own Kotlin agent loop. Fastest to set up. |
-   | Any OpenAI-compatible endpoint | Base URL, model name, key | Works for self-hosted servers in principle (llama.cpp, Ollama, vLLM). Not tested yet. |
+   | Any OpenAI-compatible endpoint | Base URL, model name, key | Hosted services or your own server. See [Self-hosted servers](#self-hosted-servers-ollama-lm-studio-vllm-strata). |
    | ChatGPT subscription | A ChatGPT account (free worked in testing) | Runs OpenAI Codex on the phone through the bundled runtime. Sign in in-app. |
    | Claude subscription | Claude Pro or Max | Runs Claude Code on the phone through the bundled runtime. **See the Risks section first.** |
 
@@ -55,6 +55,14 @@ Onboarding walks you through this. In order:
 3. **Connections (optional).** Paste your Composio API key under **Connections**, then connect the apps you want. The agent can also ask to connect an app when it needs one, and the sign-in opens inside the app's browser.
 4. **Voice (optional).** **Settings > Voice**: add a Google/Gemini, OpenAI or ElevenLabs key for spoken voice notes. A Gemini key also turns on live calls.
 5. **Notifications (optional).** Choose which apps the agent may read notifications from. Nothing is read until you do.
+
+## Self-hosted servers (Ollama, LM Studio, vLLM, Strata…)
+
+Pick **Other (OpenAI-compatible)**, then enter the server's base URL (usually ending in `/v1`), the model name and a key (any placeholder works if your server doesn't check keys).
+
+- **HTTPS is the default and the recommended way.** Put the server behind a reverse proxy with a certificate (Caddy, nginx), or use `tailscale serve` to get an `https://` address on your tailnet.
+- **Plain HTTP on your LAN** (e.g. `http://192.168.1.20:8080/v1`) is blocked unless you opt in. When the URL starts with `http://`, a warning appears with a checkbox: *Allow unencrypted HTTP for this server*. Requests and your API key then travel in plain text, so only tick it on a network you trust, like your home LAN.
+- The opt-in is saved with that server and cleared when you switch provider. Built-in providers always use HTTPS.
 
 ## Privacy
 

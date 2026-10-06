@@ -63,7 +63,7 @@ data class OnboardingActions(
     val chooseSub: (SubKind) -> Unit = {},
     val subAvailable: (SubKind) -> Boolean = { false },
     val saveKey: (Provider, String) -> Unit = { _, _ -> },
-    val saveCustom: (baseUrl: String, model: String) -> Unit = { _, _ -> },
+    val saveCustom: (baseUrl: String, model: String, allowHttp: Boolean) -> Unit = { _, _, _ -> },
     /** Makes one tiny call with the key the user typed. Returns null on success, else the reason. */
     val testKey: suspend (Provider, String) -> String? = { _, _ -> null },
     val saveComposio: suspend (String) -> String? = { null },
@@ -427,10 +427,11 @@ val keySteps = mapOf(
 )
 
 @Composable
-fun KeyStep(provider: Provider, onProvider: (Provider) -> Unit, actions: OnboardingActions, next: () -> Unit) {
+fun KeyStep(provider: Provider, onProvider: (Provider) -> Unit, actions: OnboardingActions, initialBaseUrl: String = "", next: () -> Unit) {
     var key by remember(provider) { mutableStateOf("") }
-    var baseUrl by remember(provider) { mutableStateOf("") }
+    var baseUrl by remember(provider) { mutableStateOf(initialBaseUrl) }
     var model by remember(provider) { mutableStateOf("") }
+    var allowHttp by remember(provider) { mutableStateOf(false) }
     var show by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var result by remember(provider) { mutableStateOf<String?>(null) } // "" = ok
@@ -442,13 +443,16 @@ fun KeyStep(provider: Provider, onProvider: (Provider) -> Unit, actions: Onboard
     var picking by remember { mutableStateOf(false) }
     // The moment the key works, show what it can run: pick a model right there.
     LaunchedEffect(result) { if (result == "" && !custom) { models = null; picking = true; models = runCatching { actions.listModels(provider, key) }.getOrDefault(emptyList()) } }
-    val ready = key.length > 10 && (!custom || (baseUrl.startsWith("http") && model.isNotBlank()))
+    // HTTPS by default; a plain http:// server needs the explicit opt-in below (loopback is always fine).
+    val plainHttp = custom && com.past9.phoneaos.agent.HttpPolicy.isHttp(baseUrl) && !com.past9.phoneaos.agent.HttpPolicy.isLoopback(baseUrl)
+    val urlProblem = if (custom && baseUrl.isNotBlank()) com.past9.phoneaos.agent.HttpPolicy.blockReason(baseUrl, allowHttp) else null
+    val ready = key.length > 10 && (!custom || (baseUrl.isNotBlank() && urlProblem == null && model.isNotBlank()))
     StepPage("API key", "Paste your key", "Stored encrypted on this phone. Only ever sent to ${if (custom) "the service you enter" else provider.label}.", bottom = {
         BigButton(if (result == "") "Continue" else if (busy) "Checking…" else "Check key", enabled = ready && !busy, icon = if (result == "") Icons.AutoMirrored.Rounded.ArrowForward else null) {
             if (result == "") { actions.saveKey(provider, key); (picked ?: models?.firstOrNull())?.let { actions.saveModel(it.id) }; next() }
             else scope.launch {
                 busy = true
-                if (custom) actions.saveCustom(baseUrl, model)
+                if (custom) actions.saveCustom(baseUrl, model, plainHttp && allowHttp)
                 result = actions.testKey(provider, key) ?: ""; busy = false
                 if (result == "") actions.saveKey(provider, key)
             }
@@ -463,7 +467,27 @@ fun KeyStep(provider: Provider, onProvider: (Provider) -> Unit, actions: Onboard
         }
         Spacer(Modifier.height(20.dp))
         if (custom) {
-            OutlinedTextField(baseUrl, { baseUrl = it.trim(); result = null }, label = { Text("Base URL") }, placeholder = { Text("https://api.example.com/v1") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
+            OutlinedTextField(baseUrl, { baseUrl = it.trim(); result = null }, label = { Text("Base URL") }, placeholder = { Text("https://api.example.com/v1") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium,
+                isError = urlProblem != null && !plainHttp, supportingText = urlProblem?.takeIf { !plainHttp }?.let { ({ Text(it, color = MaterialTheme.colorScheme.error) }) })
+            if (plainHttp) {
+                Spacer(Modifier.height(10.dp))
+                Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.Warning, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onErrorContainer)
+                            Spacer(Modifier.width(8.dp))
+                            Text("This address isn't encrypted", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onErrorContainer)
+                        }
+                        Row(Modifier.fillMaxWidth().clickable { allowHttp = !allowHttp; result = null }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(allowHttp, { allowHttp = it; result = null })
+                            Text("Allow unencrypted HTTP for this server. Requests and your API key are sent in plain text. Only use this on a network you trust, like your home LAN.",
+                                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer)
+                        }
+                        if (!allowHttp) Text("Plain HTTP is blocked until you tick the box. Or use an https:// address.", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
+                    }
+                }
+            }
             Spacer(Modifier.height(10.dp))
             OutlinedTextField(model, { model = it.trim(); result = null }, label = { Text("Model") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
             Spacer(Modifier.height(10.dp))

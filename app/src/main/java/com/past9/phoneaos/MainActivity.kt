@@ -127,7 +127,7 @@ class MainActivity : ComponentActivity() {
             scope.launch {
                 runCatching {
                     modelList = if (onSub) com.past9.phoneaos.agent.ModelCatalog.forSubscription(this@MainActivity, settings.subKind)
-                    else com.past9.phoneaos.agent.ModelCatalog.forKey(this@MainActivity, settings.provider, g.settings.apiKey(settings.provider).orEmpty(), settings.baseUrl)
+                    else com.past9.phoneaos.agent.ModelCatalog.forKey(this@MainActivity, settings.provider, g.settings.apiKey(settings.provider).orEmpty(), settings.baseUrl, settings.allowHttp)
                 }.onFailure { modelErr = "Couldn't load models: ${it.message}" }
             }
         }
@@ -428,11 +428,11 @@ class MainActivity : ComponentActivity() {
         chooseStyle = { a, m -> g.settings.setAccent(a); g.settings.setMascot(m) },
         chooseSub = g.settings::setSubKind,
         subAvailable = { k -> com.past9.phoneaos.runtime.SubscriptionRuntime(this, k).available },
-        saveCustom = { url, model -> g.settings.setProvider(Provider.CUSTOM); g.settings.setBaseUrl(url); g.settings.setModel(model) },
+        saveCustom = { url, model, http -> g.settings.setProvider(Provider.CUSTOM); g.settings.setBaseUrl(url); g.settings.setModel(model); g.settings.setAllowHttp(http) },
         saveKey = { p, k -> if (g.settings.state.value.provider != p) g.settings.setProvider(p); g.settings.setApiKey(p, k) },
         testKey = { p, k -> testKey(p, k) },
         saveComposio = { k -> saveComposio(g, k) },
-        listModels = { p, k -> com.past9.phoneaos.agent.ModelCatalog.forKey(this, p, k, if (p == Provider.CUSTOM) g.settings.state.value.baseUrl else p.baseUrl) },
+        listModels = { p, k -> com.past9.phoneaos.agent.ModelCatalog.forKey(this, p, k, if (p == Provider.CUSTOM) g.settings.state.value.baseUrl else p.baseUrl, p == Provider.CUSTOM && g.settings.state.value.allowHttp) },
         saveModel = { m -> g.settings.setModel(m) },
         openUrl = ::open,
     )
@@ -441,7 +441,7 @@ class MainActivity : ComponentActivity() {
         val g = App.graph(this)
         val st = g.settings.state.value
         val model = if (st.provider == p && st.model.isNotBlank()) st.model else p.defaultModel
-        val provider = com.past9.phoneaos.agent.AgentRuntime.providerFor(p, key, if (p == Provider.CUSTOM) st.baseUrl else p.baseUrl)
+        val provider = com.past9.phoneaos.agent.AgentRuntime.providerFor(p, key, if (p == Provider.CUSTOM) st.baseUrl else p.baseUrl, p == Provider.CUSTOM && st.allowHttp)
         suspend fun ping(m: String) = provider.complete("Reply with OK.", listOf(Msg.user("ping")), emptyList(), m, 16)
         return try { ping(model); null } catch (e: com.past9.phoneaos.agent.ProviderException) {
             // A retired model (Google refuses Gemini 2.5 to new keys) shouldn't block setup: switch to the provider's default.

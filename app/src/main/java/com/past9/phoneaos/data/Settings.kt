@@ -40,6 +40,8 @@ data class AgentSettings(
     val composioEnabled: Boolean = false,
     val onboarded: Boolean = false,
     val baseUrl: String = "",
+    /** The user opted in to plain http:// for their custom (self-hosted) server. Off by default. */
+    val allowHttp: Boolean = false,
     val accent: String = "iris",
     val mascot: String = "scout",
     val subKind: SubKind = SubKind.CLAUDE,
@@ -99,6 +101,7 @@ class SettingsStore(context: Context) {
             composioEnabled = !secrets.getString("composio", null).isNullOrBlank(),
             onboarded = prefs.getBoolean("onboarded", false),
             baseUrl = prefs.getString("baseUrl", null) ?: provider.baseUrl,
+            allowHttp = prefs.getBoolean("allowHttp", false),
             accent = prefs.getString("accent", "iris") ?: "iris",
             mascot = prefs.getString("mascot", "scout") ?: "scout",
             subModel = prefs.getString("subModel_" + (prefs.getString("subKind", "CLAUDE") ?: "CLAUDE"), null) ?: "",
@@ -115,8 +118,9 @@ class SettingsStore(context: Context) {
     private fun edit(block: SharedPreferences.Editor.() -> Unit) { prefs.edit().apply(block).apply(); _state.value = read() }
 
     fun setMode(mode: PowerMode) = edit { putString("mode", mode.name) }
-    fun setProvider(p: Provider) = edit { putString("provider", p.name); remove("model"); remove("helperModel"); remove("baseUrl") }
+    fun setProvider(p: Provider) = edit { putString("provider", p.name); remove("model"); remove("helperModel"); remove("baseUrl"); remove("allowHttp") }
     fun setBaseUrl(url: String) = edit { putString("baseUrl", url.trim().trimEnd('/')) }
+    fun setAllowHttp(on: Boolean) = edit { putBoolean("allowHttp", on) }
     fun setNotifApp(pkg: String, on: Boolean) = edit { putStringSet("notifApps", (_state.value.notifApps.toMutableSet().apply { if (on) add(pkg) else remove(pkg) })) }
     fun addBrowserProfile(name: String) = edit { putString("browserProfiles", (_state.value.browserProfiles + name.trim()).distinct().joinToString("\n")) }
     fun removeBrowserProfile(name: String) = edit { putString("browserProfiles", _state.value.browserProfiles.filter { it != name }.ifEmpty { listOf("Personal") }.joinToString("\n")) }

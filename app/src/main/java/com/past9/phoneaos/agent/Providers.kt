@@ -44,7 +44,8 @@ internal suspend fun postJson(http: OkHttpClient, url: String, headers: Map<Stri
     }
 
 /** Anthropic Messages API. */
-class AnthropicProvider(private val apiKey: String, private val baseUrl: String = "https://api.anthropic.com/v1", private val http: OkHttpClient = sharedHttp) : LlmProvider {
+class AnthropicProvider(private val apiKey: String, private val baseUrl: String = "https://api.anthropic.com/v1", private val http: OkHttpClient = sharedHttp,
+                        private val allowHttp: Boolean = false) : LlmProvider {
     override val name = "anthropic"
 
     override suspend fun complete(system: String, messages: List<Msg>, tools: List<ToolSpec>, model: String, maxTokens: Int): Completion {
@@ -53,6 +54,7 @@ class AnthropicProvider(private val apiKey: String, private val baseUrl: String 
         if (tools.isNotEmpty()) body.put("tools", JSONArray().apply {
             tools.forEach { put(JSONObject().put("name", it.name).put("description", it.description).put("input_schema", it.schema)) }
         })
+        HttpPolicy.check(baseUrl, allowHttp)
         val res = postJson(http, "$baseUrl/messages", mapOf("x-api-key" to apiKey, "anthropic-version" to "2023-06-01", "User-Agent" to USER_AGENT), body)
         val content = res.optJSONArray("content") ?: JSONArray()
         val blocks = (0 until content.length()).mapNotNull { i ->
@@ -86,7 +88,9 @@ class OpenAiCompatProvider(override val name: String, private val apiKey: String
                            /** Provider-specific body fields, e.g. DeepSeek's thinking switch. */
                            private val extra: JSONObject = JSONObject(),
                            /** Provider-specific headers, e.g. OpenCode Go's per-conversation session id. */
-                           private val extraHeaders: () -> Map<String, String> = { emptyMap() }) : LlmProvider {
+                           private val extraHeaders: () -> Map<String, String> = { emptyMap() },
+                           /** The user opted in to plain http:// for this server (self-hosted on their LAN). */
+                           private val allowHttp: Boolean = false) : LlmProvider {
 
     override suspend fun complete(system: String, messages: List<Msg>, tools: List<ToolSpec>, model: String, maxTokens: Int): Completion {
         val wire = JSONArray().put(JSONObject().put("role", "system").put("content", system))
@@ -99,6 +103,7 @@ class OpenAiCompatProvider(override val name: String, private val apiKey: String
         val headers = mutableMapOf("Authorization" to "Bearer $apiKey", "User-Agent" to USER_AGENT)
         headers.putAll(extraHeaders())
         if (name == "openrouter") headers["X-Title"] = "Phone agent"
+        HttpPolicy.check(baseUrl, allowHttp)
         val res = postJson(http, "${baseUrl.trimEnd('/')}/chat/completions", headers, body)
         val choice = res.optJSONArray("choices")?.optJSONObject(0) ?: throw ProviderException("No choices in response")
         val msg = choice.getJSONObject("message")
