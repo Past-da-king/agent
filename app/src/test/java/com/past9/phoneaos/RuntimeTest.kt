@@ -33,10 +33,12 @@ class ScriptedProvider(vararg replies: Msg) : LlmProvider {
     val helperQueue = ConcurrentLinkedQueue<Msg>()
     @Volatile var helperDelay = 150L
     val helperTools = mutableListOf<List<String>>()
+    val helperModels = java.util.Collections.synchronizedList(mutableListOf<String>())
     override suspend fun complete(system: String, messages: List<Msg>, tools: List<ToolSpec>, model: String, maxTokens: Int): Completion {
         synchronized(seen) { seen += system to messages.toList() }
         if (system.contains("You are a HELPER")) {
             synchronized(helperTools) { helperTools += tools.map { it.name } }
+            helperModels += model
             delay(helperDelay); return Completion(helperQueue.poll() ?: helperReply(messages.first().text), "end_turn")
         }
         return Completion(queue.poll() ?: Msg(Role.ASSISTANT, listOf(Block.Text("(no more script)"))), "end_turn")
@@ -45,6 +47,13 @@ class ScriptedProvider(vararg replies: Msg) : LlmProvider {
 
 fun call(name: String, input: JSONObject, id: String = "c" + System.nanoTime()) = Msg(Role.ASSISTANT, listOf(Block.ToolCall(id, name, input)))
 fun say(text: String) = Msg(Role.ASSISTANT, listOf(Block.Text(text)))
+val quiet = object : ToolContext {
+    override val agentLabel = "main"
+    override suspend fun activity(text: String, meta: JSONObject) = 0L
+    override suspend fun updateActivity(id: Long, text: String, meta: JSONObject) {}
+    override suspend fun ask(question: String, options: List<String>): String? = null
+    override suspend fun notify(title: String, body: String) {}
+}
 fun delegate(vararg briefs: String) = call("delegate", JSONObject().put("tasks", JSONArray(briefs.toList())))
 private fun List<Pair<String, List<Msg>>>.main() = filter { !it.first.contains("You are a HELPER") }
 private fun List<Pair<String, List<Msg>>>.helper() = filter { it.first.contains("You are a HELPER") }
@@ -99,23 +108,83 @@ class RuntimeTest {
         assertTrue(p.seen.last().second.size >= 4)
     }
 
-    @Test fun theMainAgentOnlyOrchestrates() {
+    @Test fun theMainAgentOrchestratesAndOnlyDoesSmallJobs() {
         val rt = runtime(ScriptedProvider())
         val main = rt.tools().map { it.spec.name }.toSet()
         val worker = rt.tools(forHelper = true).map { it.spec.name }.toSet()
-        // The main agent understands and plans; it has nothing that acts on the world.
-        assertTrue(main.containsAll(listOf("delegate", "helpers_status", "helper_stop", "memory_save", "memory_update", "goal_create", "task_add", "ask_user")))
-        listOf("web_fetch", "run_code", "browser_open", "routine_create", "routine_delete", "request_approval", "phone_files", "location_get", "watcher_save")
-            .forEach { assertFalse("main agent must not have $it", it in main) }
-        // Helpers do the work, and can't hand it on again.
-        assertTrue(worker.containsAll(listOf("web_fetch", "run_code", "browser_open", "browser_handoff", "routine_create", "request_approval", "ask_user")))
+        assertTrue(main.containsAll(listOf("delegate", "helper_steer", "helper_push", "helpers_status", "helper_stop", "memory_save", "memory_update", "goal_create", "task_add", "ask_user")))
+        // Small jobs it may do itself (budgeted); routines, watchers and skills stay with helpers.
+        assertTrue(main.containsAll(listOf("browser_open", "web_fetch")))
+        listOf("routine_create", "routine_delete", "watcher_save", "skill_save").forEach { assertFalse("main agent must not have $it", it in main) }
+        assertTrue(worker.containsAll(listOf("web_fetch", "run_code", "browser_open", "browser_handoff", "routine_create", "request_approval", "ask_user", "skill_save", "skill_find")))
         assertFalse("delegate" in worker)
+    }
+
+    @Test fun theMainAgentGetsFiveActionStepsAThenMustDelegate() = runBlocking {
+        val now = { call("phone_files", JSONObject().put("query", "*.pdf")) }
+        val p = ScriptedProvider(now(), now(), now(), now(), now(), now(), say("Handing it over."))
+        val rt = runtime(p); rt.send("where am I, over and over"); waitIdle(rt)
+        val results = p.seen.main().drop(1).map { (it.second.last().blocks.single() as Block.ToolResult).content }
+        assertEquals(6, results.size)
+        assertTrue(results.take(5).none { it.startsWith("Step limit") })
+        assertTrue(results[5].startsWith("Step limit"))
+        // The next turn gets a fresh budget.
+        p.queue.add(now()); p.queue.add(say("ok")); rt.send("again"); waitIdle(rt)
+        assertFalse((p.seen.main().last().second.last().blocks.single() as Block.ToolResult).content.startsWith("Step limit"))
+    }
+
+    @Test fun aWorkingHelperCanBeSteeredWithoutStopping() = runBlocking {
+        val p = ScriptedProvider(delegate("Book the movie at 9pm"), say("On it."), say("Booked the 7pm."))
+        p.helperDelay = 700
+        p.helperQueue += call("now", JSONObject()); p.helperQueue += say("Booked the 7pm show.")
+        val rt = runtime(p)
+        rt.send("book the movie")
+        withTimeout(3000) { while (rt.running.value.isEmpty()) delay(20) }
+        val id = rt.running.value.single().id
+        val steer = rt.tools().first { it.spec.name == "helper_steer" }
+        val out = steer.run(JSONObject().put("id", id).put("message", "The user means the 7pm show, not 9pm."), quiet)
+        assertTrue(out.contains("keeps going"))
+        waitIdle(rt)
+        val h = p.seen.helper()
+        assertEquals(2, h.size) // never restarted
+        assertTrue(h.last().second.last().text.contains("[The main agent, while you work] The user means the 7pm show"))
+        assertEquals("done", JSONObject(db.chat().get(id)!!.meta).getString("state"))
+    }
+
+    @Test fun aHelperGoingTheWrongWayCanBeRestartedWithNewInformation() = runBlocking {
+        val p = ScriptedProvider(delegate("Find flights to Cape Town"), say("On it."), say("Here you go."))
+        p.helperDelay = 3000
+        val rt = runtime(p)
+        rt.send("flights")
+        withTimeout(3000) { while (rt.running.value.isEmpty()) delay(20) }
+        val id = rt.running.value.single().id
+        p.helperDelay = 50
+        val out = rt.tools().first { it.spec.name == "helper_steer" }.run(JSONObject().put("id", id).put("message", "Actually Durban, not Cape Town.").put("restart", true), quiet)
+        assertTrue(out.contains("Stopped helper"))
+        waitIdle(rt)
+        val last = p.seen.helper().last().second
+        assertEquals("Find flights to Cape Town", last.first().text)
+        assertTrue(last.last().text.contains("Actually Durban"))
+        val meta = JSONObject(db.chat().get(id)!!.meta)
+        assertEquals("done", meta.getString("state")); assertEquals(1, meta.getInt("pushes"))
+    }
+
+    @Test fun helpersLeaveSkillsForTheNextHelper() = runBlocking {
+        val p = ScriptedProvider(delegate("Get the Takealot price of a Kindle"), say("On it."), say("R 2,499."))
+        p.helperQueue += call("skill_save", JSONObject().put("name", "Takealot prices").put("when", "Reading a price on takealot.com")
+            .put("steps", "1. Open the product page in the browser, not web_fetch (prices load by script).\n2. Read the price under the title."))
+        p.helperQueue += say("R 2,499 (takealot.com).")
+        val rt = runtime(p); rt.send("kindle price?"); waitIdle(rt)
+        assertEquals("skill", db.memory().list().single { it.title == "Takealot prices" }.kind)
+        // The next helper on a Takealot job gets it in its instructions; the main agent's memory recall leaves skills out.
+        assertTrue(rt.systemPrompt("check a takealot price", role = PromptRole.HELPER).contains("SKILLS EARLIER HELPERS LEFT"))
+        assertFalse(rt.systemPrompt("check a takealot price").contains("SKILLS EARLIER HELPERS LEFT"))
     }
 
     @Test fun mainAgentPromptSaysDelegateNeverDo() = runBlocking {
         val rt = runtime(ScriptedProvider())
         val sys = rt.systemPrompt("book me an uber")
-        assertTrue(sys.contains("You NEVER do the work yourself"))
+        assertTrue(sys.contains("hard limit of 5 action steps"))
         assertTrue(sys.contains("ASSUME YOU ALREADY KNOW"))
         assertFalse(sys.contains("You are a HELPER"))
         assertTrue(rt.systemPrompt("x", role = PromptRole.HELPER).contains("You are a HELPER"))
@@ -204,6 +273,48 @@ class RuntimeTest {
         assertEquals("stopped", JSONObject(db.chat().get(id)!!.meta).getString("state"))
         assertTrue(p.seen.main().none { m -> m.second.any { it.text.contains("[Helper #") } })
         assertEquals(0, rt.status.value.helpers)
+    }
+
+    @Test fun briefsGoToTheTaggedHelperModel() = runBlocking {
+        settings.setHelperRoster(listOf(com.past9.phoneaos.data.HelperModel("big-model", "Big", listOf("Hard problems")),
+            com.past9.phoneaos.data.HelperModel("small-model", "Small", listOf("Quick lookups", "Web research"))))
+        val p = ScriptedProvider(call("delegate", JSONObject().put("tasks", JSONArray(listOf("Weather in Durban", "Plan the move"))).put("models", JSONArray(listOf("Small", "big-model")))), say("Two helpers on it."))
+        val rt = runtime(p)
+        val sys = rt.systemPrompt("weather")
+        assertTrue(sys.contains("YOUR HELPERS") && sys.contains("Small (id: small-model): good for Quick lookups, Web research"))
+        rt.send("weather and the move"); waitIdle(rt)
+        assertEquals(setOf("small-model", "big-model"), p.helperModels.toSet())
+        // No model named: the first on the roster.
+        p.queue.add(delegate("Anything")); p.queue.add(say("ok"))
+        p.helperModels.clear(); rt.send("one more"); waitIdle(rt)
+        assertEquals(listOf("big-model"), p.helperModels.toList())
+    }
+
+    @Test fun aHelperThatGivesUpIsPushedBackAndKeepsItsWork() = runBlocking {
+        val p = ScriptedProvider(delegate("Find the opening hours of the Durban library"), say("On it."), say("Sending it back."), say("Open 8 to 5."))
+        p.helperQueue += say("I can't access that site.")
+        p.helperQueue += say("Found it: open 8:00 to 17:00 weekdays (durban.gov.za).")
+        val rt = runtime(p)
+        rt.send("library hours?"); waitIdle(rt)
+        val back = p.seen.main().last().second.last().text
+        assertTrue(back.contains("helper_push") && back.contains("believe it can do it"))
+        val id = db.chat().all().first().first { it.kind == "helper" }.id
+        val out = rt.tools().first { it.spec.name == "helper_push" }.run(JSONObject().put("id", id).put("message", "Try the city's own site. You can do this."), object : ToolContext {
+            override val agentLabel = "main"
+            override suspend fun activity(text: String, meta: JSONObject) = 0L
+            override suspend fun updateActivity(id: Long, text: String, meta: JSONObject) {}
+            override suspend fun ask(question: String, options: List<String>): String? = null
+            override suspend fun notify(title: String, body: String) {}
+        })
+        assertTrue(out.contains("back on it"))
+        waitIdle(rt)
+        // It carried on in its own conversation: the first brief, its "can't", then the push.
+        val h = p.seen.helper().last().second
+        assertEquals("Find the opening hours of the Durban library", h.first().text)
+        assertTrue(h.last().text.contains("Try the city's own site"))
+        val meta = JSONObject(db.chat().get(id)!!.meta)
+        assertEquals(1, meta.getInt("pushes")); assertEquals("done", meta.getString("state"))
+        assertTrue(p.seen.main().last().second.last().text.contains("after 1 push"))
     }
 
     @Test fun goalsAndTasksAutoAchieve() = runBlocking {

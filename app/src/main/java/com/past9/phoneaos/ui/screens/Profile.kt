@@ -51,7 +51,7 @@ fun ProfileScreen(home: HomeState, memories: List<MemoryRow>, actions: ProfileAc
     val helpers = remember(home.items) { HelperView.from(home.items) }
     var openHelper by remember { mutableStateOf<Long?>(null) }
     val stop = LocalStopHelper.current
-    helpers.firstOrNull { it.id == openHelper }?.let { h -> HelperSheet(h, stop, onDismiss = { openHelper = null }, now = home.now) }
+    helpers.firstOrNull { it.id == openHelper && it.working }?.let { h -> HelperSheet(h, stop, onDismiss = { openHelper = null }, now = home.now) }
     val about = (memories.filter { it.pinned } + memories.filter { !it.pinned }.sortedByDescending { it.updatedAt }).distinctBy { it.id }.take(6)
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 48.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
@@ -81,15 +81,10 @@ fun ProfileScreen(home: HomeState, memories: List<MemoryRow>, actions: ProfileAc
         }
         item {
             val running = helpers.filter { it.working }
-            SectionHeader("Helpers", if (running.isEmpty()) "None working right now. I hand every job to a helper." else "${running.size} working for you right now. Tap one to see it.",
+            SectionHeader("Helpers", if (running.isEmpty()) "None working right now. I hand bigger jobs to helpers." else "${running.size} working for you right now. Tap one to see it.",
                 Modifier.padding(horizontal = 20.dp))
         }
         items(helpers.filter { it.working }, key = { "h${it.id}" }) { h -> HelperCard(h, onClick = { openHelper = h.id }, modifier = Modifier.padding(horizontal = 16.dp), now = home.now) }
-        val recent = helpers.filter { !it.working }.takeLast(3).reversed()
-        if (recent.isNotEmpty()) {
-            item { Text("RECENTLY FINISHED", style = Eyebrow, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 20.dp, top = 6.dp)) }
-            items(recent, key = { "h${it.id}" }) { h -> HelperCard(h, onClick = { openHelper = h.id }, modifier = Modifier.padding(horizontal = 16.dp), now = home.now) }
-        }
         item { SectionHeader("What I think about you", "Things I keep in mind so you don't repeat yourself", Modifier.padding(horizontal = 20.dp)) { TextButton(onClick = actions.onMemory) { Text("All") } } }
         item {
             Surface(shape = MaterialTheme.shapes.extraLarge, color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {

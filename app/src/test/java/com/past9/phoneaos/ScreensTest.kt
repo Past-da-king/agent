@@ -217,6 +217,14 @@ class ScreensTest(private val dark: Boolean) {
     }
     @Test fun helperSheetWorking() { sheet("84-sheet-helper-working") { com.past9.phoneaos.ui.HelperSheet(com.past9.phoneaos.ui.HelperView.from(demoHelpers)[0], {}, {}, now = now) } }
     @Test fun helperSheetDone() { sheet("85-sheet-helper-done") { com.past9.phoneaos.ui.HelperSheet(com.past9.phoneaos.ui.HelperView.from(demoHelpers)[2], {}, {}, now = now) } }
+    @Test fun helperRoster() { sheet("86-sheet-helper-roster") { HelperRosterSheet(listOf(
+        com.past9.phoneaos.agent.ModelInfo("anthropic/claude-opus-5-5", "Claude Opus 5.5", true, "2026-08-01"),
+        com.past9.phoneaos.agent.ModelInfo("anthropic/claude-sonnet-5-5", "Claude Sonnet 5.5", true, "2026-08-01"),
+        com.past9.phoneaos.agent.ModelInfo("deepseek/deepseek-v4.1-flash", "DeepSeek V4.1 Flash", false, "2026-09-01"),
+        com.past9.phoneaos.agent.ModelInfo("google/gemini-3-flash", "Gemini 3 Flash", true, "2026-07-01"),
+        com.past9.phoneaos.agent.ModelInfo("openai/gpt-5-mini", "GPT-5 mini", true, "2026-05-01")), null,
+        listOf(com.past9.phoneaos.data.HelperModel("anthropic/claude-sonnet-5-5", "Claude Sonnet 5.5", listOf("Web research", "Browsing sites", "Writing")),
+            com.past9.phoneaos.data.HelperModel("deepseek/deepseek-v4.1-flash", "DeepSeek V4.1 Flash", listOf("Quick lookups", "Cheap bulk work", "Job applications"))), {}, {}) } }
     @Test fun sheetTask() { sheet("80-sheet-task") { AddTaskSheet({}, {}) { _, _ -> } } }
     @Test fun sheetMemory() { sheet("81-sheet-memory") { PageEditor(MemoryRow(id = 3, title = "Lerato", body = "Lerato is his business partner at Acme. Invoices go to her on the 25th.", kind = "person", topics = "work, acme"), {}, {}, {}) } }
     @Test fun sheetMemoryNew() { sheet("82-sheet-memory-new") { PageEditor(MemoryRow(id = 0, title = "", body = "", source = "user"), {}, {}) } }

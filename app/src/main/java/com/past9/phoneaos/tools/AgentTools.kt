@@ -3,6 +3,7 @@ package com.past9.phoneaos.tools
 import com.past9.phoneaos.agent.Tool
 import com.past9.phoneaos.agent.ToolContext
 import com.past9.phoneaos.agent.ToolSpec
+import com.past9.phoneaos.agent.bool
 import com.past9.phoneaos.agent.enumOf
 import com.past9.phoneaos.agent.int
 import com.past9.phoneaos.agent.schema
@@ -17,21 +18,22 @@ import org.json.JSONObject
  * in the background, then ends its turn, so the user can keep talking to it while helpers run.
  * When a helper finishes, its result comes back to the main agent as a new message.
  */
-class DelegateTool(private val start: suspend (task: String, label: String) -> Long) : Tool {
+class DelegateTool(private val start: suspend (task: String, label: String, model: String?) -> Long) : Tool {
     override val spec = ToolSpec("delegate", "Set helper agents working in the background. They do ALL the actual work: browsing, searching the web, apps, booking, " +
         "sending, files, code, machines, creating routines. Each brief must stand alone: the goal, everything you know that matters (names, dates, the user's " +
         "preferences and constraints from memory), exactly what to do or find, what to hand back, and anything that needs the user's approval. Returns at once; " +
         "each helper's result arrives later as a message from it. Several briefs run at the same time.",
         schema(listOf("tasks"), "tasks" to strList("1 to 5 self-contained briefs, one per helper"),
-            "labels" to strList("A 2 to 4 word name per helper, same order (e.g. 'Uber to airport'). The user sees these.")))
+            "labels" to strList("A 2 to 4 word name per helper, same order (e.g. 'Uber to airport'). The user sees these."),
+            "models" to strList("Optional: which helper model runs each brief, same order (an id or name from YOUR HELPERS). Leave out for the default.")))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val arr = input.optJSONArray("tasks") ?: return "No tasks given"
-        val labels = input.optJSONArray("labels")
+        val labels = input.optJSONArray("labels"); val models = input.optJSONArray("models")
         val tasks = (0 until arr.length()).map { arr.getString(it) }.filter { it.isNotBlank() }.take(5)
         if (tasks.isEmpty()) return "No tasks given"
         val started = tasks.mapIndexed { i, t ->
             val label = labels?.optString(i)?.trim()?.takeIf { it.isNotBlank() }?.take(40) ?: t.trim().split(Regex("\\s+")).take(4).joinToString(" ")
-            val id = runCatching { start(t, label) }.getOrElse { return "Couldn't start helpers: ${it.message}" }
+            val id = runCatching { start(t, label, models?.optString(i)?.takeIf { it.isNotBlank() }) }.getOrElse { return "Couldn't start helpers: ${it.message}" }
             "#$id $label"
         }
         return "Started: ${started.joinToString(", ")}. They run in the background and each result will arrive as a message. " +
@@ -43,6 +45,20 @@ class DelegateTool(private val start: suspend (task: String, label: String) -> L
 class HelpersStatusTool(private val status: suspend () -> String) : Tool {
     override val spec = ToolSpec("helpers_status", "See every helper: running ones with their latest steps, and recently finished ones with their results.", schema())
     override suspend fun run(input: JSONObject, ctx: ToolContext): String = status()
+}
+
+/** Tell a working helper more: it reads it before its next step, or restarts with it. */
+class HelperSteerTool(private val steer: suspend (Long, String, Boolean) -> String) : Tool {
+    override val spec = ToolSpec("helper_steer", "Send a helper more information or a correction while it works ('the user means the 7pm show, not 9pm'). By default it reads it before its next step and keeps going. restart true: stop it and start it again with this information, for when it's heading the wrong way. On a finished helper it sends it back to work.",
+        schema(listOf("id", "message"), "id" to int("Helper id"), "message" to str("What it needs to know, as an instruction to it"), "restart" to bool("Stop and start again with this (default false)")))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String = steer(input.optLong("id"), input.optString("message"), input.optBoolean("restart"))
+}
+
+/** Send a helper that gave up (or came back thin) back to work, in its own conversation. */
+class HelperPushTool(private val push: suspend (Long, String) -> String) : Tool {
+    override val spec = ToolSpec("helper_push", "Send a finished helper back to work: it keeps everything it found and carries on with your message. Use it when a helper says it can't, or its result is thin: name a concrete next thing to try and tell it you believe it can do it.",
+        schema(listOf("id", "message"), "id" to int("Helper id"), "message" to str("What to try next, plus encouragement")))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String = push(input.optLong("id"), input.optString("message"))
 }
 
 /** Stop a helper that is no longer needed (the user changed their mind, or it is going the wrong way). */

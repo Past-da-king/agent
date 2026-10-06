@@ -421,7 +421,11 @@ class MainActivity : ComponentActivity() {
                     ))
                 }
             }
-            if (modelSheet) ModelPickerSheet(
+            if (modelSheet && pickingHelper) HelperRosterSheet(
+                if (onSub) modelList?.map { if (it.id.isBlank()) it.copy(name = "Same as your agent", note = "Whatever your agent runs on") else it } else modelList,
+                modelErr, g.runtime.helperRoster().filter { settings.helperRoster.isNotEmpty() },
+                onSave = { g.settings.setHelperRoster(it) }, onDismiss = { modelSheet = false })
+            else if (modelSheet) ModelPickerSheet(
                 if (pickingHelper) "Helper model" else if (onSub) "${settings.subKind.label} model" else "${settings.provider.label} model",
                 if (pickingHelper && onSub) modelList?.map { if (it.id.isBlank()) it.copy(name = "Same as your agent", note = "Helpers use whatever your agent uses") else it } else modelList,
                 when { pickingHelper && onSub -> settings.subHelperModel; pickingHelper -> settings.helperModel; onSub -> settings.subModel; else -> settings.model }, modelErr,

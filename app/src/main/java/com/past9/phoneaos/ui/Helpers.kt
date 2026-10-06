@@ -36,6 +36,8 @@ data class HelperView(val item: ChatItem, val steps: List<ChatItem>) {
     val model: String get() = meta.optString("model").substringAfterLast('/')
     val startedAt: Long get() = meta.optLong("startedAt", item.createdAt)
     val endedAt: Long get() = meta.optLong("endedAt", 0L)
+    /** How many times the main agent sent it back to try harder. */
+    val pushes: Int get() = meta.optInt("pushes")
 
     companion object {
         /** Every helper in the chat, each with its own steps. */
@@ -127,7 +129,8 @@ fun HelperSheet(h: HelperView, onStop: ((Long) -> Unit)?, onDismiss: () -> Unit,
                     Text("HELPER", style = Eyebrow, color = cs.primary)
                     Text(h.label, style = MaterialTheme.typography.headlineSmall)
                     val took = if (h.working) "for ${spanLabel(now - h.startedAt)}" else if (h.endedAt > 0) "in ${spanLabel(h.endedAt - h.startedAt)}" else ""
-                    Text(listOf(look.word + if (took.isNotBlank()) " $took" else "", h.model.takeIf { it.isNotBlank() }).filterNotNull().joinToString(" · "),
+                    Text(listOf(look.word + if (took.isNotBlank()) " $took" else "", h.model.takeIf { it.isNotBlank() },
+                        h.pushes.takeIf { it > 0 }?.let { "sent back ${if (it == 1) "once" else "$it times"}" }).filterNotNull().joinToString(" · "),
                         style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 }
             }

@@ -103,6 +103,8 @@ fun group(items: List<ChatItem>): List<Row_> {
         flushCall()
         when {
             it.kind == "activity" && m.has("helper") -> {} // shown inside its helper's card
+            // A helper only shows while it works: once it's done or stopped it leaves the chat; its result lives in the agent's reply.
+            it.kind == "helper" && m.optString("state", "working") != "working" -> {}
             it.kind == "activity" && m.optString("image").isEmpty() && m.optString("file").isEmpty() -> buf += it
             else -> { flush(); out += Row_.Single(it) }
         }
@@ -337,7 +339,7 @@ private fun AgentMessage(item: ChatItem) {
 fun iconFor(tool: String): ImageVector = when (tool) {
     "browser" -> Icons.Rounded.Language; "memory" -> Icons.Rounded.Psychology; "tasks" -> Icons.Rounded.TaskAlt
     "apps" -> Icons.Rounded.Apps; "routines" -> Icons.Rounded.Schedule; "web" -> Icons.Rounded.Public
-    "machine" -> Icons.Rounded.Dns; "files" -> Icons.Rounded.Description
+    "machine" -> Icons.Rounded.Dns; "files" -> Icons.Rounded.Description; "agent" -> Icons.Rounded.Replay
     else -> Icons.Rounded.Bolt
 }
 

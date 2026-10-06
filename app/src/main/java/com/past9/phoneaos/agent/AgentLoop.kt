@@ -55,9 +55,17 @@ class AgentLoop(
         ctx: ToolContext,
         onEvent: suspend (AgentEvent) -> Unit = {},
         onAppend: suspend (Msg) -> Unit = {},
+        /** Messages sent in while it works (the main agent steering a helper). Read before every step. */
+        incoming: suspend () -> List<String> = { emptyList() },
     ): String {
         var lastText = ""
         for (step in 1..maxSteps) {
+            incoming().takeIf { it.isNotEmpty() }?.let { notes ->
+                val text = Block.Text(notes.joinToString("\n\n") { "[The main agent, while you work] $it" })
+                // Ride along in the last user message (after tool results) so the turn order stays valid everywhere.
+                val last = history.lastOrNull()
+                if (last != null && last.role == Role.USER) history[history.lastIndex] = Msg(Role.USER, last.blocks + text) else history += Msg(Role.USER, listOf(text))
+            }
             onEvent(AgentEvent.Thinking(step))
             Trim.fit(history)
             val completion = try { provider.complete(system, history, tools.map { it.spec }, model) } catch (e: ProviderException) {

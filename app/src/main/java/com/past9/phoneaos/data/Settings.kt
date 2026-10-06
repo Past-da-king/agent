@@ -28,6 +28,21 @@ enum class Provider(val label: String, val defaultModel: String, val helperModel
     CUSTOM("Other (OpenAI-compatible)", "", "", "", "Paste your key here"),
 }
 
+/** A model the main agent may hand work to, with what the user says it's good for. id "" = the same as the main agent's. */
+data class HelperModel(val id: String, val name: String, val tags: List<String> = emptyList()) {
+    fun toJson(): org.json.JSONObject = org.json.JSONObject().put("id", id).put("name", name).put("tags", org.json.JSONArray(tags))
+    companion object {
+        fun listFrom(raw: String?): List<HelperModel> = runCatching {
+            val a = org.json.JSONArray(raw ?: return emptyList())
+            (0 until a.length()).map { i -> a.getJSONObject(i).let { o ->
+                HelperModel(o.optString("id"), o.optString("name").ifBlank { o.optString("id") }, o.optJSONArray("tags")?.let { t -> (0 until t.length()).map { t.getString(it) } }.orEmpty())
+            } }
+        }.getOrDefault(emptyList())
+        /** What helpers can be good for: offered as tags in the helper sheet. */
+        val PresetTags = listOf("Quick lookups", "Web research", "Browsing sites", "Writing", "Planning", "Apps and email", "Files and data", "Coding", "Hard problems", "Cheap bulk work")
+    }
+}
+
 data class AgentSettings(
     val mode: PowerMode = PowerMode.NONE,
     val provider: Provider = Provider.ANTHROPIC,
@@ -53,6 +68,8 @@ data class AgentSettings(
     val subModel: String = "",
     /** Model the subscription's helpers run on ("" = the same as subModel). */
     val subHelperModel: String = "",
+    /** The models helpers can run on for the current power (API provider or subscription), each tagged with what it's good for. Empty = just the one helper model. */
+    val helperRoster: List<HelperModel> = emptyList(),
     /** Voice: who speaks the agent's replies and voice notes (system | gemini | openai | elevenlabs). */
     val ttsProvider: String = "system",
     val ttsVoice: String = "",
@@ -115,7 +132,18 @@ class SettingsStore(context: Context) {
             notifApps = prefs.getStringSet("notifApps", emptySet()) ?: emptySet(),
             browserProfiles = (prefs.getString("browserProfiles", null) ?: "Personal").split("\n").filter { it.isNotBlank() }.ifEmpty { listOf("Personal") },
             subKind = runCatching { SubKind.valueOf(prefs.getString("subKind", "CLAUDE")!!) }.getOrDefault(SubKind.CLAUDE),
+            helperRoster = HelperModel.listFrom(prefs.getString(rosterKey(), null)),
         )
+    }
+
+    /** One roster per API provider and per subscription, so switching back keeps what the user set up. */
+    private fun rosterKey(): String = if (prefs.getString("mode", null) == PowerMode.SUBSCRIPTION.name) "roster_sub_" + (prefs.getString("subKind", "CLAUDE") ?: "CLAUDE")
+        else "roster_api_" + (prefs.getString("provider", Provider.ANTHROPIC.name) ?: Provider.ANTHROPIC.name)
+
+    fun setHelperRoster(list: List<HelperModel>) = edit {
+        putString(rosterKey(), org.json.JSONArray(list.map { it.toJson() }).toString())
+        // The first one is also the default helper model (older paths read this).
+        list.firstOrNull()?.let { if (prefs.getString("mode", null) == PowerMode.SUBSCRIPTION.name) putString("subHelperModel_" + (prefs.getString("subKind", "CLAUDE") ?: "CLAUDE"), it.id) else putString("helperModel", it.id) }
     }
 
     private fun edit(block: SharedPreferences.Editor.() -> Unit) { prefs.edit().apply(block).apply(); _state.value = read() }

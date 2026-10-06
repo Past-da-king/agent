@@ -104,7 +104,7 @@ class SubscriptionPathTest {
                     else -> {
                         val list = JSONObject(post(mcpUrl, mcpToken, """{"jsonrpc":"2.0","id":1,"method":"tools/list"}""").body!!.string()).getJSONObject("result").getJSONArray("tools")
                         val mainTools = (0 until list.length()).map { list.getJSONObject(it).getString("name") }
-                        assertTrue("delegate" in mainTools); assertFalse("browser_open" in mainTools)
+                        assertTrue("delegate" in mainTools); assertFalse("routine_create" in mainTools)
                         post(mcpUrl, mcpToken, """{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"delegate","arguments":{"tasks":["Find X"],"labels":["Find X"]}}}""").close()
                         emit(JSONObject().put("type", "text").put("text", "A helper is finding X."))
                     }

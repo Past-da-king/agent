@@ -89,6 +89,25 @@ class AgentRuntime(
     /** Helpers working right now, by their chat item id. */
     private val helpers = ConcurrentHashMap<Long, HelperRun>()
     private val helperCtx = ConcurrentHashMap<Long, ToolContext>()
+    /** A finished helper's own conversation (or its harness session), so it can be sent back to try again. */
+    private val helperHistory = ConcurrentHashMap<Long, MutableList<Msg>>()
+    private val helperSession = ConcurrentHashMap<Long, String>()
+    /** Messages for helpers that are still working: each reads its queue before every step. */
+    private val steerInbox = ConcurrentHashMap<Long, java.util.concurrent.ConcurrentLinkedQueue<String>>()
+
+    /** The main agent may do a small job itself: at most this many action steps per turn, then it must delegate. */
+    class StepBudget(val max: Int = 5) { @Volatile var used = 0 }
+    private val mainBudget = StepBudget()
+
+    /** An action tool in the main agent's hands: it counts against the per-turn step budget. */
+    private class Budgeted(private val inner: Tool, private val budget: StepBudget) : Tool {
+        override val spec = inner.spec
+        override suspend fun run(input: JSONObject, ctx: ToolContext): String {
+            if (budget.used >= budget.max) return "Step limit: you've used your ${budget.max} steps for this turn. This job is bigger than a quick one, so hand it to a helper with delegate and put what you've found so far in the brief."
+            budget.used++
+            return inner.run(input, ctx)
+        }
+    }
     private val _running = MutableStateFlow<List<HelperRun>>(emptyList())
     val running: StateFlow<List<HelperRun>> = _running
     /** Helper results waiting for the main agent to read them. */
@@ -117,17 +136,25 @@ class AgentRuntime(
      * apps, code, files, machines or routine changes), so every action goes through a helper.
      * forHelper = true: the helpers' tools, everything that does the work.
      */
-    fun tools(forHelper: Boolean = false): List<Tool> = if (forHelper) workerTools() else listOf(
-        NowTool(),
-        MemorySearchTool(db.memory()), MemorySaveTool(db.memory()), MemoryGetTool(db.memory()), MemoryUpdateTool(db.memory()),
-        TaskListTool(db.tasks()), TaskAddTool(db.tasks()), TaskUpdateTool(db.tasks()), GoalCreateTool(db.tasks()),
-        NotificationsTool(db.notifications()) { settings.state.value.notifApps },
-        ScheduleListTool(db.triggers()),
-        AskUserTool(), NotifyTool(), VoiceNoteTool(context, settings, db.chat()),
-        DelegateTool { task, label -> startHelper(task, label) },
-        HelpersStatusTool { helpersReport() },
-        HelperStopTool { id -> stopHelper(id) },
-    )
+    fun tools(forHelper: Boolean = false): List<Tool> {
+        if (forHelper) return workerTools()
+        val own = listOf(
+            NowTool(),
+            MemorySearchTool(db.memory()), MemorySaveTool(db.memory()), MemoryGetTool(db.memory()), MemoryUpdateTool(db.memory()),
+            TaskListTool(db.tasks()), TaskAddTool(db.tasks()), TaskUpdateTool(db.tasks()), GoalCreateTool(db.tasks()),
+            NotificationsTool(db.notifications()) { settings.state.value.notifApps },
+            ScheduleListTool(db.triggers()),
+            AskUserTool(), NotifyTool(), VoiceNoteTool(context, settings, db.chat()),
+            DelegateTool { task, label, model -> startHelper(task, label, model) },
+            HelperSteerTool { id, message, restart -> steerHelper(id, message, restart) },
+            HelperPushTool { id, message -> pushHelper(id, message) },
+            HelpersStatusTool { helpersReport() },
+            HelperStopTool { id -> stopHelper(id) },
+        )
+        // Small jobs (a page, a quick lookup) it may do itself, within the step budget. Routines and watchers stay with helpers.
+        val mine = own.map { it.spec.name }.toSet() + setOf("routine_create", "routine_delete", "watcher_save", "skill_save", "skill_find")
+        return own + workerTools().filter { it.spec.name !in mine }.map { Budgeted(it, mainBudget) }
+    }
 
     /** Everything that acts: what helpers and routines work with. */
     private fun workerTools(): List<Tool> {
@@ -154,6 +181,7 @@ class AgentRuntime(
             list += AppsConnectTool(composio) { _, url -> openSignIn(url) }
         }
         list += AskUserTool(); list += ApprovalTool(); list += NotifyTool()
+        list += SkillFindTool(db.memory()); list += SkillSaveTool(db.memory())
         list += ScheduleCreateTool(db.triggers()) { onRoutineChanged(it) }
         list += ScheduleListTool(db.triggers())
         list += com.past9.phoneaos.triggers.WatcherSaveTool(context) { onRoutineChanged(it) }
@@ -167,7 +195,9 @@ class AgentRuntime(
         val s = settings.state.value
         val now = ZonedDateTime.now()
         val pinned = db.memory().pinned()
-        val recalled = Recall.rank(latestUserText, db.memory().list(), if (role == PromptRole.MAIN) 8 else 6).filter { m -> pinned.none { it.id == m.id } }
+        val allMem = db.memory().list()
+        val recalled = Recall.rank(latestUserText, allMem.filter { it.kind != SKILL }, if (role == PromptRole.MAIN) 8 else 6).filter { m -> pinned.none { it.id == m.id } }
+        val skills = if (role == PromptRole.MAIN) emptyList() else Recall.rank(latestUserText, allMem.filter { it.kind == SKILL }, 3)
         val goals = db.tasks().openGoals(); val tasks = db.tasks().openTasks()
         val main = role == PromptRole.MAIN
         return buildString {
@@ -180,13 +210,21 @@ class AgentRuntime(
             if (main) {
                 appendLine("YOUR JOB")
                 appendLine("Understand who the user is and what they want, at every moment, and get it done exactly how they want it, through helpers.")
-                appendLine("- You NEVER do the work yourself. You have no browser, no web, no apps, no code, no phone files. Every action goes to a helper with delegate: looking anything up online, checking a price or a page, booking, buying, sending, replying, reading their email, files, machines, and creating or changing routines. Even small ones. Even 'just quickly check'.")
-                appendLine("- What you do yourself: read and write your memory, keep goals and tasks in order, think, plan, and talk to the user.")
+                appendLine("- Helpers do the work. You may do a SMALL job yourself only when it takes 5 steps or fewer (open a page at a URL, one quick lookup, one fetch, read a notification); you have a hard limit of 5 action steps per turn. Anything bigger, anything multi-step, anything with sign-ins, forms or back-and-forth with a site, any booking, buying or sending: delegate. When in doubt, delegate.")
+                appendLine("- Routines and watchers are always created by a helper, never by you.")
+                appendLine("- What you always do yourself: read and write your memory, keep goals and tasks in order, think, plan, and talk to the user.")
                 appendLine("- Writing briefs is your craft. The user often rambles; work out what they actually want, search memory for everything relevant (people, places, accounts, preferences, past decisions), and give each helper a precise brief: the goal, the context, their preferences and constraints, exactly what to do, what to bring back, and what must get the user's approval before it goes out. A helper knows NOTHING except your brief, so never write 'as discussed' or 'the usual'.")
                 appendLine("- Split independent work across helpers so it runs at once (one per site, person or option).")
                 appendLine("- After delegating, tell the user in one short line what you set going, then end your turn. Never wait for helpers. The user can keep talking to you while they work, and anything new they ask for goes to another helper.")
                 appendLine("- A helper's result arrives as a message starting \"[Helper #\". Check it against what the user wanted. If it's right, tell the user the outcome (short, lead with the answer, name sources) and save anything durable to memory. If it's wrong or thin, delegate again with a sharper brief. Never paste a raw dump.")
-                appendLine("- 'How's it going?' or 'what are the helpers doing?': helpers_status, then answer. If they change their mind, helper_stop, then delegate the new version.")
+                appendLine("- 'How's it going?' or 'what are the helpers doing?': helpers_status, then answer.")
+                appendLine("- When the user adds to or corrects a job a helper is already doing ('wait, I actually meant...'), helper_steer that helper: it gets your message before its next step and keeps going. If it's heading the wrong way, helper_steer with restart true: it stops and starts again with the new information. If the job isn't wanted any more, helper_stop.")
+                appendLine("- Helpers often say they can't do something when they can. When one gives up or comes back thin, send it back with helper_push (it keeps what it found): name a concrete next thing to try (another site, another search, the browser instead of a fetch, a handoff for a sign-in) and tell it plainly you believe it can do it. Push at least twice before you accept 'I can't' or tell the user.")
+                val roster = helperRoster()
+                appendLine()
+                appendLine("YOUR HELPERS (pick one per brief with `models` in delegate; the first is the default)")
+                roster.forEach { h -> appendLine("- ${h.name}${if (h.id.isNotBlank() && h.id != h.name) " (id: ${h.id})" else ""}${if (h.tags.isNotEmpty()) ": good for ${h.tags.joinToString(", ")}" else ""}") }
+                appendLine("- Match the job to the helper the user tagged for it. Fit the brief to the model: a frontier model (Opus, GPT-5, Gemini Pro and the like) needs the goal, all the context and what to bring back, then works out how by itself. A smaller or faster model can do the job too but needs a fuller brief: the steps in order, which site or tool to start with, what to check, what to do if something fails, and the exact shape of the answer.")
                 appendLine("- ASSUME YOU ALREADY KNOW. Before asking the user anything, search memory (memory_search, then memory_get). Ask (ask_user, with buttons) only when you've checked and truly don't know, or it's a choice only they can make. Needless questions annoy them.")
                 appendLine("- Memory is your wiki about the user's life: one page per person, company, place, project or preference, in markdown, linking other pages as [[Name]], always tagged. Whenever you learn something durable (from them or from a helper's result), save or update the page right away (memory_get first to merge). Keep pages accurate and fix wrong ones. This is the most important thing you do.")
                 appendLine("- The user uses you as their to-do list. Things THEY must do or asked to be reminded of go on their list (task_add owner user). The work you hand out lives under goals (goal_create) with a task per step; tick them off as helper results come in, and when stuck mark the step blocked and say what would unblock it.")
@@ -234,6 +272,8 @@ class AgentRuntime(
                 val live = helpers.values.sortedBy { it.startedAt }
                 if (live.isNotEmpty()) { appendLine("\nHELPERS WORKING RIGHT NOW"); live.forEach { appendLine("- #${it.id} ${it.label}: ${it.task.take(160)}") } }
             }
+            if (skills.isNotEmpty()) { appendLine("\nSKILLS EARLIER HELPERS LEFT (use them; they cost someone a struggle)"); skills.forEach { appendLine("## ${it.title}\n${it.body}\n") } }
+            if (!main) appendLine("\n- Before anything fiddly, skill_find. If you struggled with something and then got it done, skill_save exactly what worked (steps, traps, how to check) so the next helper doesn't have to fight it.")
             if (role == PromptRole.HELPER) appendLine("\nYou are a HELPER the main agent started for one job. Do it fully with your tools. Then reply with ONLY the result for the main agent: what you did, what you found (facts, numbers, links, sources), and anything left undone and why. No chat, no greetings.")
         }
     }
@@ -399,6 +439,7 @@ class AgentRuntime(
         }
         _status.value = AgentStatus(true, "Thinking")
         phone.workStarted()
+        mainBudget.used = 0
         val history = loadHistory("main")
         val first = Msg.user(userText, images)
         history += first; db.chat().insertTurn(TurnRow(thread = "main", json = first.toJson().toString()))
@@ -427,6 +468,7 @@ class AgentRuntime(
 
     private suspend fun runSubscriptionTurn(userText: String, engine: SubscriptionEngine, images: List<String> = emptyList()) {
         _status.value = AgentStatus(true, "Thinking"); phone.workStarted()
+        mainBudget.used = 0
         try {
             var resume = settings.extra("claude_session")
             for (attempt in 1..2) {
@@ -476,35 +518,94 @@ class AgentRuntime(
 
     // ---- helpers & routines -------------------------------------------------------------------
 
+    /** The models helpers can run on, each with what it's good for. Never empty: falls back to the one helper model. */
+    fun helperRoster(): List<com.past9.phoneaos.data.HelperModel> {
+        val st = settings.state.value
+        if (st.helperRoster.isNotEmpty()) return st.helperRoster
+        val sub = st.mode == PowerMode.SUBSCRIPTION
+        val id = if (sub) st.subHelperModel else st.helperModel.ifBlank { st.model }
+        return listOf(com.past9.phoneaos.data.HelperModel(id, id.ifBlank { "Same as you" }.substringAfterLast('/')))
+    }
+
     /** Set a helper going in the background and return its id at once. */
-    private suspend fun startHelper(task: String, label: String): Long {
+    private suspend fun startHelper(task: String, label: String, wanted: String? = null): Long {
         val st = settings.state.value
         val sub = subscription?.takeIf { st.mode == PowerMode.SUBSCRIPTION && it.ready }
         val provider = if (sub == null) providerFactory(settings) ?: error("No AI is set up for helpers yet") else null
-        val model = if (sub != null) st.subHelperModel.ifBlank { st.subModel } else st.helperModel.ifBlank { st.model }
+        val roster = helperRoster()
+        // The model the main agent asked for, matched by id or name; otherwise the first on the roster.
+        val pick = wanted?.trim()?.takeIf { it.isNotEmpty() }?.let { w -> roster.firstOrNull { it.id.equals(w, true) } ?: roster.firstOrNull { it.name.equals(w, true) } } ?: roster.first()
+        val model = pick.id.ifBlank { if (sub != null) st.subModel else st.model }
         val itemId = db.chat().insert(ChatItem(kind = "helper", text = task, meta = JSONObject().put("label", label).put("state", "working")
             .put("startedAt", System.currentTimeMillis()).put("model", model).toString()))
+        launchHelper(itemId, label, mutableListOf(Msg.user(task)), task, null, provider, sub, model)
+        return itemId
+    }
+
+    private fun launchHelper(itemId: Long, label: String, history: MutableList<Msg>, prompt: String, resume: String?, provider: LlmProvider?, sub: SubscriptionEngine?, model: String) {
         val ctx = ChatContext("helper-$itemId", interactive = true, helperItem = itemId, display = label)
         helperCtx[itemId] = ctx
-        val j = scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) { runHelper(itemId, label, task, ctx, provider, sub, model) }
-        helpers[itemId] = HelperRun(itemId, label, task, System.currentTimeMillis(), j)
+        val j = scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) { runHelper(itemId, label, history, prompt, resume, ctx, provider, sub, model) }
+        helpers[itemId] = HelperRun(itemId, label, history.first().text, System.currentTimeMillis(), j)
         refreshHelpers(); j.start()
-        return itemId
+    }
+
+    /**
+     * Tell a helper more while it works. By default it reads the message before its next step and keeps going;
+     * restart stops it and starts it again on the same conversation with the new information (for when it's
+     * heading the wrong way). A helper that already finished is simply sent back with the message.
+     */
+    private suspend fun steerHelper(id: Long, message: String, restart: Boolean): String {
+        val run = helpers[id] ?: return pushHelper(id, message)
+        val label = run.label
+        val subPath = settings.state.value.mode == PowerMode.SUBSCRIPTION && subscription?.ready == true
+        // A subscription helper runs inside its own harness and can't read messages mid-turn: restart it on its session.
+        if (restart || subPath) {
+            run.job.cancel(); run.job.join()
+            val out = pushHelper(id, message)
+            return if (out.contains("back on it")) "Stopped helper #$id and started it again with your message. Its result will arrive as a message." else out
+        }
+        steerInbox.getOrPut(id) { java.util.concurrent.ConcurrentLinkedQueue() } += message
+        db.chat().insert(ChatItem(kind = "activity", text = "Told it: ${message.take(140)}", meta = JSONObject().put("tool", "agent").put("by", label).put("helper", id).toString()))
+        return "Helper #$id gets your message before its next step and keeps going."
+    }
+
+    /**
+     * Send a finished helper back to work with a nudge ("try X, you can do this"). It carries on in its own
+     * conversation, so it keeps everything it already found.
+     */
+    private suspend fun pushHelper(id: Long, message: String): String {
+        if (helpers.containsKey(id)) return "Helper #$id is still working. Wait for its result."
+        val row = db.chat().get(id)?.takeIf { it.kind == "helper" } ?: return "No helper #$id."
+        val meta = JSONObject(row.meta)
+        val st = settings.state.value
+        val sub = subscription?.takeIf { st.mode == PowerMode.SUBSCRIPTION && it.ready }
+        val provider = if (sub == null) providerFactory(settings) ?: return "No AI is set up for helpers." else null
+        val history = helperHistory[id] ?: mutableListOf(Msg.user(row.text))
+        history += Msg.user(message)
+        setHelperMeta(id) { it.put("state", "working").put("pushes", it.optInt("pushes") + 1).put("startedAt", System.currentTimeMillis()).remove("endedAt") }
+        db.chat().insert(ChatItem(kind = "activity", text = "Sent back: ${message.take(140)}", meta = JSONObject().put("tool", "agent").put("by", meta.optString("label")).put("helper", id).toString()))
+        launchHelper(id, meta.optString("label").ifBlank { "Helper" }, history, message, helperSession[id], provider, sub, meta.optString("model"))
+        return "Helper #$id is back on it. Its new result will arrive as a message."
     }
 
     private suspend fun setHelperMeta(itemId: Long, edit: (JSONObject) -> Unit) {
         db.chat().get(itemId)?.let { row -> db.chat().update(row.copy(meta = JSONObject(row.meta).also(edit).toString())) }
     }
 
-    private suspend fun runHelper(itemId: Long, label: String, task: String, ctx: ChatContext, provider: LlmProvider?, sub: SubscriptionEngine?, model: String) {
+    /** Words a helper uses when it gives up. Usually it can do it; it needs sending back. */
+    private val gaveUp = Regex("(?i)\\b(can't|cannot|can not|couldn't|could not|unable|not able|no access|don't have access|wasn't able|not possible|blocked|failed to)\\b")
+
+    private suspend fun runHelper(itemId: Long, label: String, history: MutableList<Msg>, prompt: String, resume: String?, ctx: ChatContext,
+                                  provider: LlmProvider?, sub: SubscriptionEngine?, model: String) {
         phone.workStarted()
         var state = "failed"; var result = ""
         try {
-            val sys = systemPrompt(task, role = PromptRole.HELPER)
-            result = if (sub != null) runSubHelper(itemId, task, sys, sub, model) else
-                AgentLoop(provider!!, model, tools(forHelper = true), maxSteps = 120).run(sys, mutableListOf(Msg.user(task)), ctx, onEvent = { e ->
+            val sys = systemPrompt(history.first().text, role = PromptRole.HELPER)
+            result = if (sub != null) runSubHelper(itemId, prompt, sys, resume, sub, model) else
+                AgentLoop(provider!!, model, tools(forHelper = true), maxSteps = 120).run(sys, history, ctx, onEvent = { e ->
                     if (e is AgentEvent.ToolStarted) setHelperMeta(itemId) { it.put("now", labelFor(e.call.name)) }
-                })
+                }, incoming = { steerInbox[itemId]?.let { q -> generateSequence { q.poll() }.toList() }.orEmpty() })
             state = "done"
         } catch (e: CancellationException) {
             state = "stopped"; result = "Stopped before it finished."
@@ -512,22 +613,33 @@ class AgentRuntime(
             result = friendlyError(e)
         } finally {
             kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
-                setHelperMeta(itemId) { it.put("state", state).put("result", result.take(6000)).put("endedAt", System.currentTimeMillis()).remove("now") }
+                if (sub == null) helperHistory[itemId] = history
+                var pushes = 0
+                setHelperMeta(itemId) { pushes = it.optInt("pushes"); it.put("state", state).put("result", result.take(6000)).put("endedAt", System.currentTimeMillis()).remove("now") }
                 helpers.remove(itemId); helperCtx.remove(itemId); refreshHelpers()
+                // Anything sent in that it never got to read goes into its conversation for a push later.
+                steerInbox.remove(itemId)?.let { q -> generateSequence { q.poll() }.toList() }?.takeIf { it.isNotEmpty() && sub == null }
+                    ?.let { history += Msg.user(it.joinToString("\n\n") { m -> "[The main agent, while you worked] $m" }) }
                 pending.keys.filter { id -> runCatching { JSONObject(db.chat().get(id)?.meta ?: "{}").optLong("helper") == itemId }.getOrDefault(false) }.forEach { pending.remove(it)?.cancel() }
                 com.past9.phoneaos.browser.BrowserService.release("helper-$itemId")
                 phone.workFinished()
                 // The main agent hears back unless the user stopped it (then there is nothing to report).
-                if (state != "stopped") deliver("[Helper #$itemId \"$label\" ${if (state == "done") "finished" else "failed"}]\n${result.take(12_000).ifBlank { "(no result text)" }}")
+                if (state != "stopped") {
+                    val nudge = if ((state == "failed" || gaveUp.containsMatchIn(result.take(3000))) && pushes < 2)
+                        "\n\n(It says it couldn't do all of it${if (pushes > 0) ", after $pushes push${if (pushes > 1) "es" else ""}" else ""}. Helpers usually can. Unless it's truly impossible, send it back with helper_push: name a concrete next thing to try and tell it you believe it can do it. Push at least twice before you accept it or tell the user.)"
+                    else ""
+                    deliver("[Helper #$itemId \"$label\" ${if (state == "done") "finished" else "failed"}${if (pushes > 0) " (after $pushes push${if (pushes > 1) "es" else ""})" else ""}]\n${result.take(12_000).ifBlank { "(no result text)" }}$nudge")
+                }
             }
         }
     }
 
     /** A helper on the user's subscription: the same harness, our worker tools over MCP. */
-    private suspend fun runSubHelper(itemId: Long, task: String, sys: String, engine: SubscriptionEngine, model: String): String {
+    private suspend fun runSubHelper(itemId: Long, prompt: String, sys: String, resume: String?, engine: SubscriptionEngine, model: String): String {
         var last = ""; var error: String? = null; var ok = false
-        engine.turn(task, sys, null, mcp.url + "/h/$itemId", settings.localToken(), emptyList(), model.ifBlank { null }, role = "helper").collect { e ->
+        engine.turn(prompt, sys, resume, mcp.url + "/h/$itemId", settings.localToken(), emptyList(), model.ifBlank { null }, role = "helper").collect { e ->
             when (e.optString("type")) {
+                "session" -> e.optString("id").takeIf { it.isNotBlank() }?.let { helperSession[itemId] = it }
                 "text" -> e.optString("text").takeIf { it.isNotBlank() }?.let { last = it }
                 "tool" -> {
                     val name = e.optString("name")
