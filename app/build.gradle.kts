@@ -16,8 +16,8 @@ android {
     applicationId = "com.past9.phoneaos"
     minSdk = 29
     targetSdk = 36
-    versionCode = 42
-    versionName = "0.6.2"
+    versionCode = 43
+    versionName = "0.7.0"
     // Android never lets an installed app rename itself or change the icon Samsung shows on
     // notifications, so a personal build bakes the owner's agent in: -PagentName=Hina -PagentIcon=ic_app_heart_red
     resValue("string", "app_name", (project.findProperty("agentName") as String?) ?: "Agent")
@@ -26,7 +26,10 @@ android {
     ndk { abiFilters += listOf("arm64-v8a") }
   }
   // Native executables must be extracted to nativeLibraryDir to be runnable.
-  packaging { jniLibs { useLegacyPackaging = true } }
+  packaging {
+    jniLibs { useLegacyPackaging = true }
+    resources { excludes += setOf("META-INF/versions/9/OSGI-INF/MANIFEST.MF", "META-INF/DEPENDENCIES", "META-INF/INDEX.LIST") }
+  }
 
   signingConfigs {
     if (releaseSigning.isNotEmpty()) create("release") {
@@ -77,6 +80,13 @@ kotlin {
   }
 }
 
+val sftpJarFiles: Configuration by configurations.creating { isTransitive = false }
+val strippedSftp = tasks.register<Jar>("strippedSftp") {
+  archiveFileName.set("sshd-sftp-noservices.jar")
+  destinationDirectory.set(layout.buildDirectory.dir("testlibs"))
+  from(zipTree(sftpJarFiles.singleFile)) { exclude("META-INF/services/**") }
+}
+
 dependencies {
   implementation(platform(libs.androidx.compose.bom))
   implementation(libs.androidx.core.ktx)
@@ -96,6 +106,10 @@ dependencies {
   implementation(libs.androidx.datastore.preferences)
   implementation(libs.androidx.security.crypto)
   implementation(libs.okhttp)
+  // Machines: SSH into any server or computer the user has credentials for.
+  implementation("com.hierynomus:sshj:0.39.0")
+  implementation("org.bouncycastle:bcprov-jdk18on:1.80")
+  implementation("org.bouncycastle:bcpkix-jdk18on:1.80")
   implementation(libs.androidx.graphics.shapes)
   implementation(libs.coil.compose)
   implementation(libs.coil.svg)
@@ -115,8 +129,14 @@ dependencies {
   testImplementation(libs.roborazzi.compose)
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.okhttp.mockwebserver)
+  testImplementation("org.apache.sshd:sshd-core:2.14.0")
+  // sshd-sftp registers a java.nio FileSystemProvider that breaks Robolectric; use a copy without its service files.
+  testImplementation(files(strippedSftp))
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation("org.json:json:20240303")
   debugImplementation(libs.androidx.compose.ui.test.manifest)
   debugImplementation(libs.androidx.compose.ui.tooling)
 }
+
+// The SFTP server side for MachinesTest, minus META-INF/services (see testImplementation above).
+dependencies { sftpJarFiles("org.apache.sshd:sshd-sftp:2.14.0") }

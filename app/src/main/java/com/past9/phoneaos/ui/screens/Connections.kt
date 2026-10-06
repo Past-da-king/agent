@@ -36,6 +36,8 @@ data class ConnectionsState(
     val searched: String = "",
     /** Apps the full search found for [searched]. */
     val hits: Set<String> = emptySet(),
+    /** Servers and computers the agent can work on over SSH. */
+    val machines: List<com.past9.phoneaos.machines.Machine> = emptyList(),
 )
 
 data class ConnectionsActions(
@@ -49,6 +51,8 @@ data class ConnectionsActions(
     val onAllowNotifications: () -> Unit = {},
     /** Search every Composio app (not just the popular list) for this name. */
     val onSearchAll: (String) -> Unit = {},
+    /** Open a machine (null = add one). */
+    val onMachine: (String?) -> Unit = {},
     val onNotifications: () -> Unit = {},
 )
 
@@ -71,6 +75,7 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                     }
                 }
             }
+            machinesSection(state.machines, actions.onMachine)
             item { SectionHeader("Your apps", if (state.consumer) "Tap Connect and sign in. Your agent can use it straight away." else "Gmail, Calendar, Drive, Slack and 250+ more, through Composio with your own key", Modifier.padding(start = 4.dp, top = 16.dp)) }
             if (!state.hasKey) item {
                 AppCard { ComposioKeyForm(actions.onSaveKey, actions.onOpenUrl) {} }

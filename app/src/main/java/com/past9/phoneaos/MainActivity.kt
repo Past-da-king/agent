@@ -315,7 +315,8 @@ class MainActivity : ComponentActivity() {
                 }
                 composable("connections") {
                     LaunchedEffect(Unit) { refreshConnections() }
-                    ConnectionsScreen(conn, bottomPadding = barPad + 24.dp, actions = ConnectionsActions(
+                    val machines by g.runtime.machines.store.machines.collectAsStateWithLifecycle()
+                    ConnectionsScreen(conn.copy(machines = machines), bottomPadding = barPad + 24.dp, actions = ConnectionsActions(
                         onNotifications = { nav.navigate("notifications") },
                         onBack = { nav.popBackStack() },
                         onSaveKey = { k -> saveComposio(g, k).also { if (it == null) refreshConnections() } },
@@ -335,6 +336,7 @@ class MainActivity : ComponentActivity() {
                             if (ck != null && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(ck)) runCatching { com.past9.phoneaos.tools.ComposioConnect.disconnect(ck, c.toolkit, c.id) }.onFailure { conn = conn.copy(error = it.message) }
                             else runCatching { g.runtime.composio.disconnect(c.id) }
                             refreshConnections() } },
+                        onMachine = { id -> nav.navigate("machine?id=${id ?: ""}") },
                         onSearchAll = { q -> scope.launch {
                             val ck = g.settings.composioKey()?.trim() ?: return@launch
                             conn = conn.copy(searching = true, error = null)
@@ -345,6 +347,31 @@ class MainActivity : ComponentActivity() {
                         } },
                         onRefresh = { refreshConnections() }, onOpenUrl = ::open,
                         onAllowNotifications = { if (Build.VERSION.SDK_INT >= 33) notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS) },
+                    ))
+                }
+                composable("machine?id={id}", arguments = listOf(androidx.navigation.navArgument("id") { type = androidx.navigation.NavType.StringType; defaultValue = "" })) { e ->
+                    val store = g.runtime.machines.store
+                    val all by store.machines.collectAsStateWithLifecycle()
+                    val id = e.arguments?.getString("id").orEmpty()
+                    MachineScreen(store.get(id), all, MachineActions(
+                        onBack = { nav.popBackStack() },
+                        onSave = { m, pw, key, pass, newKey ->
+                            store.save(m)
+                            when (m.auth) {
+                                com.past9.phoneaos.machines.MachineAuth.PASSWORD -> if (pw.isNotEmpty()) store.setCredentials(m.id, pw, null, null)
+                                com.past9.phoneaos.machines.MachineAuth.KEY -> if (key.isNotBlank()) store.setCredentials(m.id, null, key.trim(), pass.ifEmpty { null })
+                                com.past9.phoneaos.machines.MachineAuth.NEW_KEY -> if (newKey) {
+                                    val (priv, pub) = com.past9.phoneaos.machines.Crypto.newKey("agent-" + m.name.lowercase().replace(Regex("[^a-z0-9]+"), "-"))
+                                    store.setCredentials(m.id, null, priv, null); store.setPublicKey(m.id, pub)
+                                }
+                            }
+                            store.get(m.id) ?: m
+                        },
+                        onTest = { m -> g.runtime.machines.test(m) },
+                        onDelete = { mid -> store.remove(mid); nav.popBackStack() },
+                        onCopy = { t -> (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Public key", t)) },
+                        publicKey = { mid -> store.publicKey(mid) },
+                        reload = { mid -> store.get(mid) },
                     ))
                 }
                 composable("settings") {
