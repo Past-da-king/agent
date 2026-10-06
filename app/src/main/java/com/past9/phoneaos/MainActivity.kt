@@ -317,7 +317,10 @@ class MainActivity : ComponentActivity() {
                 composable("connections") {
                     LaunchedEffect(Unit) { refreshConnections() }
                     val machines by g.runtime.machines.store.machines.collectAsStateWithLifecycle()
-                    ConnectionsScreen(conn.copy(machines = machines), bottomPadding = barPad + 24.dp, actions = ConnectionsActions(
+                    // Re-read on every return to this screen: the user may have just switched All files access on.
+                    val resumed = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsStateWithLifecycle().value
+                    val phoneFiles = remember(resumed) { com.past9.phoneaos.tools.phoneFilesAllowed() }
+                    ConnectionsScreen(conn.copy(machines = machines, phoneFiles = phoneFiles), bottomPadding = barPad + 24.dp, actions = ConnectionsActions(
                         onNotifications = { nav.navigate("notifications") },
                         onBack = { nav.popBackStack() },
                         onSaveKey = { k -> saveComposio(g, k).also { if (it == null) refreshConnections() } },
@@ -339,6 +342,7 @@ class MainActivity : ComponentActivity() {
                             else runCatching { g.runtime.composio.disconnect(c.id) }
                             refreshConnections() } },
                         machine = machineActions(g),
+                        onAllowPhoneFiles = { com.past9.phoneaos.tools.openAllFilesSettings(this@MainActivity) },
                         onSearchAll = { q -> scope.launch {
                             val ck = g.settings.composioKey()?.trim() ?: return@launch
                             conn = conn.copy(searching = true, error = null)

@@ -28,6 +28,8 @@ data class ConnectionsState(
     val connected: List<Connection> = emptyList(),
     val toolkits: List<Toolkit> = emptyList(),
     val notificationsAllowed: Boolean = true,
+    /** The user switched on All files access, so the agent can search the phone's storage. */
+    val phoneFiles: Boolean = false,
     /** A consumer key (Composio Connect): the list is our catalogue plus search, statuses come from Composio Connect. */
     val consumer: Boolean = false,
     /** Searching all of Composio's apps for this query (consumer keys). */
@@ -49,6 +51,7 @@ data class ConnectionsActions(
     val onRefresh: () -> Unit = {},
     val onOpenUrl: (String) -> Unit = {},
     val onAllowNotifications: () -> Unit = {},
+    val onAllowPhoneFiles: () -> Unit = {},
     /** Search every Composio app (not just the popular list) for this name. */
     val onSearchAll: (String) -> Unit = {},
     /** Machines: add, test, edit, remove. */
@@ -81,6 +84,8 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                     Surface(onClick = actions.onNotifications, color = androidx.compose.ui.graphics.Color.Transparent) {
                         PhoneLine(Icons.Rounded.MarkEmailUnread, "Read my notifications", "Pick the apps your agent may learn from", false, null)
                     }
+                    PhoneLine(Icons.Rounded.FolderOpen, "Files on this phone", if (state.phoneFiles) "Your agent can find and upload your files" else "Let your agent find files to upload or send",
+                        state.phoneFiles, if (state.phoneFiles) null else actions.onAllowPhoneFiles)
                     MachinesLine(state.machines) { sheet = "list" }
                 }
             }

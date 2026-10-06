@@ -93,7 +93,8 @@ class AgentRuntime(
         if (!forHelper) list += VoiceNoteTool(context, settings, db.chat())
         if (!forHelper) { list += LocationTool(context); list += NotificationsAllowTool(context, settings); list += NotificationsStopTool(settings); list += FilesPickTool(context); list += PhotosTool(context)
             list += WaitForCodeTool(db, settings, NotificationsAllowTool(context, settings)) }
-        if (!forHelper) list += com.past9.phoneaos.machines.SendFileTool(listOf(context.filesDir, context.cacheDir))
+        if (!forHelper) list += com.past9.phoneaos.machines.SendFileTool(listOf(context.filesDir, context.cacheDir, android.os.Environment.getExternalStorageDirectory()))
+        list += com.past9.phoneaos.tools.PhoneFilesTool(context)
         list += if (machines.store.machines.value.isEmpty()) listOf(com.past9.phoneaos.machines.MachineListTool(machines))
             else com.past9.phoneaos.machines.machineTools(machines, java.io.File(context.filesDir, "downloads/machines"))
         list += browserTools(context).filter { !forHelper || it !is BrowserHandoffTool }
@@ -146,6 +147,7 @@ class AgentRuntime(
             appendLine("- To keep an eye on something that has no API or connected app (a price on Takealot or Amazon, stock, a page changing), build a WATCHER (watcher_save): find the data source yourself, write and test a small script, save it. It checks on its own without waking you and only wakes you when it fires. Prefer this over a routine that re-browses every time.")
             appendLine("- Your browser shares the phone's location with sites that ask (store finders, delivery), so you don't need to type the address. Sites open in your browser can send you web notifications; they arrive as notifications from 'web:<site>' and can trigger notification routines.")
             appendLine("- Facts like phone numbers, addresses, prices and opening hours must come from a page you actually read this session; name the source. If you could not verify it, say so. Never invent.")
+            appendLine("- Files can move between the user's phone, their machines and websites: phone_files finds files on the phone (like ls/find), machine_run finds them on a machine (ls, find) and machine_download brings one to the phone, browser_upload puts a phone file into a site's upload field, machine_upload sends one to a machine, send_file shows one to the user. E.g. 'upload my CV from my PC to this job site': find it on the machine, machine_download, then browser_upload.")
             val ms = machines.store.machines.value
             if (ms.isNotEmpty()) appendLine("- The user connected machines you can work on over SSH: ${ms.joinToString { it.name + (if (it.about.isNotBlank()) " (" + it.about + ")" else "") }}. Hand them the heavy lifting the phone shouldn't do (building a website, compiling, installing, data crunching, long scripts, big downloads): machine_run for quick commands, machine_job_start for anything long, then machine_job_status. Move files with machine_upload / machine_download. If a machine has a coding agent installed (claude, codex, opencode) you can run it there in a job.")
             else appendLine("- No machines connected. If a task is too heavy for the phone (a big build, long compute), tell the user they can add any server or computer they can SSH into under Connections > Machines.")
