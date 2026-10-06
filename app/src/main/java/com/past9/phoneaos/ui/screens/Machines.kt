@@ -170,6 +170,9 @@ fun MachineSheet(existing: Machine?, others: List<Machine>, actions: MachineActi
     val needsSecret = when (auth) { MachineAuth.PASSWORD -> !editing && password.isEmpty(); MachineAuth.KEY -> !editing && key.isBlank(); MachineAuth.NEW_KEY -> false }
     val ready = host.isNotBlank() && user.isNotBlank() && (port.toIntOrNull() ?: 0) in 1..65535 && !needsSecret && !busy
     val waitingForKey = auth == MachineAuth.NEW_KEY && pub == null
+    // Already connected once: the key is in place, so keep its card out of the way unless asked for.
+    val proven = existing?.hostKey != null
+    var showKey by remember { mutableStateOf(false) }
     val plain = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false)
 
     fun connect() = scope.launch {
@@ -185,18 +188,13 @@ fun MachineSheet(existing: Machine?, others: List<Machine>, actions: MachineActi
     }
 
     AppSheet(if (saved != null) machineIcon(saved!!) else Icons.Rounded.Dns, if (editing) "Machine" else "Heavy lifting", if (editing) existing!!.name else "New machine", onDismiss,
-        primary = when { busy -> "Connecting…"; result == "" -> "Done"; waitingForKey -> "Make a key"; auth == MachineAuth.NEW_KEY && result == null -> "I've added it, connect"; else -> "Connect" },
+        primary = when { busy -> "Connecting…"; result == "" -> "Done"; waitingForKey -> "Make a key"; proven -> "Save"; auth == MachineAuth.NEW_KEY && result == null -> "I've added it, connect"; else -> "Connect" },
         primaryEnabled = ready || result == "", onPrimary = { if (result == "") onDone() else connect() },
         shape = androidx.compose.material3.MaterialShapes.Cookie7Sided,
         secondary = if (editing) ({
             TextButton(onClick = { confirmDelete = true }, modifier = Modifier.fillMaxWidth().height(52.dp).padding(top = 4.dp)) { Text("Remove this machine", color = cs.error) }
         }) else null) {
         Column(Modifier.animateContentSize()) {
-            when {
-                result == "" -> ResultCard(true, "Connected", saved?.let { s -> listOfNotNull(s.about.takeIf { it.isNotBlank() }, s.hostKey?.let { "Identity ${it.take(22)}…" }).joinToString(" · ") } ?: "")
-                result != null -> ResultCard(false, "Couldn't connect", result!!)
-            }
-            if (result != null) Spacer(Modifier.height(16.dp))
 
             SheetField(name, { name = it }, "Name", "Build server", big = true, singleLine = true)
             Spacer(Modifier.height(16.dp))
@@ -226,7 +224,8 @@ fun MachineSheet(existing: Machine?, others: List<Machine>, actions: MachineActi
                 }
                 MachineAuth.NEW_KEY -> if (pub == null) Text("A key just for this machine. You add its public half to the machine once, and no password is ever stored.",
                     style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
-                    else PublicKeyCard(pub, actions.onCopy)
+                    else if (proven && !showKey) TextButton(onClick = { showKey = true }) { Icon(Icons.Rounded.Key, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Show this phone's public key") }
+                    else if (result != "") PublicKeyCard(pub, actions.onCopy)
             }
 
             val gateways = others.filter { it.id != existing?.id }
@@ -247,6 +246,11 @@ fun MachineSheet(existing: Machine?, others: List<Machine>, actions: MachineActi
                     Spacer(Modifier.width(12.dp))
                     Switch(trusted, { trusted = it })
                 }
+            }
+            // The outcome sits right above the button that caused it.
+            when {
+                result == "" -> { Spacer(Modifier.height(16.dp)); ResultCard(true, "Connected", saved?.let { s -> listOfNotNull(s.about.takeIf { it.isNotBlank() }, s.hostKey?.let { "Identity ${it.take(22)}…" }).joinToString(" · ") } ?: "") }
+                result != null -> { Spacer(Modifier.height(16.dp)); ResultCard(false, "Couldn't connect", result!!) }
             }
         }
     }

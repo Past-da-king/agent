@@ -191,7 +191,8 @@ private fun ToolkitLine(t: Toolkit, connected: Boolean, onConnect: () -> Unit) {
                 Text(t.description.ifBlank { "${t.toolsCount} actions" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             Spacer(Modifier.width(8.dp))
-            if (connected) Icon(Icons.Rounded.CheckCircle, "Connected", tint = LocalExtra.current.success)
+            // Connected apps can take more accounts (work and personal Gmail, say).
+            if (connected) OutlinedButton(onClick = onConnect, shapes = ButtonDefaults.shapes()) { Icon(Icons.Rounded.PersonAdd, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Add") }
             else FilledTonalButton(onClick = onConnect, shapes = ButtonDefaults.shapes()) { Text("Connect") }
         }
     }

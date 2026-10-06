@@ -26,7 +26,7 @@ class MachineService(val store: MachineStore) {
         open(m).use { s ->
             val r = Ssh.run(s, "uname -sr 2>/dev/null || ver; nproc 2>/dev/null || echo %NUMBER_OF_PROCESSORS%", timeoutSec = 20)
             val lines = r.output.lines().map { it.trim() }.filter { it.isNotBlank() }
-            val about = listOfNotNull(lines.getOrNull(0), lines.getOrNull(1)?.toIntOrNull()?.let { "$it cores" }).joinToString(" · ")
+            val about = listOfNotNull(lines.getOrNull(0)?.let(::prettyOs), lines.getOrNull(1)?.toIntOrNull()?.let { "$it cores" }).joinToString(" · ")
             store.update(m.id) { it.copy(about = about) }
         }
     }.exceptionOrNull()?.let { it.message ?: it.javaClass.simpleName }
@@ -40,6 +40,15 @@ class MachineService(val store: MachineStore) {
             throw SshException((e.message ?: "").replace("${m.host}:${m.port}", m.name).replace(m.host, m.name).replace(" for ${m.user}", ""))
         }
     }
+}
+
+/** "Linux 6.6.87.2-microsoft-standard-WSL2" -> "Windows (WSL)"; "Linux 6.8.0-138-generic" -> "Linux 6.8". */
+fun prettyOs(uname: String): String {
+    val u = uname.trim()
+    if (u.contains("microsoft", true)) return "Windows (WSL)"
+    if (u.startsWith("Microsoft Windows", true)) return "Windows"
+    val m = Regex("""^(\w+)\s+(\d+\.\d+)""").find(u) ?: return u.take(40)
+    return (if (m.groupValues[1] == "Darwin") "macOS" else m.groupValues[1]) + " " + m.groupValues[2]
 }
 
 /**
@@ -95,7 +104,7 @@ class MachineRunTool(private val svc: MachineService) : Tool {
         val cmd = input.optString("command").trim().ifEmpty { return "No command." }
         val full = dir(input.optString("cwd").takeIf { it.isNotBlank() })?.let { "cd $it && $cmd" } ?: cmd
         val m = svc.need(input.optString("machine"))
-        approve(ctx, m, "Run", full, CommandSafety.isReadOnly(cmd))?.let { return it }
+        approve(ctx, m, "Run", "$ $full", CommandSafety.isReadOnly(cmd))?.let { return it }
         val id = ctx.activity("${m.name}: ${cmd.take(80)}", JSONObject().put("tool", "machine").put("machine", m.name).put("command", full))
         val r = svc.with(m.id) { _, s -> Ssh.run(s, full, input.optLong("timeout_sec", 120).coerceIn(5, 600)) }
         ctx.updateActivity(id, "${m.name}: ${cmd.take(80)}", JSONObject().put("exit", r.exit ?: -1).put("result", r.output.takeLast(4000)))
@@ -110,7 +119,7 @@ class MachineJobStartTool(private val svc: MachineService) : Tool {
         val cmd = input.optString("command").trim().ifEmpty { return "No command." }
         val label = input.optString("label").lowercase().replace(Regex("[^a-z0-9._-]+"), "-").trim('-').take(40).ifEmpty { "job" }
         val m = svc.need(input.optString("machine"))
-        approve(ctx, m, "Start job \"$label\"", (input.optString("cwd").takeIf { it.isNotBlank() }?.let { "cd $it\n" } ?: "") + cmd, false)?.let { return it }
+        approve(ctx, m, "Start job \"$label\"", "$ " + (input.optString("cwd").takeIf { it.isNotBlank() }?.let { "cd $it\n" } ?: "") + cmd, false)?.let { return it }
         val script = buildString {
             appendLine("set -e; J=\"\$HOME/.agent-jobs\"; mkdir -p \"\$J\"")
             appendLine("cat > \"\$J/$label.sh\" <<'AGENT_JOB_EOF'")
@@ -155,14 +164,28 @@ class MachineUploadTool(private val svc: MachineService) : Tool {
 }
 
 class MachineDownloadTool(private val svc: MachineService, private val dir: File) : Tool {
-    override val spec = ToolSpec("machine_download", "Copy a file from a machine to the phone (up to 100 MB), e.g. a build artifact or report, so you can send it to the user.",
+    override val spec = ToolSpec("machine_download", "Get a file from one of the user's machines onto the phone (up to 100 MB) and show it to them as a file card they can open or save. Use this whenever they ask for a file from their PC or server.",
         schema(listOf("machine", "remote_path"), "machine" to str("Machine name"), "remote_path" to str("File path on the machine")))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val remote = input.optString("remote_path")
         val out = File(dir, remote.substringAfterLast('/').ifBlank { "file" }.replace(Regex("[^A-Za-z0-9._-]"), "_")).also { dir.mkdirs() }
         val m = svc.with(input.optString("machine")) { m, s -> Ssh.download(s, remote, out); m }
-        ctx.activity("${m.name}: downloaded ${out.name}", JSONObject().put("tool", "machine"))
-        return "Saved to ${out.absolutePath} (${out.length() / 1024} KB)"
+        // Shows in the chat as a file card the user can open or save to Downloads.
+        ctx.activity("${out.name} from ${m.name}", JSONObject().put("tool", "machine").put("file", out.absolutePath).put("from", m.name))
+        return "Sent to the user as a file card in the chat (they can open it or save it to Downloads): ${out.name}, ${out.length() / 1024} KB. Local path ${out.absolutePath}."
+    }
+}
+
+/** Hand the user any file the agent has on the phone (something it made, downloaded or fetched) as a file card. */
+class SendFileTool(private val roots: List<File>) : Tool {
+    override val spec = ToolSpec("send_file", "Show the user a file you have on the phone (one you made with run_code, downloaded, or got from a machine) as a file card they can open or save to Downloads.",
+        schema(listOf("path"), "path" to str("File path on the phone"), "note" to str("Optional: where it came from, e.g. 'from your PC'")))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String {
+        val f = File(input.optString("path")).canonicalFile
+        if (!f.isFile) return "No such file: ${f.path}"
+        if (roots.none { f.path.startsWith(it.canonicalPath) }) return "That file is outside the app's storage; copy it into the app first."
+        ctx.activity(f.name, JSONObject().put("tool", "files").put("file", f.absolutePath).put("from", input.optString("note").removePrefix("from ")))
+        return "Shown to the user as a file card: ${f.name}."
     }
 }
 

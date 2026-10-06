@@ -202,8 +202,9 @@ class MainActivity : ComponentActivity() {
                 val apps = (com.past9.phoneaos.tools.AppCatalog.popular + conn.toolkits).distinctBy { it.slug }
                 conn = conn.copy(consumer = true, toolkits = apps)
                 try {
-                    val st = cc.statuses(ck, apps.map { it.slug })
-                    conn = conn.copy(loading = false, connected = st.filter { it.value.first == "ACTIVE" }.map { (slug, v) -> com.past9.phoneaos.tools.Connection(v.second, slug, v.first, slug) })
+                    val st = cc.accounts(ck, apps.map { it.slug })
+                    // One row per signed-in account: four Gmails show as four lines, each with its email.
+                    conn = conn.copy(loading = false, connected = st.values.flatten().filter { it.status == "ACTIVE" }.map { a -> com.past9.phoneaos.tools.Connection(a.id, a.slug, a.status, a.label.ifBlank { a.slug }) })
                     // A started-but-unfinished sign-in is just an expired link here: the app stays in the list with Connect.
                 } catch (e: Exception) { conn = conn.copy(loading = false, error = "Couldn't reach Composio: ${e.message}") }
                 return@launch
@@ -324,11 +325,12 @@ class MainActivity : ComponentActivity() {
                         onConnect = { slug -> scope.launch {
                             val ck = g.settings.composioKey()?.trim()
                             if (ck != null && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(ck)) {
+                                val before = conn.connected.count { it.toolkit == slug && it.status == "ACTIVE" }
                                 runCatching { com.past9.phoneaos.tools.ComposioConnect.connectLink(ck, slug) }.onSuccess { open(it) }.onFailure { conn = conn.copy(error = it.message) }
-                                // Pick up the new connection as soon as the sign-in finishes, without a manual refresh.
-                                repeat(60) { kotlinx.coroutines.delay(5000); if (conn.connected.any { it.toolkit == slug && it.status == "ACTIVE" }) return@launch
+                                // Pick up the new account as soon as the sign-in finishes, without a manual refresh.
+                                repeat(60) { kotlinx.coroutines.delay(5000)
                                     val now = runCatching { com.past9.phoneaos.tools.ComposioConnect.statuses(ck, listOf(slug))[slug] }.getOrNull()
-                                    if (now?.first == "ACTIVE") { refreshConnections(); return@launch } }
+                                    if (now?.first == "ACTIVE" && runCatching { com.past9.phoneaos.tools.ComposioConnect.accounts(ck, listOf(slug))[slug].orEmpty().count { it.status == "ACTIVE" } }.getOrDefault(0) > before) { refreshConnections(); return@launch } }
                             } else runCatching { g.runtime.composio.connect(slug) }.onSuccess { open(it) }.onFailure { conn = conn.copy(error = it.message) }
                         } },
                         onDisconnect = { c -> scope.launch {

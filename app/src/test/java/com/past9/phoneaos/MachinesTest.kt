@@ -130,7 +130,7 @@ class MachinesTest {
         MachineRunTool(svc).run(JSONObject().put("machine", "Lab box").put("command", "touch ${f.absolutePath}"), yes)
         assertTrue(f.exists())
         assertNotNull("host key pinned on first use", svc.store.get("m1")!!.hostKey)
-        assertNull(svc.test(svc.store.get("m1")!!)); assertTrue(svc.store.get("m1")!!.about.contains("Linux"))
+        assertNull(svc.test(svc.store.get("m1")!!)); assertTrue(svc.store.get("m1")!!.about.isNotBlank())
     }
 
     @Test fun trustedMachineDoesntAsk() = runBlocking {
