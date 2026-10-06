@@ -32,6 +32,8 @@ data class SettingsActions(
     val onStyle: () -> Unit = {},
     val onPinHome: () -> Unit = {},
     val onModel: () -> Unit = {},
+    /** Opens the slide-up picker for the model helpers run on. */
+    val onHelperModel: () -> Unit = {},
     /** Claude / ChatGPT open their sign-in; OpenCode goes to the key screen. */
     val onChooseSub: (com.past9.phoneaos.data.SubKind) -> Unit = {},
     val voice: VoiceActions = VoiceActions(),
@@ -70,12 +72,13 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
             if (s.mode == PowerMode.API_KEY) AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 Line(Icons.Rounded.Hub, "Provider", s.provider.label) { actions.onChangeKey() }
                 Line(Icons.Rounded.Psychology, "Model", s.model + " · tap to switch") { actions.onModel() }
-                Line(Icons.Rounded.Groups, "Helper model", s.helperModel + " (used by helper agents)") { editValue = s.helperModel; edit = "Helper model" to actions.setHelperModel }
+                Line(Icons.Rounded.Groups, "Helper model", s.helperModel.substringAfterLast('/').ifBlank { "Same as your agent" } + " · does the work your agent hands out") { actions.onHelperModel() }
                 Line(Icons.Rounded.Password, "Change key", "Paste a new key or switch provider") { actions.onChangeKey() }
             }
             if (s.mode == PowerMode.SUBSCRIPTION || runtime.installedBytes > 0) AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 Line(Icons.Rounded.Terminal, "${s.subKind.label} runtime", runtime.note) { actions.onClaudeSetup() }
                 if (s.mode == PowerMode.SUBSCRIPTION) Line(Icons.Rounded.Psychology, "Model", s.subModel.ifBlank { "Default" }.replaceFirstChar { it.uppercase() } + " · tap to switch") { actions.onModel() }
+                if (s.mode == PowerMode.SUBSCRIPTION) Line(Icons.Rounded.Groups, "Helper model", s.subHelperModel.ifBlank { "Same as your agent" }.replaceFirstChar { it.uppercase() } + " · does the work your agent hands out") { actions.onHelperModel() }
                 if (runtime.installedBytes > 0) Line(Icons.Rounded.DeleteSweep, "Delete runtime data", "Frees ${runtime.installedBytes / 1_000_000} MB. You can set it up again later.") { actions.onDeleteRuntime() }
             }
             SectionHeader("Voice", "Talking instead of typing", Modifier.padding(start = 4.dp, top = 12.dp))

@@ -183,8 +183,19 @@ class ScreensTest(private val dark: Boolean) {
         MemoryRow(2, "Lerato", "Lerato is [[Sam]]'s sister. She runs the books at [[Acme]]; invoices go to her on the 25th.\n\n- Birthday: 14 March\n- Lives in [[Durban]]", "person", "family, acme, invoices", updatedAt = now - 3_600_000),
         MemoryRow(3, "Acme", "A fintech company where [[Sam]] works. Office in Rosebank.", "company", "work", updatedAt = now - 86_400_000L),
     )
-    private val demoHome get() = HomeState("Nova", "Sam", AgentStatus(true, "Browsing", 2),
-        listOf(item("agent", "Found three places in uMhlanga under R 1,200 a night. **Ocean Breeze** has the best reviews; want me to hold it?"),
+    private val demoHelpers: List<com.past9.phoneaos.data.ChatItem> get() { val first = item("helper", "Find guesthouses in uMhlanga for Fri 9 to Sun 11 Oct, 2 adults, under R 1,200 a night, sea view preferred (Sam loves waking up to the ocean). Use Booking.com and Airbnb. Bring back the best five with price per night, rating, distance to the beach and a link.",
+            JSONObject().put("label", "uMhlanga stays").put("state", "working").put("now", "Browsing").put("startedAt", now - 4 * 60_000).put("model", "claude-haiku-4-5"))
+        return listOf(first,
+        item("activity", "Opened Booking.com · uMhlanga, 9 to 11 Oct", JSONObject().put("tool", "browser").put("helper", first.id)),
+        item("activity", "Read 24 results, sorted by price", JSONObject().put("tool", "browser").put("helper", first.id)),
+        item("helper", "Check Uber and Bolt prices from King Shaka airport to uMhlanga Rocks on Friday around 18:00 and say which is cheaper.",
+            JSONObject().put("label", "Airport ride").put("state", "working").put("now", "Reading the web").put("startedAt", now - 60_000).put("model", "claude-haiku-4-5")),
+        item("helper", "Look up the Sharks game times for the weekend of 10 Oct and whether tickets are left.",
+            JSONObject().put("label", "Sharks tickets").put("state", "done").put("startedAt", now - 30 * 60_000).put("endedAt", now - 22 * 60_000)
+                .put("result", "**Sharks v Stormers**, Sat 10 Oct, 17:00 at Kings Park. Tickets from R 180 on Ticketmaster, about 40 left in the West stand.\n\nSource: ticketmaster.co.za, checked 14:05.")),
+    ) }
+    private val demoHome get() = HomeState("Nova", "Sam", AgentStatus(false, "", 2),
+        demoHelpers + listOf(item("agent", "Found three places in uMhlanga under R 1,200 a night. **Ocean Breeze** has the best reviews; want me to hold it?"),
             item("question", "Which guesthouse should I book?", JSONObject().put("options", JSONArray(listOf("Ocean Breeze", "The Palms", "Show me more"))))),
         demoGoals, demoTasks,
         listOf(TriggerRow(1, "Morning brief", "daily", "07:00", "Brief me"), TriggerRow(2, "Bank alerts", "notification", "MyBank|", "Flag anything over R 1,000")),
@@ -204,6 +215,8 @@ class ScreensTest(private val dark: Boolean) {
     private fun sheet(name: String, content: @Composable () -> Unit) = shot(name) {
         androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.LocalSheetPreview provides true) { content() }
     }
+    @Test fun helperSheetWorking() { sheet("84-sheet-helper-working") { com.past9.phoneaos.ui.HelperSheet(com.past9.phoneaos.ui.HelperView.from(demoHelpers)[0], {}, {}, now = now) } }
+    @Test fun helperSheetDone() { sheet("85-sheet-helper-done") { com.past9.phoneaos.ui.HelperSheet(com.past9.phoneaos.ui.HelperView.from(demoHelpers)[2], {}, {}, now = now) } }
     @Test fun sheetTask() { sheet("80-sheet-task") { AddTaskSheet({}, {}) { _, _ -> } } }
     @Test fun sheetMemory() { sheet("81-sheet-memory") { PageEditor(MemoryRow(id = 3, title = "Lerato", body = "Lerato is his business partner at Acme. Invoices go to her on the 25th.", kind = "person", topics = "work, acme"), {}, {}, {}) } }
     @Test fun sheetMemoryNew() { sheet("82-sheet-memory-new") { PageEditor(MemoryRow(id = 0, title = "", body = "", source = "user"), {}, {}) } }

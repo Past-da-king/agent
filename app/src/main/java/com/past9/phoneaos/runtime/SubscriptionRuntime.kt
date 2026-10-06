@@ -197,7 +197,7 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
     }
 
     /** Run one turn. Emits the bridge's JSON events: session, text, tool, done, error. Cancelling kills the process. */
-    fun turn(prompt: String, system: String, resume: String?, model: String?, mcpUrl: String, mcpToken: String, images: List<String> = emptyList()): Flow<JSONObject> = callbackFlow {
+    fun turn(prompt: String, system: String, resume: String?, model: String?, mcpUrl: String, mcpToken: String, images: List<String> = emptyList(), role: String = "main"): Flow<JSONObject> = callbackFlow {
         // Bridges ship in the APK; refresh them so an app update takes effect without reinstalling the runtime.
         runCatching { context.assets.open("runtime/${spec.bridge}").use { i -> File(dir, spec.bridge).outputStream().use { i.copyTo(it) } } }
         val pb = ProcessBuilder(node.path, File(dir, spec.bridge).path).directory(dir).redirectErrorStream(false)
@@ -206,7 +206,7 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
         pb.environment()["PHONE_MCP_URL"] = mcpUrl
         pb.environment()["PHONE_MCP_TOKEN"] = mcpToken
         val p = pb.start()
-        p.outputStream.bufferedWriter().use { it.write(JSONObject().put("prompt", prompt).put("system", system).put("resume", resume ?: "").put("model", model ?: "").put("images", org.json.JSONArray(images)).toString() + "\n") }
+        p.outputStream.bufferedWriter().use { it.write(JSONObject().put("prompt", prompt).put("system", system).put("resume", resume ?: "").put("model", model ?: "").put("images", org.json.JSONArray(images)).put("role", role).toString() + "\n") }
         val err = StringBuilder()
         thread(isDaemon = true) { p.errorStream.bufferedReader().forEachLine { synchronized(err) { if (err.length < 4000) err.appendLine(it) } } }
         thread(isDaemon = true) {

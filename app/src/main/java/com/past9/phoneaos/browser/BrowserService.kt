@@ -59,7 +59,10 @@ class BrowserService : Service() {
         private val engines = java.util.concurrent.ConcurrentHashMap<String, BrowserEngine>()
         private val _engines = MutableStateFlow<Map<String, BrowserEngine>>(emptyMap())
         val live: StateFlow<Map<String, BrowserEngine>> = _engines
-        val engine: BrowserEngine? get() = engines.entries.firstOrNull { it.key.startsWith("main/") }?.value ?: engines.values.firstOrNull()
+        /** The agent whose browser the user should see: whoever used one last (helpers do the browsing now). */
+        @Volatile private var focusOwner: String? = null
+        val engine: BrowserEngine? get() = focusOwner?.let { o -> engines.entries.firstOrNull { it.key.startsWith("$o/") }?.value }
+            ?: engines.entries.firstOrNull { it.key.startsWith("main/") }?.value ?: engines.values.firstOrNull()
         private val _running = MutableStateFlow(false)
         val running: StateFlow<Boolean> = _running
         private const val MAX = 4
@@ -71,6 +74,7 @@ class BrowserService : Service() {
         /** Start the service if needed and get (or open) the browser for this agent. */
         suspend fun await(context: Context, owner: String = "main", profile: String = "Personal"): BrowserEngine {
             val key = "$owner/$profile"
+            focusOwner = owner
             engines[key]?.let { it.touch(); return it }
             if (!_running.value) { start(context); repeat(50) { if (_running.value) return@repeat; kotlinx.coroutines.delay(100) } }
             check(_running.value) { "The browser did not start" }
@@ -84,6 +88,7 @@ class BrowserService : Service() {
         /** A helper finished: close its browser. The main agent's stays open. */
         fun release(owner: String) {
             if (owner == "main") return
+            if (focusOwner == owner) focusOwner = null
             engines.keys.filter { it.startsWith("$owner/") }.forEach { engines.remove(it)?.destroy() }; _engines.value = engines.toMap()
         }
     }

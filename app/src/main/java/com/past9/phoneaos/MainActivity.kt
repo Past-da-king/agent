@@ -59,7 +59,9 @@ class MainActivity : ComponentActivity() {
         val g = App.graph(this)
         setContent {
             val st by g.settings.state.collectAsStateWithLifecycle()
-            AppTheme(accent = st.accent, mascot = st.mascot) { Root(g) }
+            AppTheme(accent = st.accent, mascot = st.mascot) {
+                androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.screens.LocalStopHelper provides { id: Long -> g.runtime.stopHelper(id); Unit }) { Root(g) }
+            }
         }
     }
 
@@ -119,10 +121,13 @@ class MainActivity : ComponentActivity() {
             scope.launch { uris.forEach { u -> val name = reader.displayName(u); reader.keepCopy(u, name)?.let { docPaths[name] = it.path }; docs[name] = reader.readDocument(u) } }
         }
         var modelSheet by remember { mutableStateOf(false) }
+        /** The picker is choosing the helpers' model rather than the main agent's. */
+        var pickingHelper by remember { mutableStateOf(false) }
         var modelList by remember { mutableStateOf<List<com.past9.phoneaos.agent.ModelInfo>?>(null) }
         var modelErr by remember { mutableStateOf<String?>(null) }
         val onSub = settings.mode == PowerMode.SUBSCRIPTION
-        fun openModels() {
+        fun openModels(forHelpers: Boolean = false) {
+            pickingHelper = forHelpers
             modelSheet = true; modelList = null; modelErr = null
             scope.launch {
                 runCatching {
@@ -363,7 +368,7 @@ class MainActivity : ComponentActivity() {
                         setMode = g.settings::setMode, setProvider = g.settings::setProvider, setModel = g.settings::setModel, setHelperModel = g.settings::setHelperModel,
                         onChangeKey = { nav.navigate("key") }, setSpeak = g.settings::setSpeakReplies,
                         onClaudeSetup = { nav.navigate("sub") }, onDeleteRuntime = { sub.delete(); info = sub.info() }, onStyle = { nav.navigate("style") },
-                        onModel = { openModels() },
+                        onModel = { openModels() }, onHelperModel = { openModels(forHelpers = true) },
                         voice = VoiceActions(
                             setTts = { p, v -> g.settings.setTts(p, v) }, setKey = { p, k -> g.settings.setVoiceKey(p, k) },
                             hasKey = { p -> g.settings.voiceKey(p) != null }, setSpeak = g.settings::setSpeakReplies, setLive = g.settings::setLive, setAutoPlay = g.settings::setAutoPlayEarphones,
@@ -416,9 +421,15 @@ class MainActivity : ComponentActivity() {
                     ))
                 }
             }
-            if (modelSheet) ModelPickerSheet(if (onSub) "${settings.subKind.label} model" else "${settings.provider.label} model", modelList,
-                if (onSub) settings.subModel else settings.model, modelErr,
-                onPick = { m -> if (onSub) g.settings.setSubModel(m.id) else g.settings.setModel(m.id); modelSheet = false }, onDismiss = { modelSheet = false })
+            if (modelSheet) ModelPickerSheet(
+                if (pickingHelper) "Helper model" else if (onSub) "${settings.subKind.label} model" else "${settings.provider.label} model",
+                if (pickingHelper && onSub) modelList?.map { if (it.id.isBlank()) it.copy(name = "Same as your agent", note = "Helpers use whatever your agent uses") else it } else modelList,
+                when { pickingHelper && onSub -> settings.subHelperModel; pickingHelper -> settings.helperModel; onSub -> settings.subModel; else -> settings.model }, modelErr,
+                onPick = { m ->
+                    when { pickingHelper && onSub -> g.settings.setSubHelperModel(m.id); pickingHelper -> g.settings.setHelperModel(m.id); onSub -> g.settings.setSubModel(m.id); else -> g.settings.setModel(m.id) }
+                    modelSheet = false
+                }, onDismiss = { modelSheet = false },
+                subtitle = if (pickingHelper) "Your agent plans and hands the work to helpers. Pick what they run on." else null)
             androidx.compose.animation.AnimatedVisibility(route in barRoutes, modifier = androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
                 enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut()) {
                 HomeBar(route, ::go, onTalk = { nav.navigate("chat") })

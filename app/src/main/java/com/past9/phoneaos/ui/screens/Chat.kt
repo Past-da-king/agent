@@ -179,6 +179,7 @@ private fun ChatTopBar(agentName: String, status: AgentStatus, browserLive: Bool
                 val line = when {
                     needsYou -> "Waiting for you"
                     status.working -> status.label + if (status.helpers > 0) " · ${status.helpers} helper${if (status.helpers > 1) "s" else ""}" else ""
+                    status.helpers > 0 -> "${status.helpers} helper${if (status.helpers > 1) "s" else ""} working · you can keep talking"
                     else -> "Ready"
                 }
                 AnimatedContent(line, transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(150)) }, label = "status") {
@@ -418,56 +419,18 @@ private fun ImageActivity(item: ChatItem) {
     }
 }
 
-/** A helper agent: one line in the chat; tap it to see every step it took and what it found. */
+/** A helper agent: one calm row in the chat; tap it for the full sheet (brief, live step, steps, result). */
 @Composable
 private fun HelperRow(item: ChatItem, steps: List<ChatItem>) {
-    val meta = JSONObject(item.meta); val state = meta.optString("state")
     var open by remember { mutableStateOf(false) }
-    val extra = LocalExtra.current
-    AppCard(container = MaterialTheme.colorScheme.surfaceContainerLow, padding = PaddingValues(14.dp), onClick = { open = true }) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            when (state) {
-                "working" -> LoadingIndicator(Modifier.size(28.dp))
-                "done" -> Icon(Icons.Rounded.CheckCircle, null, tint = extra.success, modifier = Modifier.size(24.dp))
-                else -> Icon(Icons.Rounded.ErrorOutline, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(24.dp))
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(meta.optString("label", "Helper").uppercase() + when (state) { "working" -> " · WORKING"; "done" -> " · DONE"; else -> " · FAILED" }, style = Eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(item.text, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                val last = steps.lastOrNull()
-                if (state == "working" && last != null) Text(last.text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            if (steps.isNotEmpty()) Text("${steps.size}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 8.dp))
-            Icon(Icons.Rounded.ChevronRight, "See what it did", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-    if (open) ModalBottomSheet(onDismissRequest = { open = false }) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
-            Text(meta.optString("label", "Helper").uppercase(), style = Eyebrow, color = MaterialTheme.colorScheme.primary)
-            Text(item.text, style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(16.dp))
-            Text("WHAT IT DID", style = Eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(6.dp))
-            if (steps.isEmpty()) Text("Nothing yet.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            steps.forEach { a ->
-                Row(Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(iconFor(JSONObject(a.meta).optString("tool")), null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.width(10.dp))
-                    Text(a.text, style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-            if (state == "working") Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) { LoadingIndicator(Modifier.size(28.dp)); Spacer(Modifier.width(8.dp)); Text("Still working…", style = MaterialTheme.typography.bodyMedium) }
-            val result = meta.optString("result")
-            if (result.isNotBlank()) {
-                Spacer(Modifier.height(16.dp))
-                Text("WHAT IT FOUND", style = Eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(6.dp))
-                Markdown(result, style = MaterialTheme.typography.bodyMedium)
-            }
-        }
-    }
+    val h = com.past9.phoneaos.ui.HelperView(item, steps)
+    val onStop = LocalStopHelper.current
+    com.past9.phoneaos.ui.HelperCard(h, onClick = { open = true })
+    if (open) com.past9.phoneaos.ui.HelperSheet(h, onStop, onDismiss = { open = false })
 }
+
+/** How a helper row reaches the runtime to stop its helper. */
+val LocalStopHelper = androidx.compose.runtime.staticCompositionLocalOf<((Long) -> Unit)?> { null }
 
 @Composable
 fun QuestionCard(item: ChatItem, onAnswer: (Long, String) -> Unit, onBrowser: () -> Unit) {

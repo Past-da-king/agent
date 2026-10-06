@@ -79,8 +79,13 @@ object Overnight {
             val s = g.settings.state.value
             val since = g.settings.extra("overnight_last")?.toLongOrNull() ?: (System.currentTimeMillis() - 86_400_000L)
             val chat = g.db.chat().all().first()
-            val recent = chat.filter { it.createdAt > since && it.kind in setOf("user", "agent", "voice") }
-                .joinToString("\n") { (if (it.kind == "user") "USER: " else "AGENT: ") + it.text.take(800) }.takeLast(14_000)
+            val recent = chat.filter { it.createdAt > since && it.kind in setOf("user", "agent", "voice", "helper") }
+                .joinToString("\n") { when (it.kind) {
+                    "user" -> "USER: " + it.text.take(800)
+                    // What the helpers did is part of the day: the brief and what came back.
+                    "helper" -> JSONObject(it.meta).let { m -> "HELPER \"${m.optString("label")}\" [${m.optString("state")}]: ${it.text.take(200)} => ${m.optString("result").take(400)}" }
+                    else -> "AGENT: " + it.text.take(800)
+                } }.takeLast(16_000)
             val memories = g.db.memory().list().take(80).joinToString("\n") { "- ${it.title}" }
             val tasks = g.db.tasks().openTasks().take(25).joinToString("\n") { "- [${it.status}] ${it.title}" }
             val routines = g.db.triggers().list().filter { it.enabled && it.kind != KIND }.joinToString("\n") { "- ${it.name}" }
@@ -93,7 +98,11 @@ object Overnight {
                 if (full) appendLine("1) Read what happened since last time (below). For anything durable that memory doesn't have yet (people, plans, preferences, projects, decisions), save or update a memory page now. Fix pages that are wrong. Don't save trivia.")
                 appendLine("${if (full) "2" else "1"}) Then reply with ONLY one JSON object, no other text:")
                 appendLine("""{"story": "...", "greeting": "...", "line": "...", "body": "...", "ideas": [{"icon": "...", "text": "..."}]}""")
-                appendLine("- story: your running notes on who $name is and what you've been doing together, merged with the previous notes below. Max 1200 characters. Tomorrow you start without the old chat, so keep what you'll need.")
+                appendLine("- story: tomorrow you start with NO chat, only these notes, so write the final high-level report you will need to carry on without asking $name anything you already knew. Merge with your previous notes below. Plain text, max 3000 characters, in four parts with these exact headings:")
+                appendLine("  WHO $name IS: the essentials (people, work, places, how they like things done).")
+                appendLine("  WHAT WE WERE DOING: the threads of the last days, newest first, one line each.")
+                appendLine("  WHERE THINGS STAND: for each open thread, where it got to and what's next (waiting on them, on a helper, or on something outside).")
+                appendLine("  WHERE TO FIND THINGS: which memory pages, goals and routines hold the details, by name.")
                 appendLine("- greeting: e.g. \"Morning $name.\" Short.")
                 appendLine("- line: one thought in your own voice, under 70 characters: a question, an \"I wonder...\", or a nudge about something real from what you know (an open task, a plan, a person). If you know almost nothing yet, use \"What should I take off your plate?\"")
                 appendLine("- body: one sentence, under 170 characters, on what you could do for them today.")
@@ -114,7 +123,7 @@ object Overnight {
                 (0 until (json.optJSONArray("ideas")?.length() ?: 0)).mapNotNull { i -> json.optJSONArray("ideas")?.optJSONObject(i) }
                     .map { Idea(it.optString("icon", "idea"), it.optString("text")) }.filter { it.text.isNotBlank() }.take(4))
             if (b.ideas.isNotEmpty()) { g.settings.setExtra("morning_brief", toJson(b)); _brief.value = b }
-            json.optString("story").takeIf { it.isNotBlank() }?.let { g.settings.setExtra("story", it.take(1500)) }
+            json.optString("story").takeIf { it.isNotBlank() }?.let { g.settings.setExtra("story", it.take(3500)) }
 
             // Fold the old conversation into the story: tomorrow the model starts clean, with the notes.
             // Only when nobody has chatted for two hours, so a late-night conversation is never cut.

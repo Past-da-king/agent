@@ -65,11 +65,12 @@ class SubscriptionPathTest {
         val rt = AgentRuntime(app, db, settings, CoroutineScope(SupervisorJob() + Dispatchers.IO), FakePhone(), { null })
         rt.subscription = object : SubscriptionEngine {
             override val ready = true
-            override fun turn(prompt: String, system: String, resume: String?, mcpUrl: String, mcpToken: String, images: List<String>) = flow {
+            override fun turn(prompt: String, system: String, resume: String?, mcpUrl: String, mcpToken: String, images: List<String>, model: String?, role: String) = flow {
+                assertEquals("main", role)
                 seen += resume
                 assertTrue(mcpUrl.startsWith("http://127.0.0.1:")); assertEquals(settings.localToken(), mcpToken)
                 emit(JSONObject().put("type", "session").put("id", "sess-1"))
-                emit(JSONObject().put("type", "tool").put("name", "browser_open"))
+                emit(JSONObject().put("type", "tool").put("name", "memory_search"))
                 emit(JSONObject().put("type", "text").put("text", "Done: $prompt"))
                 emit(JSONObject().put("type", "done").put("ok", true))
             }
@@ -79,6 +80,44 @@ class SubscriptionPathTest {
         assertEquals(listOf(null, "sess-1"), seen)
         assertEquals(listOf("user", "agent", "user", "agent"), db.chat().all().first().map { it.kind })
         assertEquals("Done: second", db.chat().all().first().last().text)
+        rt.mcp.stop()
+    }
+
+    @Test fun subscriptionHelpersRunOnTheSameHarnessWithTheWorkerTools() = runBlocking {
+        val app = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val db = AppDb.inMemory(app); val settings = SettingsStore(app); settings.setMode(PowerMode.SUBSCRIPTION); settings.setSubHelperModel("haiku")
+        val calls = java.util.Collections.synchronizedList(mutableListOf<Triple<String, String, String?>>())
+        val rt = AgentRuntime(app, db, settings, CoroutineScope(SupervisorJob() + Dispatchers.IO), FakePhone(), { null })
+        var helperTools = emptyList<String>()
+        rt.subscription = object : SubscriptionEngine {
+            override val ready = true
+            override fun turn(prompt: String, system: String, resume: String?, mcpUrl: String, mcpToken: String, images: List<String>, model: String?, role: String) = flow {
+                calls += Triple(role, mcpUrl, model)
+                when {
+                    role == "helper" -> {
+                        assertTrue(mcpUrl.contains("/mcp/h/")); assertTrue(system.contains("You are a HELPER"))
+                        val list = JSONObject(post(mcpUrl, mcpToken, """{"jsonrpc":"2.0","id":1,"method":"tools/list"}""").body!!.string()).getJSONObject("result").getJSONArray("tools")
+                        helperTools = (0 until list.length()).map { list.getJSONObject(it).getString("name") }
+                        emit(JSONObject().put("type", "text").put("text", "X is 42"))
+                    }
+                    prompt.contains("[Helper #") -> emit(JSONObject().put("type", "text").put("text", "The helper says X is 42."))
+                    else -> {
+                        val list = JSONObject(post(mcpUrl, mcpToken, """{"jsonrpc":"2.0","id":1,"method":"tools/list"}""").body!!.string()).getJSONObject("result").getJSONArray("tools")
+                        val mainTools = (0 until list.length()).map { list.getJSONObject(it).getString("name") }
+                        assertTrue("delegate" in mainTools); assertFalse("browser_open" in mainTools)
+                        post(mcpUrl, mcpToken, """{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"delegate","arguments":{"tasks":["Find X"],"labels":["Find X"]}}}""").close()
+                        emit(JSONObject().put("type", "text").put("text", "A helper is finding X."))
+                    }
+                }
+                emit(JSONObject().put("type", "done").put("ok", true))
+            }
+        }
+        rt.send("find X"); withTimeout(15_000) { rt.awaitIdle() }
+        assertEquals(listOf("main", "helper", "main"), calls.map { it.first })
+        assertEquals("haiku", calls[1].third)
+        assertTrue("browser_open" in helperTools && "delegate" !in helperTools)
+        assertEquals("The helper says X is 42.", db.chat().all().first().last { it.kind == "agent" }.text)
+        assertEquals("done", JSONObject(db.chat().all().first().first { it.kind == "helper" }.meta).getString("state"))
         rt.mcp.stop()
     }
 

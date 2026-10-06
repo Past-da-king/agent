@@ -7,20 +7,25 @@ import { mkdirSync, writeFileSync } from "node:fs";
 
 const out = (o) => process.stdout.write(JSON.stringify(o) + "\n");
 const rl = createInterface({ input: process.stdin });
-const { prompt, system, resume, model, images = [] } = JSON.parse(await new Promise((r) => rl.once("line", r)));
+const { prompt, system, resume, model, images = [], role = "main" } = JSON.parse(await new Promise((r) => rl.once("line", r)));
+const isMain = role === "main";
 rl.close();
 
 const home = process.env.HOME;
 mkdirSync(`${home}/.codex`, { recursive: true });
 if (process.env.CODEX_AUTH_JSON) writeFileSync(`${home}/.codex/auth.json`, process.env.CODEX_AUTH_JSON, { mode: 0o600 });
-writeFileSync(`${home}/.codex/config.toml`, [
-  `[mcp_servers.phone]`, `url = "${process.env.PHONE_MCP_URL}"`, `bearer_token_env_var = "PHONE_MCP_TOKEN"`, ``,
-].join("\n"));
+// The main agent and its helpers run at the same time, each with its own MCP endpoint, so the phone's
+// server is passed per run (--config) instead of through the shared config.toml.
+writeFileSync(`${home}/.codex/config.toml`, "");
 
 try {
-  const codex = new Codex({ codexPathOverride: process.env.CODEX_BIN });
+  const codex = new Codex({ codexPathOverride: process.env.CODEX_BIN,
+    config: { mcp_servers: { phone: { url: process.env.PHONE_MCP_URL, bearer_token_env_var: "PHONE_MCP_TOKEN" } } } });
   // Android's app sandbox is the boundary here; Codex's own Linux sandbox (landlock/seccomp) isn't available.
-  const opts = { workingDirectory: home, skipGitRepoCheck: true, sandboxMode: "danger-full-access", approvalPolicy: "never", model: model || undefined };
+  // The main agent only orchestrates through the phone's tools: no shell writes, no network, no web search.
+  const opts = isMain
+    ? { workingDirectory: home, skipGitRepoCheck: true, sandboxMode: "read-only", networkAccessEnabled: false, webSearchEnabled: false, approvalPolicy: "never", model: model || undefined }
+    : { workingDirectory: home, skipGitRepoCheck: true, sandboxMode: "danger-full-access", approvalPolicy: "never", model: model || undefined };
   const thread = resume ? codex.resumeThread(resume, opts) : codex.startThread(opts);
   // Photos the user sent go to Codex as local images alongside the text.
   const text = `${system}\n\n---\n\n${prompt}`;

@@ -5,7 +5,8 @@ import { createInterface } from "node:readline";
 
 const out = (o) => process.stdout.write(JSON.stringify(o) + "\n");
 const rl = createInterface({ input: process.stdin });
-const { prompt, system, resume, model } = JSON.parse(await new Promise((r) => rl.once("line", r)));
+const { prompt, system, resume, model, role = "main" } = JSON.parse(await new Promise((r) => rl.once("line", r)));
+const isMain = role === "main";
 rl.close();
 process.env.PATH = `${process.env.PATH}`;
 
@@ -16,7 +17,9 @@ try {
       model: model || "opencode/big-pickle",
       provider: { opencode: { options: { apiKey: process.env.OPENCODE_API_KEY } } },
       mcp: { phone: { type: "remote", url: process.env.PHONE_MCP_URL, headers: { Authorization: `Bearer ${process.env.PHONE_MCP_TOKEN}` } } },
-      tools: { bash: false, edit: false, write: false, patch: false },
+      // The main agent only orchestrates through the phone's tools; helpers may also fetch the web.
+      tools: isMain ? { bash: false, edit: false, write: false, patch: false, webfetch: false, task: false, read: false, grep: false, glob: false, list: false }
+                    : { bash: false, edit: false, write: false, patch: false, task: false },
     },
   });
   const session = resume ? { id: resume } : (await client.session.create({ body: { title: "phone" } })).data;

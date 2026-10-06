@@ -26,6 +26,8 @@ class LocalMcpServer(
     private val tools: () -> List<Tool>,
     private val context: () -> ToolContext,
     private val port: Int = 0,
+    /** Helpers get their own endpoint, /mcp/h/<id>: the worker tools, acting as that helper. Null when it isn't running. */
+    private val helper: ((Long) -> Pair<List<Tool>, ToolContext>?)? = null,
 ) {
     private var server: ServerSocket? = null
     val boundPort: Int get() = server?.localPort ?: -1
@@ -60,7 +62,11 @@ class LocalMcpServer(
         while (read < len) { val n = inp.read(bodyBytes, read, len - read); if (n < 0) break; read += n }
         val out = s.getOutputStream()
 
-        if (path != "/mcp") return reply(out, 404, "text/plain", "not found")
+        val route: Pair<List<Tool>, ToolContext>? = when {
+            path == "/mcp" -> null
+            path.startsWith("/mcp/h/") -> path.removePrefix("/mcp/h/").toLongOrNull()?.let { helper?.invoke(it) } ?: return reply(out, 404, "text/plain", "no such helper")
+            else -> return reply(out, 404, "text/plain", "not found")
+        }
         if (headers["authorization"] != "Bearer $token") return reply(out, 401, "application/json", """{"error":"unauthorized"}""")
         if (method == "GET") return reply(out, 405, "text/plain", "SSE stream not supported")
         if (method == "DELETE") return reply(out, 200, "text/plain", "")
@@ -69,14 +75,16 @@ class LocalMcpServer(
         val body = String(bodyBytes, Charsets.UTF_8).trim()
         val result = if (body.startsWith("[")) {
             val arr = JSONArray(body); val res = JSONArray()
-            for (i in 0 until arr.length()) dispatch(arr.getJSONObject(i))?.let { res.put(it) }
+            for (i in 0 until arr.length()) dispatch(arr.getJSONObject(i), route)?.let { res.put(it) }
             if (res.length() == 0) null else res.toString()
-        } else dispatch(JSONObject(body))?.toString()
+        } else dispatch(JSONObject(body), route)?.toString()
         if (result == null) reply(out, 202, "application/json", "") else reply(out, 200, "application/json", result, mapOf("Mcp-Session-Id" to "phone"))
     }
 
     /** Returns null for notifications (no id). */
-    fun dispatch(msg: JSONObject): JSONObject? {
+    fun dispatch(msg: JSONObject, route: Pair<List<Tool>, ToolContext>? = null): JSONObject? {
+        val tools: () -> List<Tool> = route?.let { r -> { r.first } } ?: this.tools
+        val context: () -> ToolContext = route?.let { r -> { r.second } } ?: this.context
         val id = msg.opt("id") ?: return null
         val params = msg.optJSONObject("params") ?: JSONObject()
         fun ok(r: JSONObject) = JSONObject().put("jsonrpc", "2.0").put("id", id).put("result", r)

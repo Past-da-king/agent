@@ -10,27 +10,47 @@ import com.past9.phoneaos.agent.str
 import com.past9.phoneaos.agent.strList
 import com.past9.phoneaos.data.TriggerDao
 import com.past9.phoneaos.data.TriggerRow
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import org.json.JSONObject
 
 /**
- * Invisible helper agents. The main agent hands out pieces of work; each helper runs its own
- * loop with the same tools (minus talking to the user), all at once, and reports back.
- * The user only ever sees one line per helper in the chat.
+ * Helper agents do ALL the work. The main agent writes each one a precise brief and sets it going
+ * in the background, then ends its turn, so the user can keep talking to it while helpers run.
+ * When a helper finishes, its result comes back to the main agent as a new message.
  */
-class DelegateTool(private val runHelper: suspend (task: String, label: String, ctx: ToolContext) -> String) : Tool {
-    override val spec = ToolSpec("delegate", "Hand pieces of work to helper agents that run in parallel and report back (e.g. research three options at once, read five pages). Each task must be self-contained: say exactly what to find and what to return.",
-        schema(listOf("tasks"), "tasks" to strList("1 to 5 self-contained task briefs")))
+class DelegateTool(private val start: suspend (task: String, label: String) -> Long) : Tool {
+    override val spec = ToolSpec("delegate", "Set helper agents working in the background. They do ALL the actual work: browsing, searching the web, apps, booking, " +
+        "sending, files, code, machines, creating routines. Each brief must stand alone: the goal, everything you know that matters (names, dates, the user's " +
+        "preferences and constraints from memory), exactly what to do or find, what to hand back, and anything that needs the user's approval. Returns at once; " +
+        "each helper's result arrives later as a message from it. Several briefs run at the same time.",
+        schema(listOf("tasks"), "tasks" to strList("1 to 5 self-contained briefs, one per helper"),
+            "labels" to strList("A 2 to 4 word name per helper, same order (e.g. 'Uber to airport'). The user sees these.")))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val arr = input.optJSONArray("tasks") ?: return "No tasks given"
-        val tasks = (0 until arr.length()).map { arr.getString(it) }.take(5)
-        val results = coroutineScope {
-            tasks.mapIndexed { i, t -> async { "## Helper ${i + 1}: ${t.take(80)}\n" + runCatching { runHelper(t, "Helper ${i + 1}", ctx) }.getOrElse { "Failed: ${it.message}" } } }.awaitAll()
+        val labels = input.optJSONArray("labels")
+        val tasks = (0 until arr.length()).map { arr.getString(it) }.filter { it.isNotBlank() }.take(5)
+        if (tasks.isEmpty()) return "No tasks given"
+        val started = tasks.mapIndexed { i, t ->
+            val label = labels?.optString(i)?.trim()?.takeIf { it.isNotBlank() }?.take(40) ?: t.trim().split(Regex("\\s+")).take(4).joinToString(" ")
+            val id = runCatching { start(t, label) }.getOrElse { return "Couldn't start helpers: ${it.message}" }
+            "#$id $label"
         }
-        return results.joinToString("\n\n")
+        return "Started: ${started.joinToString(", ")}. They run in the background and each result will arrive as a message. " +
+            "Tell the user in one short line what you set going, then end your turn. Do not wait or poll."
     }
+}
+
+/** What the helpers are doing right now, so the main agent can answer "how's it going?". */
+class HelpersStatusTool(private val status: suspend () -> String) : Tool {
+    override val spec = ToolSpec("helpers_status", "See every helper: running ones with their latest steps, and recently finished ones with their results.", schema())
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String = status()
+}
+
+/** Stop a helper that is no longer needed (the user changed their mind, or it is going the wrong way). */
+class HelperStopTool(private val stop: suspend (Long) -> Boolean) : Tool {
+    override val spec = ToolSpec("helper_stop", "Stop a running helper by its id (from delegate or helpers_status). Then delegate again with a better brief if the work is still needed.",
+        schema(listOf("id"), "id" to int("Helper id")))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String =
+        if (stop(input.optLong("id"))) "Stopped helper #${input.optLong("id")}." else "No running helper #${input.optLong("id")}."
 }
 
 /** A hard stop before anything goes out in the user's name or costs money. */

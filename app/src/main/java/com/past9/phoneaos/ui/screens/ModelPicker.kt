@@ -20,7 +20,7 @@ import java.time.LocalDate
 
 /** Slide-up model switcher: the models this account can use right now, newest first. */
 @Composable
-fun ModelPickerSheet(title: String, models: List<ModelInfo>?, current: String, error: String?, onPick: (ModelInfo) -> Unit, onDismiss: () -> Unit) {
+fun ModelPickerSheet(title: String, models: List<ModelInfo>?, current: String, error: String?, onPick: (ModelInfo) -> Unit, onDismiss: () -> Unit, subtitle: String? = null) {
     var q by remember { mutableStateOf("") }
     val cs = MaterialTheme.colorScheme
     val recent = LocalDate.now().minusDays(150).toString()
@@ -28,7 +28,7 @@ fun ModelPickerSheet(title: String, models: List<ModelInfo>?, current: String, e
         Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp)) {
             Text("MODEL", style = Eyebrow, color = cs.primary)
             Text(title, style = MaterialTheme.typography.headlineSmall)
-            Text("Pulled live from your provider. Newest first.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            Text(subtitle ?: "Pulled live from your provider. Newest first.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             Spacer(Modifier.height(12.dp))
             if ((models?.size ?: 0) > 10) OutlinedTextField(q, { q = it }, placeholder = { Text("Search models") }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true,
                 modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge)

@@ -78,6 +78,7 @@ fun nowLine(s: HomeState): String {
     return when {
         pending > 0 -> "Waiting for you on ${if (pending == 1) "one thing" else "$pending things"}"
         s.status.working -> s.status.label + (if (s.status.helpers > 0) " with ${s.status.helpers} helper${if (s.status.helpers > 1) "s" else ""}" else "") + "…"
+        s.status.helpers > 0 -> "${s.status.helpers} helper${if (s.status.helpers > 1) "s" else ""} working on it. Talk to me any time."
         else -> "Free. Ask me anything."
     }
 }

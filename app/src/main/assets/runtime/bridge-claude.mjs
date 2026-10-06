@@ -9,7 +9,10 @@ const out = (o) => process.stdout.write(JSON.stringify(o) + "\n");
 const rl = createInterface({ input: process.stdin });
 const line = await new Promise((res) => rl.once("line", res));
 rl.close();
-const { prompt, system, resume, model, images = [] } = JSON.parse(line);
+const { prompt, system, resume, model, images = [], role = "main" } = JSON.parse(line);
+// The main agent only orchestrates: it gets the phone's tools (memory, tasks, delegate) and nothing that
+// acts on its own. Helpers do the work, with web search and fetch as well.
+const isMain = role === "main";
 import { readFileSync } from "node:fs";
 // Photos and scanned pages the user sent: Claude sees them as images in the same message.
 const userInput = images.length === 0 ? prompt : (async function* () {
@@ -36,8 +39,8 @@ try {
       env: { ...process.env },
       permissionMode: "bypassPermissions",
       // Productivity agent, not a coding agent: the phone's tools plus web search/fetch only.
-      allowedTools: ["mcp__phone", "WebSearch", "WebFetch"],
-      disallowedTools: ["Bash", "Edit", "Write", "NotebookEdit", "KillShell"],
+      allowedTools: isMain ? ["mcp__phone"] : ["mcp__phone", "WebSearch", "WebFetch"],
+      disallowedTools: ["Bash", "Edit", "Write", "NotebookEdit", "KillShell", ...(isMain ? ["WebSearch", "WebFetch", "Task", "Agent", "Read", "Glob", "Grep"] : ["Task", "Agent"])],
       mcpServers: { phone: { type: "http", url: process.env.PHONE_MCP_URL, headers: { Authorization: `Bearer ${process.env.PHONE_MCP_TOKEN}` } } },
     },
   })) {

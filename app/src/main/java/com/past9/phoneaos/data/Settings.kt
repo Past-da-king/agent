@@ -51,6 +51,8 @@ data class AgentSettings(
     val browserProfiles: List<String> = listOf("Personal"),
     /** Model for the subscription path ("" = the CLI's default). */
     val subModel: String = "",
+    /** Model the subscription's helpers run on ("" = the same as subModel). */
+    val subHelperModel: String = "",
     /** Voice: who speaks the agent's replies and voice notes (system | gemini | openai | elevenlabs). */
     val ttsProvider: String = "system",
     val ttsVoice: String = "",
@@ -105,6 +107,7 @@ class SettingsStore(context: Context) {
             accent = prefs.getString("accent", "iris") ?: "iris",
             mascot = prefs.getString("mascot", "scout") ?: "scout",
             subModel = prefs.getString("subModel_" + (prefs.getString("subKind", "CLAUDE") ?: "CLAUDE"), null) ?: "",
+            subHelperModel = prefs.getString("subHelperModel_" + (prefs.getString("subKind", "CLAUDE") ?: "CLAUDE"), null) ?: "",
             ttsProvider = prefs.getString("ttsProvider", "system") ?: "system",
             ttsVoice = prefs.getString("ttsVoice", "") ?: "",
             liveEnabled = prefs.getBoolean("liveEnabled", false),
@@ -125,6 +128,7 @@ class SettingsStore(context: Context) {
     fun addBrowserProfile(name: String) = edit { putString("browserProfiles", (_state.value.browserProfiles + name.trim()).distinct().joinToString("\n")) }
     fun removeBrowserProfile(name: String) = edit { putString("browserProfiles", _state.value.browserProfiles.filter { it != name }.ifEmpty { listOf("Personal") }.joinToString("\n")) }
     fun setSubModel(m: String) = edit { putString("subModel_" + _state.value.subKind.name, m) }
+    fun setSubHelperModel(m: String) = edit { putString("subHelperModel_" + _state.value.subKind.name, m) }
     fun setTts(provider: String, voice: String) = edit { putString("ttsProvider", provider); putString("ttsVoice", voice) }
     fun setAutoPlayEarphones(on: Boolean) = edit { putBoolean("autoPlayEarphones", on) }
     fun setLive(on: Boolean) = edit { putBoolean("liveEnabled", on) }
