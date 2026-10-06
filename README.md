@@ -4,6 +4,8 @@ One AI agent that lives on your Android phone. You bring the model.
 
 ![Agent](docs/hero.png)
 
+**[Watch the demo videos](https://past-da-king.github.io/agent/)**
+
 Agent is open source and free. It is not a product: there is no account, no server of ours, and nothing to pay. It is aimed at technical people for now.
 
 > **Use it at your own risk.** It is an agent with a browser and access to whatever you connect, and it will make mistakes. Read [Risks](#risks) before you install.
