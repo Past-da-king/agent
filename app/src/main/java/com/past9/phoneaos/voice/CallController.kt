@@ -80,7 +80,7 @@ class CallController(private val context: Context, private val db: AppDb, privat
                 items.filter { it.id > last && !JSONObject(it.meta).optBoolean("call") }.forEach { i ->
                     when (i.kind) {
                         "agent" -> live?.announce("[Update from the main agent, tell the user briefly] ${i.text.take(1200)}")
-                        "question" -> live?.announce("[The main agent needs the user to decide] ${i.text.removePrefix("APPROVAL|").take(600)}. Ask them; they can also answer in the app.")
+                        "question" -> live?.announce("[The main agent needs the user to decide] ${(com.past9.phoneaos.tools.ConnectRequest.parse(i.text)?.summary ?: i.text.removePrefix("APPROVAL|")).take(600)}. Ask them; they can also answer in the app.")
                     }
                 }
                 last = items.lastOrNull()?.id ?: last

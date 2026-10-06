@@ -174,8 +174,9 @@ class AppsConnectTool(private val c: ComposioClient, private val openLink: suspe
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val slug = input.optString("toolkit").lowercase().trim()
         if (c.connections().any { it.toolkit == slug && it.status == "ACTIVE" }) return "$slug is already connected."
-        val name = slug.replaceFirstChar { it.uppercase() }
-        val a = ctx.ask("Connect $name so I can ${input.optString("reason").removePrefix("so I can ")}?", listOf("Connect", "Not now"))
+        val req = ConnectRequest.of(slug, input.optString("reason"))
+        val name = req.name
+        val a = ctx.ask(req.text, ConnectRequest.OPTIONS)
         if (a != "Connect") return if (a == null) "Nobody around to approve connecting $slug." else "The user doesn't want to connect $slug right now."
         val link = c.connect(slug)
         openLink(slug, link)

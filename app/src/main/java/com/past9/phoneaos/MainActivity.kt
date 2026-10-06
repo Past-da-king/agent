@@ -195,7 +195,19 @@ class MainActivity : ComponentActivity() {
             val has = g.settings.composioKey() != null
             conn = conn.copy(hasKey = has, loading = has, error = null, notificationsAllowed = notificationsAllowed())
             if (!has) return@launch
-            if (com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(g.settings.composioKey())) { conn = conn.copy(consumer = true, loading = false); return@launch }
+            val ck = g.settings.composioKey()?.trim()
+            if (ck != null && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(ck)) {
+                // Composio Connect can't list its catalogue: show the popular apps (plus anything found by search) and ask for their status.
+                val cc = com.past9.phoneaos.tools.ComposioConnect
+                val apps = (com.past9.phoneaos.tools.AppCatalog.popular + conn.toolkits).distinctBy { it.slug }
+                conn = conn.copy(consumer = true, toolkits = apps)
+                try {
+                    val st = cc.statuses(ck, apps.map { it.slug })
+                    conn = conn.copy(loading = false, connected = st.filter { it.value.first == "ACTIVE" }.map { (slug, v) -> com.past9.phoneaos.tools.Connection(v.second, slug, v.first, slug) })
+                    // A started-but-unfinished sign-in is just an expired link here: the app stays in the list with Connect.
+                } catch (e: Exception) { conn = conn.copy(loading = false, error = "Couldn't reach Composio: ${e.message}") }
+                return@launch
+            }
             try {
                 val c = g.runtime.composio.connections(); conn = conn.copy(connected = c)
                 val t = g.runtime.composio.toolkits(); conn = conn.copy(toolkits = t, loading = false)
@@ -308,8 +320,29 @@ class MainActivity : ComponentActivity() {
                         onBack = { nav.popBackStack() },
                         onSaveKey = { k -> saveComposio(g, k).also { if (it == null) refreshConnections() } },
                         onRemoveKey = { g.settings.setComposioKey(null); conn = ConnectionsState(hasKey = false) },
-                        onConnect = { slug -> scope.launch { runCatching { g.runtime.composio.connect(slug) }.onSuccess { open(it) }.onFailure { conn = conn.copy(error = it.message) } } },
-                        onDisconnect = { c -> scope.launch { runCatching { g.runtime.composio.disconnect(c.id) }; refreshConnections() } },
+                        onConnect = { slug -> scope.launch {
+                            val ck = g.settings.composioKey()?.trim()
+                            if (ck != null && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(ck)) {
+                                runCatching { com.past9.phoneaos.tools.ComposioConnect.connectLink(ck, slug) }.onSuccess { open(it) }.onFailure { conn = conn.copy(error = it.message) }
+                                // Pick up the new connection as soon as the sign-in finishes, without a manual refresh.
+                                repeat(60) { kotlinx.coroutines.delay(5000); if (conn.connected.any { it.toolkit == slug && it.status == "ACTIVE" }) return@launch
+                                    val now = runCatching { com.past9.phoneaos.tools.ComposioConnect.statuses(ck, listOf(slug))[slug] }.getOrNull()
+                                    if (now?.first == "ACTIVE") { refreshConnections(); return@launch } }
+                            } else runCatching { g.runtime.composio.connect(slug) }.onSuccess { open(it) }.onFailure { conn = conn.copy(error = it.message) }
+                        } },
+                        onDisconnect = { c -> scope.launch {
+                            val ck = g.settings.composioKey()?.trim()
+                            if (ck != null && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(ck)) runCatching { com.past9.phoneaos.tools.ComposioConnect.disconnect(ck, c.toolkit, c.id) }.onFailure { conn = conn.copy(error = it.message) }
+                            else runCatching { g.runtime.composio.disconnect(c.id) }
+                            refreshConnections() } },
+                        onSearchAll = { q -> scope.launch {
+                            val ck = g.settings.composioKey()?.trim() ?: return@launch
+                            conn = conn.copy(searching = true, error = null)
+                            runCatching { com.past9.phoneaos.tools.ComposioConnect.searchApps(ck, q) }.onSuccess { found ->
+                                conn = conn.copy(searching = false, searched = q, hits = found.map { it.first.slug }.toSet(), toolkits = (conn.toolkits + found.map { it.first }).distinctBy { it.slug })
+                                if (found.any { it.second }) refreshConnections() // a connected app we didn't know about: fetch its account
+                            }.onFailure { conn = conn.copy(searching = false, searched = q, error = "Search failed: ${it.message}") }
+                        } },
                         onRefresh = { refreshConnections() }, onOpenUrl = ::open,
                         onAllowNotifications = { if (Build.VERSION.SDK_INT >= 33) notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS) },
                     ))

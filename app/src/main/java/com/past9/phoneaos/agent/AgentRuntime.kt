@@ -93,7 +93,8 @@ class AgentRuntime(
             list += WaitForCodeTool(db, settings, NotificationsAllowTool(context, settings)) }
         list += browserTools(context).filter { !forHelper || it !is BrowserHandoffTool }
         if (settings.state.value.composioEnabled && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(settings.composioKey())) {
-            list += com.past9.phoneaos.tools.ComposioConnect.asTools { settings.composioKey()?.trim() }
+            list += com.past9.phoneaos.tools.ComposioConnect.asTools({ settings.composioKey()?.trim() },
+                if (forHelper) null else { url -> com.past9.phoneaos.system.UiBus.openInBrowser.emit(com.past9.phoneaos.system.UiBus.OpenInBrowser(url)) })
         } else if (settings.state.value.composioEnabled) {
             list += AppsListTool(composio); list += AppsFindToolsTool(composio)
             list += GuardedAppsRunTool(AppsRunTool(composio))
@@ -141,7 +142,7 @@ class AgentRuntime(
             appendLine("- Your browser shares the phone's location with sites that ask (store finders, delivery), so you don't need to type the address. Sites open in your browser can send you web notifications; they arrive as notifications from 'web:<site>' and can trigger notification routines.")
             appendLine("- Facts like phone numbers, addresses, prices and opening hours must come from a page you actually read this session; name the source. If you could not verify it, say so. Never invent.")
             if (!s.composioEnabled) appendLine("- No apps are connected yet (Gmail, Calendar...). If a task needs one, tell the user they can connect apps in Connections.")
-            else if (com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(settings.composioKey())) appendLine("- Connected apps run through the COMPOSIO_* tools (Composio Connect): search for the right tool, check or start connections (if an app isn't connected, give the user the sign-in link it returns and wait for them), then execute. Actions that send, post, pay or delete ask the user first automatically.")
+            else if (com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(settings.composioKey())) appendLine("- Connected apps run through the COMPOSIO_* tools (Composio Connect): search for the right tool, check or start connections, then execute. If an app isn't connected, call COMPOSIO_MANAGE_CONNECTIONS with action add and a short reason: the user gets a Connect card with the app's logo, the sign-in opens for them and the tool waits until it's done. Never paste sign-in links into the chat. Actions that send, post, pay or delete ask the user first automatically.")
             else appendLine("- Connected apps run through apps_find_tools then apps_run. If the task needs an app that isn't connected, use apps_connect: it asks the user, opens the sign-in in your browser, and waits until it's done, then carry on.")
             appendLine()
             appendLine("- To show the user an image (a product photo, a map, a chart from a page), put it in your reply as markdown: ![what it is](https://...). Several images in a row become a swipeable strip.")
@@ -416,7 +417,11 @@ class AgentRuntime(
             val d = CompletableDeferred<String>(); pending[id] = d
             val prev = _status.value; _status.value = prev.copy(label = "Waiting for you")
             val isApproval = question.startsWith("APPROVAL|")
-            phone.notify(if (isApproval) "Approve?" else "Your agent has a question", if (isApproval) question.split("|").getOrElse(1) { "" } else question, id, options)
+            val connect = com.past9.phoneaos.tools.ConnectRequest.parse(question)
+            when {
+                connect != null -> phone.notify("Connect ${connect.name}?", connect.summary, id, options)
+                else -> phone.notify(if (isApproval) "Approve?" else "Your agent has a question", if (isApproval) question.split("|").getOrElse(1) { "" } else question, id, options)
+            }
             return try { d.await() } finally { _status.value = prev }
         }
         override suspend fun notify(title: String, body: String) = phone.notify(title, body)

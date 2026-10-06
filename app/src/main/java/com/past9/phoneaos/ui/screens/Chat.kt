@@ -57,6 +57,7 @@ import com.past9.phoneaos.ui.AgentAvatar
 import com.past9.phoneaos.ui.AppCard
 import com.past9.phoneaos.ui.Markdown
 import com.past9.phoneaos.ui.MorphIconButton
+import com.past9.phoneaos.ui.StatusPill
 import com.past9.phoneaos.ui.theme.Eyebrow
 import com.past9.phoneaos.ui.theme.LocalExtra
 import kotlinx.coroutines.delay
@@ -141,7 +142,11 @@ fun ChatScreen(
                     is Row_.Single -> when (r.item.kind) {
                         "user" -> UserBubble(r.item)
                         "agent" -> AgentMessage(r.item)
-                        "question" -> if (r.item.text.startsWith("APPROVAL|")) ApprovalCard(r.item, actions.onAnswer) else QuestionCard(r.item, actions.onAnswer, actions.onBrowser)
+                        "question" -> when {
+                            r.item.text.startsWith("APPROVAL|") -> ApprovalCard(r.item, actions.onAnswer)
+                            r.item.text.startsWith(com.past9.phoneaos.tools.ConnectRequest.PREFIX) -> ConnectCard(r.item, actions.onAnswer)
+                            else -> QuestionCard(r.item, actions.onAnswer, actions.onBrowser)
+                        }
                         "voice" -> VoiceBubble(r.item)
                         "helper" -> HelperRow(r.item, items.filter { a -> a.kind == "activity" && JSONObject(a.meta).optLong("helper") == r.item.id })
                         "activity" -> ImageActivity(r.item)
@@ -446,6 +451,57 @@ private fun StatusChip(text: String) {
         Icon(Icons.Rounded.Check, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.width(6.dp))
         Text(text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+    }
+}
+
+/**
+ * The agent needs an app connected: the app's logo and name, why, and Connect / Decline.
+ * Connect opens the app's sign-in; the agent waits and carries on once it's connected.
+ */
+@Composable
+fun ConnectCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
+    val req = com.past9.phoneaos.tools.ConnectRequest.parse(item.text) ?: return
+    val answer = JSONObject(item.meta).optString("answer")
+    val cs = MaterialTheme.colorScheme
+    if (answer.isNotEmpty()) {
+        // Settled: a quiet one-liner so the chat isn't full of old cards.
+        Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            AppLogo(req.name, req.logo, 32.dp)
+            Spacer(Modifier.width(12.dp))
+            Text(req.name, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            val ok = answer == "Connect"
+            StatusPill(if (ok) "Opened sign-in" else if (answer == "Decline") "Declined" else "Answered", if (ok) cs.secondaryContainer else cs.surfaceContainerHigh, if (ok) cs.onSecondaryContainer else cs.onSurfaceVariant)
+        }
+        return
+    }
+    Surface(shape = MaterialTheme.shapes.extraLarge, color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AppLogo(req.name, req.logo, 56.dp)
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("CONNECT AN APP", style = Eyebrow, color = cs.primary)
+                    Spacer(Modifier.height(2.dp))
+                    Text(req.name, style = MaterialTheme.typography.headlineSmall, color = cs.onSurface, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            val why = req.reason.removePrefix("so I can ").removePrefix("So I can ").trim().trimEnd('.', '?')
+            Text(if (why.isNotBlank()) "So I can $why." else "This task needs ${req.name}.", style = MaterialTheme.typography.bodyLarge, color = cs.onSurface)
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.Top) {
+                Icon(Icons.Rounded.Lock, null, Modifier.size(16.dp).padding(top = 2.dp), tint = cs.onSurfaceVariant)
+                Spacer(Modifier.width(8.dp))
+                Text("You sign in to ${req.name} yourself, through Composio. Disconnect any time in Connections.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            }
+            Spacer(Modifier.height(18.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(onClick = { onAnswer(item.id, "Decline") }, modifier = Modifier.weight(1f).heightIn(min = 52.dp), shapes = ButtonDefaults.shapes()) { Text("Decline") }
+                Button(onClick = { onAnswer(item.id, "Connect") }, modifier = Modifier.weight(1.4f).heightIn(min = 52.dp), shapes = ButtonDefaults.shapes()) {
+                    Icon(Icons.Rounded.Link, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Connect")
+                }
+            }
+        }
     }
 }
 

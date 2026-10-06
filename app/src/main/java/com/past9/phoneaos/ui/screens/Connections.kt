@@ -28,8 +28,14 @@ data class ConnectionsState(
     val connected: List<Connection> = emptyList(),
     val toolkits: List<Toolkit> = emptyList(),
     val notificationsAllowed: Boolean = true,
-    /** A consumer key (Composio Connect): apps are connected by the agent on request, not from a list here. */
+    /** A consumer key (Composio Connect): the list is our catalogue plus search, statuses come from Composio Connect. */
     val consumer: Boolean = false,
+    /** Searching all of Composio's apps for this query (consumer keys). */
+    val searching: Boolean = false,
+    /** The last query sent to the full search, so "Search all apps" isn't offered twice. */
+    val searched: String = "",
+    /** Apps the full search found for [searched]. */
+    val hits: Set<String> = emptySet(),
 )
 
 data class ConnectionsActions(
@@ -41,6 +47,8 @@ data class ConnectionsActions(
     val onRefresh: () -> Unit = {},
     val onOpenUrl: (String) -> Unit = {},
     val onAllowNotifications: () -> Unit = {},
+    /** Search every Composio app (not just the popular list) for this name. */
+    val onSearchAll: (String) -> Unit = {},
     val onNotifications: () -> Unit = {},
 )
 
@@ -48,7 +56,7 @@ data class ConnectionsActions(
 fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bottomPadding: androidx.compose.ui.unit.Dp = 48.dp) {
     var query by remember { mutableStateOf("") }
     val activeCount = state.connected.count { it.status == "ACTIVE" }
-    SubScreen("Connections", if (state.consumer) "Through Composio Connect" else if (state.hasKey) (if (activeCount == 1) "1 app connected" else "$activeCount apps connected") else "Connect your apps", actions.onBack,
+    SubScreen("Connections", if (state.hasKey) (if (activeCount == 1) "1 app connected" else "$activeCount apps connected") else "Connect your apps", actions.onBack,
         actions = { if (state.hasKey) IconButton(onClick = actions.onRefresh) { Icon(Icons.Rounded.Refresh, "Refresh") } }) { pad ->
         LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item { SectionHeader("On this phone", "Built in, nothing to set up", Modifier.padding(start = 4.dp, top = 4.dp)) }
@@ -63,22 +71,11 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                     }
                 }
             }
-            item { SectionHeader("Your apps", "Gmail, Calendar, Drive, Slack and 250+ more, through Composio with your own key", Modifier.padding(start = 4.dp, top = 16.dp)) }
+            item { SectionHeader("Your apps", if (state.consumer) "Tap Connect and sign in. Your agent can use it straight away." else "Gmail, Calendar, Drive, Slack and 250+ more, through Composio with your own key", Modifier.padding(start = 4.dp, top = 16.dp)) }
             if (!state.hasKey) item {
                 AppCard { ComposioKeyForm(actions.onSaveKey, actions.onOpenUrl) {} }
             } else {
                 if (state.error != null) item { Text(state.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(4.dp)) }
-                if (state.consumer) {
-                    item {
-                        AppCard {
-                            Text("CONNECTED THROUGH COMPOSIO CONNECT", style = com.past9.phoneaos.ui.theme.Eyebrow, color = MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.height(6.dp))
-                            Text("Your agent can use every app on your Composio account. To add one, just ask it, for example \"connect my Gmail\". It sends you the sign-in link and carries on once you're done.", style = MaterialTheme.typography.bodyMedium)
-                        }
-                    }
-                    item { TextButton(onClick = actions.onRemoveKey, modifier = Modifier.padding(top = 12.dp)) { Text("Remove Composio key", color = MaterialTheme.colorScheme.error) } }
-                    return@LazyColumn
-                }
                 val active = state.connected
                 if (active.isNotEmpty()) item {
                     AppCard(padding = PaddingValues(vertical = 4.dp)) {
@@ -86,12 +83,28 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                     }
                 }
                 item {
-                    OutlinedTextField(query, { query = it }, placeholder = { Text("Search ${if (state.toolkits.isEmpty()) "" else "${state.toolkits.size} "}apps") }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                    OutlinedTextField(query, { query = it }, placeholder = { Text(if (state.consumer) "Search apps" else "Search ${if (state.toolkits.isEmpty()) "" else "${state.toolkits.size} "}apps") }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
                         singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp), shape = MaterialTheme.shapes.extraLarge)
                 }
                 if (state.loading) item { Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { LoadingIndicator() } }
-                val list = state.toolkits.filter { query.isBlank() || it.name.contains(query, true) || it.slug.contains(query, true) }
+                val list = state.toolkits.filter { query.isBlank() || it.name.contains(query, true) || it.slug.contains(query, true) || (state.searched == query.trim() && it.slug in state.hits) }
                 items(list.take(150), key = { it.slug }) { t -> ToolkitLine(t, state.connected.any { it.toolkit == t.slug && it.status == "ACTIVE" }) { actions.onConnect(t.slug) } }
+                // Composio Connect keys browse the popular apps; anything else is one search away.
+                if (state.consumer && query.isNotBlank() && state.searched != query.trim()) item {
+                    Surface(onClick = { actions.onSearchAll(query.trim()) }, enabled = !state.searching, shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
+                        Row(Modifier.heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (state.searching) LoadingIndicator(Modifier.size(24.dp)) else Icon(Icons.Rounded.TravelExplore, null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                            Spacer(Modifier.width(14.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(if (state.searching) "Searching Composio…" else "Search all 500+ apps for \u201c${query.trim()}\u201d", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                                if (list.isEmpty() && !state.searching) Text("Not in the popular list", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                            }
+                        }
+                    }
+                }
+                if (state.consumer && query.isNotBlank() && state.searched == query.trim() && list.isEmpty()) item {
+                    Text("No app called \u201c${query.trim()}\u201d on Composio.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp))
+                }
                 item { TextButton(onClick = actions.onRemoveKey, modifier = Modifier.padding(top = 12.dp)) { Text("Remove Composio key", color = MaterialTheme.colorScheme.error) } }
             }
         }
@@ -114,19 +127,24 @@ private fun PhoneLine(icon: androidx.compose.ui.graphics.vector.ImageVector, tit
 }
 
 @Composable
-private fun Initial(name: String, logo: String = "") {
+private fun Initial(name: String, logo: String = "") = AppLogo(name, logo)
+
+/** An app's logo on a white tile (logos are drawn for light backgrounds), or its initial while it loads. */
+@Composable
+fun AppLogo(name: String, logo: String, size: androidx.compose.ui.unit.Dp = 40.dp) {
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(size * 0.28f)
     if (logo.isNotBlank()) {
-        coil.compose.SubcomposeAsyncImage(model = logo, contentDescription = null, modifier = Modifier.size(40.dp).clip(MaterialTheme.shapes.small).background(androidx.compose.ui.graphics.Color.White).padding(5.dp),
-            error = { InitialBox(name) }, loading = { InitialBox(name) })
+        coil.compose.SubcomposeAsyncImage(model = logo, contentDescription = null, modifier = Modifier.size(size).clip(shape).background(androidx.compose.ui.graphics.Color(0xFFF7F7F8)).padding(size * 0.16f),
+            error = { InitialBox(name, size, shape) }, loading = { InitialBox(name, size, shape) })
         return
     }
-    InitialBox(name)
+    InitialBox(name, size, shape)
 }
 
 @Composable
-private fun InitialBox(name: String) {
-    Box(Modifier.size(40.dp).clip(MaterialTheme.shapes.small).background(MaterialTheme.colorScheme.secondaryContainer), contentAlignment = Alignment.Center) {
-        Text(name.take(1).uppercase(), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
+private fun InitialBox(name: String, size: androidx.compose.ui.unit.Dp = 40.dp, shape: androidx.compose.ui.graphics.Shape = MaterialTheme.shapes.small) {
+    Box(Modifier.size(size).clip(shape).background(MaterialTheme.colorScheme.secondaryContainer), contentAlignment = Alignment.Center) {
+        Text(name.take(1).uppercase(), style = if (size > 44.dp) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
     }
 }
 
@@ -137,7 +155,7 @@ private fun ConnectedLine(c: Connection, name: String, actions: ConnectionsActio
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(name, style = MaterialTheme.typography.titleSmall)
-            Text(if (c.label == c.toolkit) "Signed in through Composio" else c.label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(if (c.label == c.toolkit) (if (c.status == "ACTIVE") "Through Composio" else "Sign-in not finished") else c.label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         val extra = LocalExtra.current
         when (c.status) {
