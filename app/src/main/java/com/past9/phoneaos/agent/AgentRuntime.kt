@@ -169,6 +169,16 @@ class AgentRuntime(
      */
     fun send(text: String, images: List<String> = emptyList(), files: List<String> = emptyList(), voiceReply: Boolean = false, fromCall: String? = null) {
         val clean = text.trim().ifEmpty { if (images.isNotEmpty() || files.isNotEmpty()) "What do you make of this?" else "" }; if (clean.isEmpty()) return
+        // A question card is waiting and the user typed instead of tapping: the typed words ARE the answer.
+        // Before, the message queued behind the open question and nothing happened.
+        if (fromCall == null && images.isEmpty() && files.isEmpty() && pending.isNotEmpty()) {
+            val id = pending.keys.maxOrNull()
+            if (id != null) {
+                scope.launch { db.chat().insert(ChatItem(kind = "user", text = clean)) }
+                answer(id, clean)
+                return
+            }
+        }
         job = scope.launch {
             if (fromCall != null) db.chat().insert(ChatItem(kind = "activity", text = "On it: $fromCall", meta = JSONObject().put("tool", "call").toString()))
             else db.chat().insert(ChatItem(kind = "user", text = clean, meta = JSONObject().put("images", org.json.JSONArray(images.filter { !it.contains("/pdf-") }))

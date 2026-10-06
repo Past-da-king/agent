@@ -48,7 +48,7 @@ data class ConnectionsActions(
 fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bottomPadding: androidx.compose.ui.unit.Dp = 48.dp) {
     var query by remember { mutableStateOf("") }
     val activeCount = state.connected.count { it.status == "ACTIVE" }
-    SubScreen("Connections", if (state.hasKey) (if (activeCount == 1) "1 app connected" else "$activeCount apps connected") else "Connect your apps", actions.onBack,
+    SubScreen("Connections", if (state.consumer) "Through Composio Connect" else if (state.hasKey) (if (activeCount == 1) "1 app connected" else "$activeCount apps connected") else "Connect your apps", actions.onBack,
         actions = { if (state.hasKey) IconButton(onClick = actions.onRefresh) { Icon(Icons.Rounded.Refresh, "Refresh") } }) { pad ->
         LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item { SectionHeader("On this phone", "Built in, nothing to set up", Modifier.padding(start = 4.dp, top = 4.dp)) }
