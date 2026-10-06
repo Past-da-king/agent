@@ -237,6 +237,26 @@ private fun NeedsYouCard(q: ChatItem, actions: HomeActions) {
     val approval = q.text.startsWith("APPROVAL|")
     val parts = q.text.split("|", limit = 3)
     val opts = JSONObject(q.meta).optJSONArray("options")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList()
+    com.past9.phoneaos.tools.ConnectRequest.parse(q.text)?.let { req ->
+        Surface(shape = MaterialTheme.shapes.extraLarge, color = cs.tertiaryContainer, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(18.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AppLogo(req.name, req.logo, 44.dp)
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("CONNECT AN APP", style = Eyebrow, color = cs.onTertiaryContainer)
+                        Text(req.summary, style = MaterialTheme.typography.titleMedium, color = cs.onTertiaryContainer, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { actions.onAnswer(q.id, "Decline") }, shapes = ButtonDefaults.shapes(), modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("Decline", color = cs.onTertiaryContainer) }
+                    Button(onClick = { actions.onAnswer(q.id, "Connect") }, shapes = ButtonDefaults.shapes(), modifier = Modifier.weight(1.4f).heightIn(min = 48.dp)) { Text("Connect") }
+                }
+            }
+        }
+        return
+    }
     Surface(shape = MaterialTheme.shapes.extraLarge, color = cs.tertiaryContainer, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(18.dp)) {
             Text(if (approval) "APPROVE?" else "QUESTION", style = Eyebrow, color = cs.onTertiaryContainer)

@@ -107,15 +107,105 @@ object ComposioConnect {
         runCatching { once() }.getOrElse { session = null; sessionKey = null; runCatching { once() }.getOrElse { "Error: ${it.message}" } }
     }
 
+    /** A Composio Connect tool's JSON reply ({data, error, successful}), as its data object. */
+    private suspend fun data(key: String, name: String, args: JSONObject): JSONObject {
+        val text = call(key, name, args)
+        val o = runCatching { JSONObject(text) }.getOrNull() ?: throw IllegalStateException(text.removePrefix("Error: ").take(300))
+        if (o.has("successful") && !o.optBoolean("successful")) throw IllegalStateException(o.optString("error").ifBlank { "Composio Connect failed" })
+        return o.optJSONObject("data") ?: JSONObject()
+    }
+
+    /** Connection status per app: ACTIVE, INITIATED (sign-in started, not finished) or "" (never connected). */
+    suspend fun statuses(key: String, slugs: List<String>): Map<String, Pair<String, String>> {
+        if (slugs.isEmpty()) return emptyMap()
+        val out = mutableMapOf<String, Pair<String, String>>()
+        // Composio caps how many toolkits one call may carry; ask in chunks.
+        slugs.distinct().chunked(50).forEach { chunk ->
+            val res = data(key, "COMPOSIO_MANAGE_CONNECTIONS", JSONObject().put("toolkits", JSONArray().apply { chunk.forEach { put(JSONObject().put("name", it).put("action", "list")) } }))
+                .optJSONObject("results") ?: JSONObject()
+            chunk.forEach { slug ->
+                val accounts = res.optJSONObject(slug)?.optJSONArray("accounts") ?: JSONArray()
+                val list = (0 until accounts.length()).mapNotNull { accounts.optJSONObject(it) }
+                val active = list.firstOrNull { it.optString("status").equals("active", true) }
+                out[slug] = when {
+                    active != null -> "ACTIVE" to active.optString("id")
+                    list.isNotEmpty() -> "INITIATED" to list.first().optString("id")
+                    else -> "" to ""
+                }
+            }
+        }
+        return out
+    }
+
+    /** Start connecting an app; returns the sign-in link (valid about 10 minutes). */
+    suspend fun connectLink(key: String, slug: String): String {
+        val r = data(key, "COMPOSIO_MANAGE_CONNECTIONS", JSONObject().put("toolkits", JSONArray().put(JSONObject().put("name", slug).put("action", "add"))))
+        return r.optJSONObject("results")?.optJSONObject(slug)?.optString("redirect_url")?.takeIf { it.startsWith("http") }
+            ?: throw IllegalStateException("Composio didn't return a sign-in link for ${AppCatalog.name(slug)}.")
+    }
+
+    suspend fun disconnect(key: String, slug: String, accountId: String) {
+        data(key, "COMPOSIO_MANAGE_CONNECTIONS", JSONObject().put("toolkits", JSONArray().put(JSONObject().put("name", slug).put("action", "remove").put("account_id", accountId))))
+    }
+
+    /** Any of Composio's 500+ apps by name: what it is and whether it's connected. */
+    suspend fun searchApps(key: String, query: String): List<Pair<Toolkit, Boolean>> {
+        val d = data(key, "COMPOSIO_SEARCH_TOOLS", JSONObject().put("queries", JSONArray().put(JSONObject().put("use_case", "use the ${query.trim()} app"))))
+        val a = d.optJSONArray("toolkit_connection_statuses") ?: JSONArray()
+        return (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { t ->
+            val slug = t.optString("toolkit")
+            (AppCatalog.popular.firstOrNull { it.slug == slug } ?: Toolkit(slug, AppCatalog.name(slug), t.optString("description"), AppCatalog.logo(slug), 0, false, true)) to t.optBoolean("has_active_connection")
+        }.filter { it.first.slug.isNotBlank() }
+    }
+
+    /**
+     * The agent wants an app connected: instead of pasting a link into the chat, show a Connect card
+     * (logo, name, why). On Connect the sign-in opens and we wait until it's ACTIVE, then the agent carries on.
+     */
+    private suspend fun connectViaCard(k: String, input: JSONObject, ctx: ToolContext, openLink: suspend (String) -> Unit): String? {
+        val items = input.optJSONArray("toolkits") ?: return null
+        val adds = (0 until items.length()).mapNotNull { items.optJSONObject(it) }.filter { it.optString("action", "add").ifBlank { "add" } == "add" }.map { it.optString("name").lowercase().trim() }.filter { it.isNotBlank() }
+        if (adds.isEmpty()) return null
+        val reason = input.optString("reason")
+        val out = StringBuilder()
+        for (slug in adds) {
+            val req = ConnectRequest.of(slug, reason)
+            if (statuses(k, listOf(slug))[slug]?.first == "ACTIVE") { out.appendLine("${req.name} is already connected."); continue }
+            val a = ctx.ask(req.text, ConnectRequest.OPTIONS)
+            if (a == null) { out.appendLine("Nobody is around to connect ${req.name}. Tell the user they can connect it from Connections in the app."); continue }
+            if (a != "Connect") { out.appendLine("The user declined connecting ${req.name}${if (a != "Decline") " and said: $a" else ""}. Don't send a link; carry on without it."); continue }
+            val link = runCatching { connectLink(k, slug) }.getOrElse { out.appendLine("Couldn't start connecting ${req.name}: ${it.message}"); continue }
+            openLink(link)
+            val id = ctx.activity("Waiting for you to sign in to ${req.name}", JSONObject().put("tool", "apps").put("link", link).put("app", slug))
+            val deadline = System.currentTimeMillis() + 5 * 60_000
+            var done = false
+            while (System.currentTimeMillis() < deadline) {
+                kotlinx.coroutines.delay(4000)
+                if (runCatching { statuses(k, listOf(slug))[slug]?.first }.getOrNull() == "ACTIVE") { done = true; break }
+            }
+            ctx.updateActivity(id, if (done) "${req.name} connected" else "${req.name} sign-in not finished")
+            out.appendLine(if (done) "${req.name} ($slug) is connected now. Carry on with the task." else "The user hasn't finished signing in to ${req.name} yet. Don't paste a link; say you'll continue once it's connected (they can also connect it from Connections).")
+        }
+        return out.toString().trim()
+    }
+
     private val writeWords = Regex("(SEND|REPLY|FORWARD|CREATE|DELETE|REMOVE|TRASH|UPDATE|PATCH|POST|PUBLISH|PAY|PURCHASE|ARCHIVE|MOVE|INVITE|SHARE|INSERT|UPLOAD|ACCEPT|DECLINE|CANCEL)")
 
     /** Each Composio Connect tool as one of the agent's tools. Actions that change things need the user's yes. */
-    fun asTools(key: () -> String?): List<Tool> = tools.map { t ->
+    fun asTools(key: () -> String?, openLink: (suspend (String) -> Unit)? = null): List<Tool> = tools.map { t ->
         val name = t.optString("name")
+        val manage = name == "COMPOSIO_MANAGE_CONNECTIONS" && openLink != null
+        val schema = t.optJSONObject("inputSchema") ?: JSONObject().put("type", "object")
+        // Connecting shows the user a Connect card; the reason is the line on it.
+        if (manage) schema.optJSONObject("properties")?.put("reason", JSONObject().put("type", "string")
+            .put("description", "For action add: what you need the app for, finishing 'so I can...'. Shown to the user on the Connect card."))
         object : Tool {
-            override val spec = ToolSpec(name, t.optString("description").take(1500), t.optJSONObject("inputSchema") ?: JSONObject().put("type", "object"))
+            override val spec = ToolSpec(name, t.optString("description").take(1500) +
+                (if (manage) "\nIn this app, action add shows the user a Connect card and opens the sign-in for them, then waits until it is connected. Never paste the sign-in link yourself." else ""), schema)
             override suspend fun run(input: JSONObject, ctx: ToolContext): String {
                 val k = key() ?: return "No Composio key."
+                if (manage) connectViaCard(k, input, ctx, openLink!!)?.let { return it }
+                input.remove("reason")
                 // Executing app actions: ask before anything that sends, posts, pays or deletes.
                 if (name.contains("EXECUTE", true)) {
                     val slugs = Regex("\"(?:tool_slug|slug|action)\"\\s*:\\s*\"([A-Z0-9_]+)\"").findAll(input.toString()).map { it.groupValues[1] }.toList()

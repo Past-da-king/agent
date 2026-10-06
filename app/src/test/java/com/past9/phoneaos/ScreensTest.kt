@@ -133,6 +133,20 @@ class ScreensTest(private val dark: Boolean) {
         shot("40-routines") { RoutinesScreen(r, RoutineActions()) }
     }
 
+    @Test fun chatConnect() {
+        val items = listOf(
+            item("user", "check my mail"),
+            item("activity", "Composio: search tools", JSONObject().put("tool", "apps")),
+            item("question", "CONNECT|slack|Slack|post the summary to #team", JSONObject().put("options", JSONArray(listOf("Connect", "Decline"))).put("answer", "Decline")),
+            item("question", com.past9.phoneaos.tools.ConnectRequest.of("gmail", "check your inbox and tell you what's new").text, JSONObject().put("options", JSONArray(listOf("Connect", "Decline")))),
+        )
+        shot("16-chat-connect") { ChatScreen(items, AgentStatus(true, "Waiting for you"), "Juno", "Sam", false, "", {}, ChatActions()) }
+    }
+    @Test fun connectionsConsumer() {
+        val st = ConnectionsState(hasKey = true, consumer = true, toolkits = com.past9.phoneaos.tools.AppCatalog.popular,
+            connected = listOf(Connection("gmail_1", "gmail", "ACTIVE", "gmail"), Connection("notion_1", "notion", "ACTIVE", "notion")))
+        shot("52-connections-consumer") { ConnectionsScreen(st, ConnectionsActions()) }
+    }
     @Test fun connectionsNoKey() { shot("50-connections-nokey") { ConnectionsScreen(ConnectionsState(hasKey = false), ConnectionsActions()) } }
     @Test fun connections() {
         val st = ConnectionsState(hasKey = true, connected = listOf(Connection("1", "gmail", "ACTIVE", "sam@example.com"), Connection("2", "googlecalendar", "INITIATED", "googlecalendar")),
