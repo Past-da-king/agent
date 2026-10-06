@@ -33,7 +33,7 @@ fun openAllFilesSettings(context: Context) {
  * Needs the user's one-time "All files access"; asks for it the first time.
  */
 class PhoneFilesTool(private val context: Context) : Tool {
-    override val spec = ToolSpec("phone_files", "Look through the files on the user's phone: action 'find' searches by name (e.g. 'cv', 'invoice march', '.pdf'), action 'list' shows a folder (e.g. Download, Documents, DCIM/Camera). Returns full paths you can pass to browser_upload, machine_upload or send_file. Asks the user once for access to their files.",
+    override val spec = ToolSpec("phone_files", "THE way to look at files on the user's phone (run_code can't see them): action 'find' searches by name (e.g. 'cv', 'invoice march', '.pdf', '.m4a'), action 'list' shows a folder. Where things live: Download, Documents, DCIM/Camera, DCIM/Screen recordings, Recordings/Voice Recorder, Recordings/Call, WhatsApp media and statuses in Android/media/com.whatsapp/WhatsApp/Media (statuses: .Statuses). Returns full paths with size and date, for browser_upload, machine_upload or send_file. Asks the user once for access to their files.",
         schema(listOf("action"), "action" to str("find or list"), "query" to str("For find: words in the file name, or an extension like .pdf"), "folder" to str("For list (or to narrow find): a folder under the phone's storage, e.g. Download"), "limit" to int("Max results, default 30")))
 
     private val root get() = Environment.getExternalStorageDirectory()
@@ -56,14 +56,18 @@ class PhoneFilesTool(private val context: Context) : Tool {
         return withContext(Dispatchers.IO) {
             when (input.optString("action").lowercase()) {
                 "list", "ls" -> {
-                    val kids = base.listFiles()?.filter { !it.name.startsWith(".") }?.sortedWith(compareByDescending<File> { it.isDirectory }.thenByDescending { it.lastModified() }).orEmpty()
+                    // Hidden folders matter here (WhatsApp keeps statuses in .Statuses), so they're listed too.
+                    val kids = base.listFiles()?.filter { it.name != ".thumbnails" }?.sortedWith(compareByDescending<File> { it.isDirectory }.thenByDescending { it.lastModified() }).orEmpty()
                     ctx.activity("Looked in ${base.relativeTo(root).path.ifBlank { "phone storage" }}", JSONObject().put("tool", "files"))
                     if (kids.isEmpty()) "Empty: ${base.absolutePath}" else kids.take(limit).joinToString("\n", "${base.absolutePath} (${kids.size} items, newest first):\n") { line(it) }
                 }
                 else -> {
                     val words = input.optString("query").lowercase().split(Regex("\\s+")).filter { it.isNotBlank() }
                     if (words.isEmpty()) return@withContext "Say what to look for, e.g. query 'cv' or '.pdf'."
-                    val hits = base.walkTopDown().onEnter { d -> !d.name.startsWith(".") && d.absolutePath != File(root, "Android").absolutePath }
+                    // Everything readable, hidden folders included (WhatsApp statuses live in .Statuses under Android/media).
+                    // Only app-private Android/data and Android/obb (unreadable anyway) and thumbnail caches are skipped.
+                    val skip = setOf(File(root, "Android/data").absolutePath, File(root, "Android/obb").absolutePath)
+                    val hits = base.walkTopDown().onEnter { d -> d.absolutePath !in skip && d.name != ".thumbnails" && !d.name.startsWith(".trash") && !d.name.startsWith(".Trash") }
                         .filter { it.isFile && words.all { w -> it.name.lowercase().contains(w) } }.take(2000).toList()
                         .sortedByDescending { it.lastModified() }
                     ctx.activity("Searched your phone for \"${words.joinToString(" ")}\" · ${hits.size} found", JSONObject().put("tool", "files"))

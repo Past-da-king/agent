@@ -88,21 +88,26 @@ data class ChatActions(
 /** Chat rows after grouping: consecutive activity lines fold into one "steps" row. */
 sealed interface Row_ { val key: String
     data class Single(val item: ChatItem) : Row_ { override val key = "i${item.id}" }
+    /** A voice call's back-and-forth, folded into one row so the chat stays one readable thread. */
+    data class Call(val items: List<ChatItem>) : Row_ { override val key = "c${items.first().id}" }
     data class Steps(val items: List<ChatItem>) : Row_ { override val key = "s${items.first().id}" }
 }
 
 fun group(items: List<ChatItem>): List<Row_> {
-    val out = mutableListOf<Row_>(); val buf = mutableListOf<ChatItem>()
+    val out = mutableListOf<Row_>(); val buf = mutableListOf<ChatItem>(); val call = mutableListOf<ChatItem>()
+    fun flushCall() { if (call.isNotEmpty()) { out += Row_.Call(call.toList()); call.clear() } }
     fun flush() { if (buf.isNotEmpty()) { out += Row_.Steps(buf.toList()); buf.clear() } }
     items.forEach {
         val m = JSONObject(it.meta)
+        if (m.optBoolean("call") && (it.kind == "user" || it.kind == "agent")) { flush(); call += it; return@forEach }
+        flushCall()
         when {
             it.kind == "activity" && m.has("helper") -> {} // shown inside its helper's card
             it.kind == "activity" && m.optString("image").isEmpty() && m.optString("file").isEmpty() -> buf += it
             else -> { flush(); out += Row_.Single(it) }
         }
     }
-    flush(); return out
+    flush(); flushCall(); return out
 }
 
 @Composable
@@ -140,6 +145,7 @@ fun ChatScreen(
             items(rows, key = { it.key }) { r ->
                 when (r) {
                     is Row_.Steps -> StepsRow(r.items)
+                    is Row_.Call -> CallRow(r.items, agentName)
                     is Row_.Single -> when (r.item.kind) {
                         "user" -> UserBubble(r.item)
                         "agent" -> AgentMessage(r.item)
@@ -334,6 +340,35 @@ fun iconFor(tool: String): ImageVector = when (tool) {
     else -> Icons.Rounded.Bolt
 }
 
+/** A voice call in the chat: one line ("Voice call · 12 messages · last thing said"), tap for the whole conversation. */
+@Composable
+private fun CallRow(items: List<ChatItem>, agentName: String) {
+    var open by remember { mutableStateOf(false) }
+    val cs = MaterialTheme.colorScheme
+    Surface(onClick = { open = !open }, shape = RoundedCornerShape(20.dp), color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp).animateContentSize()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(28.dp).clip(RoundedCornerShape(10.dp)).background(cs.primaryContainer), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Call, null, Modifier.size(16.dp), tint = cs.onPrimaryContainer)
+                }
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Voice call · ${items.size} message${if (items.size == 1) "" else "s"}", style = MaterialTheme.typography.labelLarge, color = cs.onSurface)
+                    if (!open) Text(items.last().text, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, if (open) "Hide the call" else "Show the call", tint = cs.onSurfaceVariant)
+            }
+            if (open) Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items.forEach { i ->
+                    val me = i.kind == "user"
+                    Text(if (me) "You" else agentName, style = MaterialTheme.typography.labelMedium, color = if (me) cs.onSurfaceVariant else cs.primary)
+                    Text(i.text, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface)
+                }
+            }
+        }
+    }
+}
+
 /** The transparent activity log: what the agent did, folded to one line, tap for every step. */
 @Composable
 private fun StepsRow(items: List<ChatItem>) {
@@ -435,7 +470,7 @@ private fun HelperRow(item: ChatItem, steps: List<ChatItem>) {
 }
 
 @Composable
-private fun QuestionCard(item: ChatItem, onAnswer: (Long, String) -> Unit, onBrowser: () -> Unit) {
+fun QuestionCard(item: ChatItem, onAnswer: (Long, String) -> Unit, onBrowser: () -> Unit) {
     val meta = JSONObject(item.meta); val answer = meta.optString("answer")
     val opts = meta.optJSONArray("options")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList()
     AppCard(container = if (answer.isEmpty()) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceContainerLow) {
@@ -521,7 +556,7 @@ fun ConnectCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
  * folds to one line; tap it to see what was approved.
  */
 @Composable
-private fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
+fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
     val parts = item.text.split("|", limit = 3)
     val action = parts.getOrElse(1) { "" }.replaceFirstChar { it.uppercase() }; val details = parts.getOrElse(2) { "" }
     val answer = JSONObject(item.meta).optString("answer")

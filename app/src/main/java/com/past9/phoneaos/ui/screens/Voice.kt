@@ -106,7 +106,9 @@ fun VoiceSheet(s: AgentSettings, actions: VoiceActions, onDismiss: () -> Unit) {
 
 /** The call: the character, big, breathing with whoever is talking. */
 @Composable
-fun CallScreen(name: String, st: CallState, onMute: () -> Unit, onEnd: () -> Unit, onStart: () -> Unit, actions: List<String> = emptyList()) {
+fun CallScreen(name: String, st: CallState, onMute: () -> Unit, onEnd: () -> Unit, onStart: () -> Unit, actions: List<String> = emptyList(),
+               /** What the main agent is waiting on: shown right here so the call never hides it. */
+               question: com.past9.phoneaos.data.ChatItem? = null, onAnswer: (Long, String) -> Unit = { _, _ -> }, onBrowser: () -> Unit = {}) {
     val cs = MaterialTheme.colorScheme
     val level by animateFloatAsState(maxOf(st.mine, st.theirs), spring(0.6f, 800f), label = "lvl")
     LaunchedEffect(Unit) { if (!st.active) onStart() }
@@ -125,6 +127,17 @@ fun CallScreen(name: String, st: CallState, onMute: () -> Unit, onEnd: () -> Uni
                     Text("Working on: ${st.delegated.take(60)}", style = MaterialTheme.typography.labelLarge, color = cs.onSurface, maxLines = 1)
                 }
             }
+            // The main agent needs the user: the same card as in the chat, on top of the call.
+            if (question != null) {
+                Spacer(Modifier.height(12.dp))
+                androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                    when {
+                        question.text.startsWith("APPROVAL|") -> ApprovalCard(question, onAnswer)
+                        question.text.startsWith(com.past9.phoneaos.tools.ConnectRequest.PREFIX) -> ConnectCard(question, onAnswer)
+                        else -> QuestionCard(question, onAnswer, onBrowser)
+                    }
+                }
+            } else
             // What the main agent is doing while you talk.
             if (actions.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))

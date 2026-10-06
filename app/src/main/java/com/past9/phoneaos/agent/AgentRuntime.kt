@@ -147,6 +147,7 @@ class AgentRuntime(
             appendLine("- To keep an eye on something that has no API or connected app (a price on Takealot or Amazon, stock, a page changing), build a WATCHER (watcher_save): find the data source yourself, write and test a small script, save it. It checks on its own without waking you and only wakes you when it fires. Prefer this over a routine that re-browses every time.")
             appendLine("- Your browser shares the phone's location with sites that ask (store finders, delivery), so you don't need to type the address. Sites open in your browser can send you web notifications; they arrive as notifications from 'web:<site>' and can trigger notification routines.")
             appendLine("- Facts like phone numbers, addresses, prices and opening hours must come from a page you actually read this session; name the source. If you could not verify it, say so. Never invent.")
+            appendLine("- For ANY file on the user's phone (recordings, downloads, WhatsApp statuses, screenshots) use phone_files, never run_code: Android hides other apps' files from run_code, so it only sees names or nothing. If phone_files says access isn't given, ask once, then use files_pick.")
             appendLine("- Files can move between the user's phone, their machines and websites: phone_files finds files on the phone (like ls/find), machine_run finds them on a machine (ls, find) and machine_download brings one to the phone, browser_upload puts a phone file into a site's upload field, machine_upload sends one to a machine, send_file shows one to the user. E.g. 'upload my CV from my PC to this job site': find it on the machine, machine_download, then browser_upload.")
             val ms = machines.store.machines.value
             if (ms.isNotEmpty()) appendLine("- The user connected machines you can work on over SSH: ${ms.joinToString { it.name + (if (it.about.isNotBlank()) " (" + it.about + ")" else "") }}. Hand them the heavy lifting the phone shouldn't do (building a website, compiling, installing, data crunching, long scripts, big downloads): machine_run for quick commands, machine_job_start for anything long, then machine_job_status. Move files with machine_upload / machine_download. If a machine has a coding agent installed (claude, codex, opencode) you can run it there in a job.")
@@ -214,6 +215,9 @@ class AgentRuntime(
         pending.values.forEach { it.cancel() }; pending.clear()
         _status.value = AgentStatus()
     }
+
+    /** The question card the agent is waiting on right now, if any (newest first). */
+    fun pendingQuestionId(): Long? = pending.keys.maxOrNull()
 
     /** The user tapped an option on a question card (in the app or on a notification). */
     fun answer(itemId: Long, option: String) {

@@ -43,6 +43,12 @@ class CallController(private val context: Context, private val db: AppDb, privat
         .put(JSONObject().put("name", "delegate_to_agent")
             .put("description", "Hand a task to the user's main agent, which can browse, use their apps, memory, tasks and routines. Use for ANYTHING that needs doing or looking up. Say a short 'on it' and keep chatting; results come back to you.")
             .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject().put("task", JSONObject().put("type", "STRING").put("description", "The task, clearly, with every detail the user gave"))).put("required", JSONArray().put("task"))))
+        .put(JSONObject().put("name", "answer_agent_question")
+            .put("description", "Answer the question the main agent is waiting on, with what the user said (or decided, if they told you to choose). Not for approvals of payments or sends: those need the user's tap on the screen.")
+            .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject()
+                .put("answer", JSONObject().put("type", "STRING").put("description", "The answer: one of the options if there are options, otherwise the user's words"))
+                .put("context", JSONObject().put("type", "STRING").put("description", "Anything else from the call the main agent needs to act on it")))
+                .put("required", JSONArray().put("answer"))))
         .put(JSONObject().put("name", "agent_status")
             .put("description", "What the main agent is doing right now and the last thing it said.")
             .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject())))))
@@ -56,6 +62,7 @@ class CallController(private val context: Context, private val db: AppDb, privat
             You are $name, ${s.userName.ifBlank { "the user" }}'s personal agent, talking on a voice call. Be warm, quick and natural; short sentences; this is speech.
             You are the voice. The real work is done by the main agent: for anything that needs doing, finding, checking or remembering, call delegate_to_agent with the full task, say a quick 'on it', and keep the conversation going.
             When you get an update from the main agent, tell the user the part that matters in a sentence or two. Never invent results.
+            When the main agent asks the user something, it waits until it gets an answer, and your conversation carries on meanwhile. Put the question to the user naturally, at a good moment. If it's a choice or a question, take their answer (or decide yourself if they tell you to) and call answer_agent_question with it plus anything from the call that matters. If it needs them to DO something (hold Approve on a payment or send, sign in, type a code), tell them exactly what to tap: the card is on the call screen.
         """.trimIndent()
         _state.value = CallState(active = true, phase = "connecting")
         // Started while the call screen is in front, which is what Android requires for the mic.
@@ -80,7 +87,13 @@ class CallController(private val context: Context, private val db: AppDb, privat
                 items.filter { it.id > last && !JSONObject(it.meta).optBoolean("call") }.forEach { i ->
                     when (i.kind) {
                         "agent" -> live?.announce("[Update from the main agent, tell the user briefly] ${i.text.take(1200)}")
-                        "question" -> live?.announce("[The main agent needs the user to decide] ${(com.past9.phoneaos.tools.ConnectRequest.parse(i.text)?.summary ?: i.text.removePrefix("APPROVAL|")).take(600)}. Ask them; they can also answer in the app.")
+                        "question" -> {
+                            val opts = JSONObject(i.meta).optJSONArray("options")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
+                            val approval = i.text.startsWith("APPROVAL|")
+                            val q = com.past9.phoneaos.tools.ConnectRequest.parse(i.text)?.summary ?: if (approval) "Approve: " + i.text.split("|").getOrElse(1) { "" } else i.text
+                            live?.announce(if (approval) "[The main agent needs the user's approval, which they must give by holding Approve on the card on screen. Tell them briefly what it is] ${q.take(600)}"
+                                else "[The main agent is waiting on the user for this. Ask them, then call answer_agent_question] ${q.take(600)}" + if (opts.isNotEmpty()) " Options: ${opts.joinToString(", ")}." else "")
+                        }
                     }
                 }
                 last = items.lastOrNull()?.id ?: last
@@ -126,7 +139,33 @@ class CallController(private val context: Context, private val db: AppDb, privat
                     // The main agent gets the user's own words from the call, not just the voice's summary.
                     runtime.send("Task from our voice call: $task\n\nWhat was said on the call so far:\n${transcript()}", fromCall = task)
                     _state.value = st.copy(delegated = task)
-                    live?.sendToolResult(e.id, e.name, JSONObject().put("status", "started").put("note", "The main agent is working on it. You'll get an update."))
+                    // One thing at a time: if the main agent is blocked on a question, this waits in line behind it, so say so.
+                    val waiting = runtime.pendingQuestionId()
+                    live?.sendToolResult(e.id, e.name, if (waiting == null) JSONObject().put("status", "started").put("note", "The main agent is working on it. You'll get an update.")
+                        else JSONObject().put("status", "queued").put("note", "Queued: the main agent first needs the user's answer to the question it asked. Get that answered (answer_agent_question), then this runs."))
+                }
+                "answer_agent_question" -> scope.launch {
+                    val id = runtime.pendingQuestionId()
+                    val item = id?.let { db.chat().get(it) }
+                    val answer = e.args.optString("answer").trim(); val extra = e.args.optString("context").trim()
+                    val res = when {
+                        item == null -> JSONObject().put("error", "The main agent isn't waiting on anything right now.")
+                        item.text.startsWith("APPROVAL|") && !Regex("^(no|decline|don't|do not|cancel|stop)", RegexOption.IGNORE_CASE).containsMatchIn(answer) ->
+                            JSONObject().put("error", "This needs the user to hold Approve on the card on the call screen. Declining by voice is fine.")
+                        else -> {
+                            val opts = JSONObject(item.meta).optJSONArray("options")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
+                            // Match a spoken answer to an option where it clearly is one; otherwise pass the words on.
+                            val picked = opts.firstOrNull { it.equals(answer, true) } ?: opts.firstOrNull { answer.contains(it, true) || it.contains(answer, true) }
+                            val final = when {
+                                item.text.startsWith("APPROVAL|") -> "Decline"
+                                picked != null && extra.isBlank() -> picked
+                                else -> (picked ?: answer) + if (extra.isNotBlank()) " (from our voice call: $extra)" else ""
+                            }
+                            runtime.answer(item.id, final)
+                            JSONObject().put("status", "answered").put("answer", final)
+                        }
+                    }
+                    live?.sendToolResult(e.id, e.name, res)
                 }
                 "agent_status" -> scope.launch {
                     val lastAgent = db.chat().all().first().lastOrNull { it.kind == "agent" }?.text.orEmpty()

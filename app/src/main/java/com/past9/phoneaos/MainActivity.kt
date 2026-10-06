@@ -392,7 +392,9 @@ class MainActivity : ComponentActivity() {
                 composable("call") {
                     val cst by g.call.state.collectAsStateWithLifecycle()
                     CallScreen(settings.agentName, cst, onMute = { g.call.toggleMute() }, onEnd = { g.call.end(); nav.popBackStack() }, onStart = { g.call.start() },
-                        actions = items.filter { it.kind == "activity" && it.createdAt >= g.call.callStart && g.call.callStart > 0 }.map { it.text })
+                        actions = items.filter { it.kind == "activity" && it.createdAt >= g.call.callStart && g.call.callStart > 0 }.map { it.text },
+                        question = items.lastOrNull { it.kind == "question" && !org.json.JSONObject(it.meta).has("answer") },
+                        onAnswer = { id, o -> g.runtime.answer(id, o) }, onBrowser = { nav.navigate("browser") { launchSingleTop = true } })
                 }
                 composable("style") {
                     com.past9.phoneaos.ui.SubScreen("Make it yours", "Colour and sidekick", { nav.popBackStack() }) { pad ->
