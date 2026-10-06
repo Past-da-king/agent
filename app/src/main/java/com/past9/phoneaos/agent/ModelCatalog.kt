@@ -42,9 +42,10 @@ object ModelCatalog {
     }
 
     /** Models this key can actually use, newest first. */
-    suspend fun forKey(context: Context, p: Provider, key: String, baseUrl: String): List<ModelInfo> = withContext(Dispatchers.IO) {
-        val dev = catalogue(context)?.optJSONObject(devIds[p] ?: "")?.optJSONObject("models")
+    suspend fun forKey(context: Context, p: Provider, key: String, baseUrl: String, allowHttp: Boolean = false): List<ModelInfo> = withContext(Dispatchers.IO) {
         val base = baseUrl.ifBlank { p.baseUrl }.trimEnd('/')
+        HttpPolicy.check(base, allowHttp)
+        val dev = catalogue(context)?.optJSONObject(devIds[p] ?: "")?.optJSONObject("models")
         val req = Request.Builder().url("$base/models").apply {
             header("User-Agent", USER_AGENT)
             if (p == Provider.ANTHROPIC) { header("x-api-key", key); header("anthropic-version", "2023-06-01") } else header("Authorization", "Bearer $key")

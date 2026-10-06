@@ -59,6 +59,7 @@ class ScreensTest(private val dark: Boolean) {
         item("question", "APPROVAL|Book FlySafair FA 151, Fri 9 Oct 06:05|Passenger: Sam Dlamini\nSeat: 14A (window)\nFare: R 899 incl. taxes\nPaid with: card ending 4421"),
     )
 
+    @Test fun keyStepPlainHttp() { shot("03b-key-plain-http") { com.past9.phoneaos.ui.screens.KeyStep(com.past9.phoneaos.data.Provider.CUSTOM, {}, OnboardingActions(), initialBaseUrl = "http://192.168.1.20:8080/v1") {} } }
     @Test fun onboarding() { shot("01-onboarding-hello") { OnboardingScreen(OnboardingActions()) } }
     @Test fun onboardingPower() { shot("02-onboarding-power") { OnboardingScreen(OnboardingActions(), start = OnbStep.POWER) } }
     @Test fun onboardingKey() { shot("03-onboarding-key") { OnboardingScreen(OnboardingActions(), start = OnbStep.KEY) } }

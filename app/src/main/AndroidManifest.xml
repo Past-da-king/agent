@@ -28,7 +28,8 @@
         android:roundIcon="${appIcon}"
         android:theme="@style/Theme.App"
         android:supportsRtl="true"
-        android:allowBackup="false">
+        android:allowBackup="false"
+        android:networkSecurityConfig="@xml/network_security_config">
 
         <activity
             android:name=".MainActivity"

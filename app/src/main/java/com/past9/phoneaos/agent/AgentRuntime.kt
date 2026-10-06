@@ -427,19 +427,19 @@ class AgentRuntime(
             val st = s.state.value
             if (st.mode != PowerMode.API_KEY) return null
             val key = s.apiKey(st.provider) ?: return null
-            return providerFor(st.provider, key, st.baseUrl) { conversationId(s) }
+            return providerFor(st.provider, key, st.baseUrl, st.allowHttp) { conversationId(s) }
         }
 
         /** One stable id per conversation (new when the chat is cleared), for providers that route by session. */
         fun conversationId(s: SettingsStore): String = s.extra("conversation_id") ?: java.util.UUID.randomUUID().toString().also { s.setExtra("conversation_id", it) }
 
-        fun providerFor(p: Provider, key: String, baseUrl: String = p.baseUrl, session: () -> String = { "check-" + java.util.UUID.randomUUID() }): LlmProvider = when (p) {
+        fun providerFor(p: Provider, key: String, baseUrl: String = p.baseUrl, allowHttp: Boolean = false, session: () -> String = { "check-" + java.util.UUID.randomUUID() }): LlmProvider = when (p) {
             // OpenCode Go/Zen route and cache by conversation: they require x-opencode-session.
-            Provider.OPENCODE_GO, Provider.OPENCODE_ZEN -> OpenAiCompatProvider(p.name.lowercase(), key, baseUrl.ifBlank { p.baseUrl }, extraHeaders = { mapOf("x-opencode-session" to session()) })
-            Provider.ANTHROPIC -> AnthropicProvider(key, baseUrl.ifBlank { p.baseUrl })
+            Provider.OPENCODE_GO, Provider.OPENCODE_ZEN -> OpenAiCompatProvider(p.name.lowercase(), key, baseUrl.ifBlank { p.baseUrl }, extraHeaders = { mapOf("x-opencode-session" to session()) }, allowHttp = allowHttp)
+            Provider.ANTHROPIC -> AnthropicProvider(key, baseUrl.ifBlank { p.baseUrl }, allowHttp = allowHttp)
             // DeepSeek reasons by default and can spend a whole small budget thinking; tool use is snappier without it.
-            Provider.DEEPSEEK -> OpenAiCompatProvider("deepseek", key, baseUrl.ifBlank { p.baseUrl }, extra = JSONObject().put("thinking", JSONObject().put("type", "disabled")))
-            else -> OpenAiCompatProvider(p.name.lowercase(), key, baseUrl.ifBlank { p.baseUrl })
+            Provider.DEEPSEEK -> OpenAiCompatProvider("deepseek", key, baseUrl.ifBlank { p.baseUrl }, extra = JSONObject().put("thinking", JSONObject().put("type", "disabled")), allowHttp = allowHttp)
+            else -> OpenAiCompatProvider(p.name.lowercase(), key, baseUrl.ifBlank { p.baseUrl }, allowHttp = allowHttp)
         }
 
         fun toolGroup(name: String) = when {
