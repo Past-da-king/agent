@@ -1,6 +1,7 @@
 package com.past9.phoneaos.ui.screens
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateFloat
@@ -97,7 +98,7 @@ fun group(items: List<ChatItem>): List<Row_> {
         val m = JSONObject(it.meta)
         when {
             it.kind == "activity" && m.has("helper") -> {} // shown inside its helper's card
-            it.kind == "activity" && m.optString("image").isEmpty() -> buf += it
+            it.kind == "activity" && m.optString("image").isEmpty() && m.optString("file").isEmpty() -> buf += it
             else -> { flush(); out += Row_.Single(it) }
         }
     }
@@ -149,7 +150,7 @@ fun ChatScreen(
                         }
                         "voice" -> VoiceBubble(r.item)
                         "helper" -> HelperRow(r.item, items.filter { a -> a.kind == "activity" && JSONObject(a.meta).optLong("helper") == r.item.id })
-                        "activity" -> ImageActivity(r.item)
+                        "activity" -> if (JSONObject(r.item.meta).has("file")) FileCard(r.item) else ImageActivity(r.item)
                         else -> Notice(r.item)
                     }
                 }
@@ -329,6 +330,7 @@ private fun AgentMessage(item: ChatItem) {
 fun iconFor(tool: String): ImageVector = when (tool) {
     "browser" -> Icons.Rounded.Language; "memory" -> Icons.Rounded.Psychology; "tasks" -> Icons.Rounded.TaskAlt
     "apps" -> Icons.Rounded.Apps; "routines" -> Icons.Rounded.Schedule; "web" -> Icons.Rounded.Public
+    "machine" -> Icons.Rounded.Dns; "files" -> Icons.Rounded.Description
     else -> Icons.Rounded.Bolt
 }
 
@@ -348,7 +350,7 @@ private fun StepsRow(items: List<ChatItem>) {
             if (items.size > 1) Text("${items.size} steps", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 8.dp))
             if (items.size > 1) Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, if (open) "Hide steps" else "Show steps", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        AnimatedVisibility(open && items.size > 1, enter = expandVertically(spring(0.8f, 380f)) + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+        AnimatedVisibility(open && (items.size > 1 || JSONObject(last.meta).has("result")), enter = expandVertically(spring(0.8f, 380f)) + fadeIn(), exit = shrinkVertically() + fadeOut()) {
             Column(Modifier.padding(start = 38.dp, top = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 items.forEach { a ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -356,6 +358,13 @@ private fun StepsRow(items: List<ChatItem>) {
                         Spacer(Modifier.width(8.dp))
                         val by = JSONObject(a.meta).optString("by").takeIf { it.isNotBlank() && it != "main" }
                         Text((by?.let { "$it: " } ?: "") + a.text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    // A command on a machine: its last lines of output, terminal style.
+                    JSONObject(a.meta).optString("result").takeIf { it.isNotBlank() && JSONObject(a.meta).optString("tool") == "machine" }?.let { out ->
+                        Surface(shape = RoundedCornerShape(12.dp), color = androidx.compose.ui.graphics.Color(0xFF15161A), modifier = Modifier.fillMaxWidth().padding(start = 22.dp)) {
+                            Text(out.trim().lines().takeLast(8).joinToString("\n"), Modifier.horizontalScroll(rememberScrollState()).padding(10.dp),
+                                style = MaterialTheme.typography.labelSmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace), color = androidx.compose.ui.graphics.Color(0xFFD8F3DC))
+                        }
                     }
                 }
             }
@@ -506,37 +515,163 @@ fun ConnectCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
 }
 
 /**
- * Nothing goes out in the user's name without this card. It shows EXACTLY what will happen,
- * and Approve is press-and-hold so a stray tap can never send an email or spend money.
+ * Nothing goes out in the user's name without this card. It shows EXACTLY what will happen, in words
+ * a person reads (a terminal line for commands, labelled fields for app actions, never raw JSON), and
+ * Approve is press-and-hold so a stray tap can never send an email or spend money. Once answered it
+ * folds to one line; tap it to see what was approved.
  */
 @Composable
 private fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
     val parts = item.text.split("|", limit = 3)
-    val action = parts.getOrElse(1) { "" }; val details = parts.getOrElse(2) { "" }
+    val action = parts.getOrElse(1) { "" }.replaceFirstChar { it.uppercase() }; val details = parts.getOrElse(2) { "" }
     val answer = JSONObject(item.meta).optString("answer")
     val pending = answer.isEmpty()
-    AppCard(container = if (pending) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceContainerLow) {
+    val cs = MaterialTheme.colorScheme
+    if (!pending) {
+        var open by remember { mutableStateOf(false) }
+        val ok = answer == "Approve"
+        Column(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable { open = !open }.padding(vertical = 4.dp).animateContentSize()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(28.dp).clip(RoundedCornerShape(10.dp)).background(if (ok) LocalExtra.current.successContainer else cs.surfaceContainerHigh), contentAlignment = Alignment.Center) {
+                    Icon(if (ok) Icons.Rounded.Check else Icons.Rounded.Close, null, Modifier.size(16.dp), tint = if (ok) LocalExtra.current.success else cs.onSurfaceVariant)
+                }
+                Spacer(Modifier.width(10.dp))
+                Text(action, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(if (ok) "Approved" else if (answer == "Decline") "Declined" else "Answered", style = MaterialTheme.typography.labelMedium, color = if (ok) LocalExtra.current.success else cs.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
+                Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, if (open) "Hide" else "Show what was approved", tint = cs.onSurfaceVariant)
+            }
+            if (open) Box(Modifier.padding(start = 38.dp, top = 8.dp)) { ApprovalDetails(details) }
+        }
+        return
+    }
+    AppCard(container = cs.tertiaryContainer) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.Shield, null, tint = if (pending) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+            Icon(if (details.startsWith("$ ")) Icons.Rounded.Terminal else Icons.Rounded.Shield, null, tint = cs.onTertiaryContainer, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text(if (pending) "APPROVE BEFORE I DO THIS" else if (answer == "Approve") "APPROVED" else "DECLINED", style = Eyebrow,
-                color = if (pending) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("APPROVE BEFORE I DO THIS", style = Eyebrow, color = cs.onTertiaryContainer)
         }
         Spacer(Modifier.height(6.dp))
-        Text(action.replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.titleLarge, color = if (pending) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurface)
+        Text(action, style = MaterialTheme.typography.titleLarge, color = cs.onTertiaryContainer)
         Spacer(Modifier.height(12.dp))
-        Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainerLowest, modifier = Modifier.fillMaxWidth()) {
-            Text(details, Modifier.padding(14.dp).heightIn(max = 260.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-        }
-        if (pending) {
-            Spacer(Modifier.height(14.dp))
-            HoldToApprove { onAnswer(item.id, "Approve") }
-            Spacer(Modifier.height(8.dp))
-            TextButton(onClick = { onAnswer(item.id, "Decline") }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                Text("Decline", color = MaterialTheme.colorScheme.onTertiaryContainer)
-            }
+        ApprovalDetails(details)
+        Spacer(Modifier.height(14.dp))
+        HoldToApprove { onAnswer(item.id, "Approve") }
+        Spacer(Modifier.height(8.dp))
+        TextButton(onClick = { onAnswer(item.id, "Decline") }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Text("Decline", color = cs.onTertiaryContainer)
         }
     }
+}
+
+/** What an approval will do: a shell line, an app action's fields, or plain words. */
+@Composable
+private fun ApprovalDetails(details: String) {
+    val cs = MaterialTheme.colorScheme
+    val json = remember(details) { runCatching { JSONObject(details) }.getOrNull() }
+    when {
+        details.startsWith("$ ") -> Surface(shape = MaterialTheme.shapes.medium, color = androidx.compose.ui.graphics.Color(0xFF15161A), modifier = Modifier.fillMaxWidth()) {
+            Text(details, Modifier.horizontalScroll(rememberScrollState()).padding(14.dp), style = MaterialTheme.typography.bodySmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace),
+                color = androidx.compose.ui.graphics.Color(0xFFD8F3DC))
+        }
+        json != null -> Surface(shape = MaterialTheme.shapes.medium, color = cs.surfaceContainerLowest, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp).heightIn(max = 320.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                readableFields(json).forEach { (k, v) ->
+                    if (k.startsWith("#")) Text(k.removePrefix("#"), style = MaterialTheme.typography.titleSmall, color = cs.onSurface)
+                    else Column {
+                        Text(k, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                        Text(v, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface, maxLines = 8, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+        else -> Surface(shape = MaterialTheme.shapes.medium, color = cs.surfaceContainerLowest, modifier = Modifier.fillMaxWidth()) {
+            Text(details, Modifier.padding(14.dp).heightIn(max = 260.dp), style = MaterialTheme.typography.bodyMedium, color = cs.onSurface)
+        }
+    }
+}
+
+/** App-action JSON as label/value pairs a person can read: "to" -> "To", nested tool calls become headed groups. "#" marks a heading. */
+fun readableFields(o: JSONObject): List<Pair<String, String>> {
+    fun label(k: String) = k.replace('_', ' ').replace(Regex("([a-z])([A-Z])"), "$1 $2").lowercase().replaceFirstChar { it.uppercase() }
+    fun value(v: Any?): String = when (v) {
+        null, JSONObject.NULL -> "None"
+        is org.json.JSONArray -> (0 until v.length()).joinToString(", ") { value(v.opt(it)) }
+        is JSONObject -> v.keys().asSequence().joinToString(" · ") { "${label(it)}: ${value(v.opt(it))}" }
+        is Boolean -> if (v) "Yes" else "No"
+        else -> v.toString()
+    }
+    val out = mutableListOf<Pair<String, String>>()
+    val tools = o.optJSONArray("tools")
+    if (tools != null) {
+        for (i in 0 until tools.length()) {
+            val t = tools.optJSONObject(i) ?: continue
+            out += ("#" + label(t.optString("tool_slug").substringAfter('_')).ifBlank { "Action" } + (t.optString("tool_slug").substringBefore('_').takeIf { it.isNotBlank() }?.let { " · ${label(it)}" } ?: "")) to ""
+            t.optString("account").takeIf { it.isNotBlank() }?.let { out += "Account" to it }
+            t.optJSONObject("arguments")?.let { a -> a.keys().forEach { k -> out += label(k) to value(a.opt(k)) } }
+        }
+        return out
+    }
+    o.keys().forEach { k -> if (k != "thought") out += label(k) to value(o.opt(k)) }
+    return out
+}
+
+/** A file the agent handed over (e.g. from one of your machines): what it is, and Open or Save it to Downloads. */
+@Composable
+private fun FileCard(item: ChatItem) {
+    val meta = JSONObject(item.meta)
+    val file = java.io.File(meta.optString("file"))
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val cs = MaterialTheme.colorScheme
+    var saved by remember { mutableStateOf<String?>(null) }
+    val ext = file.extension.lowercase()
+    val icon = when (ext) {
+        "pdf" -> Icons.Rounded.PictureAsPdf; "png", "jpg", "jpeg", "webp", "gif" -> Icons.Rounded.Image; "mp4", "mov", "mkv" -> Icons.Rounded.Movie
+        "mp3", "wav", "m4a" -> Icons.Rounded.AudioFile; "zip", "tar", "gz", "7z" -> Icons.Rounded.FolderZip; "apk" -> Icons.Rounded.Android
+        else -> Icons.Rounded.Description
+    }
+    val mime = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
+    Surface(shape = RoundedCornerShape(24.dp), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(cs.primaryContainer), contentAlignment = Alignment.Center) { Icon(icon, null, tint = cs.onPrimaryContainer) }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(file.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(listOfNotNull(humanSize(file.length()), meta.optString("from").takeIf { it.isNotBlank() }?.let { "from $it" }).joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                }
+            }
+            if (!file.exists()) { Text("This file is no longer on the phone.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 10.dp)); return@Column }
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(onClick = {
+                    saved = runCatching { saveToDownloads(ctx, file, mime) }.fold({ "Saved to Downloads" }, { "Couldn't save: ${it.message}" })
+                }, modifier = Modifier.weight(1f).heightIn(min = 48.dp), shapes = ButtonDefaults.shapes()) {
+                    Icon(if (saved == "Saved to Downloads") Icons.Rounded.Check else Icons.Rounded.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(if (saved == "Saved to Downloads") "Saved" else "Save")
+                }
+                Button(onClick = {
+                    runCatching {
+                        val uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", file)
+                        ctx.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(uri, mime)
+                            .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION), file.name).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }.onFailure { saved = "No app here opens .$ext files. Tap Save instead." }
+                }, modifier = Modifier.weight(1f).heightIn(min = 48.dp), shapes = ButtonDefaults.shapes()) {
+                    Icon(Icons.Rounded.OpenInNew, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Open")
+                }
+            }
+            saved?.takeIf { it != "Saved to Downloads" }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.error, modifier = Modifier.padding(top = 8.dp)) }
+        }
+    }
+}
+
+private fun humanSize(b: Long) = when { b >= 1L shl 30 -> "%.1f GB".format(b / 1073741824.0); b >= 1L shl 20 -> "%.1f MB".format(b / 1048576.0); b >= 1024 -> "${b / 1024} KB"; else -> "$b B" }
+
+private fun saveToDownloads(ctx: android.content.Context, file: java.io.File, mime: String) {
+    val values = android.content.ContentValues().apply {
+        put(android.provider.MediaStore.Downloads.DISPLAY_NAME, file.name); put(android.provider.MediaStore.Downloads.MIME_TYPE, mime)
+    }
+    val uri = ctx.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: error("no Downloads folder")
+    ctx.contentResolver.openOutputStream(uri)!!.use { out -> file.inputStream().use { it.copyTo(out) } }
 }
 
 @Composable

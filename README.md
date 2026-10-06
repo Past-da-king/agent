@@ -66,11 +66,22 @@ Pick **Other (OpenAI-compatible)**, then enter the server's base URL (usually en
 - **Plain HTTP on your LAN** (e.g. `http://192.168.1.20:8080/v1`) is blocked unless you opt in. When the URL starts with `http://`, a warning appears with a checkbox: *Allow unencrypted HTTP for this server*. Requests and your API key then travel in plain text, so only tick it on a network you trust, like your home LAN.
 - The opt-in is saved with that server and cleared when you switch provider. Built-in providers always use HTTPS.
 
+## Machines: hand the heavy work to a real computer
+
+Your phone is the remote, not the engine. Under **Connections > Machines** you can add any server or computer you can SSH into: a VPS, a university or work server, your own PC. When a job is too heavy for the phone (building a website, compiling, crunching data, a long script), the agent runs it there.
+
+- **Sign in** with a password, a private key you already use, or a **new key made on the phone** (you add its public half to `~/.ssh/authorized_keys` once; no password is stored).
+- **Through a gateway**: a machine can be reached through another one, for servers that sit behind a login host.
+- **What the agent can do**: run a command, start a long job that keeps running in the background and check on it later, and copy files both ways.
+- **Your yes first**: commands that only look around (`ls`, `df`, `git status`, logs) just run. Anything that changes the machine shows an approval card with the exact command, unless you switch on *Run without asking* for that machine.
+- **Private**: the agent only ever sees a machine's name. Addresses, usernames, passwords and keys stay encrypted on the phone. The server's identity is pinned on first connect and a change is refused.
+- **Computers at home**: put the phone and the computer on the same [Tailscale](https://tailscale.com) network and use the computer's tailnet address. On Windows, turn on *OpenSSH Server* under Settings > Optional features (or run `sshd` inside WSL).
+
 ## Privacy
 
 - Keys are stored on the phone with `EncryptedSharedPreferences`, keyed by the Android Keystore.
 - Memory, tasks, routines and chat are stored on the phone (Room database).
-- Traffic leaves the phone only to your model provider, the sites the agent browses, Composio (if you add a key) and your voice provider (if you add one). There is no server of ours.
+- Traffic leaves the phone only to your model provider, the sites the agent browses, Composio (if you add a key), your voice provider (if you add one) and the machines you add. There is no server of ours.
 
 ## Risks
 

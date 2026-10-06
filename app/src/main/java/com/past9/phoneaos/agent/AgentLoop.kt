@@ -60,7 +60,14 @@ class AgentLoop(
         for (step in 1..maxSteps) {
             onEvent(AgentEvent.Thinking(step))
             Trim.fit(history)
-            val completion = provider.complete(system, history, tools.map { it.spec }, model)
+            val completion = try { provider.complete(system, history, tools.map { it.spec }, model) } catch (e: ProviderException) {
+                // A history the provider calls malformed would block every message from now on. Rebuild it
+                // without the earlier tool exchanges and try once more instead of making the user clear their data.
+                if (e.status != 400 || !Regex("tool", RegexOption.IGNORE_CASE).containsMatchIn(e.message.orEmpty())) throw e
+                val fixed = AgentRuntime.Repair.flatten(AgentRuntime.Repair.repair(history))
+                history.clear(); history.addAll(fixed)
+                provider.complete(system, history, tools.map { it.spec }, model)
+            }
             val reply = completion.message
             history += reply; onAppend(reply)
             if (reply.text.isNotBlank()) { lastText = reply.text; onEvent(AgentEvent.Said(reply.text)) }

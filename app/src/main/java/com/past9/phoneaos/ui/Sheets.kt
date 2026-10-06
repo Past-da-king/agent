@@ -87,16 +87,20 @@ val LocalSheetPreview = staticCompositionLocalOf { false }
 fun SheetField(
     value: String, onChange: (String) -> Unit, label: String, placeholder: String,
     big: Boolean = false, minLines: Int = 1, singleLine: Boolean = false, modifier: Modifier = Modifier,
+    /** Addresses, usernames, keys: no auto-capitals, and the right keyboard. */
+    keyboard: KeyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+    secret: Boolean = false, mono: Boolean = false, maxLines: Int = Int.MAX_VALUE,
 ) {
     val cs = MaterialTheme.colorScheme
     var focused by remember { mutableStateOf(false) }
     val border by animateColorAsState(if (focused) cs.primary else cs.surfaceContainerHighest, MaterialTheme.motionScheme.defaultEffectsSpec(), label = "field")
-    val style = (if (big) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.bodyLarge).copy(color = cs.onSurface)
+    val style = (if (big) MaterialTheme.typography.headlineSmall else if (mono) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyLarge).copy(color = cs.onSurface,
+        fontFamily = if (mono) androidx.compose.ui.text.font.FontFamily.Monospace else null)
     Column(modifier.fillMaxWidth()) {
         Text(label.uppercase(), style = Eyebrow, color = if (focused) cs.primary else cs.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, bottom = 6.dp))
         Surface(shape = MaterialTheme.shapes.medium, color = cs.surfaceContainerHighest.copy(alpha = 0.55f), border = androidx.compose.foundation.BorderStroke(2.dp, border)) {
-            BasicTextField(value, onChange, textStyle = style, singleLine = singleLine, minLines = minLines, cursorBrush = SolidColor(cs.primary),
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+            BasicTextField(value, onChange, textStyle = style, singleLine = singleLine, minLines = minLines, maxLines = if (singleLine) 1 else maxLines, cursorBrush = SolidColor(cs.primary),
+                keyboardOptions = keyboard, visualTransformation = if (secret) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = if (big) 18.dp else 16.dp)
                     .onFocusChanged { focused = it.isFocused },
                 decorationBox = { inner ->

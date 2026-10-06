@@ -70,6 +70,8 @@ class AgentRuntime(
     private val turnLock = Mutex()
     private var job: Job? = null
 
+    /** Servers and computers the user connected; the agent hands them heavy work over SSH. */
+    val machines = com.past9.phoneaos.machines.MachineService(com.past9.phoneaos.machines.MachineStore(settings))
     val composio = ComposioClient({ settings.composioKey() }, settings.installId())
 
     init {
@@ -91,6 +93,9 @@ class AgentRuntime(
         if (!forHelper) list += VoiceNoteTool(context, settings, db.chat())
         if (!forHelper) { list += LocationTool(context); list += NotificationsAllowTool(context, settings); list += NotificationsStopTool(settings); list += FilesPickTool(context); list += PhotosTool(context)
             list += WaitForCodeTool(db, settings, NotificationsAllowTool(context, settings)) }
+        if (!forHelper) list += com.past9.phoneaos.machines.SendFileTool(listOf(context.filesDir, context.cacheDir))
+        list += if (machines.store.machines.value.isEmpty()) listOf(com.past9.phoneaos.machines.MachineListTool(machines))
+            else com.past9.phoneaos.machines.machineTools(machines, java.io.File(context.filesDir, "downloads/machines"))
         list += browserTools(context).filter { !forHelper || it !is BrowserHandoffTool }
         if (settings.state.value.composioEnabled && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(settings.composioKey())) {
             list += com.past9.phoneaos.tools.ComposioConnect.asTools({ settings.composioKey()?.trim() },
@@ -141,9 +146,13 @@ class AgentRuntime(
             appendLine("- To keep an eye on something that has no API or connected app (a price on Takealot or Amazon, stock, a page changing), build a WATCHER (watcher_save): find the data source yourself, write and test a small script, save it. It checks on its own without waking you and only wakes you when it fires. Prefer this over a routine that re-browses every time.")
             appendLine("- Your browser shares the phone's location with sites that ask (store finders, delivery), so you don't need to type the address. Sites open in your browser can send you web notifications; they arrive as notifications from 'web:<site>' and can trigger notification routines.")
             appendLine("- Facts like phone numbers, addresses, prices and opening hours must come from a page you actually read this session; name the source. If you could not verify it, say so. Never invent.")
+            val ms = machines.store.machines.value
+            if (ms.isNotEmpty()) appendLine("- The user connected machines you can work on over SSH: ${ms.joinToString { it.name + (if (it.about.isNotBlank()) " (" + it.about + ")" else "") }}. Hand them the heavy lifting the phone shouldn't do (building a website, compiling, installing, data crunching, long scripts, big downloads): machine_run for quick commands, machine_job_start for anything long, then machine_job_status. Move files with machine_upload / machine_download. If a machine has a coding agent installed (claude, codex, opencode) you can run it there in a job.")
+            else appendLine("- No machines connected. If a task is too heavy for the phone (a big build, long compute), tell the user they can add any server or computer they can SSH into under Connections > Machines.")
             if (!s.composioEnabled) appendLine("- No apps are connected yet (Gmail, Calendar...). If a task needs one, tell the user they can connect apps in Connections.")
-            else if (com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(settings.composioKey())) appendLine("- Connected apps run through the COMPOSIO_* tools (Composio Connect): search for the right tool, check or start connections, then execute. If an app isn't connected, call COMPOSIO_MANAGE_CONNECTIONS with action add and a short reason: the user gets a Connect card with the app's logo, the sign-in opens for them and the tool waits until it's done. Never paste sign-in links into the chat. Actions that send, post, pay or delete ask the user first automatically.")
-            else appendLine("- Connected apps run through apps_find_tools then apps_run. If the task needs an app that isn't connected, use apps_connect: it asks the user, opens the sign-in in your browser, and waits until it's done, then carry on.")
+            else if (com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(settings.composioKey())) appendLine("- Connected apps run through the COMPOSIO_* tools (Composio Connect): search for the right tool, check or start connections, then execute. If an app isn't connected, call COMPOSIO_MANAGE_CONNECTIONS with action add and a short reason: the user gets a Connect card with the app's logo, the sign-in opens for them and the tool waits until it's done. Never paste sign-in links into the chat. Any app can have several accounts connected (two Outlooks, four Gmails, a work and a personal Slack): COMPOSIO_MANAGE_CONNECTIONS list shows each with its email, and COMPOSIO_MULTI_EXECUTE_TOOL takes `account` (email, alias or id) to pick one. Calling add for an app that's already connected adds another account. Be deliberate about WHICH account: act in the account the task belongs to; when the user says 'my email' in general, check every account and say which one each result came from. Data stays where it belongs: never copy, forward or send something from one account through another (work to personal, one client to another) unless the user asked for exactly that, and always name the account you used for anything you send or change. Actions that send, post, pay or delete ask the user first automatically.")
+            else appendLine("- Any app can have several accounts connected (apps_connected lists each with its account id); pass `account` to apps_run to pick one, act in the account the task belongs to, never move data from one account through another unless asked, and name the account you used.")
+            if (s.composioEnabled && !com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(settings.composioKey())) appendLine("- Connected apps run through apps_find_tools then apps_run. If the task needs an app that isn't connected, use apps_connect: it asks the user, opens the sign-in in your browser, and waits until it's done, then carry on.")
             appendLine()
             appendLine("- To show the user an image (a product photo, a map, a chart from a page), put it in your reply as markdown: ![what it is](https://...). Several images in a row become a swipeable strip.")
             appendLine("- voice_note scripts are plain spoken words: no emoji, no markdown, no lists, no URLs. After sending one, don't repeat it as text.")
@@ -221,30 +230,58 @@ class AgentRuntime(
     }
 
     object Repair {
+        private const val INTERRUPTED = "Interrupted before it finished (the app was closed or stopped)."
+
         /**
-         * A run cut short (app killed, phone restarted, user stopped it) can leave tool calls with no
-         * results, and every provider rejects that forever after. Give each orphaned call a result
-         * saying it was interrupted, so the conversation always stays valid.
+         * Every provider rejects a history where tool calls and tool results don't pair up, and keeps
+         * rejecting it on every message after ("Messages with role 'tool' must be a response to a preceding
+         * message with 'tool_calls'"), so the chat is stuck until the user clears their data. Causes seen:
+         * a run cut short (calls with no results), and something else writing to the conversation mid-tool
+         * (a routine, a voice call, a typed answer) so the results land after an unrelated message.
+         *
+         * So: each assistant tool call gets its result placed straight after it (found anywhere before the
+         * next assistant message, or a stub saying it was interrupted), and any result no call claims is dropped.
          */
         fun repair(msgs: List<Msg>): MutableList<Msg> {
             val out = mutableListOf<Msg>()
-            var i = 0
-            while (i < msgs.size) {
-                val m = msgs[i]; out += m
-                val calls = if (m.role == Role.ASSISTANT) m.toolCalls else emptyList()
-                if (calls.isNotEmpty()) {
-                    val next = msgs.getOrNull(i + 1)
-                    val answered = next?.takeIf { it.role == Role.USER }?.blocks?.filterIsInstance<Block.ToolResult>()?.map { it.callId }?.toSet() ?: emptySet()
-                    val missing = calls.filter { it.id !in answered }
-                    if (missing.isNotEmpty()) {
-                        val fill = missing.map { Block.ToolResult(it.id, "Interrupted before it finished (the app was closed or stopped).", true) }
-                        if (next != null && next.role == Role.USER && answered.isNotEmpty()) { out += Msg(Role.USER, next.blocks + fill); i += 2; continue }
-                        out += Msg(Role.USER, fill)
+            for ((i, m) in msgs.withIndex()) {
+                if (m.role == Role.ASSISTANT) {
+                    out += m
+                    val calls = m.toolCalls
+                    if (calls.isEmpty()) continue
+                    val ids = calls.map { it.id }.toSet()
+                    val found = linkedMapOf<String, Block.ToolResult>()
+                    var j = i + 1
+                    while (j < msgs.size && msgs[j].role != Role.ASSISTANT) {
+                        msgs[j].blocks.filterIsInstance<Block.ToolResult>().forEach { r -> if (r.callId in ids && r.callId !in found) found[r.callId] = r }
+                        j++
                     }
+                    // Pictures a tool handed back ride in the same message as the results.
+                    val images = msgs.getOrNull(i + 1)?.takeIf { carriesResults(it) }?.blocks?.filterIsInstance<Block.Image>().orEmpty()
+                    out += Msg(Role.USER, calls.map { c -> found[c.id] ?: Block.ToolResult(c.id, INTERRUPTED, true) } + images)
+                } else {
+                    val followsCalls = i > 0 && msgs[i - 1].role == Role.ASSISTANT && msgs[i - 1].toolCalls.isNotEmpty() && carriesResults(m)
+                    val rest = m.blocks.filter { it !is Block.ToolResult && !(followsCalls && it is Block.Image) }
+                    if (rest.isNotEmpty()) out += if (rest.size == m.blocks.size) m else Msg(m.role, rest)
                 }
-                i++
             }
             return out
+        }
+
+        private fun carriesResults(m: Msg) = m.role == Role.USER && m.blocks.any { it is Block.ToolResult }
+
+        /**
+         * Last resort when a provider still rejects the history's tool exchange: keep every word the user
+         * and the agent said, drop the earlier tool calls and results. The current turn (after the last
+         * thing the user typed) is left whole so the work in progress carries on.
+         */
+        fun flatten(msgs: List<Msg>): MutableList<Msg> {
+            val lastUser = msgs.indexOfLast { it.role == Role.USER && it.blocks.any { b -> b is Block.Text } }.coerceAtLeast(0)
+            val before = msgs.take(lastUser).mapNotNull { m ->
+                val keep = m.blocks.filter { it is Block.Text || it is Block.Image }
+                if (keep.isEmpty()) null else Msg(m.role, keep)
+            }
+            return (before + msgs.drop(lastUser)).toMutableList()
         }
     }
 

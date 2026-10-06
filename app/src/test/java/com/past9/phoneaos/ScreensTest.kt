@@ -147,6 +147,15 @@ class ScreensTest(private val dark: Boolean) {
             connected = listOf(Connection("gmail_1", "gmail", "ACTIVE", "gmail"), Connection("notion_1", "notion", "ACTIVE", "notion")))
         shot("52-connections-consumer") { ConnectionsScreen(st, ConnectionsActions()) }
     }
+    private val lab = com.past9.phoneaos.machines.Machine("a1", "Uni lab", "login.cs.example.edu", 22, "sdlamini001", about = "Linux 5.15 · 64 cores")
+    private val vps = com.past9.phoneaos.machines.Machine("b2", "Build server", "203.0.113.20", 2222, "deploy", com.past9.phoneaos.machines.MachineAuth.NEW_KEY, trusted = true, about = "Linux 6.8 · 8 cores", hostKey = "SHA256:3xg0Qm1rT8wq1V8pJm8n0aWJxw2v1y0iYpK3b9c7D2E")
+    private val pc = com.past9.phoneaos.machines.Machine("c3", "Home PC", "100.84.55.108", 22, "sam", about = "Windows 11 · 12 cores")
+    @Test fun machinesSheetEmpty() { sheet("56-machines-empty") { MachinesSheet(emptyList(), MachineActions(), {}, {}, checkOnOpen = false) } }
+    @Test fun machinesSheet() { sheet("57-machines") { MachinesSheet(listOf(vps, lab, pc), MachineActions(), {}, {}, checkOnOpen = false, initialStatus = mapOf("b2" to "", "a1" to "", "c3" to "Couldn't reach Home PC")) } }
+    @Test fun machineNew() { sheet("53-machine-new") { MachineSheet(null, listOf(lab), MachineActions(), {}, {}) } }
+    @Test fun machineKey() { sheet("54-machine-key") { MachineSheet(vps, listOf(lab, vps), MachineActions(publicKey = { "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK8xH2kq9b7m3Wf0pQZ1vLr8sYt4uN6cE5dA2gB1hJ0k agent-build-server" }), {}, {}) } }
+    @Test fun machineConnected() { sheet("58-machine-connected") { MachineSheet(lab, listOf(lab, vps), MachineActions(), {}, {}, initialResult = "") } }
+    @Test fun connectionsMachines() { shot("55-connections-machines") { ConnectionsScreen(ConnectionsState(hasKey = false, machines = listOf(lab, vps)), ConnectionsActions()) } }
     @Test fun connectionsNoKey() { shot("50-connections-nokey") { ConnectionsScreen(ConnectionsState(hasKey = false), ConnectionsActions()) } }
     @Test fun connections() {
         val st = ConnectionsState(hasKey = true, connected = listOf(Connection("1", "gmail", "ACTIVE", "sam@example.com"), Connection("2", "googlecalendar", "INITIATED", "googlecalendar")),
