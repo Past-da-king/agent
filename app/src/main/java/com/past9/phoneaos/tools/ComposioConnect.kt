@@ -169,7 +169,8 @@ object ComposioConnect {
      * The agent wants an app connected: instead of pasting a link into the chat, show a Connect card
      * (logo, name, why). On Connect the sign-in opens and we wait until it's ACTIVE, then the agent carries on.
      */
-    private suspend fun connectViaCard(k: String, input: JSONObject, ctx: ToolContext, openLink: suspend (String) -> Unit): String? {
+    private suspend fun connectViaCard(k: String, input: JSONObject, ctx: ToolContext, openLink: suspend (String) -> Unit,
+                                       onConnected: suspend (ToolContext, com.past9.phoneaos.data.AccountRef) -> Unit): String? {
         val items = input.optJSONArray("toolkits") ?: return null
         val adds = (0 until items.length()).mapNotNull { items.optJSONObject(it) }.filter { it.optString("action", "add").ifBlank { "add" } == "add" }.map { it.optString("name").lowercase().trim() }.filter { it.isNotBlank() }
         if (adds.isEmpty()) return null
@@ -178,7 +179,8 @@ object ComposioConnect {
         for (slug in adds) {
             val req = ConnectRequest.of(slug, reason)
             // Already connected: the agent wants ANOTHER account (a second Gmail), so say so on the card.
-            val before = accounts(k, listOf(slug))[slug].orEmpty().count { it.status == "ACTIVE" }
+            val beforeIds = accounts(k, listOf(slug))[slug].orEmpty().filter { it.status == "ACTIVE" }.map { it.id }.toSet()
+            val before = beforeIds.size
             val a = ctx.ask(if (before > 0) req.copy(reason = "add another ${req.name} account" + if (req.reason.isNotBlank()) ", so I can ${req.reason.removePrefix("so I can ")}" else "").text else req.text, ConnectRequest.OPTIONS)
             if (a == null) { out.appendLine("Nobody is around to connect ${req.name}. Tell the user they can connect it from Connections in the app."); continue }
             if (a != "Connect") { out.appendLine("The user declined connecting ${req.name}${if (a != "Decline") " and said: $a" else ""}. Don't send a link; carry on without it."); continue }
@@ -189,7 +191,13 @@ object ComposioConnect {
             var done = false
             while (System.currentTimeMillis() < deadline) {
                 kotlinx.coroutines.delay(4000)
-                if ((runCatching { accounts(k, listOf(slug))[slug].orEmpty().count { it.status == "ACTIVE" } }.getOrNull() ?: 0) > before) { done = true; break }
+                val now = runCatching { accounts(k, listOf(slug))[slug].orEmpty().filter { it.status == "ACTIVE" } }.getOrNull().orEmpty()
+                if (now.size > before) {
+                    done = true
+                    // The new account: offer to put it in a profile (and a helper's own profile gets it straight away).
+                    now.filter { it.id !in beforeIds }.forEach { a -> runCatching { onConnected(ctx, com.past9.phoneaos.data.AccountRef(a.id, slug, a.label.ifBlank { AppCatalog.name(slug) })) } }
+                    break
+                }
             }
             ctx.updateActivity(id, if (done) "${req.name} connected" else "${req.name} sign-in not finished")
             out.appendLine(if (done) "${req.name} ($slug) is connected now. Carry on with the task." else "The user hasn't finished signing in to ${req.name} yet. Don't paste a link; say you'll continue once it's connected (they can also connect it from Connections).")
@@ -197,10 +205,9 @@ object ComposioConnect {
         return out.toString().trim()
     }
 
-    private val writeWords = Regex("(SEND|REPLY|FORWARD|CREATE|DELETE|REMOVE|TRASH|UPDATE|PATCH|POST|PUBLISH|PAY|PURCHASE|ARCHIVE|MOVE|INVITE|SHARE|INSERT|UPLOAD|ACCEPT|DECLINE|CANCEL)")
-
     /** Each Composio Connect tool as one of the agent's tools. Actions that change things need the user's yes. */
-    fun asTools(key: () -> String?, openLink: (suspend (String) -> Unit)? = null): List<Tool> = tools.map { t ->
+    fun asTools(key: () -> String?, openLink: (suspend (String) -> Unit)? = null, guard: AppGuard = AppGuard.DEFAULT,
+                onConnected: suspend (ToolContext, com.past9.phoneaos.data.AccountRef) -> Unit = { _, _ -> }): List<Tool> = tools.map { t ->
         val name = t.optString("name")
         val manage = name == "COMPOSIO_MANAGE_CONNECTIONS" && openLink != null
         val schema = t.optJSONObject("inputSchema") ?: JSONObject().put("type", "object")
@@ -212,15 +219,14 @@ object ComposioConnect {
                 (if (manage) "\nIn this app, action add shows the user a Connect card and opens the sign-in for them, then waits until it is connected. Never paste the sign-in link yourself." else ""), schema)
             override suspend fun run(input: JSONObject, ctx: ToolContext): String {
                 val k = key() ?: return "No Composio key."
-                if (manage) connectViaCard(k, input, ctx, openLink!!)?.let { return it }
+                if (manage) connectViaCard(k, input, ctx, openLink!!, onConnected)?.let { return it }
                 input.remove("reason")
-                // Executing app actions: ask before anything that sends, posts, pays or deletes.
+                // Executing app actions: the account's rules (and a helper's profile) decide, in code.
                 if (name.contains("EXECUTE", true)) {
                     val slugs = Regex("\"(?:tool_slug|slug|action)\"\\s*:\\s*\"([A-Z0-9_]+)\"").findAll(input.toString()).map { it.groupValues[1] }.toList()
-                    if (slugs.any { writeWords.containsMatchIn(it.substringAfter('_')) }) {
-                        val a = ctx.ask("APPROVAL|${slugs.joinToString(", ") { it.lowercase().replace('_', ' ') }}|${input.toString(2).take(1500)}", listOf("Approve", "Decline"))
-                        if (a != "Approve") return if (a == null) "Needs the user's approval and nobody is around. Not done." else "The user declined. Not done."
-                    }
+                    val v = guard.check(ctx, slugs, input.optString("account").takeIf { it.isNotBlank() }, input.toString(2).take(1500))
+                    v.refuse?.let { return it }
+                    v.account?.let { input.put("account", it) }
                 }
                 ctx.activity("Composio: ${name.removePrefix("COMPOSIO_").lowercase().replace('_', ' ')}", JSONObject().put("tool", "apps"))
                 return call(k, name, input)

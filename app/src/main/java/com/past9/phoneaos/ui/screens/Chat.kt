@@ -36,6 +36,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.Reply
+import androidx.compose.material.icons.automirrored.rounded.Article
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -62,6 +64,7 @@ import com.past9.phoneaos.ui.StatusPill
 import com.past9.phoneaos.ui.theme.Eyebrow
 import com.past9.phoneaos.ui.theme.LocalExtra
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.File
 
@@ -85,7 +88,24 @@ data class ChatActions(
     val onCall: (() -> Unit)? = null,
     /** Non-null while a reply is being read aloud: tap to stop it. */
     val onStopSpeaking: (() -> Unit)? = null,
+    /** Open a report (its file path) in the full-screen reader. */
+    val onReport: (String) -> Unit = {},
 )
+
+/**
+ * The user's message this reply answers, when that isn't obvious: the reply came later, from helpers' results,
+ * or the user said something else in between (helpers keep working while they talk).
+ */
+fun quotedFor(item: ChatItem, items: List<ChatItem>, byId: Map<Long, ChatItem>): ChatItem? {
+    val meta = JSONObject(item.meta)
+    val q = meta.optLong("replyTo").takeIf { it > 0 }?.let { byId[it] }?.takeIf { it.kind == "user" } ?: return null
+    val between = items.filter { it.id > q.id && it.id < item.id }
+    val interrupted = meta.optBoolean("late") || between.any { it.kind == "user" }
+    // Quote once: the first message of a late answer carries it, the rest of that answer follows it.
+    val alreadyQuoted = between.lastOrNull { it.kind == "agent" || it.kind == "report" || it.kind == "user" }
+        ?.let { prev -> prev.kind != "user" && JSONObject(prev.meta).optLong("replyTo") == q.id && JSONObject(prev.meta).optBoolean("late") == meta.optBoolean("late") } == true
+    return q.takeIf { interrupted && !alreadyQuoted }
+}
 
 /** Chat rows after grouping: consecutive activity lines fold into one "steps" row. */
 sealed interface Row_ { val key: String
@@ -134,7 +154,11 @@ fun ChatScreen(
     morning: MorningUi? = null,
 ) {
     val rows = remember(items) { group(items) }
+    val byId = remember(items) { items.associateBy { it.id } }
     val list = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    /** Tap a quote: jump to the message it quotes. */
+    val jumpTo: (Long) -> Unit = { id -> rows.indexOfFirst { it.key == "i$id" }.takeIf { it >= 0 }?.let { i -> scope.launch { list.animateScrollToItem(i) } } }
     LaunchedEffect(rows.size, items.lastOrNull()?.meta) { if (rows.isNotEmpty()) list.animateScrollToItem(rows.size) }
     val waitingOnYou = items.any { it.kind == "question" && !JSONObject(it.meta).has("answer") }
 
@@ -155,7 +179,9 @@ fun ChatScreen(
                     is Row_.Call -> CallRow(r.items, agentName)
                     is Row_.Single -> when (r.item.kind) {
                         "user" -> UserBubble(r.item)
-                        "agent" -> AgentMessage(r.item)
+                        "agent" -> AgentMessage(r.item, quotedFor(r.item, items, byId), jumpTo)
+                        "report" -> { val path = JSONObject(r.item.meta).optString("path")
+                            Column { quotedFor(r.item, items, byId)?.let { ReplyQuote(it) { jumpTo(it.id) }; Spacer(Modifier.height(8.dp)) }; ReportCard(r.item) { actions.onReport(path) } } }
                         "question" -> when {
                             r.item.text.startsWith("APPROVAL|") -> ApprovalCard(r.item, actions.onAnswer)
                             r.item.text.startsWith(com.past9.phoneaos.tools.ConnectRequest.PREFIX) -> ConnectCard(r.item, actions.onAnswer)
@@ -328,9 +354,10 @@ private fun UserBubble(item: ChatItem) {
 }
 
 @Composable
-private fun AgentMessage(item: ChatItem) {
+private fun AgentMessage(item: ChatItem, quoted: ChatItem? = null, onQuote: (Long) -> Unit = {}) {
     val routine = JSONObject(item.meta).optString("routine")
     Column(Modifier.fillMaxWidth().padding(end = 12.dp, top = 2.dp)) {
+        if (quoted != null) { ReplyQuote(quoted) { onQuote(quoted.id) }; Spacer(Modifier.height(8.dp)) }
         if (routine.isNotEmpty()) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 6.dp)) {
                 Icon(Icons.Rounded.Schedule, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
@@ -339,6 +366,52 @@ private fun AgentMessage(item: ChatItem) {
             }
         }
         Markdown(com.past9.phoneaos.voice.Tts.stripEmoji(item.text))
+    }
+}
+
+/** What this reply answers, like a quoted message on WhatsApp: a bar in the accent, who said it, and the first lines. */
+@Composable
+fun ReplyQuote(quoted: ChatItem, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Surface(onClick = onClick, shape = RoundedCornerShape(14.dp), color = cs.surfaceContainerLow, modifier = Modifier.widthIn(max = 340.dp)) {
+        Row(Modifier.height(IntrinsicSize.Min)) {
+            Box(Modifier.width(4.dp).fillMaxHeight().background(cs.primary))
+            Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.AutoMirrored.Rounded.Reply, null, Modifier.size(14.dp), tint = cs.primary); Spacer(Modifier.width(4.dp))
+                    Text("Replying to you", style = MaterialTheme.typography.labelMedium, color = cs.primary)
+                }
+                Text(quoted.text.substringBefore("\n\n[Attached document:").trim().ifBlank { "A photo or document" }, style = MaterialTheme.typography.bodySmall,
+                    color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+/** A long answer, kept out of the chat: what it is, the takeaway, and one way in. */
+@Composable
+fun ReportCard(item: ChatItem, onOpen: () -> Unit) {
+    val meta = JSONObject(item.meta)
+    val cs = MaterialTheme.colorScheme
+    val minutes = (meta.optInt("words") / 220).coerceAtLeast(1)
+    Surface(onClick = onOpen, shape = RoundedCornerShape(28.dp), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(cs.primaryContainer), contentAlignment = Alignment.Center) {
+                    Icon(Icons.AutoMirrored.Rounded.Article, null, tint = cs.onPrimaryContainer)
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("REPORT · $minutes MIN READ", style = Eyebrow, color = cs.primary)
+                    Text(meta.optString("title").ifBlank { "Report" }, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            if (item.text.isNotBlank()) Text(item.text, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 12.dp))
+            Spacer(Modifier.height(14.dp))
+            Button(onClick = onOpen, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shapes = ButtonDefaults.shapes()) {
+                Text("Read the report"); Spacer(Modifier.width(8.dp)); Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, Modifier.size(18.dp))
+            }
+        }
     }
 }
 

@@ -40,6 +40,11 @@ data class ConnectionsState(
     val hits: Set<String> = emptySet(),
     /** Servers and computers the agent can work on over SSH. */
     val machines: List<com.past9.phoneaos.machines.Machine> = emptyList(),
+    /** Parts of the user's life, each a set of these accounts. */
+    val profiles: List<com.past9.phoneaos.data.AgentProfile> = emptyList(),
+    /** Per account: what the agent may do there. */
+    val rules: Map<String, com.past9.phoneaos.data.AccountRules> = emptyMap(),
+    val browserProfiles: List<String> = listOf("Personal"),
 )
 
 data class ConnectionsActions(
@@ -57,6 +62,7 @@ data class ConnectionsActions(
     /** Machines: add, test, edit, remove. */
     val machine: MachineActions = MachineActions(),
     val onNotifications: () -> Unit = {},
+    val profile: AccountProfileActions = AccountProfileActions(),
 )
 
 @Composable
@@ -64,12 +70,23 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
     var query by remember { mutableStateOf("") }
     // Machines: "list", "new", or a machine id being edited.
     var sheet by remember { mutableStateOf(initialSheet) }
+    val logos = state.toolkits.associate { it.slug to it.logo }
     when (val sh = sheet) {
         null -> {}
+        "profile:new" -> ProfileSheet(null, state.connected.map { it.ref() }, logos, state.browserProfiles, actions.profile) { sheet = null }
+        else -> if (sh.startsWith("profile:")) ProfileSheet(state.profiles.firstOrNull { it.id == sh.removePrefix("profile:") }, state.connected.map { it.ref() }, logos, state.browserProfiles, actions.profile) { sheet = null }
+            else if (sh.startsWith("account:")) state.connected.firstOrNull { it.id == sh.removePrefix("account:") }?.let { c ->
+                AccountSheet(c.ref(), logos[c.toolkit].orEmpty(), state.rules[c.id] ?: com.past9.phoneaos.data.AccountRules.DEFAULT, state.profiles, actions.profile,
+                    onDisconnect = { actions.onDisconnect(c) }) { sheet = null }
+            }
+    }
+    when (val sh = sheet) {
+        null -> {}
+        else -> if (sh.startsWith("profile:") || sh.startsWith("account:")) {} else when (sh) {
         "list" -> MachinesSheet(state.machines, actions.machine, onDismiss = { sheet = null }, onOpen = { sheet = it ?: "new" })
         else -> MachineSheet(state.machines.firstOrNull { it.id == sh }, state.machines, actions.machine.copy(onDelete = { actions.machine.onDelete(it); sheet = "list" }),
             onDismiss = { sheet = "list" }, onDone = { sheet = "list" })
-    }
+    } }
     val activeCount = state.connected.count { it.status == "ACTIVE" }
     SubScreen("Connections", if (state.hasKey) (if (activeCount == 1) "1 app connected" else "$activeCount apps connected") else "Connect your apps", actions.onBack,
         actions = { if (state.hasKey) IconButton(onClick = actions.onRefresh) { Icon(Icons.Rounded.Refresh, "Refresh") } }) { pad ->
@@ -89,6 +106,7 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                     MachinesLine(state.machines) { sheet = "list" }
                 }
             }
+            if (state.hasKey) item { ProfilesSection(state.profiles, logos) { id -> sheet = "profile:" + (id ?: "new") } }
             item { SectionHeader("Your apps", if (state.consumer) "Tap Connect and sign in. Your agent can use it straight away." else "Gmail, Calendar, Drive, Slack and 250+ more, through Composio with your own key", Modifier.padding(start = 4.dp, top = 16.dp)) }
             if (!state.hasKey) item {
                 AppCard { ComposioKeyForm(actions.onSaveKey, actions.onOpenUrl) {} }
@@ -97,7 +115,9 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                 val active = state.connected
                 if (active.isNotEmpty()) item {
                     AppCard(padding = PaddingValues(vertical = 4.dp)) {
-                        active.forEach { c -> val tk = state.toolkits.firstOrNull { it.slug == c.toolkit }; ConnectedLine(c, tk?.name ?: prettySlug(c.toolkit), actions, tk?.logo.orEmpty()) }
+                        active.forEach { c -> val tk = state.toolkits.firstOrNull { it.slug == c.toolkit }
+                            ConnectedLine(c, tk?.name ?: prettySlug(c.toolkit), actions, tk?.logo.orEmpty(), state.profiles.filter { it.has(c.id) }.map { it.name },
+                                state.rules[c.id] ?: com.past9.phoneaos.data.AccountRules.DEFAULT) { sheet = "account:" + c.id } }
                     }
                 }
                 item {
@@ -167,13 +187,16 @@ private fun InitialBox(name: String, size: androidx.compose.ui.unit.Dp = 40.dp, 
 }
 
 @Composable
-private fun ConnectedLine(c: Connection, name: String, actions: ConnectionsActions, logo: String = "") {
-    Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun ConnectedLine(c: Connection, name: String, actions: ConnectionsActions, logo: String = "", profiles: List<String> = emptyList(),
+                          rules: com.past9.phoneaos.data.AccountRules = com.past9.phoneaos.data.AccountRules.DEFAULT, onOpen: () -> Unit = {}) {
+    Surface(onClick = onOpen, color = androidx.compose.ui.graphics.Color.Transparent) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Initial(name, logo)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(name, style = MaterialTheme.typography.titleSmall)
             Text(if (c.label == c.toolkit) (if (c.status == "ACTIVE") "Through Composio" else "Sign-in not finished") else c.label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            ProfileTags(profiles, rules)
         }
         val extra = LocalExtra.current
         when (c.status) {
@@ -181,7 +204,8 @@ private fun ConnectedLine(c: Connection, name: String, actions: ConnectionsActio
             "INITIATED", "INITIALIZING" -> StatusPill("Finish sign-in", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
             else -> StatusPill(c.status.lowercase().replaceFirstChar { it.uppercase() }, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
         }
-        IconButton(onClick = { actions.onDisconnect(c) }) { Icon(Icons.Rounded.LinkOff, "Disconnect ${c.toolkit}", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+        Icon(Icons.Rounded.ChevronRight, "Rules and profiles for ${c.toolkit}", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp))
+    }
     }
 }
 
@@ -203,5 +227,5 @@ private fun ToolkitLine(t: Toolkit, connected: Boolean, onConnect: () -> Unit) {
     }
 }
 
-private val known = mapOf("googlecalendar" to "Google Calendar", "googledrive" to "Google Drive", "googledocs" to "Google Docs", "googlesheets" to "Google Sheets", "github" to "GitHub", "linkedin" to "LinkedIn", "whatsapp" to "WhatsApp")
+private val known = mapOf("googlecalendar" to "Google Calendar", "googledrive" to "Google Drive", "googledocs" to "Google Docs", "googlesheets" to "Google Sheets", "github" to "GitHub", "linkedin" to "LinkedIn", "whatsapp" to "WhatsApp", "microsoft_teams" to "Microsoft Teams", "outlook" to "Outlook", "one_drive" to "OneDrive", "sharepoint" to "SharePoint")
 fun prettySlug(slug: String) = known[slug] ?: slug.replace('_', ' ').replaceFirstChar { it.uppercase() }
