@@ -42,6 +42,13 @@ class MemoryPackTest {
         assertEquals("Updated.", dao.byTitle("Strat Edge")!!.body)
         assertEquals(2, dao.list().size)
 
+        // A pack never writes or touches a helper skill.
+        dao.insert(MemoryRow(title = "Send a WhatsApp", body = "Helper steps.", kind = "skill", source = "agent"))
+        MemoryPack.import("""[{"title":"Send a WhatsApp","body":"Bank note.","kind":"skill"}]""", dao)
+        assertEquals("Helper steps.", dao.byTitle("Send a WhatsApp")!!.body)
+        assertEquals("fact", dao.byTitle("Send a WhatsApp (A.O.S)")!!.kind)
+        dao.delete(dao.byTitle("Send a WhatsApp")!!.id); dao.delete(dao.byTitle("Send a WhatsApp (A.O.S)")!!.id)
+
         // The agent can find it with its normal recall.
         assertEquals("Strat Edge", Recall.rank("strat edge client", dao.list(), 3).first().title)
     }

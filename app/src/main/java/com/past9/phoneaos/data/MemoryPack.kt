@@ -13,7 +13,8 @@ object MemoryPack {
     const val FILE = "memory-pack.json"
     const val SOURCE = "import"
     private const val MARK = "\n\n## From A.O.S memory bank\n\n"
-    private val kinds = setOf("fact", "preference", "person", "decision", "how-to", "event", "skill")
+    // "skill" is reserved for helper skills, so a pack can never write one.
+    private val kinds = setOf("fact", "preference", "person", "decision", "how-to", "event")
 
     fun pending(context: Context): List<File> =
         listOfNotNull(context.getExternalFilesDir(null), context.filesDir).map { File(it, FILE) }.filter { it.isFile }
@@ -39,6 +40,10 @@ object MemoryPack {
             val now = System.currentTimeMillis()
             val cur = dao.byTitle(title)
             when {
+                cur?.kind == "skill" -> dao.byTitle("$title (A.O.S)").let { mine ->
+                    if (mine == null) dao.insert(MemoryRow(title = "$title (A.O.S)", body = body, kind = kind, topics = tags, pinned = pinned, source = SOURCE))
+                    else dao.update(mine.copy(body = body, kind = kind, topics = tags, pinned = pinned, updatedAt = now))
+                }
                 cur == null -> dao.insert(MemoryRow(title = title, body = body, kind = kind, topics = tags, pinned = pinned, source = SOURCE))
                 cur.source == SOURCE -> dao.update(cur.copy(body = body, kind = kind, topics = tags, pinned = pinned, updatedAt = now))
                 else -> {
