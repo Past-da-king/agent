@@ -1,0 +1,26 @@
+<div class="hero stack tight">
+  <span class="eyebrow">Cheapest today</span>
+  <span class="headline num" id="best"></span>
+  <span class="small" id="bestName"></span>
+</div>
+<div class="section">
+  <div class="section-head"><span class="eyebrow">Price over 14 days</span></div>
+  <div class="card"><div id="trend"></div></div>
+</div>
+<div class="section">
+  <div class="section-head"><span class="eyebrow">Tracked monitors</span><span class="small">Tap one to open the shop</span></div>
+  <div class="list" id="items"></div>
+</div>
+<script>
+function render(d) {
+  if (!d || !d.items || !d.items.length) { document.body.innerHTML = '<div class="empty"><div class="title">No prices yet</div>The first check runs within the hour.</div>'; return; }
+  const items = d.items.slice().sort((a, b) => a.price - b.price), top = items[0];
+  best.textContent = Kit.money(top.price);
+  bestName.textContent = top.name + " at " + top.store;
+  Kit.line("#trend", d.history, { unit: "R" });
+  document.getElementById("items").innerHTML = items.map(i => `<a class="item" href="${Kit.esc(i.url)}">
+    <div class="lead"><i data-ic="tag" class="sm"></i></div>
+    <div class="main"><span class="name">${Kit.esc(i.name)}</span><span class="meta">${Kit.esc(i.store)}</span></div>
+    <div class="end"><span class="value">${Kit.money(i.price)}</span>${i.drop ? `<span class="badge good"><i data-ic="down" class="sm"></i>${Kit.money(i.drop)}</span>` : ""}</div></a>`).join("");
+}
+</script>

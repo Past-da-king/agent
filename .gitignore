@@ -1,0 +1,8 @@
+build/
+.gradle/
+.kotlin/
+local.properties
+*.apk
+app/src/main/jniLibs/
+app/src/main/assets/runtime/node_modules.zip
+app/src/main/assets/runtime/cacert.pem

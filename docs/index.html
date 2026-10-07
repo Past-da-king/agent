@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent: an autonomous agent that lives on your phone</title>
+<meta name="description" content="Agent is a free, open-source Android app: one AI agent that lives on your phone, browses for you, remembers what matters and runs on the model you already pay for.">
+<meta property="og:title" content="Agent">
+<meta property="og:description" content="An autonomous agent that's always on, right on your phone. Free and open source.">
+<meta property="og:image" content="https://past-da-king.github.io/agent/hero.png">
+<meta name="theme-color" content="#E3E0FD">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@6..144,400..900&display=swap" rel="stylesheet">
+<style>
+:root{--iris:#4A3FD1;--lav:#E4E0FF;--lav2:#E3E0FD;--deep:#1C1466;--light:#C3BBFF;--paper:#FAF8F4;--ink:#1B1A1F}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Google Sans Flex',system-ui,sans-serif;color:var(--ink);background:var(--paper);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+img,video,svg{display:block;max-width:100%}
+a{color:inherit}
+.wrap{width:min(1200px,100% - 48px);margin-inline:auto}
+.display{font-weight:800;font-variation-settings:'opsz' 144;letter-spacing:-0.035em;line-height:.92}
+h2{font-weight:750;font-variation-settings:'opsz' 144;letter-spacing:-0.025em;line-height:1.02;font-size:clamp(38px,5.6vw,76px)}
+.eyebrow{font-size:14px;font-weight:650;letter-spacing:.12em;text-transform:uppercase}
+.lead{font-size:clamp(18px,1.6vw,22px);line-height:1.5;max-width:46ch}
+
+/* nav */
+nav{position:absolute;inset:0 0 auto;z-index:5}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;height:84px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:22px;color:var(--iris);text-decoration:none;letter-spacing:-.02em}
+.brand svg{width:34px}
+.navlinks{display:flex;gap:8px}
+.pill{display:inline-flex;align-items:center;gap:10px;height:52px;padding:0 26px;border-radius:999px;font-weight:650;font-size:17px;text-decoration:none;transition:transform .25s cubic-bezier(.2,.8,.2,1),background .2s}
+.pill:hover{transform:translateY(-2px)}
+.pill:focus-visible{outline:3px solid var(--iris);outline-offset:3px}
+.pill.solid{background:var(--iris);color:#FBFAFF}
+.pill.solid:hover{background:#3A2FB0}
+.pill.ghost{background:transparent;color:var(--deep);box-shadow:inset 0 0 0 2px rgba(28,20,102,.25)}
+.pill.ghost:hover{box-shadow:inset 0 0 0 2px var(--deep)}
+.pill.small{height:42px;padding:0 18px;font-size:15px}
+.pill svg{width:18px;height:18px}
+
+/* hero */
+.hero{background:var(--lav2);color:var(--deep);position:relative;overflow:hidden;padding:150px 0 0}
+.hero .wrap{display:grid;grid-template-columns:1.05fr .95fr;gap:24px;align-items:stretch;min-height:700px}
+.hero .copy{padding-bottom:110px;align-self:end}
+.hero h1{font-size:clamp(96px,15vw,232px);color:var(--iris)}
+.hero .line{font-size:clamp(26px,3vw,44px);font-weight:650;letter-spacing:-.02em;line-height:1.08;margin-top:22px;max-width:15em}
+.hero .since{font-size:clamp(18px,1.7vw,24px);font-weight:500;opacity:.72;margin-top:18px}
+.ctas{display:flex;flex-wrap:wrap;gap:12px;margin-top:38px}
+.stage{position:relative;height:100%;min-height:620px}
+.phone{position:absolute;border-radius:44px;overflow:hidden;background:#15112E;padding:8px;box-shadow:0 60px 100px -50px rgba(20,14,60,.6)}
+.phone img{border-radius:36px;width:100%;height:auto}
+.hero .phone{width:min(310px,64%);right:6%;top:90px;z-index:1}
+.hero .peek{position:absolute;width:min(270px,52%);left:2%;bottom:30px;z-index:2;animation:bob 6s ease-in-out infinite;filter:drop-shadow(0 30px 30px rgba(20,14,60,.25))}
+@keyframes bob{50%{transform:translateY(-14px) rotate(-3deg)}}
+.chip{position:absolute;background:#fff;color:var(--deep);border-radius:22px;padding:14px 18px;font-weight:600;font-size:16px;box-shadow:0 20px 40px -24px rgba(20,14,60,.45);max-width:250px;line-height:1.3}
+.chip small{display:block;font-weight:500;opacity:.6;font-size:13px;margin-bottom:2px}
+.hero .chip{left:0;top:150px;z-index:3}
+
+/* video */
+.watch{background:var(--deep);color:var(--lav);padding:130px 0 120px;position:relative;overflow:hidden}
+.watch h2{color:#fff;max-width:15em}
+.watch .lead{color:var(--light);margin-top:22px}
+.vid{margin-top:56px;border-radius:32px;overflow:hidden;background:#0E0A33;box-shadow:0 0 0 1px rgba(195,187,255,.18),0 60px 120px -60px #000}
+.vid video{width:100%;aspect-ratio:16/9;background:#0E0A33}
+.vidcap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-top:18px;color:var(--light);font-size:16px}
+.vidcap b{color:#fff;font-weight:650}
+.watch .grid2{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:90px;align-items:center}
+.watch .grid2 h3{font-size:clamp(28px,3vw,42px);font-weight:700;letter-spacing:-.02em;color:#fff;line-height:1.08}
+.watch .grid2 p{color:var(--light);margin-top:14px;font-size:18px;line-height:1.5;max-width:40ch}
+.watch .grid2 .vid{margin-top:0}
+.watch .peek{position:absolute;width:260px;right:-60px;top:70px;opacity:.95;animation:bob 7s ease-in-out infinite}
+
+/* features */
+.feature{position:relative;overflow:hidden;padding:120px 0}
+.feature .wrap{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center}
+.feature.flip .wrap{grid-template-columns:.9fr 1.1fr}
+.feature.flip .text{order:2}
+.feature .text .lead{margin-top:24px}
+.feature .eyebrow{margin-bottom:22px}
+.feature .stage{min-height:600px}
+.feature .phone{width:min(330px,74%);left:50%;transform:translateX(-50%);top:0}
+.feature .peek{position:absolute;width:min(230px,46%);left:0;bottom:40px;z-index:2;animation:bob 6.5s ease-in-out infinite;filter:drop-shadow(0 30px 30px rgba(10,6,40,.28))}
+.feature.flip .peek{left:auto;right:0}
+
+/* looks */
+.looks{background:var(--paper);padding:130px 0 110px;text-align:center}
+.looks h2{color:var(--ink)}
+.looks .lead{margin:22px auto 0;color:#4A4852}
+.mgrid{display:grid;grid-template-columns:repeat(9,1fr);gap:18px;margin-top:64px}
+.mgrid svg{width:100%;transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+.mgrid svg:hover{transform:translateY(-10px) rotate(-6deg) scale(1.06)}
+
+/* get it */
+.get{background:var(--iris);color:#FBFAFF;padding:130px 0 70px;position:relative;overflow:hidden}
+.get h2{color:#fff;max-width:11em}
+.get .lead{color:var(--lav);margin-top:22px}
+.get .pill.solid{background:#FBFAFF;color:var(--iris)}
+.get .pill.solid:hover{background:var(--lav)}
+.get .pill.ghost{color:#FBFAFF;box-shadow:inset 0 0 0 2px rgba(251,250,255,.4)}
+.get .pill.ghost:hover{box-shadow:inset 0 0 0 2px #FBFAFF}
+.get .peek{position:absolute;width:420px;right:-40px;bottom:-60px;animation:bob 6s ease-in-out infinite}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:70px;max-width:900px}
+.step{background:rgba(251,250,255,.1);border-radius:24px;padding:24px}
+.step b{display:block;font-size:20px;margin-bottom:6px}
+.step span{color:var(--lav);line-height:1.45;font-size:16px}
+footer{margin-top:90px;padding-top:28px;border-top:1px solid rgba(251,250,255,.2);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;color:var(--lav);font-size:15px;line-height:1.5}
+footer a{color:#fff}
+.get .ver{margin-top:18px;color:var(--lav);font-size:15px}
+
+/* phone crops from the cards: the phone is drawn in the image, so no frame */
+.vid img{width:100%;height:auto}
+.phone.shot{padding:0;background:none;border-radius:0;box-shadow:none}
+.phone.shot img{border-radius:0;max-width:none}
+.stage .phone.shot{top:auto;bottom:0}
+.feature .phone.shot{bottom:-120px}
+.shot.card{aspect-ratio:100/132.7}
+.shot.card img{width:175.4%;margin:-86.6% 0 0 -66.3%}
+.shot.wide{aspect-ratio:100/184.5}
+.shot.wide img{width:352.7%;margin:-13.9% 0 0 -236.8%}
+
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}html{scroll-behavior:auto}}
+@media (max-width: 900px){
+  .navlinks .ghost{display:none}
+  .hero{padding-top:110px}
+  .hero .wrap,.feature .wrap,.feature.flip .wrap,.watch .grid2{grid-template-columns:1fr}
+  .hero .copy{padding-bottom:20px}
+  .stage{min-height:520px}
+  .hero .phone{width:230px;right:4%;top:30px}
+  .hero .peek{width:170px;left:0;bottom:20px}
+  .hero .chip{left:0;top:60px;max-width:180px;font-size:14px}
+  .watch{padding:100px 0 90px}
+  .watch .peek{width:150px;right:-40px;top:30px}
+  .watch .grid2{margin-top:70px;gap:22px}
+  .feature{padding:90px 0 80px}
+  .feature.flip .text{order:0}
+  .feature .stage{min-height:500px}
+  .feature .phone{width:250px}
+  .feature .phone.shot{bottom:-80px}
+  .feature .peek{width:150px;bottom:20px}
+  .mgrid{grid-template-columns:repeat(3,1fr);gap:20px;max-width:420px;margin-inline:auto}
+  .steps{grid-template-columns:1fr}
+  .get .peek{display:none}
+}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <a class="brand" href="#top"><svg class="" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M42.75,0.00 L40.41,0.68 L38.44,2.42 L36.93,4.68 L35.73,7.18 L34.52,9.59 L32.93,11.63 L30.97,12.99 L28.63,13.52 L26.13,13.37 L23.64,12.92 L21.15,12.46 L18.66,12.31 L16.31,12.69 L14.50,13.82 L13.37,15.63 L13.07,17.98 L13.22,20.47 L13.67,22.96 L14.12,25.45 L14.05,27.95 L13.29,30.36 L11.71,32.40 L9.52,34.06 L7.02,35.35 L4.53,36.40 L2.27,37.92 L0.68,39.80 L0.00,42.07 L0.68,44.56 L2.27,47.05 L4.53,49.55 L6.80,52.04 L8.31,54.53 L8.84,57.02 L8.31,59.52 L7.10,62.01 L5.74,64.50 L4.61,66.99 L4.00,69.49 L4.38,71.90 L5.74,73.87 L7.85,75.23 L10.35,75.91 L12.84,76.21 L15.33,76.51 L17.82,77.42 L20.02,79.00 L21.60,81.12 L22.51,83.61 L22.81,86.10 L22.96,88.60 L23.49,91.09 L24.62,93.35 L26.44,94.86 L28.63,95.47 L31.12,94.94 L33.61,93.88 L36.10,92.52 L38.60,91.39 L41.09,90.71 L43.58,91.01 L46.07,92.37 L48.41,94.41 L50.68,96.83 L52.95,98.87 L55.21,100.00 L57.70,100.00 L59.89,98.79 L61.63,96.83 L63.07,94.41 L64.20,91.92 L65.56,89.58 L67.30,87.76 L69.41,86.63 L71.83,86.33 L74.32,86.56 L76.81,87.01 L79.31,87.46 L81.80,87.54 L84.14,86.93 L85.95,85.57 L86.93,83.53 L87.08,81.12 L86.71,78.63 L86.10,76.13 L85.73,73.64 L85.88,71.15 L86.78,68.73 L88.60,66.77 L90.94,65.11 L93.43,63.90 L95.92,62.69 L98.11,61.18 L99.47,59.29 L99.85,57.02 L99.02,54.53 L97.28,52.19 L95.09,49.92 L92.82,47.66 L91.24,45.39 L90.63,42.90 L91.09,40.41 L92.15,37.92 L93.58,35.42 L94.79,32.93 L95.47,30.44 L95.39,28.02 L94.26,25.98 L92.45,24.62 L90.11,23.87 L87.61,23.49 L85.12,23.26 L82.63,22.66 L80.29,21.68 L78.47,20.09 L77.34,17.90 L76.66,15.48 L76.36,12.99 L75.98,10.50 L75.38,8.01 L74.24,5.97 L72.43,4.68 L70.17,4.31 L67.67,4.98 L65.18,6.12 L62.69,7.48 L60.20,8.61 L57.70,9.21 L55.21,8.84 L52.95,7.48 L50.68,5.44 L48.41,3.10 L46.07,1.13 L43.58,0.08 Z" fill="#4A3FD1"/><rect x="44.92447129909366" y="43" width="6.5" height="14" rx="3.25" fill="#15112E"/><rect x="58.42447129909366" y="43" width="6.5" height="14" rx="3.25" fill="#15112E"/></svg>Agent</a>
+  <div class="navlinks">
+    <a class="pill ghost small" href="https://github.com/Past-da-king/agent">GitHub</a>
+    <a class="pill solid small" href="https://github.com/Past-da-king/agent/releases/download/v0.9.1/Agent-0.9.1.apk">Download</a>
+  </div>
+</div></nav>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <div class="copy">
+      <div class="eyebrow">Free and open source, for Android</div>
+      <h1 class="display">Agent</h1>
+      <p class="line">An autonomous agent that's always on, right on your phone.</p>
+      <p class="since">The best thing since Hermes.</p>
+      <div class="ctas">
+        <a class="pill solid" href="https://github.com/Past-da-king/agent/releases/download/v0.9.1/Agent-0.9.1.apk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12m0 0-5-5m5 5 5-5M5 20h14"/></svg>Get the APK</a>
+        <a class="pill ghost" href="#watch">Watch it work</a>
+      </div>
+    </div>
+    <div class="stage">
+      <svg class="peek" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M42.75,0.00 L40.41,0.68 L38.44,2.42 L36.93,4.68 L35.73,7.18 L34.52,9.59 L32.93,11.63 L30.97,12.99 L28.63,13.52 L26.13,13.37 L23.64,12.92 L21.15,12.46 L18.66,12.31 L16.31,12.69 L14.50,13.82 L13.37,15.63 L13.07,17.98 L13.22,20.47 L13.67,22.96 L14.12,25.45 L14.05,27.95 L13.29,30.36 L11.71,32.40 L9.52,34.06 L7.02,35.35 L4.53,36.40 L2.27,37.92 L0.68,39.80 L0.00,42.07 L0.68,44.56 L2.27,47.05 L4.53,49.55 L6.80,52.04 L8.31,54.53 L8.84,57.02 L8.31,59.52 L7.10,62.01 L5.74,64.50 L4.61,66.99 L4.00,69.49 L4.38,71.90 L5.74,73.87 L7.85,75.23 L10.35,75.91 L12.84,76.21 L15.33,76.51 L17.82,77.42 L20.02,79.00 L21.60,81.12 L22.51,83.61 L22.81,86.10 L22.96,88.60 L23.49,91.09 L24.62,93.35 L26.44,94.86 L28.63,95.47 L31.12,94.94 L33.61,93.88 L36.10,92.52 L38.60,91.39 L41.09,90.71 L43.58,91.01 L46.07,92.37 L48.41,94.41 L50.68,96.83 L52.95,98.87 L55.21,100.00 L57.70,100.00 L59.89,98.79 L61.63,96.83 L63.07,94.41 L64.20,91.92 L65.56,89.58 L67.30,87.76 L69.41,86.63 L71.83,86.33 L74.32,86.56 L76.81,87.01 L79.31,87.46 L81.80,87.54 L84.14,86.93 L85.95,85.57 L86.93,83.53 L87.08,81.12 L86.71,78.63 L86.10,76.13 L85.73,73.64 L85.88,71.15 L86.78,68.73 L88.60,66.77 L90.94,65.11 L93.43,63.90 L95.92,62.69 L98.11,61.18 L99.47,59.29 L99.85,57.02 L99.02,54.53 L97.28,52.19 L95.09,49.92 L92.82,47.66 L91.24,45.39 L90.63,42.90 L91.09,40.41 L92.15,37.92 L93.58,35.42 L94.79,32.93 L95.47,30.44 L95.39,28.02 L94.26,25.98 L92.45,24.62 L90.11,23.87 L87.61,23.49 L85.12,23.26 L82.63,22.66 L80.29,21.68 L78.47,20.09 L77.34,17.90 L76.66,15.48 L76.36,12.99 L75.98,10.50 L75.38,8.01 L74.24,5.97 L72.43,4.68 L70.17,4.31 L67.67,4.98 L65.18,6.12 L62.69,7.48 L60.20,8.61 L57.70,9.21 L55.21,8.84 L52.95,7.48 L50.68,5.44 L48.41,3.10 L46.07,1.13 L43.58,0.08 Z" fill="#4A3FD1"/><rect x="44.92447129909366" y="43" width="6.5" height="14" rx="3.25" fill="#15112E"/><rect x="58.42447129909366" y="43" width="6.5" height="14" rx="3.25" fill="#15112E"/></svg>
+      <div class="chip"><small>Juno · just now</small>Found it. Walmart has the 5 lb bag for $3.98.</div>
+      <div class="phone shot wide"><img src="hero.png" alt="Agent's home screen: what it's working on, what needs you, and your to-dos" width="3840" height="2160"></div>
+    </div>
+  </div>
+</header>
+
+<section class="watch" id="watch">
+  <svg class="peek" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M44.35,0.40 L41.74,0.79 L39.13,1.34 L36.52,1.90 L33.91,2.77 L31.30,3.72 L28.70,4.90 L26.09,6.25 L23.48,7.75 L20.87,9.57 L18.26,11.62 L15.65,13.99 L13.20,16.52 L10.99,19.13 L9.01,21.74 L7.43,24.35 L5.93,26.96 L4.66,29.57 L3.56,32.17 L2.61,34.78 L1.82,37.39 L1.19,40.00 L0.63,42.61 L0.32,45.22 L0.08,47.83 L0.00,50.43 L0.00,53.04 L0.00,55.65 L0.00,58.26 L0.00,60.87 L0.00,63.48 L0.00,66.09 L0.00,68.70 L0.00,71.30 L0.00,73.91 L0.00,76.52 L0.00,79.13 L0.24,81.74 L0.63,84.35 L1.42,86.96 L2.61,89.57 L4.27,92.02 L6.32,94.31 L8.70,96.21 L11.30,97.63 L13.91,98.81 L16.52,99.45 L19.13,99.84 L21.74,99.84 L24.35,99.45 L26.96,98.66 L29.57,97.55 L32.17,96.28 L34.78,95.02 L37.39,93.75 L40.00,92.65 L42.61,91.86 L45.22,91.23 L47.83,90.83 L50.43,90.75 L53.04,90.83 L55.65,91.23 L58.26,91.94 L60.87,92.73 L63.48,93.91 L66.09,95.18 L68.70,96.52 L71.30,97.87 L73.91,98.89 L76.52,99.53 L79.13,99.92 L81.74,99.84 L84.35,99.45 L86.96,98.66 L89.57,97.39 L92.02,95.73 L94.31,93.68 L96.21,91.30 L97.63,88.70 L98.74,86.09 L99.37,83.48 L99.76,80.87 L100.00,78.26 L100.00,75.65 L100.00,73.04 L100.00,70.43 L100.00,67.83 L100.00,65.22 L100.00,62.61 L100.00,60.00 L100.00,57.39 L100.00,54.78 L100.00,52.17 L100.00,49.57 L99.92,46.96 L99.68,44.35 L99.29,41.74 L98.74,39.13 L98.10,36.52 L97.31,33.91 L96.44,31.30 L95.26,28.70 L93.91,26.09 L92.25,23.48 L90.43,20.87 L88.38,18.26 L86.01,15.65 L83.48,13.20 L80.87,10.99 L78.26,9.01 L75.65,7.43 L73.04,5.93 L70.43,4.66 L67.83,3.56 L65.22,2.69 L62.61,1.90 L60.00,1.34 L57.39,0.79 L54.78,0.40 L52.17,0.16 L49.57,0.00 L46.96,0.16 Z" fill="#C3BBFF"/><rect x="35" y="42.9604743083004" width="6.5" height="14" rx="3.25" fill="#1C1466"/><rect x="48.5" y="42.9604743083004" width="6.5" height="14" rx="3.25" fill="#1C1466"/></svg>
+  <div class="wrap">
+    <div class="eyebrow" style="color:var(--light)">Real recording, sped up</div>
+    <h2>I asked for the cheapest bag of bread flour. It went and found it.</h2>
+    <p class="lead">Straight off a phone. It searched Walmart and Target by itself, compared the 5 lb bags and came back with prices and links to buy.</p>
+    <div class="vid"><img src="demo-flour.gif" alt="Agent searching Walmart and Target for the cheapest 5 lb bag of bread flour, sped up" loading="lazy"></div>
+    <div class="vidcap"><span><b>Walmart $3.98</b>, Target $3.99, both with links</span><span>Sped up 12x, running on DeepSeek V4.1 Flash</span></div>
+    <div class="grid2">
+      <div><h3>Everything on one screen.</h3><p>What it's working on, what needs you, and your to-dos. Open the app and you see where things stand.</p></div>
+      <div class="vid"><img src="hero.png" alt="Agent's home screen next to the app's name and tagline" width="3840" height="2160" loading="lazy"></div>
+    </div>
+  </div>
+</section>
+
+
+<section class="feature" style="background:#4A3FD1;color:#FBFAFF">
+  <div class="wrap">
+    <div class="text">
+      <div class="eyebrow" style="color:#E4E0FF">Bring your own model</div>
+      <h2 style="color:#FBFAFF">Sign in with the plan you already pay for.</h2>
+      <p class="lead" style="color:#E4E0FF">ChatGPT and Claude subscriptions run right on the phone. Or paste a key from DeepSeek, Gemini, OpenRouter, OpenCode, or point it at your own server.</p>
+    </div>
+    <div class="stage">
+      <svg class="peek" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M42.75,0.00 L40.41,0.68 L38.44,2.42 L36.93,4.68 L35.73,7.18 L34.52,9.59 L32.93,11.63 L30.97,12.99 L28.63,13.52 L26.13,13.37 L23.64,12.92 L21.15,12.46 L18.66,12.31 L16.31,12.69 L14.50,13.82 L13.37,15.63 L13.07,17.98 L13.22,20.47 L13.67,22.96 L14.12,25.45 L14.05,27.95 L13.29,30.36 L11.71,32.40 L9.52,34.06 L7.02,35.35 L4.53,36.40 L2.27,37.92 L0.68,39.80 L0.00,42.07 L0.68,44.56 L2.27,47.05 L4.53,49.55 L6.80,52.04 L8.31,54.53 L8.84,57.02 L8.31,59.52 L7.10,62.01 L5.74,64.50 L4.61,66.99 L4.00,69.49 L4.38,71.90 L5.74,73.87 L7.85,75.23 L10.35,75.91 L12.84,76.21 L15.33,76.51 L17.82,77.42 L20.02,79.00 L21.60,81.12 L22.51,83.61 L22.81,86.10 L22.96,88.60 L23.49,91.09 L24.62,93.35 L26.44,94.86 L28.63,95.47 L31.12,94.94 L33.61,93.88 L36.10,92.52 L38.60,91.39 L41.09,90.71 L43.58,91.01 L46.07,92.37 L48.41,94.41 L50.68,96.83 L52.95,98.87 L55.21,100.00 L57.70,100.00 L59.89,98.79 L61.63,96.83 L63.07,94.41 L64.20,91.92 L65.56,89.58 L67.30,87.76 L69.41,86.63 L71.83,86.33 L74.32,86.56 L76.81,87.01 L79.31,87.46 L81.80,87.54 L84.14,86.93 L85.95,85.57 L86.93,83.53 L87.08,81.12 L86.71,78.63 L86.10,76.13 L85.73,73.64 L85.88,71.15 L86.78,68.73 L88.60,66.77 L90.94,65.11 L93.43,63.90 L95.92,62.69 L98.11,61.18 L99.47,59.29 L99.85,57.02 L99.02,54.53 L97.28,52.19 L95.09,49.92 L92.82,47.66 L91.24,45.39 L90.63,42.90 L91.09,40.41 L92.15,37.92 L93.58,35.42 L94.79,32.93 L95.47,30.44 L95.39,28.02 L94.26,25.98 L92.45,24.62 L90.11,23.87 L87.61,23.49 L85.12,23.26 L82.63,22.66 L80.29,21.68 L78.47,20.09 L77.34,17.90 L76.66,15.48 L76.36,12.99 L75.98,10.50 L75.38,8.01 L74.24,5.97 L72.43,4.68 L70.17,4.31 L67.67,4.98 L65.18,6.12 L62.69,7.48 L60.20,8.61 L57.70,9.21 L55.21,8.84 L52.95,7.48 L50.68,5.44 L48.41,3.10 L46.07,1.13 L43.58,0.08 Z" fill="#E4E0FF"/><rect x="44.92447129909366" y="43" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/><rect x="58.42447129909366" y="43" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/></svg>
+      <div class="phone shot card"><img src="card-1-power.png" alt="" width="2160" height="2700" loading="lazy"></div>
+    </div>
+  </div>
+</section>
+<section class="feature flip" style="background:#FAF8F4;color:#1B1A1F">
+  <div class="wrap">
+    <div class="text">
+      <div class="eyebrow" style="color:#4A4852">Its own browser</div>
+      <h2 style="color:#1B1A1F">Ask it to find something. It goes and looks.</h2>
+      <p class="lead" style="color:#4A4852">It has a browser of its own that keeps working while you use other apps. Helpers split the job up, and anything that costs money waits for your yes.</p>
+    </div>
+    <div class="stage">
+      <svg class="peek" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M44.35,0.40 L41.74,0.79 L39.13,1.34 L36.52,1.90 L33.91,2.77 L31.30,3.72 L28.70,4.90 L26.09,6.25 L23.48,7.75 L20.87,9.57 L18.26,11.62 L15.65,13.99 L13.20,16.52 L10.99,19.13 L9.01,21.74 L7.43,24.35 L5.93,26.96 L4.66,29.57 L3.56,32.17 L2.61,34.78 L1.82,37.39 L1.19,40.00 L0.63,42.61 L0.32,45.22 L0.08,47.83 L0.00,50.43 L0.00,53.04 L0.00,55.65 L0.00,58.26 L0.00,60.87 L0.00,63.48 L0.00,66.09 L0.00,68.70 L0.00,71.30 L0.00,73.91 L0.00,76.52 L0.00,79.13 L0.24,81.74 L0.63,84.35 L1.42,86.96 L2.61,89.57 L4.27,92.02 L6.32,94.31 L8.70,96.21 L11.30,97.63 L13.91,98.81 L16.52,99.45 L19.13,99.84 L21.74,99.84 L24.35,99.45 L26.96,98.66 L29.57,97.55 L32.17,96.28 L34.78,95.02 L37.39,93.75 L40.00,92.65 L42.61,91.86 L45.22,91.23 L47.83,90.83 L50.43,90.75 L53.04,90.83 L55.65,91.23 L58.26,91.94 L60.87,92.73 L63.48,93.91 L66.09,95.18 L68.70,96.52 L71.30,97.87 L73.91,98.89 L76.52,99.53 L79.13,99.92 L81.74,99.84 L84.35,99.45 L86.96,98.66 L89.57,97.39 L92.02,95.73 L94.31,93.68 L96.21,91.30 L97.63,88.70 L98.74,86.09 L99.37,83.48 L99.76,80.87 L100.00,78.26 L100.00,75.65 L100.00,73.04 L100.00,70.43 L100.00,67.83 L100.00,65.22 L100.00,62.61 L100.00,60.00 L100.00,57.39 L100.00,54.78 L100.00,52.17 L100.00,49.57 L99.92,46.96 L99.68,44.35 L99.29,41.74 L98.74,39.13 L98.10,36.52 L97.31,33.91 L96.44,31.30 L95.26,28.70 L93.91,26.09 L92.25,23.48 L90.43,20.87 L88.38,18.26 L86.01,15.65 L83.48,13.20 L80.87,10.99 L78.26,9.01 L75.65,7.43 L73.04,5.93 L70.43,4.66 L67.83,3.56 L65.22,2.69 L62.61,1.90 L60.00,1.34 L57.39,0.79 L54.78,0.40 L52.17,0.16 L49.57,0.00 L46.96,0.16 Z" fill="#4A3FD1"/><rect x="35" y="42.9604743083004" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/><rect x="48.5" y="42.9604743083004" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/></svg>
+      <div class="phone shot card"><img src="card-2-browse.png" alt="" width="2160" height="2700" loading="lazy"></div>
+    </div>
+  </div>
+</section>
+<section class="feature" style="background:#1C1466;color:#E4E0FF">
+  <div class="wrap">
+    <div class="text">
+      <div class="eyebrow" style="color:#C3BBFF">Memory</div>
+      <h2 style="color:#E4E0FF">Tell it about your mom once. It remembers.</h2>
+      <p class="lead" style="color:#C3BBFF">Everyone and everything it learns about gets a page in a wiki on your phone, linked to the rest. You can read and change every word.</p>
+    </div>
+    <div class="stage">
+      <svg class="peek" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M18.66,0.31 L16.08,0.86 L13.51,1.80 L10.93,2.97 L8.35,4.68 L6.01,6.87 L3.98,9.29 L2.34,11.87 L1.17,14.44 L0.39,17.02 L0.00,19.59 L0.00,22.17 L0.39,24.75 L1.01,27.32 L1.95,29.90 L3.20,32.47 L4.84,35.05 L6.71,37.63 L8.82,40.20 L11.01,42.78 L13.11,45.36 L15.38,47.93 L17.49,50.51 L19.75,53.08 L21.86,55.66 L24.04,58.24 L26.15,60.81 L28.34,63.39 L30.44,65.96 L32.71,68.54 L34.82,71.12 L37.08,73.69 L39.19,76.27 L41.37,78.84 L43.48,81.42 L45.67,84.00 L47.70,86.26 L49.65,87.20 L51.68,86.73 L53.63,84.86 L55.89,82.28 L58.00,79.70 L60.27,77.13 L62.37,74.55 L64.56,71.98 L66.67,69.40 L68.85,66.82 L70.96,64.25 L73.15,61.67 L75.33,59.09 L77.52,56.52 L79.70,53.94 L81.81,51.37 L84.00,48.79 L86.10,46.21 L88.29,43.64 L90.40,41.06 L92.58,38.49 L94.61,35.91 L96.41,33.33 L97.81,30.76 L98.91,28.18 L99.61,25.60 L100.00,23.03 L100.00,20.45 L99.61,17.88 L98.91,15.30 L97.89,12.72 L96.49,10.15 L94.69,7.57 L92.43,5.31 L89.93,3.36 L87.35,1.95 L84.78,0.94 L82.20,0.31 L79.63,0.00 L77.05,0.08 L74.47,0.55 L71.90,1.33 L69.32,2.50 L66.74,4.06 L64.17,6.09 L61.75,8.43 L59.41,11.01 L57.06,13.58 L54.96,16.16 L52.62,18.42 L50.27,19.36 L48.09,18.89 L45.75,17.02 L43.48,14.44 L41.30,11.87 L38.95,9.29 L36.61,6.79 L34.11,4.61 L31.54,2.81 L28.96,1.48 L26.39,0.62 L23.81,0.08 L21.23,0.00 Z" fill="#C3BBFF"/><rect x="45" y="36.59875097580015" width="6.5" height="14" rx="3.25" fill="#1C1466"/><rect x="58.5" y="36.59875097580015" width="6.5" height="14" rx="3.25" fill="#1C1466"/></svg>
+      <div class="phone shot card"><img src="card-3-memory.png" alt="" width="2160" height="2700" loading="lazy"></div>
+    </div>
+  </div>
+</section>
+<section class="feature flip" style="background:#E4E0FF;color:#1C1466">
+  <div class="wrap">
+    <div class="text">
+      <div class="eyebrow" style="color:#3A2FB0">Routines</div>
+      <h2 style="color:#1C1466">Set it once. It runs every day.</h2>
+      <p class="lead" style="color:#3A2FB0">It can brief you every morning or keep an eye on a price for weeks. It runs on a clock or when a notification comes in, and only bothers you when something actually changed.</p>
+    </div>
+    <div class="stage">
+      <svg class="peek" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M23.01,0.56 L20.35,1.21 L17.70,2.25 L15.04,3.62 L12.39,5.31 L9.81,7.40 L7.48,9.81 L5.47,12.39 L3.86,15.04 L2.49,17.70 L1.45,20.35 L0.64,23.01 L0.24,25.66 L0.00,28.32 L0.00,30.97 L0.16,33.63 L0.48,36.28 L1.13,38.94 L2.17,41.59 L3.46,44.25 L4.91,46.90 L5.47,49.56 L5.23,52.21 L4.18,54.87 L2.82,57.52 L1.69,60.18 L0.88,62.83 L0.32,65.49 L0.08,68.14 L0.00,70.80 L0.08,73.45 L0.40,76.11 L0.97,78.76 L1.85,81.42 L3.14,84.07 L4.67,86.73 L6.68,89.38 L9.01,91.79 L11.50,93.89 L14.16,95.66 L16.81,97.10 L19.47,98.23 L22.12,99.12 L24.78,99.68 L27.43,99.92 L30.09,100.00 L32.74,99.92 L35.40,99.68 L38.05,99.12 L40.71,98.23 L43.36,97.02 L46.02,95.49 L48.67,94.61 L51.33,94.53 L53.98,95.33 L56.64,96.78 L59.29,97.91 L61.95,98.87 L64.60,99.52 L67.26,99.84 L69.91,100.00 L72.57,100.00 L75.22,99.76 L77.88,99.28 L80.53,98.47 L83.19,97.35 L85.84,95.90 L88.50,94.05 L90.99,91.79 L93.24,89.38 L95.09,86.73 L96.62,84.07 L97.83,81.42 L98.87,78.76 L99.52,76.11 L99.84,73.45 L100.00,70.80 L100.00,68.14 L99.76,65.49 L99.36,62.83 L98.55,60.18 L97.43,57.52 L95.98,54.87 L94.85,52.21 L94.45,49.56 L95.01,46.90 L96.30,44.25 L97.59,41.59 L98.63,38.94 L99.36,36.28 L99.76,33.63 L100.00,30.97 L100.00,28.32 L99.84,25.66 L99.44,23.01 L98.79,20.35 L97.75,17.70 L96.38,15.04 L94.69,12.39 L92.60,9.81 L90.19,7.48 L87.61,5.47 L84.96,3.86 L82.30,2.49 L79.65,1.45 L76.99,0.64 L74.34,0.24 L71.68,0.00 L69.03,0.00 L66.37,0.16 L63.72,0.48 L61.06,1.13 L58.41,2.17 L55.75,3.46 L53.10,4.91 L50.44,5.47 L47.79,5.23 L45.13,4.18 L42.48,2.82 L39.82,1.69 L37.17,0.88 L34.51,0.32 L31.86,0.08 L29.20,0.00 L26.55,0.08 L23.89,0.40 Z" fill="#4A3FD1"/><rect x="35" y="43" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/><rect x="48.5" y="43" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/></svg>
+      <div class="phone shot card"><img src="card-4-routines.png" alt="" width="2160" height="2700" loading="lazy"></div>
+    </div>
+  </div>
+</section>
+
+<section class="looks">
+  <div class="wrap">
+    <div class="eyebrow" style="color:var(--iris)">Make it yours</div>
+    <h2>Choose how it looks.</h2>
+    <p class="lead">Give it a name and a face. The whole app takes its colour, right down to the icon on your home screen.</p>
+    <div class="mgrid"><svg class="" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M42.75,0.00 L40.41,0.68 L38.44,2.42 L36.93,4.68 L35.73,7.18 L34.52,9.59 L32.93,11.63 L30.97,12.99 L28.63,13.52 L26.13,13.37 L23.64,12.92 L21.15,12.46 L18.66,12.31 L16.31,12.69 L14.50,13.82 L13.37,15.63 L13.07,17.98 L13.22,20.47 L13.67,22.96 L14.12,25.45 L14.05,27.95 L13.29,30.36 L11.71,32.40 L9.52,34.06 L7.02,35.35 L4.53,36.40 L2.27,37.92 L0.68,39.80 L0.00,42.07 L0.68,44.56 L2.27,47.05 L4.53,49.55 L6.80,52.04 L8.31,54.53 L8.84,57.02 L8.31,59.52 L7.10,62.01 L5.74,64.50 L4.61,66.99 L4.00,69.49 L4.38,71.90 L5.74,73.87 L7.85,75.23 L10.35,75.91 L12.84,76.21 L15.33,76.51 L17.82,77.42 L20.02,79.00 L21.60,81.12 L22.51,83.61 L22.81,86.10 L22.96,88.60 L23.49,91.09 L24.62,93.35 L26.44,94.86 L28.63,95.47 L31.12,94.94 L33.61,93.88 L36.10,92.52 L38.60,91.39 L41.09,90.71 L43.58,91.01 L46.07,92.37 L48.41,94.41 L50.68,96.83 L52.95,98.87 L55.21,100.00 L57.70,100.00 L59.89,98.79 L61.63,96.83 L63.07,94.41 L64.20,91.92 L65.56,89.58 L67.30,87.76 L69.41,86.63 L71.83,86.33 L74.32,86.56 L76.81,87.01 L79.31,87.46 L81.80,87.54 L84.14,86.93 L85.95,85.57 L86.93,83.53 L87.08,81.12 L86.71,78.63 L86.10,76.13 L85.73,73.64 L85.88,71.15 L86.78,68.73 L88.60,66.77 L90.94,65.11 L93.43,63.90 L95.92,62.69 L98.11,61.18 L99.47,59.29 L99.85,57.02 L99.02,54.53 L97.28,52.19 L95.09,49.92 L92.82,47.66 L91.24,45.39 L90.63,42.90 L91.09,40.41 L92.15,37.92 L93.58,35.42 L94.79,32.93 L95.47,30.44 L95.39,28.02 L94.26,25.98 L92.45,24.62 L90.11,23.87 L87.61,23.49 L85.12,23.26 L82.63,22.66 L80.29,21.68 L78.47,20.09 L77.34,17.90 L76.66,15.48 L76.36,12.99 L75.98,10.50 L75.38,8.01 L74.24,5.97 L72.43,4.68 L70.17,4.31 L67.67,4.98 L65.18,6.12 L62.69,7.48 L60.20,8.61 L57.70,9.21 L55.21,8.84 L52.95,7.48 L50.68,5.44 L48.41,3.10 L46.07,1.13 L43.58,0.08 Z" fill="#4A3FD1"/><rect x="36.92447129909366" y="43" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/><rect x="50.42447129909366" y="43" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/></svg><svg class="" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M44.35,0.40 L41.74,0.79 L39.13,1.34 L36.52,1.90 L33.91,2.77 L31.30,3.72 L28.70,4.90 L26.09,6.25 L23.48,7.75 L20.87,9.57 L18.26,11.62 L15.65,13.99 L13.20,16.52 L10.99,19.13 L9.01,21.74 L7.43,24.35 L5.93,26.96 L4.66,29.57 L3.56,32.17 L2.61,34.78 L1.82,37.39 L1.19,40.00 L0.63,42.61 L0.32,45.22 L0.08,47.83 L0.00,50.43 L0.00,53.04 L0.00,55.65 L0.00,58.26 L0.00,60.87 L0.00,63.48 L0.00,66.09 L0.00,68.70 L0.00,71.30 L0.00,73.91 L0.00,76.52 L0.00,79.13 L0.24,81.74 L0.63,84.35 L1.42,86.96 L2.61,89.57 L4.27,92.02 L6.32,94.31 L8.70,96.21 L11.30,97.63 L13.91,98.81 L16.52,99.45 L19.13,99.84 L21.74,99.84 L24.35,99.45 L26.96,98.66 L29.57,97.55 L32.17,96.28 L34.78,95.02 L37.39,93.75 L40.00,92.65 L42.61,91.86 L45.22,91.23 L47.83,90.83 L50.43,90.75 L53.04,90.83 L55.65,91.23 L58.26,91.94 L60.87,92.73 L63.48,93.91 L66.09,95.18 L68.70,96.52 L71.30,97.87 L73.91,98.89 L76.52,99.53 L79.13,99.92 L81.74,99.84 L84.35,99.45 L86.96,98.66 L89.57,97.39 L92.02,95.73 L94.31,93.68 L96.21,91.30 L97.63,88.70 L98.74,86.09 L99.37,83.48 L99.76,80.87 L100.00,78.26 L100.00,75.65 L100.00,73.04 L100.00,70.43 L100.00,67.83 L100.00,65.22 L100.00,62.61 L100.00,60.00 L100.00,57.39 L100.00,54.78 L100.00,52.17 L100.00,49.57 L99.92,46.96 L99.68,44.35 L99.29,41.74 L98.74,39.13 L98.10,36.52 L97.31,33.91 L96.44,31.30 L95.26,28.70 L93.91,26.09 L92.25,23.48 L90.43,20.87 L88.38,18.26 L86.01,15.65 L83.48,13.20 L80.87,10.99 L78.26,9.01 L75.65,7.43 L73.04,5.93 L70.43,4.66 L67.83,3.56 L65.22,2.69 L62.61,1.90 L60.00,1.34 L57.39,0.79 L54.78,0.40 L52.17,0.16 L49.57,0.00 L46.96,0.16 Z" fill="#E1732D"/><rect x="40" y="42.9604743083004" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/><rect x="53.5" y="42.9604743083004" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/></svg><svg class="" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M23.01,0.56 L20.35,1.21 L17.70,2.25 L15.04,3.62 L12.39,5.31 L9.81,7.40 L7.48,9.81 L5.47,12.39 L3.86,15.04 L2.49,17.70 L1.45,20.35 L0.64,23.01 L0.24,25.66 L0.00,28.32 L0.00,30.97 L0.16,33.63 L0.48,36.28 L1.13,38.94 L2.17,41.59 L3.46,44.25 L4.91,46.90 L5.47,49.56 L5.23,52.21 L4.18,54.87 L2.82,57.52 L1.69,60.18 L0.88,62.83 L0.32,65.49 L0.08,68.14 L0.00,70.80 L0.08,73.45 L0.40,76.11 L0.97,78.76 L1.85,81.42 L3.14,84.07 L4.67,86.73 L6.68,89.38 L9.01,91.79 L11.50,93.89 L14.16,95.66 L16.81,97.10 L19.47,98.23 L22.12,99.12 L24.78,99.68 L27.43,99.92 L30.09,100.00 L32.74,99.92 L35.40,99.68 L38.05,99.12 L40.71,98.23 L43.36,97.02 L46.02,95.49 L48.67,94.61 L51.33,94.53 L53.98,95.33 L56.64,96.78 L59.29,97.91 L61.95,98.87 L64.60,99.52 L67.26,99.84 L69.91,100.00 L72.57,100.00 L75.22,99.76 L77.88,99.28 L80.53,98.47 L83.19,97.35 L85.84,95.90 L88.50,94.05 L90.99,91.79 L93.24,89.38 L95.09,86.73 L96.62,84.07 L97.83,81.42 L98.87,78.76 L99.52,76.11 L99.84,73.45 L100.00,70.80 L100.00,68.14 L99.76,65.49 L99.36,62.83 L98.55,60.18 L97.43,57.52 L95.98,54.87 L94.85,52.21 L94.45,49.56 L95.01,46.90 L96.30,44.25 L97.59,41.59 L98.63,38.94 L99.36,36.28 L99.76,33.63 L100.00,30.97 L100.00,28.32 L99.84,25.66 L99.44,23.01 L98.79,20.35 L97.75,17.70 L96.38,15.04 L94.69,12.39 L92.60,9.81 L90.19,7.48 L87.61,5.47 L84.96,3.86 L82.30,2.49 L79.65,1.45 L76.99,0.64 L74.34,0.24 L71.68,0.00 L69.03,0.00 L66.37,0.16 L63.72,0.48 L61.06,1.13 L58.41,2.17 L55.75,3.46 L53.10,4.91 L50.44,5.47 L47.79,5.23 L45.13,4.18 L42.48,2.82 L39.82,1.69 L37.17,0.88 L34.51,0.32 L31.86,0.08 L29.20,0.00 L26.55,0.08 L23.89,0.40 Z" fill="#4DAA87"/><rect x="43" y="43" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/><rect x="56.5" y="43" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/></svg><svg class="" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M47.90,0.46 L45.46,1.98 L43.33,4.27 L41.57,6.79 L40.27,9.31 L39.28,11.82 L38.29,14.34 L36.92,16.09 L35.09,16.86 L32.80,16.55 L30.28,15.48 L27.77,14.34 L25.25,13.50 L22.73,12.97 L20.21,12.66 L17.77,12.97 L15.56,13.88 L13.96,15.48 L13.04,17.70 L12.66,20.21 L12.89,22.73 L13.35,25.25 L14.11,27.77 L15.10,30.28 L16.17,32.80 L16.55,35.09 L15.94,36.92 L14.26,38.29 L11.82,39.28 L9.31,40.27 L6.79,41.57 L4.27,43.33 L2.06,45.46 L0.46,47.90 L0.00,50.42 L0.84,52.94 L2.67,55.30 L5.11,57.28 L7.63,58.89 L10.14,60.03 L12.66,61.02 L15.03,62.09 L16.48,63.62 L16.86,65.60 L16.25,68.04 L15.03,70.56 L14.04,73.07 L13.27,75.59 L12.89,78.11 L12.74,80.63 L13.20,82.99 L14.34,85.05 L16.17,86.42 L18.54,87.11 L21.05,87.34 L23.57,87.03 L26.09,86.50 L28.60,85.66 L31.12,84.52 L33.64,83.60 L35.77,83.52 L37.45,84.52 L38.67,86.50 L39.59,89.02 L40.66,91.53 L42.11,94.05 L44.01,96.49 L46.22,98.55 L48.74,99.85 L51.26,99.85 L53.78,98.63 L55.99,96.57 L57.89,94.05 L59.34,91.53 L60.41,89.02 L61.33,86.50 L62.55,84.36 L64.23,83.30 L66.36,83.22 L68.88,84.21 L71.40,85.28 L73.91,86.27 L76.43,86.88 L78.95,87.19 L81.46,87.19 L83.75,86.50 L85.58,85.13 L86.73,83.07 L87.26,80.63 L87.26,78.11 L86.88,75.59 L86.27,73.07 L85.28,70.56 L84.13,68.04 L83.45,65.60 L83.75,63.62 L85.05,62.09 L87.34,61.02 L89.86,60.03 L92.37,58.89 L94.89,57.28 L97.25,55.30 L99.08,52.94 L100.00,50.42 L99.54,47.90 L98.02,45.46 L95.73,43.33 L93.21,41.57 L90.69,40.27 L88.18,39.28 L85.66,38.29 L83.91,36.92 L83.14,35.09 L83.45,32.80 L84.52,30.28 L85.66,27.77 L86.50,25.25 L87.03,22.73 L87.34,20.21 L87.03,17.77 L86.12,15.56 L84.52,13.96 L82.30,13.04 L79.79,12.66 L77.27,12.89 L74.75,13.35 L72.23,14.11 L69.72,15.10 L67.20,16.17 L64.91,16.55 L63.08,15.94 L61.71,14.26 L60.72,11.82 L59.73,9.31 L58.43,6.79 L56.67,4.27 L54.54,2.06 L52.10,0.46 L49.58,0.00 Z" fill="#C9302C"/><rect x="37" y="42.92372234935164" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/><rect x="50.5" y="42.92372234935164" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/></svg><svg class="" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M37.09,0.45 L34.60,1.36 L32.25,2.95 L30.36,5.00 L28.92,7.42 L27.55,9.01 L25.89,9.54 L23.77,9.31 L21.27,8.55 L18.77,8.40 L16.28,8.93 L13.78,10.07 L11.58,11.88 L9.84,14.08 L8.71,16.58 L8.40,19.08 L8.71,21.57 L9.69,24.07 L10.07,26.12 L9.54,27.71 L7.95,28.92 L5.45,30.13 L3.26,31.87 L1.51,34.07 L0.38,36.56 L0.00,39.06 L0.15,41.56 L1.06,44.06 L2.65,46.48 L4.69,48.37 L7.12,49.81 L8.93,51.17 L9.61,52.76 L9.39,54.88 L8.55,57.38 L8.40,59.88 L8.78,62.38 L9.92,64.88 L11.66,67.22 L13.78,69.04 L16.28,70.17 L18.77,70.55 L21.27,70.25 L23.77,69.49 L25.97,69.27 L27.71,69.87 L29.14,71.54 L30.58,73.96 L32.40,76.08 L34.60,77.67 L37.09,78.58 L39.59,78.88 L42.09,78.58 L44.51,77.67 L46.78,76.15 L48.98,75.17 L51.02,75.17 L53.22,76.15 L55.49,77.67 L57.91,78.58 L60.41,78.88 L62.91,78.58 L65.40,77.67 L67.75,76.08 L69.64,73.96 L71.08,71.54 L72.45,69.95 L74.11,69.42 L76.23,69.64 L78.73,70.40 L81.23,70.55 L83.72,70.02 L86.22,68.89 L88.42,67.07 L90.23,64.88 L91.37,62.38 L91.67,59.88 L91.29,57.38 L90.31,54.88 L89.93,52.84 L90.46,51.25 L92.05,50.04 L94.55,48.83 L96.74,47.09 L98.49,44.89 L99.62,42.39 L100.00,39.89 L99.85,37.40 L98.94,34.90 L97.35,32.55 L95.31,30.73 L92.88,29.30 L91.07,27.93 L90.39,26.27 L90.61,24.07 L91.45,21.57 L91.67,19.08 L91.29,16.58 L90.16,14.08 L88.42,11.73 L86.22,9.92 L83.72,8.78 L81.23,8.40 L78.73,8.71 L76.23,9.46 L74.03,9.69 L72.29,9.08 L70.86,7.42 L69.42,4.92 L67.60,2.73 L65.40,1.14 L62.91,0.23 L60.41,0.00 L57.91,0.38 L55.49,1.29 L53.22,2.80 L51.02,3.79 L48.98,3.79 L46.78,2.80 L44.51,1.29 L42.09,0.38 L39.59,0.15 Z" fill="#EBC24A"/><rect x="40" y="32.439818319454965" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/><rect x="53.5" y="32.439818319454965" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/></svg><svg class="" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M45.58,0.23 L43.09,0.75 L40.60,1.66 L38.11,2.79 L35.62,4.30 L33.13,6.04 L30.64,7.85 L28.15,9.58 L25.66,11.40 L23.17,13.21 L20.68,14.94 L18.19,16.75 L15.70,18.64 L13.21,20.75 L10.87,23.02 L8.75,25.51 L7.09,28.00 L5.96,30.49 L5.06,32.98 L4.53,35.47 L4.00,37.96 L3.62,40.45 L3.25,42.94 L2.87,45.43 L2.57,47.92 L2.11,50.42 L1.89,52.91 L1.43,55.40 L1.13,57.89 L0.75,60.38 L0.38,62.87 L0.15,65.36 L0.00,67.85 L0.30,70.34 L0.83,72.83 L1.81,75.32 L3.25,77.81 L5.13,80.30 L7.40,82.49 L9.89,84.38 L12.38,85.89 L14.87,87.02 L17.36,88.15 L19.85,89.28 L22.34,90.49 L24.83,91.62 L27.32,92.75 L29.81,93.89 L32.30,95.02 L34.79,96.15 L37.28,97.21 L39.77,98.19 L42.26,99.02 L44.75,99.62 L47.25,100.00 L49.74,100.00 L52.23,99.70 L54.72,99.09 L57.21,98.34 L59.70,97.36 L62.19,96.30 L64.68,95.25 L67.17,94.11 L69.66,92.98 L72.15,91.85 L74.64,90.72 L77.13,89.58 L79.62,88.45 L82.11,87.32 L84.60,86.04 L87.09,84.53 L89.58,82.57 L91.77,80.30 L93.66,77.81 L95.02,75.32 L96.00,72.83 L96.60,70.34 L96.91,67.85 L96.91,65.36 L96.68,62.87 L96.38,60.38 L95.92,57.89 L95.70,55.40 L95.25,52.91 L94.94,50.42 L94.57,47.92 L94.19,45.43 L93.89,42.94 L93.43,40.45 L93.13,37.96 L92.68,35.47 L92.08,32.98 L91.25,30.49 L90.11,28.00 L88.60,25.51 L86.72,23.25 L84.53,21.13 L82.11,19.25 L79.62,17.43 L77.13,15.70 L74.64,13.89 L72.15,12.08 L69.66,10.26 L67.17,8.45 L64.68,6.64 L62.19,4.98 L59.70,3.47 L57.21,2.11 L54.72,1.13 L52.23,0.38 L49.74,0.00 L47.25,0.00 Z" fill="#2C6E6A"/><rect x="41.45283018867924" y="43" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/><rect x="54.95283018867924" y="43" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/></svg><svg class="" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M53.74,0.15 L51.25,0.45 L48.75,0.91 L46.26,1.36 L43.77,2.11 L41.28,3.02 L38.79,4.15 L36.30,5.51 L33.81,7.02 L31.32,8.75 L28.83,10.79 L26.34,13.06 L23.85,15.55 L21.36,18.04 L18.87,20.53 L16.38,23.02 L13.89,25.51 L11.55,28.00 L9.43,30.49 L7.55,32.98 L6.04,35.47 L4.75,37.96 L3.62,40.45 L2.64,42.94 L1.81,45.43 L1.21,47.92 L0.75,50.42 L0.30,52.91 L0.08,55.40 L0.00,57.89 L0.15,60.38 L0.53,62.87 L0.98,65.36 L1.51,67.85 L2.26,70.34 L3.09,72.83 L4.23,75.32 L5.51,77.81 L7.02,80.30 L8.75,82.79 L10.79,85.28 L13.06,87.70 L15.55,89.89 L18.04,91.77 L20.53,93.43 L23.02,94.79 L25.51,96.00 L28.00,97.06 L30.49,97.81 L32.98,98.57 L35.47,99.02 L37.96,99.47 L40.45,99.85 L42.94,100.00 L45.43,99.92 L47.92,99.70 L50.42,99.25 L52.91,98.79 L55.40,98.19 L57.89,97.28 L60.38,96.23 L62.87,94.94 L65.36,93.58 L67.85,91.92 L70.34,89.96 L72.83,87.77 L75.32,85.28 L77.81,82.79 L80.30,80.30 L82.79,77.81 L85.28,75.32 L87.70,72.83 L89.89,70.34 L91.85,67.85 L93.51,65.36 L94.87,62.87 L96.08,60.38 L97.06,57.89 L97.89,55.40 L98.64,52.91 L99.09,50.42 L99.55,47.92 L99.85,45.43 L100.00,42.94 L99.92,40.45 L99.62,37.96 L99.17,35.47 L98.72,32.98 L98.04,30.49 L97.21,28.00 L96.15,25.51 L94.94,23.02 L93.51,20.53 L91.85,18.04 L89.89,15.55 L87.70,13.06 L85.28,10.79 L82.79,8.83 L80.30,7.09 L77.81,5.66 L75.32,4.38 L72.83,3.25 L70.34,2.42 L67.85,1.66 L65.36,1.13 L62.87,0.68 L60.38,0.23 L57.89,0.00 L55.40,0.00 Z" fill="#3D8FDC"/><rect x="37" y="42.99999999999999" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/><rect x="50.5" y="42.99999999999999" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/></svg><svg class="" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M18.66,0.31 L16.08,0.86 L13.51,1.80 L10.93,2.97 L8.35,4.68 L6.01,6.87 L3.98,9.29 L2.34,11.87 L1.17,14.44 L0.39,17.02 L0.00,19.59 L0.00,22.17 L0.39,24.75 L1.01,27.32 L1.95,29.90 L3.20,32.47 L4.84,35.05 L6.71,37.63 L8.82,40.20 L11.01,42.78 L13.11,45.36 L15.38,47.93 L17.49,50.51 L19.75,53.08 L21.86,55.66 L24.04,58.24 L26.15,60.81 L28.34,63.39 L30.44,65.96 L32.71,68.54 L34.82,71.12 L37.08,73.69 L39.19,76.27 L41.37,78.84 L43.48,81.42 L45.67,84.00 L47.70,86.26 L49.65,87.20 L51.68,86.73 L53.63,84.86 L55.89,82.28 L58.00,79.70 L60.27,77.13 L62.37,74.55 L64.56,71.98 L66.67,69.40 L68.85,66.82 L70.96,64.25 L73.15,61.67 L75.33,59.09 L77.52,56.52 L79.70,53.94 L81.81,51.37 L84.00,48.79 L86.10,46.21 L88.29,43.64 L90.40,41.06 L92.58,38.49 L94.61,35.91 L96.41,33.33 L97.81,30.76 L98.91,28.18 L99.61,25.60 L100.00,23.03 L100.00,20.45 L99.61,17.88 L98.91,15.30 L97.89,12.72 L96.49,10.15 L94.69,7.57 L92.43,5.31 L89.93,3.36 L87.35,1.95 L84.78,0.94 L82.20,0.31 L79.63,0.00 L77.05,0.08 L74.47,0.55 L71.90,1.33 L69.32,2.50 L66.74,4.06 L64.17,6.09 L61.75,8.43 L59.41,11.01 L57.06,13.58 L54.96,16.16 L52.62,18.42 L50.27,19.36 L48.09,18.89 L45.75,17.02 L43.48,14.44 L41.30,11.87 L38.95,9.29 L36.61,6.79 L34.11,4.61 L31.54,2.81 L28.96,1.48 L26.39,0.62 L23.81,0.08 L21.23,0.00 Z" fill="#A3335A"/><rect x="40" y="36.59875097580015" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/><rect x="53.5" y="36.59875097580015" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/></svg><svg class="" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M22.16,0.38 L19.68,0.83 L17.21,1.58 L14.73,2.48 L12.25,3.76 L9.77,5.48 L7.44,7.59 L5.41,9.92 L3.76,12.40 L2.48,14.88 L1.50,17.36 L0.75,19.83 L0.23,22.31 L0.00,24.79 L0.08,27.27 L0.45,29.75 L1.05,32.23 L1.95,34.71 L3.16,37.19 L4.73,39.67 L6.69,42.07 L8.94,44.25 L11.42,46.06 L13.90,47.48 L15.48,48.91 L15.70,50.26 L14.58,51.77 L12.25,53.34 L9.77,55.07 L7.44,57.18 L5.41,59.50 L3.68,61.98 L2.48,64.46 L1.50,66.94 L0.75,69.42 L0.30,71.90 L0.00,74.38 L0.08,76.86 L0.45,79.34 L1.05,81.82 L1.95,84.30 L3.16,86.78 L4.73,89.26 L6.69,91.59 L8.94,93.69 L11.42,95.49 L13.90,96.84 L16.38,97.97 L18.86,98.80 L21.34,99.32 L23.82,99.70 L26.30,99.92 L28.78,100.00 L31.25,100.00 L33.73,100.00 L36.21,100.00 L38.69,100.00 L41.17,100.00 L43.65,100.00 L46.13,100.00 L48.61,100.00 L51.09,100.00 L53.57,100.00 L56.05,100.00 L58.53,100.00 L61.01,100.00 L63.49,100.00 L65.97,100.00 L68.44,100.00 L70.92,99.92 L73.40,99.70 L75.88,99.32 L78.36,98.72 L80.84,97.90 L83.32,96.69 L85.80,95.12 L88.20,93.16 L90.31,90.91 L92.11,88.43 L93.54,85.95 L94.59,83.47 L95.42,80.99 L96.02,78.51 L96.32,76.03 L96.39,73.55 L96.09,71.07 L95.57,68.60 L94.74,66.12 L93.69,63.64 L92.26,61.16 L90.38,58.68 L88.20,56.42 L85.80,54.47 L83.32,52.97 L81.29,51.54 L80.62,50.19 L81.29,48.76 L83.32,47.18 L85.80,45.53 L88.20,43.58 L90.31,41.32 L92.19,38.84 L93.54,36.36 L94.59,33.88 L95.42,31.40 L95.94,28.93 L96.32,26.45 L96.39,23.97 L96.09,21.49 L95.57,19.01 L94.74,16.53 L93.69,14.05 L92.26,11.57 L90.38,9.17 L88.20,6.99 L85.80,5.11 L83.32,3.61 L80.84,2.40 L78.36,1.50 L75.88,0.75 L73.40,0.30 L70.92,0.08 L68.44,0.00 L65.97,0.00 L63.49,0.00 L61.01,0.00 L58.53,0.00 L56.05,0.00 L53.57,0.00 L51.09,0.00 L48.61,0.00 L46.13,0.00 L43.65,0.00 L41.17,0.00 L38.69,0.00 L36.21,0.00 L33.73,0.00 L31.25,0.00 L28.78,0.00 L26.30,0.00 L23.82,0.23 Z" fill="#7C3AED"/><rect x="41.19684447783621" y="43" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/><rect x="54.69684447783621" y="43" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/></svg></div>
+  </div>
+</section>
+
+<section class="get" id="get">
+  <svg class="peek" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M53.74,0.15 L51.25,0.45 L48.75,0.91 L46.26,1.36 L43.77,2.11 L41.28,3.02 L38.79,4.15 L36.30,5.51 L33.81,7.02 L31.32,8.75 L28.83,10.79 L26.34,13.06 L23.85,15.55 L21.36,18.04 L18.87,20.53 L16.38,23.02 L13.89,25.51 L11.55,28.00 L9.43,30.49 L7.55,32.98 L6.04,35.47 L4.75,37.96 L3.62,40.45 L2.64,42.94 L1.81,45.43 L1.21,47.92 L0.75,50.42 L0.30,52.91 L0.08,55.40 L0.00,57.89 L0.15,60.38 L0.53,62.87 L0.98,65.36 L1.51,67.85 L2.26,70.34 L3.09,72.83 L4.23,75.32 L5.51,77.81 L7.02,80.30 L8.75,82.79 L10.79,85.28 L13.06,87.70 L15.55,89.89 L18.04,91.77 L20.53,93.43 L23.02,94.79 L25.51,96.00 L28.00,97.06 L30.49,97.81 L32.98,98.57 L35.47,99.02 L37.96,99.47 L40.45,99.85 L42.94,100.00 L45.43,99.92 L47.92,99.70 L50.42,99.25 L52.91,98.79 L55.40,98.19 L57.89,97.28 L60.38,96.23 L62.87,94.94 L65.36,93.58 L67.85,91.92 L70.34,89.96 L72.83,87.77 L75.32,85.28 L77.81,82.79 L80.30,80.30 L82.79,77.81 L85.28,75.32 L87.70,72.83 L89.89,70.34 L91.85,67.85 L93.51,65.36 L94.87,62.87 L96.08,60.38 L97.06,57.89 L97.89,55.40 L98.64,52.91 L99.09,50.42 L99.55,47.92 L99.85,45.43 L100.00,42.94 L99.92,40.45 L99.62,37.96 L99.17,35.47 L98.72,32.98 L98.04,30.49 L97.21,28.00 L96.15,25.51 L94.94,23.02 L93.51,20.53 L91.85,18.04 L89.89,15.55 L87.70,13.06 L85.28,10.79 L82.79,8.83 L80.30,7.09 L77.81,5.66 L75.32,4.38 L72.83,3.25 L70.34,2.42 L67.85,1.66 L65.36,1.13 L62.87,0.68 L60.38,0.23 L57.89,0.00 L55.40,0.00 Z" fill="#E4E0FF"/><rect x="35" y="42.99999999999999" width="6.5" height="14" rx="3.25" fill="#1C1466"/><rect x="48.5" y="42.99999999999999" width="6.5" height="14" rx="3.25" fill="#1C1466"/></svg>
+  <div class="wrap">
+    <div class="eyebrow" style="color:var(--light)">Free and open source</div>
+    <h2>Put it on your phone.</h2>
+    <p class="lead">No account and no server of ours. Nothing leaves the phone except calls to the model you choose.</p>
+    <div class="ctas">
+      <a class="pill solid" href="https://github.com/Past-da-king/agent/releases/download/v0.9.1/Agent-0.9.1.apk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12m0 0-5-5m5 5 5-5M5 20h14"/></svg>Download the APK</a>
+      <a class="pill ghost" href="https://github.com/Past-da-king/agent">Read the code</a>
+    </div>
+    <p class="ver">This build is version 0.9.1 (about 215 MB).</p>
+    <div class="steps">
+      <div class="step"><b>Install</b><span>Android 10 or newer. Allow the install from your browser when it asks.</span></div>
+      <div class="step"><b>Name it</b><span>Give your agent a name and pick how it looks.</span></div>
+      <div class="step"><b>Power it</b><span>Sign in with ChatGPT or Claude, or paste an API key.</span></div>
+    </div>
+    <footer>
+      <span>Use it at your own risk. It's an agent with a browser and it will get things wrong sometimes.</span>
+      <span><a href="https://github.com/Past-da-king/agent">github.com/Past-da-king/agent</a></span>
+    </footer>
+  </div>
+</section>
+
+</body>
+</html>
