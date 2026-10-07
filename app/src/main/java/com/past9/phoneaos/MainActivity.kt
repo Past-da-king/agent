@@ -71,6 +71,12 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         com.past9.phoneaos.triggers.Overnight.onAppOpen(this)
+        // A memory pack pushed over adb (Android/data/<pkg>/files/memory-pack.json) is imported once, on open.
+        val g = App.graph(this)
+        if (com.past9.phoneaos.data.MemoryPack.pending(this).isNotEmpty()) g.scope.launch {
+            val n = com.past9.phoneaos.data.MemoryPack.importPending(this@MainActivity, g.db.memory())
+            if (n > 0) g.db.chat().insert(com.past9.phoneaos.data.ChatItem(kind = "notice", text = "Added $n memory pages from A.O.S"))
+        }
     }
 
     override fun onStop() {
