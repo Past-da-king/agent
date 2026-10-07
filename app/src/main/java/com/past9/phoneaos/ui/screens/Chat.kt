@@ -80,6 +80,8 @@ data class ChatActions(
     val onRemoveDoc: (String) -> Unit = {},
     val onRemoveAttachment: (String) -> Unit = {},
     val onModel: () -> Unit = {},
+    /** Open a live card (by id) in its sheet. */
+    val onCard: (String) -> Unit = {},
     val onCall: (() -> Unit)? = null,
     /** Non-null while a reply is being read aloud: tap to stop it. */
     val onStopSpeaking: (() -> Unit)? = null,
@@ -160,6 +162,7 @@ fun ChatScreen(
                             else -> QuestionCard(r.item, actions.onAnswer, actions.onBrowser)
                         }
                         "voice" -> VoiceBubble(r.item)
+                        "card" -> { val id = JSONObject(r.item.meta).optString("card"); com.past9.phoneaos.ui.CardChatRow(LocalCards.current.firstOrNull { it.id == id }, r.item.text) { actions.onCard(id) } }
                         "helper" -> HelperRow(r.item, items.filter { a -> a.kind == "activity" && JSONObject(a.meta).optLong("helper") == r.item.id })
                         "activity" -> if (JSONObject(r.item.meta).has("file")) FileCard(r.item) else ImageActivity(r.item)
                         else -> Notice(r.item)
@@ -342,7 +345,7 @@ private fun AgentMessage(item: ChatItem) {
 fun iconFor(tool: String): ImageVector = when (tool) {
     "browser" -> Icons.Rounded.Language; "memory" -> Icons.Rounded.Psychology; "tasks" -> Icons.Rounded.TaskAlt
     "apps" -> Icons.Rounded.Apps; "routines" -> Icons.Rounded.Schedule; "web" -> Icons.Rounded.Public
-    "machine" -> Icons.Rounded.Dns; "files" -> Icons.Rounded.Description; "agent" -> Icons.Rounded.Replay
+    "machine" -> Icons.Rounded.Dns; "files" -> Icons.Rounded.Description; "agent" -> Icons.Rounded.Replay; "cards" -> Icons.Rounded.Dashboard
     else -> Icons.Rounded.Bolt
 }
 
@@ -433,6 +436,9 @@ private fun HelperRow(item: ChatItem, steps: List<ChatItem>) {
     com.past9.phoneaos.ui.HelperCard(h, onClick = { open = true })
     if (open) com.past9.phoneaos.ui.HelperSheet(h, onStop, onDismiss = { open = false })
 }
+
+/** The user's cards, so a card in the chat can show its live headline. */
+val LocalCards = androidx.compose.runtime.staticCompositionLocalOf<List<com.past9.phoneaos.cards.Card>> { emptyList() }
 
 /** How a helper row reaches the runtime to stop its helper. */
 val LocalStopHelper = androidx.compose.runtime.staticCompositionLocalOf<((Long) -> Unit)?> { null }

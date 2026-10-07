@@ -61,7 +61,7 @@ object Routines {
             (0..7).asSequence().map { now.toLocalDate().plusDays(it.toLong()).atTime(h, m).atZone(now.zone) }
                 .firstOrNull { it.isAfter(now) && it.dayOfWeek.value in days }?.let { Duration.between(now, it).toMillis() }
         }
-        "interval", Watchers.KIND -> t.lastRunAt?.let { (it + (t.spec.toLongOrNull() ?: 60) * 60_000 - now.toInstant().toEpochMilli()).coerceAtLeast(0) } ?: ((t.spec.toLongOrNull() ?: 60) * 60_000)
+        "interval", Watchers.KIND, com.past9.phoneaos.cards.CardScripts.KIND -> t.lastRunAt?.let { (it + (t.spec.toLongOrNull() ?: 60) * 60_000 - now.toInstant().toEpochMilli()).coerceAtLeast(0) } ?: ((t.spec.toLongOrNull() ?: 60) * 60_000)
         "email" -> 15 * 60_000L
         else -> null // "notification" fires on arrival, not on a clock
     }
@@ -71,7 +71,7 @@ object Routines {
         if (!t.enabled) { wm.cancelUniqueWork(name(t.id)); return }
         val data = workDataOf("id" to t.id)
         when (t.kind) {
-            "interval", "email", Watchers.KIND -> {
+            "interval", "email", Watchers.KIND, com.past9.phoneaos.cards.CardScripts.KIND -> {
                 val minutes = if (t.kind == "email") 15L else (t.spec.toLongOrNull() ?: 60L).coerceAtLeast(15)
                 wm.enqueueUniquePeriodicWork(name(t.id), ExistingPeriodicWorkPolicy.UPDATE,
                     PeriodicWorkRequestBuilder<RoutineWorker>(minutes, TimeUnit.MINUTES).setInputData(data).setConstraints(net).build())
@@ -116,6 +116,11 @@ class RoutineWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         val manual = inputData.getBoolean("manual", false) && inputData.getString("context").isNullOrEmpty()
         if (!t.enabled && !inputData.getBoolean("manual", false)) return Result.success()
 
+        if (t.kind == com.past9.phoneaos.cards.CardScripts.KIND) {
+            val out = runCatching { com.past9.phoneaos.cards.CardScripts.tick(applicationContext, t) }.getOrElse { "Refresh failed: ${it.message}" }
+            g.db.triggers().get(id)?.let { g.db.triggers().upsert(it.copy(lastRunAt = System.currentTimeMillis(), lastResult = out.take(300))) }
+            return Result.success()
+        }
         if (t.kind == Watchers.KIND) {
             val out = runCatching { Watchers.tick(applicationContext, t) }.getOrElse { "Check failed: ${it.message}" }
             g.db.triggers().get(id)?.let { g.db.triggers().upsert(it.copy(lastRunAt = System.currentTimeMillis(), lastResult = out.take(300))) }

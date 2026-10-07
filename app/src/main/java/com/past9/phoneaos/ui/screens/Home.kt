@@ -55,6 +55,8 @@ data class HomeState(
     val notifApps: Int = 0,
     val browserLive: Boolean = false,
     val now: Long = System.currentTimeMillis(),
+    /** Live cards the user put on Home. */
+    val cards: List<com.past9.phoneaos.cards.Card> = emptyList(),
 )
 
 data class HomeActions(
@@ -70,6 +72,7 @@ data class HomeActions(
     val onNotifications: () -> Unit = {},
     /** Live voice call with the agent; null when live calls are off. */
     val onCall: (() -> Unit)? = null,
+    val onCard: (com.past9.phoneaos.cards.Card) -> Unit = {},
 )
 
 /** What the agent is doing right now, in one human line. */
@@ -158,6 +161,10 @@ fun HomeScreen(s: HomeState, actions: HomeActions, bottomPadding: Dp = 120.dp) {
                     }
                 }
             }
+        }
+        if (s.cards.isNotEmpty()) {
+            item { SectionHeader("Your cards", "Kept up to date for you. Tap one to open it", Modifier.padding(start = 4.dp, top = 6.dp)) }
+            item { com.past9.phoneaos.ui.CardTiles(s.cards, actions.onCard, s.now) }
         }
         item { SectionHeader("Your to-dos", if (myTodos.isEmpty()) "Nothing on your list" else "${myTodos.size} open, soonest first", Modifier.padding(start = 4.dp, top = 6.dp)) {
             TextButton(onClick = actions.onTasks) { Text("All") }

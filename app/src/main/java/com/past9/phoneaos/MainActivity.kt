@@ -43,6 +43,8 @@ import com.past9.phoneaos.data.TaskRow
 import com.past9.phoneaos.system.Speaker
 import com.past9.phoneaos.triggers.Routines
 import com.past9.phoneaos.ui.screens.*
+import com.past9.phoneaos.ui.CardSheet
+import com.past9.phoneaos.ui.CardSheetActions
 import com.past9.phoneaos.ui.theme.AppTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -60,7 +62,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             val st by g.settings.state.collectAsStateWithLifecycle()
             AppTheme(accent = st.accent, mascot = st.mascot) {
-                androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.screens.LocalStopHelper provides { id: Long -> g.runtime.stopHelper(id); Unit }) { Root(g) }
+                androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.screens.LocalStopHelper provides { id: Long -> g.runtime.stopHelper(id); Unit },
+                    com.past9.phoneaos.ui.screens.LocalCards provides App.graph(this).cards.cards.collectAsStateWithLifecycle().value) { Root(g) }
             }
         }
     }
@@ -104,7 +107,9 @@ class MainActivity : ComponentActivity() {
         val goals by g.db.tasks().goals().collectAsStateWithLifecycle(emptyList())
         val tasks by g.db.tasks().tasks().collectAsStateWithLifecycle(emptyList())
         val memories by g.db.memory().all().collectAsStateWithLifecycle(emptyList())
-        val routines by g.db.triggers().all().collectAsStateWithLifecycle(emptyList())
+        val allRoutines by g.db.triggers().all().collectAsStateWithLifecycle(emptyList())
+        // A card's refresh schedule is part of the card, not a routine of its own.
+        val routines = allRoutines.filter { it.kind != com.past9.phoneaos.cards.CardScripts.KIND }
         val browserLive by BrowserService.running.collectAsStateWithLifecycle()
         val nav = rememberNavController()
         val notifRows by g.db.notifications().recent(200).collectAsStateWithLifecycle(emptyList())
@@ -220,8 +225,11 @@ class MainActivity : ComponentActivity() {
             } catch (e: Exception) { conn = conn.copy(loading = false, error = "Couldn't reach Composio: ${e.message}") }
         }
         fun go(r: String) { if (r == "home") nav.popBackStack("home", false) else nav.navigate(r) { popUpTo("home"); launchSingleTop = true } }
+        val cards by g.cards.cards.collectAsStateWithLifecycle()
+        var openCard by remember { mutableStateOf<String?>(null) }
+        var refreshingCard by remember { mutableStateOf<String?>(null) }
         val home = HomeState(settings.agentName, settings.userName, status, items, goals, tasks, routines,
-            notifRows.count { it.postedAt > System.currentTimeMillis() - 86_400_000L }, settings.notifApps.size, browserLive)
+            notifRows.count { it.postedAt > System.currentTimeMillis() - 86_400_000L }, settings.notifApps.size, browserLive, cards = cards.filter { it.pinned })
         val barRoutes = setOf("home", "tasks", "memory", "routines", "connections")
         val barPad = 112.dp
 
@@ -235,6 +243,7 @@ class MainActivity : ComponentActivity() {
                             onToggleTask = { t -> scope.launch { g.db.tasks().updateTask(t.copy(status = if (t.status == "done") "todo" else "done", updatedAt = System.currentTimeMillis())) } },
                             onTasks = { go("tasks") }, onGoal = { nav.navigate("profile") }, onRoutines = { go("routines") },
                             onSettings = { nav.navigate("settings") }, onCall = if (settings.liveEnabled) ({ startCall() }) else null, onBrowser = { nav.navigate("browser") }, onNotifications = { nav.navigate("notifications") },
+                            onCard = { openCard = it.id },
                         ), bottomPadding = barPad + 24.dp)
                     }
                 }
@@ -265,6 +274,7 @@ class MainActivity : ComponentActivity() {
                 composable("chat") {
                     ChatScreen(items, status, settings.agentName, settings.userName, browserLive, draft, { draft = it },
                         ChatActions(
+                            onCard = { openCard = it },
                             onSend = { g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity)
                                 val docText = docs.entries.joinToString("") { (n, d) -> "\n\n[Attached document: $n${docPaths[n]?.let { p -> ", file saved at $p (you can upload it with browser_upload)" }.orEmpty()}]\n${d.first.take(30_000)}" }
                                 g.runtime.send(it + docText, attachments.toList() + docs.values.flatMap { d -> d.second }.take(6), docs.keys.toList())
@@ -420,6 +430,19 @@ class MainActivity : ComponentActivity() {
                         onAddProfile = { n -> g.settings.addBrowserProfile(n); scope.launch { runCatching { BrowserService.await(this@MainActivity, "main", n).goto("https://www.google.com") } } },
                     ))
                 }
+            }
+            cards.firstOrNull { it.id == openCard }?.let { c ->
+                CardSheet(c, androidx.compose.foundation.isSystemInDarkTheme(), settings.accent, CardSheetActions(
+                    onRefresh = { card -> refreshingCard = card.id; scope.launch {
+                        val r = com.past9.phoneaos.cards.CardScripts.run(this@MainActivity, card)
+                        g.cards.update(card.id) { x -> if (r.ok) x.copy(data = r.data!!, headline = com.past9.phoneaos.cards.CardScripts.headlineFrom(r.data) ?: x.headline, updatedAt = System.currentTimeMillis(), error = "") else x.copy(error = r.log.takeLast(400)) }
+                        refreshingCard = null } },
+                    onPin = { card, on -> g.cards.update(card.id) { it.copy(pinned = on) } },
+                    onAsk = { card, text -> openCard = null; g.runtime.send("[About the card \"${card.title}\" (id ${card.id})] $text"); nav.navigate("chat") },
+                    onOpenLink = { url -> scope.launch { com.past9.phoneaos.system.UiBus.openInBrowser.emit(com.past9.phoneaos.system.UiBus.OpenInBrowser(url)) } },
+                    onRun = { card, input -> val r = com.past9.phoneaos.cards.CardScripts.run(this@MainActivity, card, input)
+                        if (r.ok) { g.cards.update(card.id) { it.copy(data = r.data!!, updatedAt = System.currentTimeMillis()) }; true to r.data!! } else false to org.json.JSONObject().put("error", r.log.takeLast(300)).toString() },
+                ), onDismiss = { openCard = null }, refreshing = refreshingCard == c.id)
             }
             if (modelSheet && pickingHelper) HelperRosterSheet(
                 if (onSub) modelList?.map { if (it.id.isBlank()) it.copy(name = "Same as your agent", note = "Whatever your agent runs on") else it } else modelList,

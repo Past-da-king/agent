@@ -75,7 +75,9 @@ class AgentRuntime(
     /** Our tools, served to Claude Code on 127.0.0.1 with a per-install token. Started on first use. */
     val mcp by lazy {
         com.past9.phoneaos.runtime.LocalMcpServer(settings.localToken(), { tools() }, { ChatContext("main", interactive = true) },
-            helper = { id -> helperCtx[id]?.let { ctx -> tools(forHelper = true) to ctx } }).start()
+            helper = { id -> helperCtx[id]?.let { ctx -> tools(forHelper = true) to ctx } },
+            // Card scripts: read-only app tools, and nobody to approve, so anything that writes is refused.
+            card = { workerTools().filter { it.spec.name.startsWith("apps_") || it.spec.name.startsWith("COMPOSIO_") } to QuietContext() }).start()
     }
     private val _status = MutableStateFlow(AgentStatus())
     val status: StateFlow<AgentStatus> = _status
@@ -121,6 +123,8 @@ class AgentRuntime(
     /** Servers and computers the user connected; the agent hands them heavy work over SSH. */
     val machines = com.past9.phoneaos.machines.MachineService(com.past9.phoneaos.machines.MachineStore(settings))
     val composio = ComposioClient({ settings.composioKey() }, settings.installId())
+    /** The user's live cards (the same store the UI shows). */
+    val cards: com.past9.phoneaos.cards.CardStore get() = com.past9.phoneaos.App.graph(context).cards
 
     init {
         // A fresh process has no live helpers: anything still marked working was cut off.
@@ -150,9 +154,11 @@ class AgentRuntime(
             HelperPushTool { id, message -> pushHelper(id, message) },
             HelpersStatusTool { helpersReport() },
             HelperStopTool { id -> stopHelper(id) },
+            com.past9.phoneaos.cards.CardListTool(cards), com.past9.phoneaos.cards.CardShowTool(cards, db.chat()), com.past9.phoneaos.cards.CardPinTool(cards),
         )
         // Small jobs (a page, a quick lookup) it may do itself, within the step budget. Routines and watchers stay with helpers.
-        val mine = own.map { it.spec.name }.toSet() + setOf("routine_create", "routine_delete", "watcher_save", "skill_save", "skill_find")
+        val mine = own.map { it.spec.name }.toSet() + setOf("routine_create", "routine_delete", "watcher_save", "skill_save", "skill_find",
+            "card_guide", "card_save", "card_update", "card_delete")
         return own + workerTools().filter { it.spec.name !in mine }.map { Budgeted(it, mainBudget) }
     }
 
@@ -182,6 +188,11 @@ class AgentRuntime(
         }
         list += AskUserTool(); list += ApprovalTool(); list += NotifyTool()
         list += SkillFindTool(db.memory()); list += SkillSaveTool(db.memory())
+        list += com.past9.phoneaos.cards.CardGuideTool(context)
+        list += com.past9.phoneaos.cards.CardSaveTool(context, cards, settings, db.chat()) { c -> com.past9.phoneaos.cards.CardScripts.schedule(context, c, onRoutineChanged, onRoutineDeleted) }
+        list += com.past9.phoneaos.cards.CardUpdateTool(cards); list += com.past9.phoneaos.cards.CardListTool(cards); list += com.past9.phoneaos.cards.CardShowTool(cards, db.chat())
+        list += com.past9.phoneaos.cards.CardPinTool(cards)
+        list += com.past9.phoneaos.cards.CardDeleteTool(cards) { c -> com.past9.phoneaos.cards.CardScripts.schedule(context, c, onRoutineChanged, onRoutineDeleted) }
         list += ScheduleCreateTool(db.triggers()) { onRoutineChanged(it) }
         list += ScheduleListTool(db.triggers())
         list += com.past9.phoneaos.triggers.WatcherSaveTool(context) { onRoutineChanged(it) }
@@ -230,6 +241,7 @@ class AgentRuntime(
                 appendLine("- The user uses you as their to-do list. Things THEY must do or asked to be reminded of go on their list (task_add owner user). The work you hand out lives under goals (goal_create) with a task per step; tick them off as helper results come in, and when stuck mark the step blocked and say what would unblock it.")
                 appendLine("- Routines: you come up with the ideas (a morning brief, watching a price, chasing a reply) and suggest them. When the user agrees, a helper creates it: delegate with the exact schedule and the instruction the routine should run. routine_list shows what exists.")
                 if (s.notifApps.isNotEmpty()) appendLine("- You can read the phone's notifications from the apps the user allowed (notifications_read): bank alerts, messages, deliveries. Read them when they help you understand what's going on.")
+                appendLine("- CARDS: the user can have live cards, small screens in the app's own look that open from Home or the chat (card_list shows them). When they want something to keep an eye on or see at a glance (a tracker, a dashboard, prices every day, a daily brief, search results they'll come back to), delegate building a CARD. Brief the helper: what it must show and in what order (the most important number first), where the data comes from, and that data should refresh by a SCRIPT whenever code can fetch it (an API, a page, counting emails in a connected app), with the agent filling it only when it needs judgement (a brief, a summary, via a routine calling card_update). Pin it to Home only if they asked for it there. card_show puts an existing card in the chat.")
                 appendLine("- Facts like phone numbers, addresses, prices and opening hours must come from a helper that actually read a source; pass the source on. If it isn't verified, say so. Never invent.")
                 appendLine()
                 appendLine("WHAT YOUR HELPERS CAN DO (brief them to use it; beyond a small job of 5 steps or fewer, this is their work, not yours)")
@@ -247,6 +259,7 @@ class AgentRuntime(
             appendLine("- Recurring or later work becomes a routine (routine_create). To keep an eye on something with no API (a price on Takealot or Amazon, stock, a page changing), build a WATCHER (watcher_save): find the data source, write and test a small script, save it. It only wakes the agent when it fires.")
             appendLine("- The browser shares the phone's location with sites that ask, and sites can send web notifications (they arrive from 'web:<site>').")
             appendLine("- For ANY file on the user's phone (recordings, downloads, WhatsApp statuses, screenshots) use phone_files, never run_code. If phone_files says access isn't given, ask once, then files_pick.")
+            if (!main) appendLine("- To build or change a CARD: card_guide first (the design rules), then card_save. Look at the screenshot it returns and fix anything that isn't beautiful before reporting back.")
             appendLine("- Files move between the phone, machines and websites: phone_files, machine_run (ls, find), machine_download, browser_upload, machine_upload, send_file (shows one to the user).")
             val ms = machines.store.machines.value
             if (ms.isNotEmpty()) appendLine("- The user connected machines to work on over SSH: ${ms.joinToString { it.name + (if (it.about.isNotBlank()) " (" + it.about + ")" else "") }}. Heavy lifting goes there (building, compiling, installing, data crunching, long scripts, big downloads): machine_run for quick commands, machine_job_start for anything long, then machine_job_status. If a machine has a coding agent (claude, codex, opencode) it can run there in a job.")

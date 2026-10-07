@@ -32,16 +32,16 @@ object Watchers {
     fun dir(context: Context) = File(context.filesDir, "watchers").apply { mkdirs() }
     fun scriptFile(context: Context, id: Long) = File(dir(context), "$id.mjs")
 
-    data class Outcome(val ok: Boolean, val fire: Boolean, val message: String, val state: String, val raw: String)
+    data class Outcome(val ok: Boolean, val fire: Boolean, val message: String, val state: String, val raw: String, val json: JSONObject? = null)
 
-    suspend fun execute(context: Context, script: String, state: String): Outcome = withContext(Dispatchers.IO) {
+    suspend fun execute(context: Context, script: String, state: String, extraEnv: Map<String, String> = emptyMap()): Outcome = withContext(Dispatchers.IO) {
         val rt = SubscriptionRuntime(context, SubKind.CLAUDE)
         if (!rt.nodeAvailable) return@withContext Outcome(false, false, "", state, "Node isn't available in this build.")
         val work = File(context.filesDir, "workspace").apply { mkdirs() }
         val f = File(work, ".watch-${System.nanoTime()}.mjs").apply { writeText(script) }
         rt.linkBins()
         val p = ProcessBuilder(File(rt.bin, "node").path, f.path).directory(work).redirectErrorStream(true)
-            .apply { environment().putAll(rt.env()); environment()["HOME"] = work.path; environment()["WATCH_STATE"] = state.ifBlank { "{}" } }.start()
+            .apply { environment().putAll(rt.env()); environment()["HOME"] = work.path; environment()["WATCH_STATE"] = state.ifBlank { "{}" }; environment().putAll(extraEnv) }.start()
         val out = StringBuilder()
         val reader = Thread { runCatching { p.inputStream.bufferedReader().forEachLine { if (out.length < 20_000) out.appendLine(it) } } }.apply { start() }
         val finished = p.waitFor(90, TimeUnit.SECONDS)
@@ -50,7 +50,7 @@ object Watchers {
         val text = out.toString().trim()
         val json = text.lineSequence().toList().asReversed().firstNotNullOfOrNull { l -> runCatching { JSONObject(l.trim()) }.getOrNull() }
         if (!finished || p.exitValue() != 0 || json == null) return@withContext Outcome(false, false, "", state, (if (!finished) "Timed out after 90 s.\n" else "") + text.takeLast(3000))
-        Outcome(true, json.optBoolean("fire"), json.optString("message"), json.optJSONObject("state")?.toString() ?: state, text.takeLast(1000))
+        Outcome(true, json.optBoolean("fire"), json.optString("message"), json.optJSONObject("state")?.toString() ?: state, text.takeLast(1000), json)
     }
 
     /** One tick of a watcher. Returns the line shown as "Last:" on the routine. */

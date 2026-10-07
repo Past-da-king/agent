@@ -28,6 +28,8 @@ class LocalMcpServer(
     private val port: Int = 0,
     /** Helpers get their own endpoint, /mcp/h/<id>: the worker tools, acting as that helper. Null when it isn't running. */
     private val helper: ((Long) -> Pair<List<Tool>, ToolContext>?)? = null,
+    /** Card scripts reading connected apps: /mcp/card, read-only app tools and nobody to approve anything. */
+    private val card: (() -> Pair<List<Tool>, ToolContext>)? = null,
 ) {
     private var server: ServerSocket? = null
     val boundPort: Int get() = server?.localPort ?: -1
@@ -64,6 +66,7 @@ class LocalMcpServer(
 
         val route: Pair<List<Tool>, ToolContext>? = when {
             path == "/mcp" -> null
+            path == "/mcp/card" -> card?.invoke() ?: return reply(out, 404, "text/plain", "not found")
             path.startsWith("/mcp/h/") -> path.removePrefix("/mcp/h/").toLongOrNull()?.let { helper?.invoke(it) } ?: return reply(out, 404, "text/plain", "no such helper")
             else -> return reply(out, 404, "text/plain", "not found")
         }

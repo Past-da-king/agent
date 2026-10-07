@@ -19,6 +19,8 @@ class Graph(context: Context) {
     val db = AppDb.open(app)
     val settings = SettingsStore(app)
     val phone = AndroidPhone(app)
+    /** Live cards the agent built (HTML + data), on Home and in chat. */
+    val cards = com.past9.phoneaos.cards.CardStore(app)
     val runtime = AgentRuntime(app, db, settings, scope, phone).apply {
         onRoutineChanged = { t -> if (t != null) Routines.schedule(app, t) }
         onRoutineDeleted = { id -> Routines.cancel(app, id) }

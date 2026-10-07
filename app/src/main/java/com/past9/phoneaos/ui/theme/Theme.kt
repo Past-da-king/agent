@@ -105,12 +105,18 @@ fun accentOf(id: String) = Accents.firstOrNull { it.id == id } ?: Accents.first(
 /** Which mascot shape the user picked. Read by AgentAvatar. */
 val LocalMascot = staticCompositionLocalOf { "scout" }
 
-@Composable
-fun AppTheme(dark: Boolean = isSystemInDarkTheme(), accent: String = "iris", mascot: String = "scout", content: @Composable () -> Unit) {
+/** The app's colours for this accent and mode, outside Compose too (cards render them into CSS). */
+fun appColors(dark: Boolean, accent: String): Pair<androidx.compose.material3.ColorScheme, Extra> {
     val extra = if (dark) Extra(Color(0xFF8FD6A6), Color(0xFF0D3A1D), Color(0xFF1F4D2E)) else Extra(Color(0xFF1E6B3A), Color(0xFFF4FFF6), Color(0xFFCFEBD7))
     val a = accentOf(accent)
     val scheme = if (dark) Dark.copy(primary = a.dP, onPrimary = a.dOnP, primaryContainer = a.dPC, onPrimaryContainer = a.dOnPC, inversePrimary = a.lP, surfaceTint = a.dP)
         else Light.copy(primary = a.lP, onPrimary = a.lOnP, primaryContainer = a.lPC, onPrimaryContainer = a.lOnPC, inversePrimary = a.dP, surfaceTint = a.lP)
+    return scheme to extra
+}
+
+@Composable
+fun AppTheme(dark: Boolean = isSystemInDarkTheme(), accent: String = "iris", mascot: String = "scout", content: @Composable () -> Unit) {
+    val (scheme, extra) = appColors(dark, accent)
     androidx.compose.runtime.CompositionLocalProvider(LocalExtra provides extra, LocalMascot provides mascot) {
         MaterialExpressiveTheme(colorScheme = scheme, motionScheme = MotionScheme.expressive(), shapes = AppShapes, typography = AppType, content = content)
     }
