@@ -1,0 +1,21 @@
+<div class="hero stack tight">
+  <span class="eyebrow">Tuesday 7 October</span>
+  <span class="title" id="focus"></span>
+  <div class="row" style="gap:16px;margin-top:6px"><span class="small"><i data-ic="sun" class="sm"></i> <span id="weather"></span></span><span class="small"><i data-ic="calendar" class="sm"></i> <span id="meet"></span></span></div>
+</div>
+<div class="section">
+  <div class="section-head"><span class="eyebrow">Your day</span></div>
+  <div class="timeline" id="tl"></div>
+</div>
+<div class="section">
+  <div class="section-head"><span class="eyebrow">This week</span></div>
+  <div class="stack" id="goals"></div>
+</div>
+<script>
+function render(d) {
+  if (!d) return;
+  Kit.$("#focus").textContent = d.focus; Kit.$("#weather").textContent = d.weather; Kit.$("#meet").textContent = d.meetings + " meetings";
+  tl.innerHTML = d.day.map(t => `<div class="t-item ${t.state}"><span class="t-dot"><i data-ic="${t.state === "done" ? "check" : t.icon}" class="sm"></i></span><div><div class="t-time">${t.time}</div><div class="t-title">${Kit.esc(t.title)}</div>${t.note ? `<div class="small">${Kit.esc(t.note)}</div>` : ""}</div></div>`).join("");
+  goals.innerHTML = d.goals.map(g => `<div><div class="row between"><span class="subtitle">${Kit.esc(g.name)}</span><span class="small num">${g.done}/${g.total}</span></div><div class="progress${g.done / g.total > .7 ? " good" : ""}" style="margin-top:6px"><span style="width:${g.done / g.total * 100}%"></span></div></div>`).join("");
+}
+</script>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android blocks plain HTTP by default. We let the OS allow it, and enforce the real rule in
+  our own code (agent/HttpPolicy.kt): an http:// base URL is only used when the user ticked
+  "Allow unencrypted HTTP" for it. Loopback (127.0.0.1, localhost) is always allowed.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

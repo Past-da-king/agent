@@ -1,0 +1,24 @@
+<div class="stats">
+  <div class="stat"><span class="label">Sent today</span><span class="value" id="sent"></span><span class="delta up" id="sentDelta"></span></div>
+  <div class="stat"><span class="label">Replies</span><span class="value" id="replies"></span><span class="delta flat-trend" id="rate"></span></div>
+</div>
+<div class="section">
+  <div class="section-head"><span class="eyebrow">Replies by company</span></div>
+  <div class="card"><div id="by"></div></div>
+</div>
+<div class="section">
+  <div class="section-head"><span class="eyebrow">Today's outreach</span><span class="small">Newest first</span></div>
+  <div class="table-wrap"><table><thead><tr><th>Company</th><th>Contact</th><th>Status</th></tr></thead><tbody id="rows"></tbody></table></div>
+</div>
+<script>
+const badge = { replied: "good", opened: "info", bounced: "bad", sent: "" };
+function render(d) {
+  if (!d) return;
+  sent.textContent = Kit.num(d.sent);
+  sentDelta.innerHTML = '<i data-ic="trend_up" class="sm"></i> ' + (d.sent - d.sentYesterday) + " vs yesterday";
+  replies.textContent = Kit.num(d.replies);
+  rate.textContent = Kit.pct(d.replies / d.sent) + " reply rate";
+  Kit.bars("#by", d.byCompany);
+  rows.innerHTML = d.emails.map(e => `<tr><td><b>${Kit.esc(e.company)}</b></td><td>${Kit.esc(e.contact)}</td><td><span class="badge ${badge[e.status] || ""}">${Kit.esc(e.status)}</span></td></tr>`).join("");
+}
+</script>
