@@ -232,7 +232,7 @@ class AgentRuntime(
                 if (s.notifApps.isNotEmpty()) appendLine("- You can read the phone's notifications from the apps the user allowed (notifications_read): bank alerts, messages, deliveries. Read them when they help you understand what's going on.")
                 appendLine("- Facts like phone numbers, addresses, prices and opening hours must come from a helper that actually read a source; pass the source on. If it isn't verified, say so. Never invent.")
                 appendLine()
-                appendLine("WHAT YOUR HELPERS CAN DO (brief them to use it; you can't do these yourself)")
+                appendLine("WHAT YOUR HELPERS CAN DO (brief them to use it; beyond a small job of 5 steps or fewer, this is their work, not yours)")
             } else {
                 appendLine("HOW YOU WORK")
                 appendLine("- Do the work yourself with your tools instead of telling the user how. Only ask when it is a real choice (ask_user with buttons), or you are truly blocked.")
@@ -319,7 +319,7 @@ class AgentRuntime(
         launchTurn {
             turnLock.withLock {
                 val batch = generateSequence { inbox.poll() }.toList()
-                if (batch.isNotEmpty()) runTurn(batch.joinToString("\n\n"))
+                if (batch.isNotEmpty()) runTurn(batch.joinToString("\n\n"), fromUser = false)
             }
         }
     }
@@ -429,7 +429,9 @@ class AgentRuntime(
         }
     }
 
-    private suspend fun runTurn(userText: String, images: List<String> = emptyList()) {
+    /** @param fromUser a message the user sent: it starts a fresh 5-step budget. A helper's result coming back doesn't. */
+    private suspend fun runTurn(userText: String, images: List<String> = emptyList(), fromUser: Boolean = true) {
+        if (fromUser) mainBudget.used = 0
         if (settings.state.value.mode == PowerMode.SUBSCRIPTION && subscription?.ready == true) return runSubscriptionTurn(userText, subscription!!, images)
         val provider = providerFactory(settings)
         if (provider == null) {
@@ -439,7 +441,6 @@ class AgentRuntime(
         }
         _status.value = AgentStatus(true, "Thinking")
         phone.workStarted()
-        mainBudget.used = 0
         val history = loadHistory("main")
         val first = Msg.user(userText, images)
         history += first; db.chat().insertTurn(TurnRow(thread = "main", json = first.toJson().toString()))
@@ -468,7 +469,6 @@ class AgentRuntime(
 
     private suspend fun runSubscriptionTurn(userText: String, engine: SubscriptionEngine, images: List<String> = emptyList()) {
         _status.value = AgentStatus(true, "Thinking"); phone.workStarted()
-        mainBudget.used = 0
         try {
             var resume = settings.extra("claude_session")
             for (attempt in 1..2) {
@@ -594,7 +594,7 @@ class AgentRuntime(
     }
 
     /** Words a helper uses when it gives up. Usually it can do it; it needs sending back. */
-    private val gaveUp = Regex("(?i)\\b(can't|cannot|can not|couldn't|could not|unable|not able|no access|don't have access|wasn't able|not possible|blocked|failed to)\\b")
+    private val gaveUp = Regex("(?i)(^\\s*(unable|couldn't|could not|can't|cannot|failed)\\b)|\\b(I|we)\\s+(can't|cannot|can not|couldn't|could not|was unable|were unable|am unable|wasn't able|weren't able|am not able|don't have access|do not have access|have no access|wasn't allowed|got blocked|was blocked)\\b")
 
     private suspend fun runHelper(itemId: Long, label: String, history: MutableList<Msg>, prompt: String, resume: String?, ctx: ChatContext,
                                   provider: LlmProvider?, sub: SubscriptionEngine?, model: String) {
@@ -625,7 +625,7 @@ class AgentRuntime(
                 phone.workFinished()
                 // The main agent hears back unless the user stopped it (then there is nothing to report).
                 if (state != "stopped") {
-                    val nudge = if ((state == "failed" || gaveUp.containsMatchIn(result.take(3000))) && pushes < 2)
+                    val nudge = if ((state == "failed" || gaveUp.containsMatchIn(result.trim().split(Regex("(?<=[.!?])\\s+|\\n")).first().take(300))) && pushes < 2)
                         "\n\n(It says it couldn't do all of it${if (pushes > 0) ", after $pushes push${if (pushes > 1) "es" else ""}" else ""}. Helpers usually can. Unless it's truly impossible, send it back with helper_push: name a concrete next thing to try and tell it you believe it can do it. Push at least twice before you accept it or tell the user.)"
                     else ""
                     deliver("[Helper #$itemId \"$label\" ${if (state == "done") "finished" else "failed"}${if (pushes > 0) " (after $pushes push${if (pushes > 1) "es" else ""})" else ""}]\n${result.take(12_000).ifBlank { "(no result text)" }}$nudge")
@@ -701,6 +701,8 @@ class AgentRuntime(
             return AgentLoop(provider, settings.state.value.model, tools, maxSteps = 40).run(sys, mutableListOf(Msg.user(prompt)), QuietContext())
         }
         val engine = subscription?.takeIf { settings.state.value.mode == PowerMode.SUBSCRIPTION && it.ready } ?: return null
+        // The night run only writes notes: spend the action budget so the main route's action tools refuse.
+        mainBudget.used = mainBudget.max
         var last = ""
         engine.turn(prompt + "\n\nDon't use any tools for this; just reply.", sys, null, mcp.url, settings.localToken()).collect { e -> if (e.optString("type") == "text") last = e.optString("text") }
         return last.ifBlank { null }

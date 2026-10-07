@@ -69,7 +69,7 @@ fun ProfileScreen(home: HomeState, memories: List<MemoryRow>, actions: ProfileAc
                     Text(nowLine(home), style = MaterialTheme.typography.bodyLarge, color = cs.onPrimaryContainer, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 32.dp))
                     Spacer(Modifier.height(18.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Stat("${goals.size}", "goals"); Stat("${home.tasks.count { it.owner == "agent" && it.status == "done" }}", "steps done"); Stat("${memories.size}", "memories"); Stat("${home.routines.count { it.enabled }}", "routines")
+                        Stat("${goals.size}", "goals"); home.tasks.count { it.owner == "agent" && it.status == "done" }.let { n -> Stat("$n", if (n == 1) "step done" else "steps done") }; Stat("${memories.size}", "memories"); Stat("${home.routines.count { it.enabled }}", "routines")
                     }
                     Spacer(Modifier.height(18.dp))
                     Button(onClick = actions.onChat, shapes = ButtonDefaults.shapes(), colors = ButtonDefaults.buttonColors(containerColor = cs.onPrimaryContainer, contentColor = cs.primaryContainer)) {

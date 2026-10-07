@@ -97,6 +97,9 @@ fun group(items: List<ChatItem>): List<Row_> {
     val out = mutableListOf<Row_>(); val buf = mutableListOf<ChatItem>(); val call = mutableListOf<ChatItem>()
     fun flushCall() { if (call.isNotEmpty()) { out += Row_.Call(call.toList()); call.clear() } }
     fun flush() { if (buf.isNotEmpty()) { out += Row_.Steps(buf.toList()); buf.clear() } }
+    // A finished helper leaves the chat once the main agent has replied after it (its result lives in that reply).
+    // If that reply never came (the turn failed), the helper stays so its result isn't lost.
+    val lastAgentAt = items.filter { it.kind == "agent" }.maxOfOrNull { it.createdAt } ?: 0L
     items.forEach {
         val m = JSONObject(it.meta)
         if (m.optBoolean("call") && (it.kind == "user" || it.kind == "agent")) { flush(); call += it; return@forEach }
@@ -104,7 +107,7 @@ fun group(items: List<ChatItem>): List<Row_> {
         when {
             it.kind == "activity" && m.has("helper") -> {} // shown inside its helper's card
             // A helper only shows while it works: once it's done or stopped it leaves the chat; its result lives in the agent's reply.
-            it.kind == "helper" && m.optString("state", "working") != "working" -> {}
+            it.kind == "helper" && m.optString("state", "working").let { st -> st == "stopped" || (st != "working" && lastAgentAt > m.optLong("endedAt", Long.MAX_VALUE)) } -> {}
             it.kind == "activity" && m.optString("image").isEmpty() && m.optString("file").isEmpty() -> buf += it
             else -> { flush(); out += Row_.Single(it) }
         }

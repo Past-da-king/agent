@@ -72,8 +72,8 @@ fun HelperRosterSheet(models: List<ModelInfo>?, error: String?, initial: List<He
                 }
             }
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp, bottom = 20.dp)) {
-                Button(onClick = { onSave(picked.toList()); onDismiss() }, enabled = picked.isNotEmpty(), modifier = Modifier.fillMaxWidth().height(56.dp), shapes = ButtonDefaults.shapes()) {
-                    Text(when (picked.size) { 0 -> "Pick at least one"; 1 -> "Save 1 helper"; else -> "Save ${picked.size} helpers" }, style = MaterialTheme.typography.titleMedium)
+                Button(onClick = { onSave(picked.toList()); onDismiss() }, modifier = Modifier.fillMaxWidth().height(56.dp), shapes = ButtonDefaults.shapes()) {
+                    Text(when (picked.size) { 0 -> "Use your agent's model only"; 1 -> "Save 1 helper"; else -> "Save ${picked.size} helpers" }, style = MaterialTheme.typography.titleMedium)
                 }
             }
         }

@@ -143,7 +143,9 @@ class SettingsStore(context: Context) {
     fun setHelperRoster(list: List<HelperModel>) = edit {
         putString(rosterKey(), org.json.JSONArray(list.map { it.toJson() }).toString())
         // The first one is also the default helper model (older paths read this).
-        list.firstOrNull()?.let { if (prefs.getString("mode", null) == PowerMode.SUBSCRIPTION.name) putString("subHelperModel_" + (prefs.getString("subKind", "CLAUDE") ?: "CLAUDE"), it.id) else putString("helperModel", it.id) }
+        // Cleared: helpers run on the agent's own model.
+        val first = list.firstOrNull()?.id ?: if (prefs.getString("mode", null) == PowerMode.SUBSCRIPTION.name) "" else _state.value.model
+        if (prefs.getString("mode", null) == PowerMode.SUBSCRIPTION.name) putString("subHelperModel_" + (prefs.getString("subKind", "CLAUDE") ?: "CLAUDE"), first) else putString("helperModel", first)
     }
 
     private fun edit(block: SharedPreferences.Editor.() -> Unit) { prefs.edit().apply(block).apply(); _state.value = read() }

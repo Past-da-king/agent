@@ -147,7 +147,8 @@ class RuntimeTest {
         waitIdle(rt)
         val h = p.seen.helper()
         assertEquals(2, h.size) // never restarted
-        assertTrue(h.last().second.last().text.contains("[The main agent, while you work] The user means the 7pm show"))
+        // It reaches the helper before whichever step comes next (the first one, if it lands that early).
+        assertTrue(h.last().second.any { it.text.contains("[The main agent, while you work] The user means the 7pm show") })
         assertEquals("done", JSONObject(db.chat().get(id)!!.meta).getString("state"))
     }
 
@@ -315,6 +316,24 @@ class RuntimeTest {
         val meta = JSONObject(db.chat().get(id)!!.meta)
         assertEquals(1, meta.getInt("pushes")); assertEquals("done", meta.getString("state"))
         assertTrue(p.seen.main().last().second.last().text.contains("after 1 push"))
+    }
+
+    @Test fun aGoodResultThatMentionsAProblemIsNotPushedBack() = runBlocking {
+        val p = ScriptedProvider(delegate("Find the Durban library hours"), say("On it."), say("Open 8 to 5."))
+        p.helperQueue += say("Open 08:00 to 17:00 weekdays (durban.gov.za). The first site I tried was blocked, and I couldn't load the old page, so I used the city's own site.")
+        val rt = runtime(p); rt.send("hours?"); waitIdle(rt)
+        assertFalse(p.seen.main().last().second.last().text.contains("helper_push"))
+    }
+
+    @Test fun aHelperResultDoesNotRefillTheMainAgentsStepBudget() = runBlocking {
+        val act = { call("phone_files", JSONObject().put("query", "*.pdf")) }
+        // 4 steps on the user's message, then a helper result arrives: only 1 step is left for that turn.
+        val p = ScriptedProvider(delegate("x"), act(), act(), act(), act(), say("Working on it."), act(), act(), say("Done."))
+        val rt = runtime(p); rt.send("go"); waitIdle(rt)
+        val results = p.seen.main().map { it.second.last().blocks.lastOrNull() }.filterIsInstance<Block.ToolResult>().filter { !it.content.startsWith("Started:") }.map { it.content }
+        assertEquals(6, results.size)
+        assertTrue(results.take(5).none { it.startsWith("Step limit") })
+        assertTrue(results[5].startsWith("Step limit"))
     }
 
     @Test fun goalsAndTasksAutoAchieve() = runBlocking {

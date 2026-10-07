@@ -17,6 +17,7 @@ import com.past9.phoneaos.ui.theme.AppTheme
 import org.json.JSONArray
 import androidx.compose.foundation.layout.fillMaxSize
 import org.json.JSONObject
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -217,6 +218,16 @@ class ScreensTest(private val dark: Boolean) {
     }
     @Test fun helperSheetWorking() { sheet("84-sheet-helper-working") { com.past9.phoneaos.ui.HelperSheet(com.past9.phoneaos.ui.HelperView.from(demoHelpers)[0], {}, {}, now = now) } }
     @Test fun helperSheetDone() { sheet("85-sheet-helper-done") { com.past9.phoneaos.ui.HelperSheet(com.past9.phoneaos.ui.HelperView.from(demoHelpers)[2], {}, {}, now = now) } }
+    @Test fun finishedHelpersLeaveTheChatOnlyAfterTheAgentReplies() {
+        val h = ChatItem(id = 500, kind = "helper", text = "x", meta = JSONObject().put("state", "failed").put("endedAt", now).put("result", "boom").toString(), createdAt = now - 10)
+        val stopped = ChatItem(id = 501, kind = "helper", text = "y", meta = JSONObject().put("state", "stopped").put("endedAt", now).toString(), createdAt = now - 10)
+        fun shown(items: List<ChatItem>) = group(items).filterIsInstance<Row_.Single>().map { it.item.id }
+        // No reply after it (the main turn failed): the failed helper stays visible; a stopped one never shows.
+        assertEquals(listOf(500L, 502L), shown(listOf(h, stopped, ChatItem(id = 502, kind = "notice", text = "Something went wrong", createdAt = now + 5))))
+        // The agent replied after it: it leaves.
+        assertEquals(listOf(503L), shown(listOf(h, stopped, ChatItem(id = 503, kind = "agent", text = "It failed: boom", createdAt = now + 5))))
+    }
+
     @Test fun helperRoster() { sheet("86-sheet-helper-roster") { HelperRosterSheet(listOf(
         com.past9.phoneaos.agent.ModelInfo("anthropic/claude-opus-5-5", "Claude Opus 5.5", true, "2026-08-01"),
         com.past9.phoneaos.agent.ModelInfo("anthropic/claude-sonnet-5-5", "Claude Sonnet 5.5", true, "2026-08-01"),
