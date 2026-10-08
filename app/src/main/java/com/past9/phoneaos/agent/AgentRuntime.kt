@@ -113,7 +113,7 @@ class AgentRuntime(
     private val _running = MutableStateFlow<List<HelperRun>>(emptyList())
     val running: StateFlow<List<HelperRun>> = _running
     /** Helper results waiting for the main agent to read them. */
-    private val inbox = java.util.concurrent.ConcurrentLinkedQueue<String>()
+    private val inbox = java.util.concurrent.ConcurrentLinkedQueue<Pair<String, Long?>>()
 
     private fun refreshHelpers() {
         _running.value = helpers.values.sortedBy { it.startedAt }
@@ -123,6 +123,41 @@ class AgentRuntime(
     /** Servers and computers the user connected; the agent hands them heavy work over SSH. */
     val machines = com.past9.phoneaos.machines.MachineService(com.past9.phoneaos.machines.MachineStore(settings))
     val composio = ComposioClient({ settings.composioKey() }, settings.installId())
+    /** Profiles (parts of the user's life, each a set of connected accounts) and each account's rules. */
+    val profiles = com.past9.phoneaos.data.ProfileStore(context)
+    /** The profile each helper was handed (helper id -> profile id): it may only use that profile's accounts. */
+    private val helperProfile = ConcurrentHashMap<Long, String>()
+    /** Helpers started together for one answer: held until all of them finish, then reported as one message. */
+    private val helperBatch = ConcurrentHashMap<Long, String>()
+    private val batchResults = ConcurrentHashMap<String, java.util.concurrent.ConcurrentLinkedQueue<Pair<Long, String>>>()
+    /** The user's message the current main turn is answering, so replies can quote it. */
+    @Volatile private var turnOrigin: Long? = null
+    /** This main turn answers helpers' results (so its replies come late and quote what they answer). */
+    @Volatile private var turnLate = false
+
+    fun profileOf(ctx: ToolContext): com.past9.phoneaos.data.AgentProfile? =
+        ctx.agentLabel.removePrefix("helper-").toLongOrNull()?.let { helperProfile[it] }?.let { profiles.find(it) }
+
+    private val accountCache = ConcurrentHashMap<String, Pair<Long, List<com.past9.phoneaos.data.AccountRef>>>()
+    /** The user's signed-in accounts for these app slugs (cached a minute; unknown slugs are simply empty). */
+    suspend fun appAccounts(slugs: List<String>): List<com.past9.phoneaos.data.AccountRef> = slugs.flatMap { slug ->
+        accountCache[slug]?.takeIf { System.currentTimeMillis() - it.first < 60_000 }?.second ?: run {
+            val k = settings.composioKey()?.trim()
+            val list = if (k != null && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(k))
+                com.past9.phoneaos.tools.ComposioConnect.accounts(k, listOf(slug))[slug].orEmpty().filter { it.status == "ACTIVE" }
+                    .map { com.past9.phoneaos.data.AccountRef(it.id, slug, it.label.ifBlank { com.past9.phoneaos.tools.AppCatalog.name(slug) }) }
+            else composio.connections().filter { it.toolkit == slug && it.status == "ACTIVE" }.map { com.past9.phoneaos.data.AccountRef(it.id, slug, it.label) }
+            list.also { accountCache[slug] = System.currentTimeMillis() to it }
+        }
+    }
+    val appGuard = com.past9.phoneaos.tools.AppGuard({ profiles.rules(it) }, { slugs -> slugs.flatMap { s -> runCatching { appAccounts(listOf(s)) }.getOrDefault(emptyList()) } }, ::profileOf)
+
+    /** A new account got connected mid-task: a helper's own profile takes it, and the user is offered to file it. */
+    private suspend fun accountConnected(ctx: ToolContext, acc: com.past9.phoneaos.data.AccountRef) {
+        accountCache.remove(acc.slug)
+        profileOf(ctx)?.let { profiles.setMember(it.id, acc, true) }
+        com.past9.phoneaos.system.UiBus.addToProfile.emit(acc)
+    }
     /** The user's live cards (the same store the UI shows). */
     val cards: com.past9.phoneaos.cards.CardStore get() = com.past9.phoneaos.App.graph(context).cards
 
@@ -149,15 +184,17 @@ class AgentRuntime(
             NotificationsTool(db.notifications()) { settings.state.value.notifApps },
             ScheduleListTool(db.triggers()),
             AskUserTool(), NotifyTool(), VoiceNoteTool(context, settings, db.chat()),
-            DelegateTool { task, label, model -> startHelper(task, label, model) },
+            com.past9.phoneaos.tools.ReportTool(context) { item -> db.chat().insert(item.copy(meta = JSONObject(item.meta).apply { turnOrigin?.let { put("replyTo", it); if (turnLate) put("late", true) } }.toString())) },
+            DelegateTool { task, label, model, profile, batch -> startHelper(task, label, model, profile, batch) },
             HelperSteerTool { id, message, restart -> steerHelper(id, message, restart) },
             HelperPushTool { id, message -> pushHelper(id, message) },
             HelpersStatusTool { helpersReport() },
             HelperStopTool { id -> stopHelper(id) },
+            com.past9.phoneaos.tools.ProfileCreateTool(profiles) { slugs -> appAccounts(slugs) },
             com.past9.phoneaos.cards.CardListTool(cards), com.past9.phoneaos.cards.CardShowTool(cards, db.chat()), com.past9.phoneaos.cards.CardPinTool(cards),
         )
         // Small jobs (a page, a quick lookup) it may do itself, within the step budget. Routines and watchers stay with helpers.
-        val mine = own.map { it.spec.name }.toSet() + setOf("routine_create", "routine_delete", "watcher_save", "skill_save", "skill_find",
+        val mine = own.map { it.spec.name }.toSet() + setOf("report", "routine_create", "routine_delete", "watcher_save", "skill_save", "skill_find",
             "card_guide", "card_save", "card_update", "card_delete")
         return own + workerTools().filter { it.spec.name !in mine }.map { Budgeted(it, mainBudget) }
     }
@@ -180,10 +217,10 @@ class AgentRuntime(
         list += browserTools(context)
         val openSignIn: suspend (String) -> Unit = { url -> com.past9.phoneaos.system.UiBus.openInBrowser.emit(com.past9.phoneaos.system.UiBus.OpenInBrowser(url)) }
         if (settings.state.value.composioEnabled && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(settings.composioKey())) {
-            list += com.past9.phoneaos.tools.ComposioConnect.asTools({ settings.composioKey()?.trim() }, openSignIn)
+            list += com.past9.phoneaos.tools.ComposioConnect.asTools({ settings.composioKey()?.trim() }, openSignIn, appGuard) { ctx, acc -> accountConnected(ctx, acc) }
         } else if (settings.state.value.composioEnabled) {
             list += AppsListTool(composio); list += AppsFindToolsTool(composio)
-            list += GuardedAppsRunTool(AppsRunTool(composio))
+            list += GuardedAppsRunTool(AppsRunTool(composio), appGuard)
             list += AppsConnectTool(composio) { _, url -> openSignIn(url) }
         }
         list += AskUserTool(); list += ApprovalTool(); list += NotifyTool()
@@ -202,7 +239,8 @@ class AgentRuntime(
 
     // ---- prompt ---------------------------------------------------------------------------
 
-    suspend fun systemPrompt(latestUserText: String, background: Boolean = false, role: PromptRole = if (background) PromptRole.ROUTINE else PromptRole.MAIN): String {
+    suspend fun systemPrompt(latestUserText: String, background: Boolean = false, role: PromptRole = if (background) PromptRole.ROUTINE else PromptRole.MAIN,
+                             profile: com.past9.phoneaos.data.AgentProfile? = null): String {
         val s = settings.state.value
         val now = ZonedDateTime.now()
         val pinned = db.memory().pinned()
@@ -227,8 +265,18 @@ class AgentRuntime(
                 appendLine("- Writing briefs is your craft. The user often rambles; work out what they actually want, search memory for everything relevant (people, places, accounts, preferences, past decisions), and give each helper a precise brief: the goal, the context, their preferences and constraints, exactly what to do, what to bring back, and what must get the user's approval before it goes out. A helper knows NOTHING except your brief, so never write 'as discussed' or 'the usual'.")
                 appendLine("- Split independent work across helpers so it runs at once (one per site, person or option).")
                 appendLine("- After delegating, tell the user in one short line what you set going, then end your turn. Never wait for helpers. The user can keep talking to you while they work, and anything new they ask for goes to another helper.")
-                appendLine("- A helper's result arrives as a message starting \"[Helper #\". Check it against what the user wanted. If it's right, tell the user the outcome (short, lead with the answer, name sources) and save anything durable to memory. If it's wrong or thin, delegate again with a sharper brief. Never paste a raw dump.")
+                appendLine("- A helper's result arrives as a message starting \"[Helper #\" (or \"[Helpers finished\" for a group). Check it against what the user wanted. If it's right, tell the user the outcome (short, lead with the answer, name sources) and save anything durable to memory. If it's wrong or thin, delegate again with a sharper brief. Never paste a raw dump.")
+                appendLine("- ONE PACKED ANSWER. When several helpers work on parts of ONE answer (compare three shops, research one decision from four angles), start them in one delegate call with together true: their results come back to you as one message once ALL are done, and you give the user one packed answer. Jobs that have nothing to do with each other: leave together off and report each as it lands.")
+                appendLine("- You decide what is worth saying now. A result that is only a step toward something the user is still waiting on, or that changes nothing for them, doesn't need a message: reply with exactly HOLD (nothing else) and the user sees nothing. Something important or urgent (a deadline, money, a problem, a question only they can answer): tell them straight away, in a line. If they ask how things are going, always answer.")
                 appendLine("- 'How's it going?' or 'what are the helpers doing?': helpers_status, then answer.")
+                val ps = profiles.profiles.value
+                appendLine()
+                appendLine("PROFILES: every helper works inside exactly one (parts of the user's life, each with its own connected accounts)")
+                ps.forEach { p -> appendLine("- ${p.name}: ${p.accounts.joinToString { "${com.past9.phoneaos.tools.AppCatalog.name(it.slug)} ${it.label}" }.ifBlank { "no accounts" }}${if (p.browser.isNotBlank()) "; browser sign-ins: ${p.browser}" else ""}") }
+                if (ps.none { it.name == com.past9.phoneaos.data.AgentProfile.GENERAL }) appendLine("- ${com.past9.phoneaos.data.AgentProfile.GENERAL}: none of the user's accounts (made when first used)")
+                appendLine("- Name the profile for each brief with `profiles` in delegate. A helper can ONLY use its profile's accounts; with one account of an app in it, that one is picked for it. Jobs that need none of their accounts (web research, the phone's own tools) go in ${com.past9.phoneaos.data.AgentProfile.GENERAL}, which is also what a helper gets when you name none.")
+                appendLine("- If no profile fits the job, make one with profile_create (a clear name, the apps it needs) before delegating. The user sees it in Connections in its own colour.")
+                appendLine("- Each connected account has the user's own rules (reading and changing things: allowed, ask first, or never). The app enforces them; if an action is refused, tell the user in a line and don't look for a way round it.")
                 appendLine("- When the user adds to or corrects a job a helper is already doing ('wait, I actually meant...'), helper_steer that helper: it gets your message before its next step and keeps going. If it's heading the wrong way, helper_steer with restart true: it stops and starts again with the new information. If the job isn't wanted any more, helper_stop.")
                 appendLine("- Helpers often say they can't do something when they can. When one gives up or comes back thin, send it back with helper_push (it keeps what it found): name a concrete next thing to try (another site, another search, the browser instead of a fetch, a handoff for a sign-in) and tell it plainly you believe it can do it. Push at least twice before you accept 'I can't' or tell the user.")
                 val roster = helperRoster()
@@ -271,7 +319,10 @@ class AgentRuntime(
             appendLine("- To show the user an image (a product photo, a map, a chart), put it in the reply as markdown: ![what it is](https://...). Several images in a row become a swipeable strip.")
             if (main) appendLine("- voice_note scripts are plain spoken words: no emoji, no markdown, no lists, no URLs. After sending one, don't repeat it as text.")
             appendLine("- NEVER use emoji, anywhere. They cheapen the app.")
-            appendLine("STYLE: short and warm. Lead with the answer. Use short bullets for lists. No walls of text. Plain words. No em dashes.")
+            if (main) {
+                appendLine("STYLE: TLDR, always. Lead with the answer in one or two short lines, then at most a few short bullets if they truly help. Never an essay, never a report in the chat, no headings, no recap of what you did. Plain, warm words. No em dashes.")
+                appendLine("- Anything longer (research, a comparison, a plan, a write-up the user will read properly): put it in a REPORT with the report tool. It shows as a card that opens a full-screen reader they can share or save. In the chat say only the one-line takeaway.")
+            } else appendLine("STYLE: short. Lead with the answer. Use short bullets for lists. No walls of text. Plain words. No em dashes.")
             if (role == PromptRole.ROUTINE) appendLine("\nThis is a BACKGROUND run (a routine). Nobody is watching. Do the work, then finish with a short summary the user will read later. Use notify_user if something needs their attention.")
             settings.extra("story")?.takeIf { it.isNotBlank() }?.let { appendLine("\n" + (if (main) "WHERE THINGS STAND (your own notes, written overnight; earlier chat is folded into these)" else "BACKGROUND ON THE USER (the agent's notes)") + "\n$it") }
             if (pinned.isNotEmpty()) { appendLine("\nCORE MEMORIES (pinned)"); pinned.forEach { appendLine("- ${Recall.format(it)}") } }
@@ -287,6 +338,10 @@ class AgentRuntime(
             }
             if (skills.isNotEmpty()) { appendLine("\nSKILLS EARLIER HELPERS LEFT (use them; they cost someone a struggle)"); skills.forEach { appendLine("## ${it.title}\n${it.body}\n") } }
             if (!main) appendLine("\n- Before anything fiddly, skill_find. If you struggled with something and then got it done, skill_save exactly what worked (steps, traps, how to check) so the next helper doesn't have to fight it.")
+            if (role == PromptRole.HELPER && profile != null) {
+                appendLine("\nYOUR PROFILE: ${profile.name}. This job belongs to that part of the user's life. Use ONLY these connected accounts: ${profile.accounts.joinToString { "${com.past9.phoneaos.tools.AppCatalog.name(it.slug)} ${it.label} (account ${it.id})" }.ifBlank { "none" }}. Any other account is off limits; if the job needs one that isn't here, say so in your result.")
+                if (profile.browser.isNotBlank()) appendLine("Your browser is signed in as the \"${profile.browser}\" browser profile; use that one.")
+            }
             if (role == PromptRole.HELPER) appendLine("\nYou are a HELPER the main agent started for one job. Do it fully with your tools. Then reply with ONLY the result for the main agent: what you did, what you found (facts, numbers, links, sources), and anything left undone and why. No chat, no greetings.")
         }
     }
@@ -311,11 +366,11 @@ class AgentRuntime(
             }
         }
         launchTurn {
-            if (fromCall != null) db.chat().insert(ChatItem(kind = "activity", text = "On it: $fromCall", meta = JSONObject().put("tool", "call").toString()))
+            val origin = if (fromCall != null) { db.chat().insert(ChatItem(kind = "activity", text = "On it: $fromCall", meta = JSONObject().put("tool", "call").toString())); null }
             else db.chat().insert(ChatItem(kind = "user", text = clean, meta = JSONObject().put("images", org.json.JSONArray(images.filter { !it.contains("/pdf-") }))
                 .put("files", org.json.JSONArray(files)).put("voiceReply", voiceReply).toString()))
             val forModel = if (voiceReply) "$clean\n\n(The user is on the move: answer with a voice_note, then at most one short line of text. Don't repeat the voice note as text.)" else clean
-            turnLock.withLock { runTurn(forModel, images) }
+            turnLock.withLock { runTurn(forModel, images, replyTo = origin) }
         }
     }
 
@@ -327,12 +382,13 @@ class AgentRuntime(
     }
 
     /** A helper's result goes back to the main agent as a new message (batched if several land together). */
-    private fun deliver(note: String) {
-        inbox += note
+    private fun deliver(note: String, origin: Long? = null) {
+        inbox += note to origin
         launchTurn {
             turnLock.withLock {
                 val batch = generateSequence { inbox.poll() }.toList()
-                if (batch.isNotEmpty()) runTurn(batch.joinToString("\n\n"), fromUser = false)
+                // The reply quotes the message that asked for this work (the newest, if several landed together).
+                if (batch.isNotEmpty()) runTurn(batch.joinToString("\n\n") { it.first }, fromUser = false, replyTo = batch.mapNotNull { it.second }.maxOrNull())
             }
         }
     }
@@ -443,8 +499,9 @@ class AgentRuntime(
     }
 
     /** @param fromUser a message the user sent: it starts a fresh 5-step budget. A helper's result coming back doesn't. */
-    private suspend fun runTurn(userText: String, images: List<String> = emptyList(), fromUser: Boolean = true) {
+    private suspend fun runTurn(userText: String, images: List<String> = emptyList(), fromUser: Boolean = true, replyTo: Long? = null) {
         if (fromUser) mainBudget.used = 0
+        turnOrigin = replyTo; turnLate = !fromUser
         if (settings.state.value.mode == PowerMode.SUBSCRIPTION && subscription?.ready == true) return runSubscriptionTurn(userText, subscription!!, images)
         val provider = providerFactory(settings)
         if (provider == null) {
@@ -464,7 +521,7 @@ class AgentRuntime(
                 onEvent = { e ->
                     when (e) {
                         is AgentEvent.Thinking -> _status.value = _status.value.copy(working = true, label = if (e.step == 1) "Thinking" else "Working")
-                        is AgentEvent.Said -> db.chat().insert(ChatItem(kind = "agent", text = e.text))
+                        is AgentEvent.Said -> say(e.text)
                         is AgentEvent.ToolStarted -> _status.value = _status.value.copy(label = labelFor(e.call.name))
                         is AgentEvent.ToolFinished -> {}
                     }
@@ -480,6 +537,12 @@ class AgentRuntime(
         }
     }
 
+    /** The main agent said something: into the chat, quoting what it answers. "HOLD" means it chose to say nothing yet. */
+    private suspend fun say(text: String) {
+        if (isHold(text)) return
+        db.chat().insert(ChatItem(kind = "agent", text = text, meta = JSONObject().apply { turnOrigin?.let { put("replyTo", it); if (turnLate) put("late", true) } }.toString()))
+    }
+
     private suspend fun runSubscriptionTurn(userText: String, engine: SubscriptionEngine, images: List<String> = emptyList()) {
         _status.value = AgentStatus(true, "Thinking"); phone.workStarted()
         try {
@@ -489,8 +552,14 @@ class AgentRuntime(
                 engine.turn(userText, systemPrompt(userText), resume, mcp.url, settings.localToken(), images, role = "main").collect { e ->
                     when (e.optString("type")) {
                         "session" -> newSession = e.optString("id")
-                        "text" -> e.optString("text").takeIf { !it.contains("API Error: 401") && !it.startsWith("Failed to authenticate") }
-                            ?.let { db.chat().insert(ChatItem(kind = "agent", text = it)) }
+                        "text" -> e.optString("text").let { t ->
+                            when {
+                                t.contains("API Error: 401") || t.startsWith("Failed to authenticate") -> {}
+                                // The harness's own error, not the agent talking: one plain line, not raw JSON.
+                                t.trimStart().startsWith("API Error:") -> db.chat().insert(ChatItem(kind = "notice", text = subError(t), meta = JSONObject().put("error", true).toString()))
+                                else -> say(t)
+                            }
+                        }
                         "tool" -> {
                             val name = e.optString("name")
                             _status.value = _status.value.copy(label = labelFor(name))
@@ -509,6 +578,8 @@ class AgentRuntime(
                                     engine.forgetBadSignIn(); settings.setExtra("claude_session", null)
                                     db.chat().insert(ChatItem(kind = "notice", text = "Your ${settings.state.value.subKind.label} sign-in didn't work. Open Settings, Subscription, and sign in again.", meta = JSONObject().put("error", true).toString()))
                                 }
+                                // The same failure also came as text a moment ago: say it once.
+                                m.contains("API Error:") -> {}
                                 m.isNotBlank() && !m.matches(Regex("exit \\d+")) -> db.chat().insert(ChatItem(kind = "notice", text = "${settings.state.value.subKind.label}: " + m.take(300), meta = JSONObject().put("error", true).toString()))
                             }
                         }
@@ -526,6 +597,18 @@ class AgentRuntime(
         } finally { _status.value = AgentStatus(helpers = helpers.size); phone.workFinished() }
     }
 
+    /** "API Error: 400 {...claude_code_version_too_old...}" -> a line the user can act on. */
+    private fun subError(raw: String): String {
+        val msg = Regex("\"message\"\\s*:\\s*\"([^\"]+)\"").find(raw)?.groupValues?.get(1)
+        val who = settings.state.value.subKind.label
+        return when {
+            raw.contains("claude_code_version_too_old") -> "This model needs a newer Claude Code than this version of the app has. Update the app, or pick another model."
+            raw.contains("rate_limit") || raw.contains(" 429") -> "$who says you've hit your plan's limit for now. Try again later or switch models."
+            raw.contains("overloaded") || raw.contains(" 529") -> "$who is overloaded right now. Try again in a minute."
+            else -> "$who: " + (msg ?: raw.removePrefix("API Error:").trim()).take(240)
+        }
+    }
+
     private val phoneToolNames by lazy { tools().map { it.spec.name }.toSet() }
     private val workerToolNames get() = tools(forHelper = true).map { it.spec.name }.toSet()
 
@@ -541,7 +624,10 @@ class AgentRuntime(
     }
 
     /** Set a helper going in the background and return its id at once. */
-    private suspend fun startHelper(task: String, label: String, wanted: String? = null): Long {
+    private suspend fun startHelper(task: String, label: String, wanted: String? = null, profileName: String? = null, batch: String? = null): Long {
+        // Every helper works inside a profile; with none named, it gets General (none of the user's accounts).
+        val profile = profileName?.trim()?.takeIf { it.isNotEmpty() }?.let { w -> profiles.find(w) ?: error("No profile called \"$w\". The user's profiles: ${profiles.profiles.value.joinToString { it.name }.ifBlank { "none yet" }}. Pick one, or make one with profile_create.") }
+            ?: profiles.general()
         val st = settings.state.value
         val sub = subscription?.takeIf { st.mode == PowerMode.SUBSCRIPTION && it.ready }
         val provider = if (sub == null) providerFactory(settings) ?: error("No AI is set up for helpers yet") else null
@@ -550,7 +636,12 @@ class AgentRuntime(
         val pick = wanted?.trim()?.takeIf { it.isNotEmpty() }?.let { w -> roster.firstOrNull { it.id.equals(w, true) } ?: roster.firstOrNull { it.name.equals(w, true) } } ?: roster.first()
         val model = pick.id.ifBlank { if (sub != null) st.subModel else st.model }
         val itemId = db.chat().insert(ChatItem(kind = "helper", text = task, meta = JSONObject().put("label", label).put("state", "working")
-            .put("startedAt", System.currentTimeMillis()).put("model", model).toString()))
+            .put("startedAt", System.currentTimeMillis()).put("model", model).apply {
+                put("profile", profile.name).put("profileColor", profile.color); turnOrigin?.let { put("origin", it) }; batch?.let { put("batch", it) }
+            }.toString()))
+        helperProfile[itemId] = profile.id
+        if (profile.browser.isNotBlank()) com.past9.phoneaos.tools.BrowserTool.lastProfile["helper-$itemId"] = profile.browser
+        batch?.let { helperBatch[itemId] = it }
         launchHelper(itemId, label, mutableListOf(Msg.user(task)), task, null, provider, sub, model)
         return itemId
     }
@@ -614,7 +705,7 @@ class AgentRuntime(
         phone.workStarted()
         var state = "failed"; var result = ""
         try {
-            val sys = systemPrompt(history.first().text, role = PromptRole.HELPER)
+            val sys = systemPrompt(history.first().text, role = PromptRole.HELPER, profile = helperProfile[itemId]?.let { profiles.find(it) })
             result = if (sub != null) runSubHelper(itemId, prompt, sys, resume, sub, model) else
                 AgentLoop(provider!!, model, tools(forHelper = true), maxSteps = 120).run(sys, history, ctx, onEvent = { e ->
                     if (e is AgentEvent.ToolStarted) setHelperMeta(itemId) { it.put("now", labelFor(e.call.name)) }
@@ -637,11 +728,23 @@ class AgentRuntime(
                 com.past9.phoneaos.browser.BrowserService.release("helper-$itemId")
                 phone.workFinished()
                 // The main agent hears back unless the user stopped it (then there is nothing to report).
+                if (state == "stopped") helperBatch.remove(itemId)?.let { b -> if (helperBatch.values.none { it == b }) batchResults.remove(b)?.takeIf { it.isNotEmpty() }?.let { all ->
+                    deliver("[Helpers finished: the rest of the group was stopped. Give the user ONE packed answer from these.]\n\n" + all.joinToString("\n\n") { it.second }) } }
                 if (state != "stopped") {
                     val nudge = if ((state == "failed" || gaveUp.containsMatchIn(result.trim().split(Regex("(?<=[.!?])\\s+|\\n")).first().take(300))) && pushes < 2)
                         "\n\n(It says it couldn't do all of it${if (pushes > 0) ", after $pushes push${if (pushes > 1) "es" else ""}" else ""}. Helpers usually can. Unless it's truly impossible, send it back with helper_push: name a concrete next thing to try and tell it you believe it can do it. Push at least twice before you accept it or tell the user.)"
                     else ""
-                    deliver("[Helper #$itemId \"$label\" ${if (state == "done") "finished" else "failed"}${if (pushes > 0) " (after $pushes push${if (pushes > 1) "es" else ""})" else ""}]\n${result.take(12_000).ifBlank { "(no result text)" }}$nudge")
+                    val note = "[Helper #$itemId \"$label\" ${if (state == "done") "finished" else "failed"}${if (pushes > 0) " (after $pushes push${if (pushes > 1) "es" else ""})" else ""}]\n${result.take(12_000).ifBlank { "(no result text)" }}$nudge"
+                    val origin = runCatching { JSONObject(db.chat().get(itemId)?.meta ?: "{}").optLong("origin").takeIf { it > 0 } }.getOrNull()
+                    val batch = helperBatch.remove(itemId)
+                    if (batch == null) deliver(note, origin)
+                    else {
+                        // Part of one answer: hold it until every helper in the group is done, then hand them over together.
+                        batchResults.getOrPut(batch) { java.util.concurrent.ConcurrentLinkedQueue() }.add(itemId to note)
+                        if (helperBatch.values.none { it == batch }) batchResults.remove(batch)?.let { all ->
+                            deliver("[Helpers finished: all ${all.size} you started together are done. Give the user ONE packed answer.]\n\n" + all.joinToString("\n\n") { it.second }, origin)
+                        }
+                    }
                 }
             }
         }
@@ -765,6 +868,9 @@ class AgentRuntime(
     }
 
     companion object {
+        /** The agent chose to say nothing yet (a result that's only a step toward a bigger answer). */
+        fun isHold(text: String) = text.trim().trim('.', '*', '"', '`').equals("HOLD", true)
+
         fun defaultProvider(s: SettingsStore): LlmProvider? {
             val st = s.state.value
             if (st.mode != PowerMode.API_KEY) return null
@@ -821,19 +927,17 @@ class AgentRuntime(
 }
 
 /**
- * Write actions in connected apps need the user's yes, enforced in code (not just asked of the
- * model): sending, posting, deleting, paying, inviting, sharing...
+ * Connected-app actions go through the account's rules (and a helper's profile), enforced in code
+ * (not just asked of the model): reading and changing things are each Allowed, Ask me or Never.
  */
-class GuardedAppsRunTool(private val inner: AppsRunTool) : Tool {
+class GuardedAppsRunTool(private val inner: AppsRunTool, private val guard: com.past9.phoneaos.tools.AppGuard = com.past9.phoneaos.tools.AppGuard.DEFAULT) : Tool {
     override val spec = inner.spec
-    private val writeWords = Regex("(SEND|REPLY|FORWARD|CREATE|DELETE|REMOVE|TRASH|UPDATE|PATCH|POST|PUBLISH|PAY|PURCHASE|ARCHIVE|MOVE|INVITE|SHARE|ADD|INSERT|UPLOAD|ACCEPT|DECLINE|CANCEL)")
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val slug = input.optString("slug").uppercase()
-        if (writeWords.containsMatchIn(slug.substringAfter('_'))) {
-            val args = input.optJSONObject("arguments")?.toString(2)?.take(1500) ?: "{}"
-            val a = ctx.ask("APPROVAL|${slug.lowercase().replace('_', ' ')}|$args", listOf("Approve", "Decline"))
-            if (a != "Approve") return if (a == null) "Needs the user's approval and nobody is around. Not done." else "The user declined. Not done."
-        }
+        val args = input.optJSONObject("arguments")?.toString(2)?.take(1500) ?: "{}"
+        val v = guard.check(ctx, listOf(slug), input.optString("account").takeIf { it.isNotBlank() }, args)
+        v.refuse?.let { return it }
+        v.account?.let { input.put("account", it) }
         return inner.run(input, ctx)
     }
 }

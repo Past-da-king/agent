@@ -33,11 +33,11 @@ try {
       resume: resume || undefined,
       model: model || undefined,
       cwd: process.env.HOME,
-      // The node running this bridge, by absolute path: never depend on PATH lookups on Android.
-      executable: process.execPath,
-      pathToClaudeCodeExecutable: new URL("./node_modules/@anthropic-ai/claude-agent-sdk/cli.js", import.meta.url).pathname,
+      // Claude Code is a native (musl) binary shipped in the APK; the app links it as bin/claude.
+      pathToClaudeCodeExecutable: process.env.CLAUDE_BIN,
       env: { ...process.env },
       permissionMode: "bypassPermissions",
+      allowDangerouslySkipPermissions: true,
       // Productivity agent, not a coding agent: the phone's tools plus web search/fetch only.
       allowedTools: isMain ? ["mcp__phone"] : ["mcp__phone", "WebSearch", "WebFetch"],
       disallowedTools: ["Bash", "Edit", "Write", "NotebookEdit", "KillShell", ...(isMain ? ["WebSearch", "WebFetch", "Task", "Agent", "Read", "Glob", "Grep"] : ["Task", "Agent"])],

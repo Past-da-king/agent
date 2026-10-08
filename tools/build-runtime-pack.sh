@@ -12,7 +12,13 @@ WORK="${WORK:-/tmp/phone-runtime-pack}"
 JNI="$ROOT/app/src/main/jniLibs/arm64-v8a"
 ASSETS="$ROOT/app/src/main/assets/runtime"
 PATCHELF="${PATCHELF:-patchelf}"
-SDK_VERSION="0.2.112"   # last Agent SDK whose Claude Code CLI is plain JavaScript (0.2.113+ ship a Bun binary)
+SDK_VERSION="${SDK_VERSION:-0.3.293}"   # Agent SDK (JS). Claude Code itself is a native Bun binary since 0.2.113: we ship its musl build.
+CODEX_SDK_VERSION="${CODEX_SDK_VERSION:-0.160.0}"
+APP_ID="com.past9.phoneaos"
+# The musl Claude Code binary asks for /lib/ld-musl-aarch64.so.1, which Android lacks. We ship Alpine's musl
+# loader as libldmusl.so and point the binary's interpreter at a symlink the app keeps in its own files dir
+# (bin/ld-musl-aarch64.so.1 -> nativeLibraryDir/libldmusl.so). The kernel follows the link to an APK lib, so it may run.
+INTERP="/data/user/0/$APP_ID/files/runtime/bin/ld-musl-aarch64.so.1"
 mkdir -p "$WORK/debs" "$WORK/root" "$JNI" "$ASSETS"
 cd "$WORK"
 
@@ -53,15 +59,25 @@ cp "$U/bin/node" "$JNI/libnode.so"; chmod 755 "$JNI/libnode.so"; fix "$JNI/libno
 echo "== JS packages"
 mkdir -p js && cd js
 echo '{"name":"phone-runtime","private":true,"type":"module"}' > package.json
-npm install --ignore-scripts --no-audit --no-fund --omit=optional "@anthropic-ai/claude-agent-sdk@$SDK_VERSION" @openai/codex-sdk >/dev/null
+npm install --ignore-scripts --no-audit --no-fund --omit=optional "@anthropic-ai/claude-agent-sdk@$SDK_VERSION" "@openai/codex-sdk@$CODEX_SDK_VERSION" >/dev/null
+CC=$(node -e "console.log(require('./node_modules/@anthropic-ai/claude-agent-sdk/package.json').claudeCodeVersion)")
+npm pack "@anthropic-ai/claude-code-linux-arm64-musl@$CC" >/dev/null
+mkdir -p ccn && tar xzf anthropic-ai-claude-code-linux-arm64-musl-*.tgz -C ccn
+cp ccn/package/claude "$JNI/libclaude.so"; chmod 755 "$JNI/libclaude.so"
+"$PATCHELF" --set-interpreter "$INTERP" "$JNI/libclaude.so"
+AV=$(curl -s -m 60 https://dl-cdn.alpinelinux.org/alpine/latest-stable/main/aarch64/APKINDEX.tar.gz | tar xzO APKINDEX | awk '/^P:musl$/{f=1} f&&/^V:/{print substr($0,3); exit}')
+curl -s -m 120 -o musl.apk "https://dl-cdn.alpinelinux.org/alpine/latest-stable/main/aarch64/musl-$AV.apk"
+mkdir -p musl && tar xzf musl.apk -C musl 2>/dev/null || true
+cp musl/lib/ld-musl-aarch64.so.1 "$JNI/libldmusl.so"; chmod 755 "$JNI/libldmusl.so"
 CX=$(node -e "console.log(require('./node_modules/@openai/codex/package.json').version)")
 npm pack "@openai/codex@$CX-linux-arm64" >/dev/null
 mkdir -p cx && tar xzf openai-codex-*-linux-arm64.tgz -C cx
 cp cx/package/vendor/aarch64-unknown-linux-musl/bin/codex "$JNI/libcodex.so"
-cp node_modules/@anthropic-ai/claude-agent-sdk/vendor/ripgrep/arm64-linux/rg "$JNI/librg.so"
+# ripgrep: newer SDKs no longer vendor it; keep the one already packed if so.
+[ -f node_modules/@anthropic-ai/claude-agent-sdk/vendor/ripgrep/arm64-linux/rg ] && cp node_modules/@anthropic-ai/claude-agent-sdk/vendor/ripgrep/arm64-linux/rg "$JNI/librg.so"
 chmod 755 "$JNI/libcodex.so" "$JNI/librg.so"
 # Keep only what runs on an arm64 phone.
-find node_modules/@anthropic-ai/claude-agent-sdk/vendor -mindepth 2 -maxdepth 2 -type d ! -name 'arm64-linux' -exec rm -r {} +
+[ -d node_modules/@anthropic-ai/claude-agent-sdk/vendor ] && find node_modules/@anthropic-ai/claude-agent-sdk/vendor -mindepth 2 -maxdepth 2 -type d ! -name 'arm64-linux' -exec rm -r {} +
 rm -f "$ASSETS/node_modules.zip"; zip -qr -9 "$ASSETS/node_modules.zip" node_modules package.json
 cd ..
 cp /etc/ssl/certs/ca-certificates.crt "$ASSETS/cacert.pem"

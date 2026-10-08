@@ -79,32 +79,76 @@ class LiveSession(
     private val micOpen = AtomicBoolean(false)
     @Volatile private var muted = false
 
+    /**
+     * A call outlives one connection. Google closes a Live connection after about ten minutes (it warns
+     * with goAway first) and networks drop; calls used to simply die there (seen 7 Oct 23:52-00:03:
+     * "sent ping but didn't receive pong" after 30 pings). Now the session hands us a resumption handle
+     * as it goes, and on goAway or an unexpected drop we reconnect with it and carry on the same
+     * conversation, mic and speaker untouched. Dictation is short and doesn't bother.
+     */
+    private val resumable = !dictation
+    @Volatile private var resumeHandle: String? = null
+    /** Turned off if this model rejects the resumption fields, so a call still works without them. */
+    @Volatile private var resumeFields = true
+    @Volatile private var retries = 0
+    @Volatile private var everReady = false
+
     fun start() {
         if (running.getAndSet(true)) return
+        connect()
+    }
+
+    private fun connect() {
         val url = "wss://generativelanguage.googleapis.com/ws/" +
             "google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=$apiKey"
         ws = http.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
+                if (webSocket !== ws) return
                 onEvent(Event.Connected)
                 webSocket.send(setupMessage().toString())
             }
 
-            override fun onMessage(webSocket: WebSocket, text: String) = handle(text)
+            override fun onMessage(webSocket: WebSocket, text: String) { if (webSocket === ws) handle(text) }
 
-            override fun onMessage(webSocket: WebSocket, bytes: okio.ByteString) = handle(bytes.utf8())
+            override fun onMessage(webSocket: WebSocket, bytes: okio.ByteString) { if (webSocket === ws) handle(bytes.utf8()) }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                if (webSocket !== ws) return
                 Log.w(TAG, "socket failed: ${t.message}")
-                onEvent(Event.Failed(t.message ?: "connection failed"))
-                stop()
+                if (!tryReconnect("failed: ${t.message}")) { onEvent(Event.Failed(t.message ?: "connection failed")); stop() }
+            }
+
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                if (webSocket === ws) Log.i(TAG, "server closing $code $reason")
+                runCatching { webSocket.close(1000, null) }
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                if (webSocket !== ws) return
                 Log.i(TAG, "socket closed $code $reason")
-                onEvent(Event.Closed(reason.ifBlank { "closed" }))
-                stop()
+                // 1007: this model refused a setup field. Try once more without the resumption fields.
+                if (code == 1007 && resumeFields && !ready.get()) { resumeFields = false; resumeHandle = null; if (tryReconnect("setup refused: $reason")) return }
+                if (!tryReconnect("closed $code $reason")) { onEvent(Event.Closed(reason.ifBlank { "closed" })); stop() }
             }
         })
+    }
+
+    /** The call is still wanted but the connection went: open a new one on the same session. False when giving up. */
+    private fun tryReconnect(why: String): Boolean {
+        if (!running.get() || !resumable || retries >= 4) return false
+        // Nothing to resume (it never got going): one quick retry only, for a flaky first connection.
+        if (resumeHandle == null && everReady && resumeFields) return false
+        if (!everReady && retries >= 1) return false
+        retries++
+        ready.set(false)
+        val old = ws; ws = null
+        runCatching { old?.cancel() }
+        Log.i(TAG, "reconnecting (try $retries, ${if (resumeHandle != null) "resuming" else "fresh"}) after $why")
+        thread(name = "aos-live-reconnect", isDaemon = true) {
+            Thread.sleep(400L * (1 shl (retries - 1)).coerceAtMost(8))
+            if (running.get()) connect()
+        }
+        return true
     }
 
     private fun setupMessage(): JSONObject {
@@ -140,6 +184,11 @@ class LiveSession(
         // Only the call needs to hear ITSELF back; dictation only ever wants his own words.
         if (!dictation) setup.put("outputAudioTranscription", JSONObject())
         if (tools != null && !dictation) setup.put("tools", tools)
+        if (resumable && resumeFields) {
+            setup.put("sessionResumption", JSONObject().apply { resumeHandle?.let { put("handle", it) } })
+            // Without compression an audio session ends at ~15 minutes however often we reconnect.
+            setup.put("contextWindowCompression", JSONObject().put("slidingWindow", JSONObject()))
+        }
         return JSONObject().put("setup", setup)
     }
 
@@ -147,8 +196,20 @@ class LiveSession(
         try {
             val m = JSONObject(raw)
             if (m.has("setupComplete")) {
-                ready.set(true)
-                onEvent(Event.SetupComplete)
+                Log.i(TAG, "setup complete${if (everReady) " (reconnected)" else ""}")
+                ready.set(true); retries = 0
+                val again = everReady; everReady = true
+                if (!again) onEvent(Event.SetupComplete) else onEvent(Event.Speaking(false))
+                return
+            }
+            m.optJSONObject("sessionResumptionUpdate")?.let { u ->
+                if (u.optBoolean("resumable") && u.optString("newHandle").isNotBlank()) resumeHandle = u.optString("newHandle")
+                return
+            }
+            m.optJSONObject("goAway")?.let { g ->
+                // Google is about to end this connection: move to a fresh one now, while it's clean.
+                Log.i(TAG, "goAway, time left ${g.optString("timeLeft")}")
+                if (!tryReconnect("goAway")) Log.w(TAG, "goAway and no way to resume")
                 return
             }
             m.optJSONObject("toolCall")?.let { tc ->

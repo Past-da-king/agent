@@ -92,8 +92,9 @@ class BrowserEngine(private val context: Context, val profile: String = "Persona
                 .setFullVersion(full).setMobile(true).setPlatform("Android").build())
         }.onFailure { android.util.Log.w("AgentBrowser", "UA metadata failed", it) }
         android.util.Log.i("AgentBrowser", "X-Requested-With removable=$xrw, UA metadata=$uam, UA=${settings.userAgentString}")
-        if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.WEB_AUTHENTICATION))
-            runCatching { androidx.webkit.WebSettingsCompat.setWebAuthenticationSupport(settings, androidx.webkit.WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_FOR_BROWSER) }
+        // No WebAuthn: browser-mode passkeys need CREDENTIAL_MANAGER_SET_ORIGIN, which only privileged
+        // apps hold. With it on, any site asking for a passkey (Microsoft sign-in) threw a SecurityException
+        // on the main thread and killed the app. Left off, sites fall back to password or code sign-in.
         val cookies = if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.MULTI_PROFILE))
             runCatching { androidx.webkit.WebViewCompat.getProfile(this).cookieManager }.getOrNull() ?: CookieManager.getInstance() else CookieManager.getInstance()
         cookies.setAcceptCookie(true)

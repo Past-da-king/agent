@@ -22,12 +22,12 @@ Home, chat, memory, routines. The two demo recordings are on the [project page](
 
 It is not on the Play Store. You sideload the APK.
 
-1. Open [Releases](https://github.com/Past-da-king/agent/releases/latest) and download `Agent-0.9.1.apk` on your phone.
+1. Open [Releases](https://github.com/Past-da-king/agent/releases/latest) and download `Agent-0.11.0.apk` on your phone.
 2. Tap the file and allow the install when Android asks. That is the whole sideload.
 3. Open Agent, give it a name, pick how it looks, then pick how to power it. See [Setup](#setup).
 4. On a Samsung, Xiaomi or OnePlus phone, set the app's battery to **Unrestricted** under Settings, or Android will kill the browser and the routines while they work.
 
-You need Android 10 or newer on an arm64 phone, which is every phone sold in the last few years. The APK is about 215 MB because the Node runtime ships inside it, so leave room for that and for its data.
+You need Android 10 or newer on an arm64 phone, which is every phone sold in the last few years. The APK is about 317 MB because the Node runtime, Codex and Claude Code ship inside it, so leave room for that and for its data.
 
 ## What it can actually do
 
@@ -124,7 +124,7 @@ Tests: `./gradlew testDebugUnitTest`, which runs the unit tests plus Robolectric
 
 - Kotlin and Jetpack Compose (Material 3 Expressive), Room, WorkManager.
 - On the API key path, a provider-neutral agent loop in Kotlin that speaks both chat formats.
-- On the subscription path, Node 24 (Termux's Android build) ships inside the APK as `lib*.so` files, because Android only lets an app execute files from its native library folder, and Codex and the Agent SDK run on it. The app's own tools are served to them over a local MCP server on `127.0.0.1` with a per-install token.
+- On the subscription path, Node 24 (Termux's Android build) ships inside the APK as `lib*.so` files, because Android only lets an app execute files from its native library folder, and the Agent SDK runs on it. Codex and Claude Code ship the same way as their arm64 musl builds; Claude Code gets the musl loader as `libldmusl.so`, and a local proxy resolves DNS for both. The app's own tools are served to them over a local MCP server on `127.0.0.1` with a per-install token.
 - The browser is an Android WebView hosted in a foreground service.
 
 ## Risks
