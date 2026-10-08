@@ -153,7 +153,7 @@ class ProfilesTest {
         assertTrue(sys.contains("YOUR PROFILE: Strat Edge work") && sys.contains("account ca_work") && !sys.contains("ca_home"))
         assertEquals("Strat Edge work", JSONObject(db.chat().all().first().first { it.kind == "helper" }.meta).getString("profile"))
         // The main agent sees the profiles it can hand out.
-        assertTrue(rt.systemPrompt("x").contains("THE USER'S PROFILES") )
+        assertTrue(rt.systemPrompt("x").contains("PROFILES: every helper works inside exactly one"))
         assertTrue(rt.systemPrompt("x").contains(prof.name))
     }
 
@@ -170,11 +170,33 @@ class ProfilesTest {
         val p = ScriptedProvider(call("report", JSONObject().put("title", "Cyber tender readiness").put("summary", "Two gaps: ISO 27001 and a SOC partner.")
             .put("markdown", "## Gaps\n\n- ISO 27001\n- SOC partner\n")), say("Two gaps; the report has the plan."))
         val rt = runtime(p)
-        rt.send("Are we ready for the cyber tender?"); idle(rt)
+        rt.send("Are we ready for the cyber tender?")
+        // Poll rather than block the test's main thread in join (Robolectric's looper then never runs the turn).
+        withTimeout(20_000) { while (db.chat().all().first().none { it.kind == "agent" }) kotlinx.coroutines.delay(200) }
+        idle(rt)
         val card = db.chat().all().first().single { it.kind == "report" }
         val meta = JSONObject(card.meta)
         assertEquals("Cyber tender readiness", meta.getString("title"))
         assertTrue(java.io.File(meta.getString("path")).readText().contains("## Gaps"))
         assertEquals(db.chat().all().first().first { it.kind == "user" }.id, meta.optLong("replyTo"))
+    }
+
+    @Test fun everyHelperGetsAProfileGeneralWhenNoneIsNamed() = runBlocking {
+        val p = ScriptedProvider(delegate("Weather in Durban tomorrow"), say("On it."), say("Sunny."))
+        val rt = runtime(p)
+        rt.send("Weather?"); idle(rt)
+        val meta = JSONObject(db.chat().all().first().first { it.kind == "helper" }.meta)
+        assertEquals(AgentProfile.GENERAL, meta.getString("profile")); assertEquals("graphite", meta.getString("profileColor"))
+        assertTrue(p.seen.first { it.first.contains("You are a HELPER") }.first.contains("YOUR PROFILE: General"))
+    }
+
+    @Test fun theAgentCanMakeAProfileWithTheAppsItNeeds() = runBlocking {
+        val tool = com.past9.phoneaos.tools.ProfileCreateTool(store) { slugs -> listOf(work, home, slack).filter { it.slug in slugs } }
+        val out = tool.run(JSONObject().put("name", "Job hunt").put("apps", JSONArray(listOf("gmail:me@gmail.com", "linkedin"))), Ctx())
+        val p = store.find("job hunt")!!
+        assertEquals(listOf(home.id), p.accounts.map { it.id })
+        assertTrue(out, out.contains("linkedin"))
+        assertTrue(p.color in AgentProfile.COLORS)
+        assertNotEquals("A second profile gets a different colour", p.color, store.create("Side gig").color)
     }
 }

@@ -190,6 +190,7 @@ class AgentRuntime(
             HelperPushTool { id, message -> pushHelper(id, message) },
             HelpersStatusTool { helpersReport() },
             HelperStopTool { id -> stopHelper(id) },
+            com.past9.phoneaos.tools.ProfileCreateTool(profiles) { slugs -> appAccounts(slugs) },
             com.past9.phoneaos.cards.CardListTool(cards), com.past9.phoneaos.cards.CardShowTool(cards, db.chat()), com.past9.phoneaos.cards.CardPinTool(cards),
         )
         // Small jobs (a page, a quick lookup) it may do itself, within the step budget. Routines and watchers stay with helpers.
@@ -269,12 +270,12 @@ class AgentRuntime(
                 appendLine("- You decide what is worth saying now. A result that is only a step toward something the user is still waiting on, or that changes nothing for them, doesn't need a message: reply with exactly HOLD (nothing else) and the user sees nothing. Something important or urgent (a deadline, money, a problem, a question only they can answer): tell them straight away, in a line. If they ask how things are going, always answer.")
                 appendLine("- 'How's it going?' or 'what are the helpers doing?': helpers_status, then answer.")
                 val ps = profiles.profiles.value
-                if (ps.isNotEmpty()) {
-                    appendLine()
-                    appendLine("THE USER'S PROFILES (parts of their life, each with its own connected accounts)")
-                    ps.forEach { p -> appendLine("- ${p.name}: ${p.accounts.joinToString { "${com.past9.phoneaos.tools.AppCatalog.name(it.slug)} ${it.label}" }.ifBlank { "no accounts yet" }}${if (p.browser.isNotBlank()) "; browser sign-ins: ${p.browser}" else ""}") }
-                    appendLine("- When a job belongs to one part of their life (a work email, a Slack message, their personal calendar), hand the helper that profile with `profiles` in delegate. It can then ONLY use that profile's accounts, and with one account of an app in it, that one is picked for it. Leave it out for jobs that need no accounts or span everything.")
-                }
+                appendLine()
+                appendLine("PROFILES: every helper works inside exactly one (parts of the user's life, each with its own connected accounts)")
+                ps.forEach { p -> appendLine("- ${p.name}: ${p.accounts.joinToString { "${com.past9.phoneaos.tools.AppCatalog.name(it.slug)} ${it.label}" }.ifBlank { "no accounts" }}${if (p.browser.isNotBlank()) "; browser sign-ins: ${p.browser}" else ""}") }
+                if (ps.none { it.name == com.past9.phoneaos.data.AgentProfile.GENERAL }) appendLine("- ${com.past9.phoneaos.data.AgentProfile.GENERAL}: none of the user's accounts (made when first used)")
+                appendLine("- Name the profile for each brief with `profiles` in delegate. A helper can ONLY use its profile's accounts; with one account of an app in it, that one is picked for it. Jobs that need none of their accounts (web research, the phone's own tools) go in ${com.past9.phoneaos.data.AgentProfile.GENERAL}, which is also what a helper gets when you name none.")
+                appendLine("- If no profile fits the job, make one with profile_create (a clear name, the apps it needs) before delegating. The user sees it in Connections in its own colour.")
                 appendLine("- Each connected account has the user's own rules (reading and changing things: allowed, ask first, or never). The app enforces them; if an action is refused, tell the user in a line and don't look for a way round it.")
                 appendLine("- When the user adds to or corrects a job a helper is already doing ('wait, I actually meant...'), helper_steer that helper: it gets your message before its next step and keeps going. If it's heading the wrong way, helper_steer with restart true: it stops and starts again with the new information. If the job isn't wanted any more, helper_stop.")
                 appendLine("- Helpers often say they can't do something when they can. When one gives up or comes back thin, send it back with helper_push (it keeps what it found): name a concrete next thing to try (another site, another search, the browser instead of a fetch, a handoff for a sign-in) and tell it plainly you believe it can do it. Push at least twice before you accept 'I can't' or tell the user.")
@@ -551,8 +552,14 @@ class AgentRuntime(
                 engine.turn(userText, systemPrompt(userText), resume, mcp.url, settings.localToken(), images, role = "main").collect { e ->
                     when (e.optString("type")) {
                         "session" -> newSession = e.optString("id")
-                        "text" -> e.optString("text").takeIf { !it.contains("API Error: 401") && !it.startsWith("Failed to authenticate") }
-                            ?.let { say(it) }
+                        "text" -> e.optString("text").let { t ->
+                            when {
+                                t.contains("API Error: 401") || t.startsWith("Failed to authenticate") -> {}
+                                // The harness's own error, not the agent talking: one plain line, not raw JSON.
+                                t.trimStart().startsWith("API Error:") -> db.chat().insert(ChatItem(kind = "notice", text = subError(t), meta = JSONObject().put("error", true).toString()))
+                                else -> say(t)
+                            }
+                        }
                         "tool" -> {
                             val name = e.optString("name")
                             _status.value = _status.value.copy(label = labelFor(name))
@@ -571,6 +578,8 @@ class AgentRuntime(
                                     engine.forgetBadSignIn(); settings.setExtra("claude_session", null)
                                     db.chat().insert(ChatItem(kind = "notice", text = "Your ${settings.state.value.subKind.label} sign-in didn't work. Open Settings, Subscription, and sign in again.", meta = JSONObject().put("error", true).toString()))
                                 }
+                                // The same failure also came as text a moment ago: say it once.
+                                m.contains("API Error:") -> {}
                                 m.isNotBlank() && !m.matches(Regex("exit \\d+")) -> db.chat().insert(ChatItem(kind = "notice", text = "${settings.state.value.subKind.label}: " + m.take(300), meta = JSONObject().put("error", true).toString()))
                             }
                         }
@@ -586,6 +595,18 @@ class AgentRuntime(
         } catch (e: Exception) {
             db.chat().insert(ChatItem(kind = "notice", text = friendlyError(e), meta = JSONObject().put("error", true).toString()))
         } finally { _status.value = AgentStatus(helpers = helpers.size); phone.workFinished() }
+    }
+
+    /** "API Error: 400 {...claude_code_version_too_old...}" -> a line the user can act on. */
+    private fun subError(raw: String): String {
+        val msg = Regex("\"message\"\\s*:\\s*\"([^\"]+)\"").find(raw)?.groupValues?.get(1)
+        val who = settings.state.value.subKind.label
+        return when {
+            raw.contains("claude_code_version_too_old") -> "This model needs a newer Claude Code than this version of the app has. Update the app, or pick another model."
+            raw.contains("rate_limit") || raw.contains(" 429") -> "$who says you've hit your plan's limit for now. Try again later or switch models."
+            raw.contains("overloaded") || raw.contains(" 529") -> "$who is overloaded right now. Try again in a minute."
+            else -> "$who: " + (msg ?: raw.removePrefix("API Error:").trim()).take(240)
+        }
     }
 
     private val phoneToolNames by lazy { tools().map { it.spec.name }.toSet() }
@@ -604,7 +625,9 @@ class AgentRuntime(
 
     /** Set a helper going in the background and return its id at once. */
     private suspend fun startHelper(task: String, label: String, wanted: String? = null, profileName: String? = null, batch: String? = null): Long {
-        val profile = profileName?.trim()?.takeIf { it.isNotEmpty() }?.let { w -> profiles.find(w) ?: error("No profile called \"$w\". The user's profiles: ${profiles.profiles.value.joinToString { it.name }.ifBlank { "none yet" }}") }
+        // Every helper works inside a profile; with none named, it gets General (none of the user's accounts).
+        val profile = profileName?.trim()?.takeIf { it.isNotEmpty() }?.let { w -> profiles.find(w) ?: error("No profile called \"$w\". The user's profiles: ${profiles.profiles.value.joinToString { it.name }.ifBlank { "none yet" }}. Pick one, or make one with profile_create.") }
+            ?: profiles.general()
         val st = settings.state.value
         val sub = subscription?.takeIf { st.mode == PowerMode.SUBSCRIPTION && it.ready }
         val provider = if (sub == null) providerFactory(settings) ?: error("No AI is set up for helpers yet") else null
@@ -614,9 +637,10 @@ class AgentRuntime(
         val model = pick.id.ifBlank { if (sub != null) st.subModel else st.model }
         val itemId = db.chat().insert(ChatItem(kind = "helper", text = task, meta = JSONObject().put("label", label).put("state", "working")
             .put("startedAt", System.currentTimeMillis()).put("model", model).apply {
-                profile?.let { put("profile", it.name) }; turnOrigin?.let { put("origin", it) }; batch?.let { put("batch", it) }
+                put("profile", profile.name).put("profileColor", profile.color); turnOrigin?.let { put("origin", it) }; batch?.let { put("batch", it) }
             }.toString()))
-        profile?.let { p -> helperProfile[itemId] = p.id; if (p.browser.isNotBlank()) com.past9.phoneaos.tools.BrowserTool.lastProfile["helper-$itemId"] = p.browser }
+        helperProfile[itemId] = profile.id
+        if (profile.browser.isNotBlank()) com.past9.phoneaos.tools.BrowserTool.lastProfile["helper-$itemId"] = profile.browser
         batch?.let { helperBatch[itemId] = it }
         launchHelper(itemId, label, mutableListOf(Msg.user(task)), task, null, provider, sub, model)
         return itemId

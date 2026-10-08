@@ -17,12 +17,19 @@ data class AccountRef(val id: String, val slug: String, val label: String) {
  * optionally, which browser profile is signed in for it. A helper handed a profile can only use those
  * accounts. One account can sit in any number of profiles.
  */
-data class AgentProfile(val id: String, val name: String, val accounts: List<AccountRef> = emptyList(), val browser: String = "") {
+data class AgentProfile(val id: String, val name: String, val accounts: List<AccountRef> = emptyList(), val browser: String = "",
+                        /** One of the app's accent ids (ui.theme.Accents): its helpers show in this colour. */
+                        val color: String = "iris") {
     fun has(accountId: String) = accounts.any { it.id == accountId }
-    fun toJson(): JSONObject = JSONObject().put("id", id).put("name", name).put("browser", browser).put("accounts", JSONArray(accounts.map { it.toJson() }))
+    fun toJson(): JSONObject = JSONObject().put("id", id).put("name", name).put("browser", browser).put("color", color).put("accounts", JSONArray(accounts.map { it.toJson() }))
     companion object {
         fun from(o: JSONObject) = AgentProfile(o.optString("id"), o.optString("name"),
-            o.optJSONArray("accounts")?.let { a -> (0 until a.length()).map { AccountRef.from(a.getJSONObject(it)) } }.orEmpty(), o.optString("browser"))
+            o.optJSONArray("accounts")?.let { a -> (0 until a.length()).map { AccountRef.from(a.getJSONObject(it)) } }.orEmpty(), o.optString("browser"),
+            o.optString("color").ifBlank { COLORS[Math.floorMod(o.optString("name").lowercase().hashCode(), COLORS.size)] })
+        /** The colours a profile can take, in the order new profiles get them. */
+        val COLORS = listOf("ocean", "ember", "mint", "violet", "rose", "sunflower", "teal", "red", "sky", "forest", "magenta", "tangerine", "lime", "iris", "graphite")
+        /** Jobs that need none of the user's accounts (web research, the phone's own tools) run here. */
+        const val GENERAL = "General"
     }
 }
 
@@ -60,8 +67,14 @@ class ProfileStore(context: Context) {
         _profiles.value.firstOrNull { it.id == w } ?: _profiles.value.firstOrNull { it.name.equals(w, true) }
     }
 
-    fun create(name: String, accounts: List<AccountRef> = emptyList()): AgentProfile {
-        val p = AgentProfile("p" + java.util.UUID.randomUUID().toString().take(8), name.trim(), accounts.distinctBy { it.id })
+    /** A colour no other profile has yet, so each one is easy to tell apart at a glance. */
+    fun nextColor(): String = AgentProfile.COLORS.firstOrNull { c -> _profiles.value.none { it.color == c } } ?: AgentProfile.COLORS[_profiles.value.size % AgentProfile.COLORS.size]
+
+    /** The profile for jobs that touch none of the user's accounts; made the first time it's needed. */
+    fun general(): AgentProfile = find(AgentProfile.GENERAL) ?: create(AgentProfile.GENERAL, color = "graphite")
+
+    fun create(name: String, accounts: List<AccountRef> = emptyList(), color: String? = null): AgentProfile {
+        val p = AgentProfile("p" + java.util.UUID.randomUUID().toString().take(8), name.trim(), accounts.distinctBy { it.id }, color = color?.takeIf { it in AgentProfile.COLORS } ?: nextColor())
         saveProfiles(_profiles.value + p); return p
     }
     fun update(p: AgentProfile) = saveProfiles(_profiles.value.map { if (it.id == p.id) p.copy(accounts = p.accounts.distinctBy { a -> a.id }) else it })

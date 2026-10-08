@@ -9,6 +9,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,6 +39,9 @@ data class HelperView(val item: ChatItem, val steps: List<ChatItem>) {
     val endedAt: Long get() = meta.optLong("endedAt", 0L)
     /** How many times the main agent sent it back to try harder. */
     val pushes: Int get() = meta.optInt("pushes")
+    /** The profile it works in, and that profile's colour (an accent id). */
+    val profile: String get() = meta.optString("profile")
+    val profileColor: String get() = meta.optString("profileColor").ifBlank { "iris" }
 
     companion object {
         /** Every helper in the chat, each with its own steps. */
@@ -72,11 +76,13 @@ private fun lookOf(state: String): StateLook {
 
 /** The round badge that says at a glance whether a helper is working, done or stuck. */
 @Composable
-fun HelperOrb(state: String, size: Dp = 40.dp) {
+fun HelperOrb(state: String, size: Dp = 40.dp, profileColor: String? = null) {
     val look = lookOf(state)
-    Box(Modifier.size(size).clip(CircleShape).background(look.container), contentAlignment = Alignment.Center) {
+    // A working helper shows in its profile's colour, so "that one's on my work stuff" reads at a glance.
+    val tones = if (state == "working" && profileColor != null) com.past9.phoneaos.ui.screens.profileTones(profileColor) else look.container to look.content
+    Box(Modifier.size(size).clip(CircleShape).background(tones.first), contentAlignment = Alignment.Center) {
         when (state) {
-            "working" -> LoadingIndicator(Modifier.size(size * 0.8f), color = look.content)
+            "working" -> LoadingIndicator(Modifier.size(size * 0.8f), color = tones.second)
             "done" -> Icon(Icons.Rounded.Check, "Done", Modifier.size(size * 0.5f), tint = look.content)
             "stopped" -> Icon(Icons.Rounded.Stop, "Stopped", Modifier.size(size * 0.5f), tint = look.content)
             else -> Icon(Icons.Rounded.PriorityHigh, "Didn't finish", Modifier.size(size * 0.5f), tint = look.content)
@@ -91,7 +97,7 @@ fun HelperCard(h: HelperView, onClick: () -> Unit, modifier: Modifier = Modifier
     val look = lookOf(h.state)
     Surface(onClick = onClick, shape = MaterialTheme.shapes.extraLarge, color = cs.surfaceContainerLow, modifier = modifier.fillMaxWidth()) {
         Row(Modifier.padding(start = 14.dp, end = 10.dp, top = 14.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            HelperOrb(h.state)
+            HelperOrb(h.state, profileColor = h.profileColor.takeIf { h.profile.isNotBlank() })
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -99,6 +105,7 @@ fun HelperCard(h: HelperView, onClick: () -> Unit, modifier: Modifier = Modifier
                     Spacer(Modifier.width(8.dp))
                     Text(if (h.working) spanLabel(now - h.startedAt) else look.word, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
                 }
+                if (h.profile.isNotBlank()) ProfileTag(h.profile, h.profileColor, Modifier.padding(top = 2.dp, bottom = 2.dp))
                 val line = when {
                     h.working -> (h.now.ifBlank { h.steps.lastOrNull()?.text ?: "Getting started" }) + "…"
                     h.result.isNotBlank() -> plainFirstLine(h.result)
@@ -123,7 +130,7 @@ fun HelperSheet(h: HelperView, onStop: ((Long) -> Unit)?, onDismiss: () -> Unit,
     val body: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 40.dp).navigationBarsPadding()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                HelperOrb(h.state, 52.dp)
+                HelperOrb(h.state, 52.dp, profileColor = h.profileColor.takeIf { h.profile.isNotBlank() })
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
                     Text("HELPER", style = Eyebrow, color = cs.primary)
@@ -132,6 +139,7 @@ fun HelperSheet(h: HelperView, onStop: ((Long) -> Unit)?, onDismiss: () -> Unit,
                     Text(listOf(look.word + if (took.isNotBlank()) " $took" else "", h.model.takeIf { it.isNotBlank() },
                         h.pushes.takeIf { it > 0 }?.let { "sent back ${if (it == 1) "once" else "$it times"}" }).filterNotNull().joinToString(" · "),
                         style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    if (h.profile.isNotBlank()) ProfileTag(h.profile, h.profileColor, Modifier.padding(top = 6.dp))
                 }
             }
             if (h.working && onStop != null) {
@@ -144,11 +152,12 @@ fun HelperSheet(h: HelperView, onStop: ((Long) -> Unit)?, onDismiss: () -> Unit,
 
             if (h.working) {
                 Section("RIGHT NOW", null)
-                Surface(shape = MaterialTheme.shapes.large, color = cs.primaryContainer, modifier = Modifier.fillMaxWidth()) {
+                val (nowBg, nowFg) = if (h.profile.isNotBlank()) com.past9.phoneaos.ui.screens.profileTones(h.profileColor) else cs.primaryContainer to cs.onPrimaryContainer
+                Surface(shape = MaterialTheme.shapes.large, color = nowBg, modifier = Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        LoadingIndicator(Modifier.size(28.dp), color = cs.onPrimaryContainer)
+                        LoadingIndicator(Modifier.size(28.dp), color = nowFg)
                         Spacer(Modifier.width(12.dp))
-                        Text(h.now.ifBlank { h.steps.lastOrNull()?.text ?: "Getting started" }, style = MaterialTheme.typography.bodyLarge, color = cs.onPrimaryContainer)
+                        Text(h.now.ifBlank { h.steps.lastOrNull()?.text ?: "Getting started" }, style = MaterialTheme.typography.bodyLarge, color = nowFg)
                     }
                 }
             }
@@ -203,6 +212,19 @@ private fun StepRow(a: ChatItem, last: Boolean, now: Long) {
         Column(Modifier.weight(1f).padding(top = 4.dp, bottom = if (last) 0.dp else 16.dp)) {
             Text(a.text, style = MaterialTheme.typography.bodyMedium)
             Text(relativeTime(a.createdAt, now), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+        }
+    }
+}
+
+/** Which profile a helper works in: its mark and name, in that profile's colour. */
+@Composable
+fun ProfileTag(name: String, color: String, modifier: Modifier = Modifier) {
+    val (bg, fg) = com.past9.phoneaos.ui.screens.profileTones(color)
+    Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(50), color = bg, modifier = modifier) {
+        Row(Modifier.padding(start = 4.dp, end = 10.dp, top = 3.dp, bottom = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.padding(start = 4.dp).size(10.dp).clip(androidx.compose.material3.MaterialShapes.Cookie9Sided.toShape()).background(fg))
+            Spacer(Modifier.width(6.dp))
+            Text(name, style = MaterialTheme.typography.labelMedium, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

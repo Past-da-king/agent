@@ -3,6 +3,8 @@ package com.past9.phoneaos.ui.screens
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -10,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.material3.toShape
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,7 +32,7 @@ import com.past9.phoneaos.ui.theme.Eyebrow
 
 /** What the profile and rules UI needs to do things. */
 data class AccountProfileActions(
-    val onCreate: (name: String, accounts: List<AccountRef>, browser: String) -> AgentProfile? = { _, _, _ -> null },
+    val onCreate: (name: String, accounts: List<AccountRef>, browser: String, color: String?) -> AgentProfile? = { _, _, _, _ -> null },
     val onSave: (AgentProfile) -> Unit = {},
     val onDelete: (String) -> Unit = {},
     val onMember: (profileId: String, account: AccountRef, member: Boolean) -> Unit = { _, _, _ -> },
@@ -49,7 +52,7 @@ fun ProfilesSection(profiles: List<AgentProfile>, logos: Map<String, String>, on
     if (profiles.isEmpty()) {
         AppCard(onClick = { onOpen(null) }) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(52.dp).clip(RoundedCornerShape(18.dp)).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(48.dp).clip(MaterialShapes.Clover4Leaf.toShape()).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
                     Icon(Icons.Rounded.Workspaces, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
                 }
                 Spacer(Modifier.width(16.dp))
@@ -82,12 +85,11 @@ fun ProfilesSection(profiles: List<AgentProfile>, logos: Map<String, String>, on
 private fun ProfileLine(p: AgentProfile, logos: Map<String, String>, onClick: () -> Unit) {
     Surface(onClick = onClick, color = androidx.compose.ui.graphics.Color.Transparent) {
         Row(Modifier.fillMaxWidth().heightIn(min = 72.dp).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            ProfileBadge(p.name)
+            ProfileBadge(p.name, p.color)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(p.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                val apps = p.accounts.map { prettySlug(it.slug) }.distinct()
-                Text(when (p.accounts.size) { 0 -> "No accounts yet"; 1 -> "1 account · ${apps.single()}"; else -> "${p.accounts.size} accounts · ${apps.take(3).joinToString(", ")}${if (apps.size > 3) " +${apps.size - 3}" else ""}" },
+                Text(when (p.accounts.size) { 0 -> "No accounts"; 1 -> "1 account"; else -> "${p.accounts.size} accounts" },
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             LogoStack(p.accounts.map { it.slug }.distinct(), logos)
@@ -97,25 +99,50 @@ private fun ProfileLine(p: AgentProfile, logos: Map<String, String>, onClick: ()
     }
 }
 
-/** A profile's initial on a soft tile: the same tile wherever the profile shows up. */
+/** A profile's colour as a container and the colour on it, tuned for this mode (light or dark). */
 @Composable
-fun ProfileBadge(name: String, size: Dp = 44.dp) {
-    Box(Modifier.size(size).clip(RoundedCornerShape(size * 0.36f)).background(MaterialTheme.colorScheme.tertiaryContainer), contentAlignment = Alignment.Center) {
-        Text(name.trim().take(1).uppercase().ifBlank { "?" }, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onTertiaryContainer)
+fun profileTones(color: String): Pair<androidx.compose.ui.graphics.Color, androidx.compose.ui.graphics.Color> {
+    val a = com.past9.phoneaos.ui.theme.accentOf(color)
+    val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    return if (dark) a.dPC to a.dOnPC else a.lPC to a.lOnPC
+}
+
+/** A profile's mark: its initial in its own colour and one of the app's expressive shapes (always the same one for a profile). */
+@Composable
+fun ProfileBadge(name: String, color: String, size: Dp = 44.dp) {
+    val shapes = listOf(MaterialShapes.Cookie9Sided, MaterialShapes.Clover4Leaf, MaterialShapes.Sunny, MaterialShapes.Puffy, MaterialShapes.Gem, MaterialShapes.SoftBurst, MaterialShapes.Flower)
+    val shape = shapes[Math.floorMod(name.trim().lowercase().hashCode(), shapes.size)].toShape()
+    val (bg, fg) = profileTones(color)
+    Box(Modifier.size(size).clip(shape).background(bg), contentAlignment = Alignment.Center) {
+        Text(name.trim().take(1).uppercase().ifBlank { "?" }, style = if (size < 32.dp) MaterialTheme.typography.labelMedium else MaterialTheme.typography.titleMedium, color = fg)
     }
 }
 
-/** Up to three app logos overlapping, so a profile reads at a glance. */
+/** Pick a profile's colour: the app's palette as big round swatches, the chosen one ringed. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun ColorSwatches(selected: String, onPick: (String) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        AgentProfile.COLORS.forEach { c ->
+            val (bg, fg) = profileTones(c)
+            val a = com.past9.phoneaos.ui.theme.accentOf(c)
+            val on = c == selected
+            Box(Modifier.size(44.dp).clip(CircleShape).background(if (on) MaterialTheme.colorScheme.onSurface else androidx.compose.ui.graphics.Color.Transparent).padding(3.dp)
+                .clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerLow).padding(3.dp).clip(CircleShape).background(bg)
+                .clickable { onPick(c) }, contentAlignment = Alignment.Center) {
+                if (on) Icon(Icons.Rounded.Check, "${a.label}, chosen", tint = fg, modifier = Modifier.size(20.dp))
+            }
+        }
+    }
+}
+
+/** Up to three of the profile's app logos, the same tiles as everywhere else, plus how many more. */
 @Composable
 private fun LogoStack(slugs: List<String>, logos: Map<String, String>) {
     if (slugs.isEmpty()) return
-    val shown = slugs.take(3)
-    Box(Modifier.width((28 + (shown.size - 1) * 20).dp).height(28.dp)) {
-        shown.forEachIndexed { i, s ->
-            Box(Modifier.offset(x = (i * 20).dp).size(28.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceContainerLow).padding(2.dp)) {
-                AppLogo(prettySlug(s), logos[s].orEmpty(), 24.dp)
-            }
-        }
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        slugs.take(3).forEach { s -> AppLogo(prettySlug(s), logos[s].orEmpty(), 28.dp) }
+        if (slugs.size > 3) Text("+${slugs.size - 3}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -127,18 +154,24 @@ fun ProfileSheet(profile: AgentProfile?, accounts: List<AccountRef>, logos: Map<
     var name by remember(profile?.id) { mutableStateOf(profile?.name.orEmpty()) }
     var chosen by remember(profile?.id) { mutableStateOf(profile?.accounts?.map { it.id }?.toSet().orEmpty()) }
     var browser by remember(profile?.id) { mutableStateOf(profile?.browser.orEmpty()) }
+    var color by remember(profile?.id) { mutableStateOf(profile?.color ?: AgentProfile.COLORS.first()) }
     // Accounts that left Composio still show (so they can be taken out), after the live ones.
     val all = (accounts + profile?.accounts.orEmpty()).distinctBy { it.id }
     AppSheet(Icons.Rounded.Workspaces, if (profile == null) "New profile" else "Profile", if (profile == null) (name.ifBlank { "Name it" }) else name.ifBlank { profile.name }, onDismiss,
         primary = if (profile == null) "Create profile" else "Save", primaryEnabled = name.isNotBlank(),
         onPrimary = {
             val picked = all.filter { it.id in chosen }
-            if (profile == null) actions.onCreate(name.trim(), picked, browser) else actions.onSave(profile.copy(name = name.trim(), accounts = picked, browser = browser))
+            if (profile == null) actions.onCreate(name.trim(), picked, browser, color) else actions.onSave(profile.copy(name = name.trim(), accounts = picked, browser = browser, color = color))
             onDismiss()
         },
         secondary = if (profile != null) ({ TextButton(onClick = { actions.onDelete(profile.id); onDismiss() }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) { Text("Delete profile", color = MaterialTheme.colorScheme.error) } }) else null,
     ) {
         SheetField(name, { name = it }, "Name", "Strat Edge work", big = true, singleLine = true)
+        Spacer(Modifier.height(24.dp))
+        Text("COLOUR", style = Eyebrow, color = MaterialTheme.colorScheme.primary)
+        Text("Helpers working in this profile show in it, so you can tell them apart at a glance.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(12.dp))
+        ColorSwatches(color) { color = it }
         Spacer(Modifier.height(24.dp))
         Text("ACCOUNTS", style = Eyebrow, color = MaterialTheme.colorScheme.primary)
         Text("Helpers given this profile can use these and nothing else.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -216,7 +249,7 @@ private fun ProfileChips(account: AccountRef, profiles: List<AgentProfile>, acti
         Row(verticalAlignment = Alignment.Bottom) {
             Box(Modifier.weight(1f)) { SheetField(newName, { newName = it }, "New profile", "Personal", singleLine = true) }
             Spacer(Modifier.width(10.dp))
-            FilledIconButton(onClick = { if (newName.isNotBlank()) { actions.onCreate(newName.trim(), listOf(account), ""); newName = ""; adding = false } },
+            FilledIconButton(onClick = { if (newName.isNotBlank()) { actions.onCreate(newName.trim(), listOf(account), "", null); newName = ""; adding = false } },
                 enabled = newName.isNotBlank(), modifier = Modifier.size(56.dp)) { Icon(Icons.Rounded.Check, "Add profile") }
         }
     }
