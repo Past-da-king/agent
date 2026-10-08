@@ -33,7 +33,7 @@ data class SubSpec(
 )
 
 val SubSpecs = mapOf(
-    SubKind.CLAUDE to SubSpec(SubKind.CLAUDE, listOf("@anthropic-ai/claude-agent-sdk"), "bridge-claude.mjs", emptyList(), "CLAUDE_CODE_OAUTH_TOKEN",
+    SubKind.CLAUDE to SubSpec(SubKind.CLAUDE, listOf("@anthropic-ai/claude-agent-sdk"), "bridge-claude.mjs", listOf("claude", "ldmusl"), "CLAUDE_CODE_OAUTH_TOKEN",
         "Or paste a long-lived token from claude setup-token on a computer."),
     SubKind.CODEX to SubSpec(SubKind.CODEX, listOf("@openai/codex-sdk"), "bridge-codex.mjs", listOf("codex"), "CODEX_AUTH_JSON",
         "Or paste the contents of auth.json from codex login on a computer."),
@@ -57,6 +57,8 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
 
     val available: Boolean get() = node.exists() && spec.nativeBins.all { File(libDir, "lib$it.so").exists() }
     val installed: Boolean get() = spec.packages.all { File(dir, "node_modules/$it/package.json").exists() }
+    /** The unpacked JS matches the pack inside this APK (an app update can bring a newer Agent SDK). */
+    val upToDate: Boolean get() = installed && runCatching { File(dir, ".pack").readText().trim() }.getOrNull() == PACK
     val signedIn: Boolean get() = token() != null || when (kind) {
         SubKind.CLAUDE -> File(home, ".claude/.credentials.json").exists()
         SubKind.CODEX -> File(home, ".codex/auth.json").exists()
@@ -98,8 +100,16 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
         dir.mkdirs(); bin.mkdirs()
         progress("Unpacking")
         context.assets.list("runtime")?.filter { it != "node_modules.zip" }?.forEach { name -> context.assets.open("runtime/$name").use { i -> File(dir, name).outputStream().use { i.copyTo(it) } } }
-        if (!installed) context.assets.open("runtime/node_modules.zip").use { unzip(it, dir) }
+        if (!upToDate) {
+            // A newer pack: replace the old JS wholesale so no stale file from the previous SDK lingers.
+            File(dir, "node_modules").deleteRecursively()
+            context.assets.open("runtime/node_modules.zip").use { unzip(it, dir) }
+            File(dir, ".pack").writeText(PACK)
+        }
         linkBins()
+        if (kind == SubKind.CLAUDE) check(File(bin, "ld-musl-aarch64.so.1").path == CLAUDE_INTERP) {
+            "Claude Code can't run from this app's folder (${bin.path}); it expects $CLAUDE_INTERP"
+        }
         progress("Checking Node")
         val out = StringBuilder()
         val code = exec(listOf(File(bin, "node").path, "-e", "console.log('node ' + process.version)")) { out.appendLine(it); progress(it) }
@@ -119,7 +129,7 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
      */
     suspend fun login(onUrl: (String) -> Unit, progress: (String) -> Unit, needsCode: () -> Unit = {}): String? = withContext(Dispatchers.IO) {
         val cmd = when (kind) {
-            SubKind.CLAUDE -> listOf(File(bin, "node").path, File(dir, "node_modules/@anthropic-ai/claude-agent-sdk/cli.js").path, "auth", "login", "--claudeai")
+            SubKind.CLAUDE -> { if (!upToDate) install {}; listOf(File(bin, "claude").path, "auth", "login", "--claudeai") }
             SubKind.CODEX -> listOf(File(bin, "codex").path, "login")
             SubKind.OPENCODE -> return@withContext "OpenCode sign-in isn't available yet"
         }
@@ -162,7 +172,9 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
      */
     fun linkBins() {
         bin.mkdirs()
-        mapOf("node" to "libnode.so", "rg" to "librg.so", "codex" to "libcodex.so").forEach { (name, lib) ->
+        mapOf("node" to "libnode.so", "rg" to "librg.so", "codex" to "libcodex.so", "claude" to "libclaude.so",
+            // The musl loader Claude Code's binary names as its interpreter (see build-runtime-pack.sh).
+            "ld-musl-aarch64.so.1" to "libldmusl.so").forEach { (name, lib) ->
             val target = File(libDir, lib); val link = File(bin, name)
             if (target.exists() && runCatching { android.system.Os.readlink(link.path) }.getOrNull() != target.path) {
                 link.delete(); runCatching { android.system.Os.symlink(target.path, link.path) }
@@ -180,10 +192,11 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
             "USE_BUILTIN_RIPGREP" to "0", "DISABLE_AUTOUPDATER" to "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC" to "1",
             // Codex refuses to start if its home folder doesn't exist yet.
             "CODEX_HOME" to File(home, ".codex").apply { mkdirs() }.path, "CODEX_BIN" to File(bin, "codex").path,
+            "CLAUDE_BIN" to File(bin, "claude").path,
         )
-        // Only Codex needs the proxy: it is static musl and can't resolve DNS on Android. Node (bionic)
-        // resolves fine on its own, and routing Claude's sign-in through the proxy broke it.
-        if (kind != SubKind.CODEX) return base
+        // Codex and Claude Code are musl builds: musl reads /etc/resolv.conf, which Android lacks, so they
+        // can't resolve names. Our proxy on 127.0.0.1 does it for them (Android's resolver). Node ignores it.
+        if (kind == SubKind.OPENCODE) return base
         val proxy = "http://127.0.0.1:${proxy.start().port}"
         return base + mapOf("HTTPS_PROXY" to proxy, "HTTP_PROXY" to proxy, "https_proxy" to proxy, "http_proxy" to proxy,
             "NO_PROXY" to "127.0.0.1,localhost", "no_proxy" to "127.0.0.1,localhost")
@@ -198,6 +211,8 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
 
     /** Run one turn. Emits the bridge's JSON events: session, text, tool, done, error. Cancelling kills the process. */
     fun turn(prompt: String, system: String, resume: String?, model: String?, mcpUrl: String, mcpToken: String, images: List<String> = emptyList(), role: String = "main"): Flow<JSONObject> = callbackFlow {
+        // An app update can bring a newer pack (a newer Claude Code): unpack it before the turn.
+        if (!upToDate) runCatching { install {} }.onFailure { trySend(JSONObject().put("type", "error").put("message", "Couldn't update the ${kind.label} runtime: ${it.message}")); close(); return@callbackFlow }
         // Bridges ship in the APK; refresh them so an app update takes effect without reinstalling the runtime.
         runCatching { context.assets.open("runtime/${spec.bridge}").use { i -> File(dir, spec.bridge).outputStream().use { i.copyTo(it) } } }
         val pb = ProcessBuilder(node.path, File(dir, spec.bridge).path).directory(dir).redirectErrorStream(false)
@@ -226,6 +241,10 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
 
     companion object {
         private val proxy = LocalProxy()
+        /** Bump with every new runtime pack (build-runtime-pack.sh), so installs replace their unpacked JS. */
+        const val PACK = "sdk-0.3.293+cc-2.1.293"
+        /** Where libclaude.so's patched ELF interpreter points: a symlink in this app's files to libldmusl.so. */
+        const val CLAUDE_INTERP = "/data/user/0/com.past9.phoneaos/files/runtime/bin/ld-musl-aarch64.so.1"
 
         fun unzip(input: InputStream, dest: File) {
             java.util.zip.ZipInputStream(input.buffered()).use { z ->

@@ -185,12 +185,12 @@ class ScreensTest(private val dark: Boolean) {
         MemoryRow(3, "Acme", "A fintech company where [[Sam]] works. Office in Rosebank.", "company", "work", updatedAt = now - 86_400_000L),
     )
     private val demoHelpers: List<com.past9.phoneaos.data.ChatItem> get() { val first = item("helper", "Find guesthouses in uMhlanga for Fri 9 to Sun 11 Oct, 2 adults, under R 1,200 a night, sea view preferred (Sam loves waking up to the ocean). Use Booking.com and Airbnb. Bring back the best five with price per night, rating, distance to the beach and a link.",
-            JSONObject().put("label", "uMhlanga stays").put("state", "working").put("now", "Browsing").put("startedAt", now - 4 * 60_000).put("model", "claude-haiku-4-5"))
+            JSONObject().put("label", "uMhlanga stays").put("state", "working").put("now", "Browsing").put("startedAt", now - 4 * 60_000).put("model", "claude-haiku-4-5").put("profile", "Personal").put("profileColor", "mint"))
         return listOf(first,
         item("activity", "Opened Booking.com · uMhlanga, 9 to 11 Oct", JSONObject().put("tool", "browser").put("helper", first.id)),
         item("activity", "Read 24 results, sorted by price", JSONObject().put("tool", "browser").put("helper", first.id)),
         item("helper", "Check Uber and Bolt prices from King Shaka airport to uMhlanga Rocks on Friday around 18:00 and say which is cheaper.",
-            JSONObject().put("label", "Airport ride").put("state", "working").put("now", "Reading the web").put("startedAt", now - 60_000).put("model", "claude-haiku-4-5")),
+            JSONObject().put("label", "Airport ride").put("state", "working").put("now", "Reading the web").put("startedAt", now - 60_000).put("model", "claude-haiku-4-5").put("profile", "Northwind work").put("profileColor", "ocean")),
         item("helper", "Look up the Sharks game times for the weekend of 10 Oct and whether tickets are left.",
             JSONObject().put("label", "Sharks tickets").put("state", "done").put("startedAt", now - 30 * 60_000).put("endedAt", now - 22 * 60_000)
                 .put("result", "**Sharks v Stormers**, Sat 10 Oct, 17:00 at Kings Park. Tickets from R 180 on Ticketmaster, about 40 left in the West stand.\n\nSource: ticketmaster.co.za, checked 14:05.")),
@@ -250,4 +250,50 @@ class ScreensTest(private val dark: Boolean) {
     @Test fun sheetRoutineEdit() { sheet("84-sheet-routine-edit") { RoutineEditor(TriggerRow(id = 4, name = "Bank alerts", kind = "email", spec = "from:alerts@mybank.co.za", prompt = "Tell me what changed and flag anything over R 1,000."), {}, {}, {}, {}) } }
     @Test fun sheetRoutineWeekly() { sheet("85-sheet-routine-weekly") { RoutineEditor(TriggerRow(id = 7, name = "Sunday week planning", kind = "weekly", spec = "SUN 18:00", prompt = "Look at my open tasks and the week ahead and give me a simple plan."), {}, {}, {}, {}) } }
     @Test fun browserEmpty() { shot("70-browser-empty") { BrowserScreen(emptyMap(), listOf("Personal", "Work"), BrowserActions()) } }
+
+    // ---- profiles, account rules, reply quotes and reports (0.10) ----
+    private val gmailWork = Connection("ca_w", "gmail", "ACTIVE", "sam@northwind.example")
+    private val gmailHome = Connection("ca_h", "gmail", "ACTIVE", "sam.dlamini@gmail.com")
+    private val slackWork = Connection("ca_s", "slack", "ACTIVE", "Northwind")
+    private val outlookWork = Connection("ca_o", "outlook", "ACTIVE", "sam@northwind.example")
+    private val teamsWork = Connection("ca_t", "microsoft_teams", "ACTIVE", "microsoft_teams")
+    private val workProfile = AgentProfile("p1", "Northwind work", listOf(slackWork, outlookWork, teamsWork, gmailWork).map { it.ref() }, "Work", color = "ocean")
+    private val homeProfile = AgentProfile("p2", "Personal", listOf(gmailHome).map { it.ref() }, color = "mint")
+    private val kits = listOf(Toolkit("gmail", "Gmail", "Read, search, draft and send email", "", 40, false, true), Toolkit("slack", "Slack", "Messages, channels and threads", "", 60, false, true),
+        Toolkit("outlook", "Outlook", "Mail and calendar", "", 40, false, true), Toolkit("microsoft_teams", "Microsoft Teams", "Chats and meetings", "", 30, false, true))
+    @Test fun connectionsProfiles() {
+        val st = ConnectionsState(hasKey = true, consumer = true, toolkits = kits, connected = listOf(gmailWork, gmailHome, slackWork, outlookWork, teamsWork),
+            profiles = listOf(workProfile, homeProfile), rules = mapOf("ca_h" to AccountRules(change = com.past9.phoneaos.data.Rule.ALLOW), "ca_t" to AccountRules(change = com.past9.phoneaos.data.Rule.NEVER)))
+        shot("59-connections-profiles") { ConnectionsScreen(st, ConnectionsActions()) }
+    }
+    @Test fun connectionsNoProfiles() {
+        val st = ConnectionsState(hasKey = true, consumer = true, toolkits = kits, connected = listOf(gmailWork, slackWork))
+        shot("59b-connections-no-profiles") { ConnectionsScreen(st, ConnectionsActions()) }
+    }
+    @Test fun sheetProfile() { sheet("87-sheet-profile") { ProfileSheet(workProfile, listOf(gmailWork, gmailHome, slackWork, outlookWork, teamsWork).map { it.ref() }, emptyMap(), listOf("Personal", "Work"), AccountProfileActions()) {} } }
+    @Test fun sheetProfileNew() { sheet("88-sheet-profile-new") { ProfileSheet(null, listOf(gmailWork, gmailHome, slackWork).map { it.ref() }, emptyMap(), listOf("Personal"), AccountProfileActions()) {} } }
+    @Test fun sheetAccount() { sheet("89-sheet-account") { AccountSheet(gmailWork.ref(), "", AccountRules(change = com.past9.phoneaos.data.Rule.ASK), listOf(workProfile, homeProfile), AccountProfileActions(), {}) {} } }
+    @Test fun sheetAddToProfile() { sheet("90-sheet-add-to-profile") { AddToProfileSheet(outlookWork.ref(), "", AccountRules.DEFAULT, listOf(workProfile, homeProfile), AccountProfileActions()) {} } }
+    @Test fun chatQuoteAndReport() {
+        val ask = item("user", "Can you check if we qualify for the Transnet cyber tender and what we'd need?")
+        val items = listOf(ask,
+            item("agent", "On it: three helpers are checking the RFP, our certificates and possible partners.", JSONObject().put("replyTo", ask.id)),
+            item("user", "Also remind me to call Lerato at 3"),
+            item("agent", "Done, reminder set for 15:00.", JSONObject().put("replyTo", ask.id + 2)),
+            item("report", "Not yet: two gaps, ISO 27001 and a 24/7 SOC. A partner closes both in about a month.",
+                JSONObject().put("title", "Transnet cyber tender readiness").put("path", "/nope").put("words", 1400).put("replyTo", ask.id).put("late", true)),
+            item("agent", "Short answer: not yet. Two gaps, both closable with a partner. The report has the plan.", JSONObject().put("replyTo", ask.id).put("late", true)))
+        shot("15-chat-quote-report") { ChatScreen(items, AgentStatus(), "Nova", "Sam", false, "", {}, ChatActions()) }
+    }
+    @Test fun report() {
+        val f = File.createTempFile("report", ".md").apply { writeText("# Transnet cyber tender readiness\n\n**Short answer:** not yet. Two gaps.\n\n## What they ask for\n\n- ISO 27001 certificate\n- A 24/7 security operations centre\n- B-BBEE level 1 or 2\n\n## What we have\n\n| Need | Us |\n|---|---|\n| ISO 27001 | No |\n| SOC | No |\n| B-BBEE | Level 1 |\n\n## The plan\n\n1. Partner with a SOC provider this month.\n2. Start ISO 27001 gap analysis.\n") }
+        shot("17-report") { ReportScreen(f.path) {} }
+    }
+
+    @Test fun connectionsAppsOpen() {
+        val st = ConnectionsState(hasKey = true, consumer = true, toolkits = kits + Toolkit("instagram", "Instagram", "Posts and messages", "", 20, false, true),
+            connected = listOf(gmailWork, gmailHome, slackWork, Connection("ig1", "instagram", "ACTIVE", "instagram"), Connection("ig2", "instagram", "ACTIVE", "instagram")),
+            profiles = listOf(workProfile, homeProfile))
+        shot("59c-connections-apps-open") { ConnectionsScreen(st, ConnectionsActions(), initialAppsOpen = true) }
+    }
 }

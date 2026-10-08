@@ -152,6 +152,18 @@ class MainActivity : ComponentActivity() {
             scope.launch { uris.forEach { u -> importImage(u)?.let { attachments += it } } }
         }
         var conn by remember { mutableStateOf(ConnectionsState(hasKey = settings.composioEnabled)) }
+        val profileList by g.runtime.profiles.profiles.collectAsStateWithLifecycle()
+        val accountRules by g.runtime.profiles.rules.collectAsStateWithLifecycle()
+        val ps = g.runtime.profiles
+        val profileActions = com.past9.phoneaos.ui.screens.AccountProfileActions(
+            onCreate = { n, a, b, c -> ps.create(n, a, c).let { p -> if (b.isNotBlank()) p.copy(browser = b).also { ps.update(it) } else p } },
+            onSave = { ps.update(it) }, onDelete = { ps.delete(it) },
+            onMember = { pid, a, on -> ps.setMember(pid, a, on) }, onRules = { id, r -> ps.setRules(id, r) })
+        /** An account that was just connected (here or by a helper): ask which profiles it belongs to. */
+        var justConnected by remember { mutableStateOf<com.past9.phoneaos.data.AccountRef?>(null) }
+        LaunchedEffect(Unit) {
+            com.past9.phoneaos.system.UiBus.addToProfile.collect { a -> com.past9.phoneaos.system.UiBus.addToProfile.resetReplayCache(); justConnected = a }
+        }
         val sub = remember(settings.subKind) { g.subRuntime() }
         val speaker = remember { Speaker(this) }
 
@@ -293,12 +305,16 @@ class MainActivity : ComponentActivity() {
                             onAttach = { picker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                             onRemoveAttachment = { attachments.remove(it) }, onModel = { openModels() }, onCall = if (settings.liveEnabled) ({ startCall() }) else null, onStopSpeaking = if (speakingNow) ({ g.stopSpeaking() }) else null,
                             onAnswer = { id, o -> g.runtime.answer(id, o) },
+                            onReport = { path -> nav.navigate("report?path=" + Uri.encode(path)) },
                             onMenu = { nav.popBackStack() }, onBrowser = { nav.navigate("browser") }, onProfile = { nav.navigate("profile") },
                             onMic = { runCatching { voice.launch(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)) } },
                         ), openCount = tasks.count { it.status != "done" }, attachments = attachments, modelLabel = modelLabel, docs = docs.keys.toList(),
                         morning = if (!morningNow) null else (brief?.takeIf { it.ideas.isNotEmpty() }?.let { b ->
                             com.past9.phoneaos.ui.screens.MorningUi(b.greeting, b.line, b.body, b.ideas.map { it.icon to it.text }, preparingBrief, { com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity) })
                         } ?: com.past9.phoneaos.ui.screens.MorningUi(preparing = preparingBrief, onBackToChat = { com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity) })))
+                }
+                composable("report?path={path}") { e ->
+                    ReportScreen(e.arguments?.getString("path").orEmpty(), onBack = { nav.popBackStack() })
                 }
                 composable("tasks") {
                     TasksScreen(goals, tasks, bottomPadding = barPad, actions = TaskActions(
@@ -341,7 +357,18 @@ class MainActivity : ComponentActivity() {
                     // Re-read on every return to this screen: the user may have just switched All files access on.
                     val resumed = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsStateWithLifecycle().value
                     val phoneFiles = remember(resumed) { com.past9.phoneaos.tools.phoneFilesAllowed() }
-                    ConnectionsScreen(conn.copy(machines = machines, phoneFiles = phoneFiles), bottomPadding = barPad + 24.dp, actions = ConnectionsActions(
+                    ConnectionsScreen(conn.copy(machines = machines, phoneFiles = phoneFiles, profiles = profileList, rules = accountRules, browserProfiles = settings.browserProfiles), bottomPadding = barPad + 24.dp, actions = ConnectionsActions(
+                        profile = profileActions,
+                        onKeepOne = { keep, remove -> scope.launch {
+                            val ck = g.settings.composioKey()?.trim()
+                            remove.forEach { c ->
+                                if (ck != null && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(ck)) runCatching { com.past9.phoneaos.tools.ComposioConnect.disconnect(ck, c.toolkit, c.id) }
+                                else runCatching { g.runtime.composio.disconnect(c.id) }
+                                // The copy's profiles and rules move to the one that stays.
+                                ps.profilesWith(c.id).forEach { p -> ps.setMember(p.id, keep.ref(), true) }
+                                ps.forgetAccount(c.id)
+                            }
+                            refreshConnections() } },
                         onNotifications = { nav.navigate("notifications") },
                         onBack = { nav.popBackStack() },
                         onSaveKey = { k -> saveComposio(g, k).also { if (it == null) refreshConnections() } },
@@ -349,18 +376,37 @@ class MainActivity : ComponentActivity() {
                         onConnect = { slug -> scope.launch {
                             val ck = g.settings.composioKey()?.trim()
                             if (ck != null && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(ck)) {
-                                val before = conn.connected.count { it.toolkit == slug && it.status == "ACTIVE" }
+                                val beforeIds = conn.connected.filter { it.toolkit == slug && it.status == "ACTIVE" }.map { it.id }.toSet(); val before = beforeIds.size
                                 runCatching { com.past9.phoneaos.tools.ComposioConnect.connectLink(ck, slug) }.onSuccess { open(it) }.onFailure { conn = conn.copy(error = it.message) }
                                 // Pick up the new account as soon as the sign-in finishes, without a manual refresh.
                                 repeat(60) { kotlinx.coroutines.delay(5000)
-                                    val now = runCatching { com.past9.phoneaos.tools.ComposioConnect.statuses(ck, listOf(slug))[slug] }.getOrNull()
-                                    if (now?.first == "ACTIVE" && runCatching { com.past9.phoneaos.tools.ComposioConnect.accounts(ck, listOf(slug))[slug].orEmpty().count { it.status == "ACTIVE" } }.getOrDefault(0) > before) { refreshConnections(); return@launch } }
-                            } else runCatching { g.runtime.composio.connect(slug) }.onSuccess { open(it) }.onFailure { conn = conn.copy(error = it.message) }
+                                    val now = runCatching { com.past9.phoneaos.tools.ComposioConnect.accounts(ck, listOf(slug))[slug].orEmpty().filter { it.status == "ACTIVE" } }.getOrDefault(emptyList())
+                                    if (now.size > before) {
+                                        val fresh = now.firstOrNull { it.id !in beforeIds }
+                                        // The same account again (same email or name, or the app names nobody): keep the one there was.
+                                        if (fresh != null && now.any { it.id in beforeIds && com.past9.phoneaos.tools.ComposioConnect.sameAccount(it, fresh) }) {
+                                            runCatching { com.past9.phoneaos.tools.ComposioConnect.disconnect(ck, slug, fresh.id) }
+                                            conn = conn.copy(error = "That ${com.past9.phoneaos.tools.AppCatalog.name(slug)} account was already connected, so nothing changed.")
+                                            refreshConnections(); return@launch
+                                        }
+                                        refreshConnections()
+                                        // Straight away: which part of their life is this account for?
+                                        fresh?.let { a -> justConnected = com.past9.phoneaos.data.AccountRef(a.id, slug, a.label.ifBlank { com.past9.phoneaos.tools.AppCatalog.name(slug) }) }
+                                        return@launch
+                                    } }
+                            } else {
+                                val beforeIds = runCatching { g.runtime.composio.connections() }.getOrDefault(emptyList()).filter { it.toolkit == slug && it.status == "ACTIVE" }.map { it.id }.toSet()
+                                runCatching { g.runtime.composio.connect(slug) }.onSuccess { open(it) }.onFailure { conn = conn.copy(error = it.message); return@launch }
+                                repeat(60) { kotlinx.coroutines.delay(5000)
+                                    val fresh = runCatching { g.runtime.composio.connections() }.getOrDefault(emptyList()).firstOrNull { it.toolkit == slug && it.status == "ACTIVE" && it.id !in beforeIds }
+                                    if (fresh != null) { refreshConnections(); justConnected = com.past9.phoneaos.data.AccountRef(fresh.id, slug, fresh.label); return@launch } }
+                            }
                         } },
                         onDisconnect = { c -> scope.launch {
                             val ck = g.settings.composioKey()?.trim()
                             if (ck != null && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(ck)) runCatching { com.past9.phoneaos.tools.ComposioConnect.disconnect(ck, c.toolkit, c.id) }.onFailure { conn = conn.copy(error = it.message) }
                             else runCatching { g.runtime.composio.disconnect(c.id) }
+                            ps.forgetAccount(c.id)
                             refreshConnections() } },
                         machine = machineActions(g),
                         onAllowPhoneFiles = { com.past9.phoneaos.tools.openAllFilesSettings(this@MainActivity) },
@@ -436,6 +482,10 @@ class MainActivity : ComponentActivity() {
                         onAddProfile = { n -> g.settings.addBrowserProfile(n); scope.launch { runCatching { BrowserService.await(this@MainActivity, "main", n).goto("https://www.google.com") } } },
                     ))
                 }
+            }
+            justConnected?.let { a ->
+                com.past9.phoneaos.ui.screens.AddToProfileSheet(a, conn.toolkits.firstOrNull { it.slug == a.slug }?.logo ?: com.past9.phoneaos.tools.AppCatalog.logo(a.slug),
+                    accountRules[a.id] ?: com.past9.phoneaos.data.AccountRules.DEFAULT, profileList, profileActions) { justConnected = null }
             }
             cards.firstOrNull { it.id == openCard }?.let { c ->
                 CardSheet(c, androidx.compose.foundation.isSystemInDarkTheme(), settings.accent, CardSheetActions(
