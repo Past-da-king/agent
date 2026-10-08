@@ -223,9 +223,11 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
         val p = pb.start()
         p.outputStream.bufferedWriter().use { it.write(JSONObject().put("prompt", prompt).put("system", system).put("resume", resume ?: "").put("model", model ?: "").put("images", org.json.JSONArray(images)).put("role", role).toString() + "\n") }
         val err = StringBuilder()
-        thread(isDaemon = true) { p.errorStream.bufferedReader().forEachLine { synchronized(err) { if (err.length < 4000) err.appendLine(it) } } }
+        // awaitClose's p.destroy() closes these streams under the reader threads; the resulting
+        // InterruptedIOException is uncaught on a non-main thread and would kill the whole app.
+        thread(isDaemon = true) { runCatching { p.errorStream.bufferedReader().forEachLine { synchronized(err) { if (err.length < 4000) err.appendLine(it) } } } }
         thread(isDaemon = true) {
-            p.inputStream.bufferedReader().forEachLine { l -> runCatching { JSONObject(l) }.getOrNull()?.let { trySend(it) } }
+            runCatching { p.inputStream.bufferedReader().forEachLine { l -> runCatching { JSONObject(l) }.getOrNull()?.let { trySend(it) } } }
             val code = p.waitFor()
             if (code != 0) trySend(JSONObject().put("type", "error").put("message", synchronized(err) { err.toString() }.takeLast(600).ifBlank { "exit $code" }))
             close()
