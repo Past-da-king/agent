@@ -156,7 +156,7 @@ class MainActivity : ComponentActivity() {
         val accountRules by g.runtime.profiles.rules.collectAsStateWithLifecycle()
         val ps = g.runtime.profiles
         val profileActions = com.past9.phoneaos.ui.screens.AccountProfileActions(
-            onCreate = { n, a, b -> ps.create(n, a).let { p -> if (b.isNotBlank()) p.copy(browser = b).also { ps.update(it) } else p } },
+            onCreate = { n, a, b, c -> ps.create(n, a, c).let { p -> if (b.isNotBlank()) p.copy(browser = b).also { ps.update(it) } else p } },
             onSave = { ps.update(it) }, onDelete = { ps.delete(it) },
             onMember = { pid, a, on -> ps.setMember(pid, a, on) }, onRules = { id, r -> ps.setRules(id, r) })
         /** An account that was just connected (here or by a helper): ask which profiles it belongs to. */
@@ -359,6 +359,16 @@ class MainActivity : ComponentActivity() {
                     val phoneFiles = remember(resumed) { com.past9.phoneaos.tools.phoneFilesAllowed() }
                     ConnectionsScreen(conn.copy(machines = machines, phoneFiles = phoneFiles, profiles = profileList, rules = accountRules, browserProfiles = settings.browserProfiles), bottomPadding = barPad + 24.dp, actions = ConnectionsActions(
                         profile = profileActions,
+                        onKeepOne = { keep, remove -> scope.launch {
+                            val ck = g.settings.composioKey()?.trim()
+                            remove.forEach { c ->
+                                if (ck != null && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(ck)) runCatching { com.past9.phoneaos.tools.ComposioConnect.disconnect(ck, c.toolkit, c.id) }
+                                else runCatching { g.runtime.composio.disconnect(c.id) }
+                                // The copy's profiles and rules move to the one that stays.
+                                ps.profilesWith(c.id).forEach { p -> ps.setMember(p.id, keep.ref(), true) }
+                                ps.forgetAccount(c.id)
+                            }
+                            refreshConnections() } },
                         onNotifications = { nav.navigate("notifications") },
                         onBack = { nav.popBackStack() },
                         onSaveKey = { k -> saveComposio(g, k).also { if (it == null) refreshConnections() } },
@@ -372,9 +382,16 @@ class MainActivity : ComponentActivity() {
                                 repeat(60) { kotlinx.coroutines.delay(5000)
                                     val now = runCatching { com.past9.phoneaos.tools.ComposioConnect.accounts(ck, listOf(slug))[slug].orEmpty().filter { it.status == "ACTIVE" } }.getOrDefault(emptyList())
                                     if (now.size > before) {
+                                        val fresh = now.firstOrNull { it.id !in beforeIds }
+                                        // The same account again (same email or name, or the app names nobody): keep the one there was.
+                                        if (fresh != null && now.any { it.id in beforeIds && com.past9.phoneaos.tools.ComposioConnect.sameAccount(it, fresh) }) {
+                                            runCatching { com.past9.phoneaos.tools.ComposioConnect.disconnect(ck, slug, fresh.id) }
+                                            conn = conn.copy(error = "That ${com.past9.phoneaos.tools.AppCatalog.name(slug)} account was already connected, so nothing changed.")
+                                            refreshConnections(); return@launch
+                                        }
                                         refreshConnections()
                                         // Straight away: which part of their life is this account for?
-                                        now.firstOrNull { it.id !in beforeIds }?.let { a -> justConnected = com.past9.phoneaos.data.AccountRef(a.id, slug, a.label.ifBlank { com.past9.phoneaos.tools.AppCatalog.name(slug) }) }
+                                        fresh?.let { a -> justConnected = com.past9.phoneaos.data.AccountRef(a.id, slug, a.label.ifBlank { com.past9.phoneaos.tools.AppCatalog.name(slug) }) }
                                         return@launch
                                     } }
                             } else {

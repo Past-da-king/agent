@@ -185,12 +185,12 @@ class ScreensTest(private val dark: Boolean) {
         MemoryRow(3, "Acme", "A fintech company where [[Sam]] works. Office in Rosebank.", "company", "work", updatedAt = now - 86_400_000L),
     )
     private val demoHelpers: List<com.past9.phoneaos.data.ChatItem> get() { val first = item("helper", "Find guesthouses in uMhlanga for Fri 9 to Sun 11 Oct, 2 adults, under R 1,200 a night, sea view preferred (Sam loves waking up to the ocean). Use Booking.com and Airbnb. Bring back the best five with price per night, rating, distance to the beach and a link.",
-            JSONObject().put("label", "uMhlanga stays").put("state", "working").put("now", "Browsing").put("startedAt", now - 4 * 60_000).put("model", "claude-haiku-4-5"))
+            JSONObject().put("label", "uMhlanga stays").put("state", "working").put("now", "Browsing").put("startedAt", now - 4 * 60_000).put("model", "claude-haiku-4-5").put("profile", "Personal").put("profileColor", "mint"))
         return listOf(first,
         item("activity", "Opened Booking.com · uMhlanga, 9 to 11 Oct", JSONObject().put("tool", "browser").put("helper", first.id)),
         item("activity", "Read 24 results, sorted by price", JSONObject().put("tool", "browser").put("helper", first.id)),
         item("helper", "Check Uber and Bolt prices from King Shaka airport to uMhlanga Rocks on Friday around 18:00 and say which is cheaper.",
-            JSONObject().put("label", "Airport ride").put("state", "working").put("now", "Reading the web").put("startedAt", now - 60_000).put("model", "claude-haiku-4-5")),
+            JSONObject().put("label", "Airport ride").put("state", "working").put("now", "Reading the web").put("startedAt", now - 60_000).put("model", "claude-haiku-4-5").put("profile", "Strat Edge work").put("profileColor", "ocean")),
         item("helper", "Look up the Sharks game times for the weekend of 10 Oct and whether tickets are left.",
             JSONObject().put("label", "Sharks tickets").put("state", "done").put("startedAt", now - 30 * 60_000).put("endedAt", now - 22 * 60_000)
                 .put("result", "**Sharks v Stormers**, Sat 10 Oct, 17:00 at Kings Park. Tickets from R 180 on Ticketmaster, about 40 left in the West stand.\n\nSource: ticketmaster.co.za, checked 14:05.")),
@@ -257,8 +257,8 @@ class ScreensTest(private val dark: Boolean) {
     private val slackWork = Connection("ca_s", "slack", "ACTIVE", "Strat Edge")
     private val outlookWork = Connection("ca_o", "outlook", "ACTIVE", "sam@stratedge.example")
     private val teamsWork = Connection("ca_t", "microsoft_teams", "ACTIVE", "microsoft_teams")
-    private val workProfile = AgentProfile("p1", "Strat Edge work", listOf(slackWork, outlookWork, teamsWork, gmailWork).map { it.ref() }, "Work")
-    private val homeProfile = AgentProfile("p2", "Personal", listOf(gmailHome).map { it.ref() })
+    private val workProfile = AgentProfile("p1", "Strat Edge work", listOf(slackWork, outlookWork, teamsWork, gmailWork).map { it.ref() }, "Work", color = "ocean")
+    private val homeProfile = AgentProfile("p2", "Personal", listOf(gmailHome).map { it.ref() }, color = "mint")
     private val kits = listOf(Toolkit("gmail", "Gmail", "Read, search, draft and send email", "", 40, false, true), Toolkit("slack", "Slack", "Messages, channels and threads", "", 60, false, true),
         Toolkit("outlook", "Outlook", "Mail and calendar", "", 40, false, true), Toolkit("microsoft_teams", "Microsoft Teams", "Chats and meetings", "", 30, false, true))
     @Test fun connectionsProfiles() {
@@ -288,5 +288,12 @@ class ScreensTest(private val dark: Boolean) {
     @Test fun report() {
         val f = File.createTempFile("report", ".md").apply { writeText("# Transnet cyber tender readiness\n\n**Short answer:** not yet. Two gaps.\n\n## What they ask for\n\n- ISO 27001 certificate\n- A 24/7 security operations centre\n- B-BBEE level 1 or 2\n\n## What we have\n\n| Need | Us |\n|---|---|\n| ISO 27001 | No |\n| SOC | No |\n| B-BBEE | Level 1 |\n\n## The plan\n\n1. Partner with a SOC provider this month.\n2. Start ISO 27001 gap analysis.\n") }
         shot("17-report") { ReportScreen(f.path) {} }
+    }
+
+    @Test fun connectionsAppsOpen() {
+        val st = ConnectionsState(hasKey = true, consumer = true, toolkits = kits + Toolkit("instagram", "Instagram", "Posts and messages", "", 20, false, true),
+            connected = listOf(gmailWork, gmailHome, slackWork, Connection("ig1", "instagram", "ACTIVE", "instagram"), Connection("ig2", "instagram", "ACTIVE", "instagram")),
+            profiles = listOf(workProfile, homeProfile))
+        shot("59c-connections-apps-open") { ConnectionsScreen(st, ConnectionsActions(), initialAppsOpen = true) }
     }
 }
