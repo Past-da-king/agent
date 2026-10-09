@@ -210,7 +210,7 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
     }
 
     /** Run one turn. Emits the bridge's JSON events: session, text, tool, done, error. Cancelling kills the process. */
-    fun turn(prompt: String, system: String, resume: String?, model: String?, mcpUrl: String, mcpToken: String, images: List<String> = emptyList(), role: String = "main"): Flow<JSONObject> = callbackFlow {
+    fun turn(prompt: String, system: String, resume: String?, model: String?, mcpUrl: String, mcpToken: String, images: List<String> = emptyList(), role: String = "main", fork: Boolean = false): Flow<JSONObject> = callbackFlow {
         // An app update can bring a newer pack (a newer Claude Code): unpack it before the turn.
         if (!upToDate) runCatching { install {} }.onFailure { trySend(JSONObject().put("type", "error").put("message", "Couldn't update the ${kind.label} runtime: ${it.message}")); close(); return@callbackFlow }
         // Bridges ship in the APK; refresh them so an app update takes effect without reinstalling the runtime.
@@ -221,11 +221,13 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
         pb.environment()["PHONE_MCP_URL"] = mcpUrl
         pb.environment()["PHONE_MCP_TOKEN"] = mcpToken
         val p = pb.start()
-        p.outputStream.bufferedWriter().use { it.write(JSONObject().put("prompt", prompt).put("system", system).put("resume", resume ?: "").put("model", model ?: "").put("images", org.json.JSONArray(images)).put("role", role).toString() + "\n") }
+        p.outputStream.bufferedWriter().use { it.write(JSONObject().put("prompt", prompt).put("system", system).put("resume", resume ?: "").put("model", model ?: "").put("images", org.json.JSONArray(images)).put("role", role).put("fork", fork).toString() + "\n") }
         val err = StringBuilder()
-        thread(isDaemon = true) { p.errorStream.bufferedReader().forEachLine { synchronized(err) { if (err.length < 4000) err.appendLine(it) } } }
+        // awaitClose's p.destroy() closes these streams under the reader threads; the resulting
+        // InterruptedIOException is uncaught on a non-main thread and would kill the whole app.
+        thread(isDaemon = true) { runCatching { p.errorStream.bufferedReader().forEachLine { synchronized(err) { if (err.length < 4000) err.appendLine(it) } } } }
         thread(isDaemon = true) {
-            p.inputStream.bufferedReader().forEachLine { l -> runCatching { JSONObject(l) }.getOrNull()?.let { trySend(it) } }
+            runCatching { p.inputStream.bufferedReader().forEachLine { l -> runCatching { JSONObject(l) }.getOrNull()?.let { trySend(it) } } }
             val code = p.waitFor()
             if (code != 0) trySend(JSONObject().put("type", "error").put("message", synchronized(err) { err.toString() }.takeLast(600).ifBlank { "exit $code" }))
             close()

@@ -9,7 +9,7 @@ const out = (o) => process.stdout.write(JSON.stringify(o) + "\n");
 const rl = createInterface({ input: process.stdin });
 const line = await new Promise((res) => rl.once("line", res));
 rl.close();
-const { prompt, system, resume, model, images = [], role = "main" } = JSON.parse(line);
+const { prompt, system, resume, model, images = [], role = "main", fork = false } = JSON.parse(line);
 // The main agent only orchestrates: it gets the phone's tools (memory, tasks, delegate) and nothing that
 // acts on its own. Helpers do the work, with web search and fetch as well.
 const isMain = role === "main";
@@ -31,6 +31,8 @@ try {
     options: {
       systemPrompt: system,
       resume: resume || undefined,
+      // Double texting: a branch continues a COPY of the running session, so the original is untouched.
+      forkSession: !!(fork && resume),
       model: model || undefined,
       cwd: process.env.HOME,
       // Claude Code is a native (musl) binary shipped in the APK; the app links it as bin/claude.
