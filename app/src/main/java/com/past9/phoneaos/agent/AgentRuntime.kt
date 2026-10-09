@@ -162,10 +162,43 @@ class AgentRuntime(
     val cards: com.past9.phoneaos.cards.CardStore get() = com.past9.phoneaos.App.graph(context).cards
 
     init {
-        // A fresh process has no live helpers: anything still marked working was cut off.
-        scope.launch {
-            db.chat().all().first().filter { it.kind == "helper" && JSONObject(it.meta).optString("state") == "working" }
-                .forEach { db.chat().update(it.copy(meta = JSONObject(it.meta).put("state", "failed").put("result", "Interrupted when the app closed.").toString())) }
+        // A fresh process has no live helpers: anything still marked working was cut off. Pick it up again.
+        scope.launch { resumeCutOffHelpers() }
+    }
+
+    /**
+     * The app died (a crash, or Android reclaimed it) while helpers were working. Each one is started again where it
+     * left off, so a dead app no longer loses the job. A helper that keeps taking the app down with it gets
+     * [MAX_RESUMES] tries, then is marked failed, so a bad job can't crash-loop the app.
+     */
+    internal suspend fun resumeCutOffHelpers() {
+        val cut = db.chat().all().first().filter { it.kind == "helper" && JSONObject(it.meta).optString("state") == "working" }
+        // The subscription runtime can take a moment to be ready on a fresh start.
+        if (cut.isNotEmpty() && settings.state.value.mode == PowerMode.SUBSCRIPTION) repeat(20) { if (subscription?.ready != true) kotlinx.coroutines.delay(500) }
+        for (row in cut) {
+            val meta = JSONObject(row.meta)
+            val tries = meta.optInt("resumes")
+            val st = settings.state.value
+            val sub = subscription?.takeIf { st.mode == PowerMode.SUBSCRIPTION && it.ready }
+            val provider = if (sub == null) runCatching { providerFactory(settings) }.getOrNull() else null
+            if (tries >= MAX_RESUMES || (sub == null && provider == null)) {
+                meta.put("state", "failed").put("result", if (tries >= MAX_RESUMES) "Interrupted when the app closed, and it didn't get further after $tries tries." else "Interrupted when the app closed.")
+                meta.remove("now")
+                db.chat().update(row.copy(meta = meta.toString()))
+                continue
+            }
+            val label = meta.optString("label").ifBlank { "Helper" }
+            val session = meta.optString("session").takeIf { it.isNotBlank() }
+            // What it had already done, from its own activity trail, so it carries on instead of starting over.
+            val trail = db.chat().all().first().filter { it.kind == "activity" && JSONObject(it.meta).optLong("helper") == row.id }.takeLast(8).joinToString("\n") { "- ${it.text}" }
+            val note = "[The app was closed while you were working, so you were cut off. Carry on from where you got to; don't redo what is already done." +
+                (if (trail.isNotBlank()) " What you had done so far:\n$trail" else "") + "]"
+            meta.optString("profile").takeIf { it.isNotBlank() }?.let { n -> profiles.find(n)?.let { helperProfile[row.id] = it.id } }
+            db.chat().update(row.copy(meta = meta.put("resumes", tries + 1).put("startedAt", System.currentTimeMillis()).toString()))
+            db.chat().insert(ChatItem(kind = "activity", text = "Picked up again after the app restarted", meta = JSONObject().put("tool", "agent").put("by", label).put("helper", row.id).toString()))
+            val prompt = if (session != null) note else row.text + "\n\n" + note
+            // A subscription helper resumes its own session, so its history only names the task; an API helper starts from the note.
+            launchHelper(row.id, label, mutableListOf(Msg.user(if (sub != null) row.text else prompt)), prompt, session, provider, sub, meta.optString("model"))
         }
     }
 
@@ -755,7 +788,7 @@ class AgentRuntime(
         var last = ""; var error: String? = null; var ok = false
         engine.turn(prompt, sys, resume, mcp.url + "/h/$itemId", settings.localToken(), emptyList(), model.ifBlank { null }, role = "helper").collect { e ->
             when (e.optString("type")) {
-                "session" -> e.optString("id").takeIf { it.isNotBlank() }?.let { helperSession[itemId] = it }
+                "session" -> e.optString("id").takeIf { it.isNotBlank() }?.let { helperSession[itemId] = it; setHelperMeta(itemId) { m -> m.put("session", it) } }
                 "text" -> e.optString("text").takeIf { it.isNotBlank() }?.let { last = it }
                 "tool" -> {
                     val name = e.optString("name")
@@ -868,6 +901,8 @@ class AgentRuntime(
     }
 
     companion object {
+        /** How many times a cut-off helper is picked up again before it is called failed. */
+        const val MAX_RESUMES = 2
         /** The agent chose to say nothing yet (a result that's only a step toward a bigger answer). */
         fun isHold(text: String) = text.trim().trim('.', '*', '"', '`').equals("HOLD", true)
 

@@ -3,6 +3,7 @@ package com.past9.phoneaos
 import androidx.test.core.app.ApplicationProvider
 import com.past9.phoneaos.agent.*
 import com.past9.phoneaos.data.AppDb
+import com.past9.phoneaos.data.ChatItem
 import com.past9.phoneaos.data.PowerMode
 import com.past9.phoneaos.data.Provider
 import com.past9.phoneaos.data.SettingsStore
@@ -106,6 +107,29 @@ class RuntimeTest {
         assertTrue(p.seen.last().first.contains("prefers window seats"))
         // And the transcript carried over (provider sees the earlier exchange).
         assertTrue(p.seen.last().second.size >= 4)
+    }
+
+    @Test fun helpersCutOffByAnAppDeathAreStartedAgainAndCappedAtTwoTries() = runBlocking {
+        // The app died with two helpers mid-job: one fresh, one that has already been picked up twice.
+        val fresh = db.chat().insert(ChatItem(kind = "helper", text = "Find the cheapest flight", meta = JSONObject().put("label", "Scout").put("state", "working").put("startedAt", 1L).put("model", "").toString()))
+        db.chat().insert(ChatItem(kind = "activity", text = "Opened the flights page", meta = JSONObject().put("tool", "browser").put("by", "Scout").put("helper", fresh).toString()))
+        val stuck = db.chat().insert(ChatItem(kind = "helper", text = "A job that keeps killing the app", meta = JSONObject().put("label", "Looper").put("state", "working").put("resumes", AgentRuntime.MAX_RESUMES).put("startedAt", 1L).toString()))
+        val p = ScriptedProvider()
+        val rt = runtime(p)
+        // The runtime's own startup recovery races this call, so wait for the helper to finish either way.
+        withTimeout(15_000) { while (JSONObject(db.chat().get(fresh)!!.meta).optString("state") != "done") delay(100) }
+        val freshMeta = JSONObject(db.chat().get(fresh)!!.meta)
+        assertEquals("done", freshMeta.optString("state"))
+        assertEquals(1, freshMeta.optInt("resumes"))
+        // It was told it had been cut off and what it had already done, and not to redo it.
+        val sent = p.seen.helper().first().second.first().text
+        assertTrue(sent.contains("Find the cheapest flight")); assertTrue(sent.contains("cut off")); assertTrue(sent.contains("Opened the flights page"))
+        assertTrue(db.chat().all().first().any { it.kind == "activity" && it.text.startsWith("Picked up again") })
+        // The one that already used up its tries is called failed, not started a third time.
+        withTimeout(5_000) { while (JSONObject(db.chat().get(stuck)!!.meta).optString("state") == "working") delay(50) }
+        val stuckMeta = JSONObject(db.chat().get(stuck)!!.meta)
+        assertEquals(stuckMeta.toString(), "failed", stuckMeta.optString("state")); assertTrue(stuckMeta.optString("result").contains("2 tries"))
+        rt.awaitIdle()
     }
 
     @Test fun theMainAgentOrchestratesAndOnlyDoesSmallJobs() {
