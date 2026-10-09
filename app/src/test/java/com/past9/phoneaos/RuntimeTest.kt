@@ -192,7 +192,10 @@ class RuntimeTest {
     }
 
     @Test fun approvalInAHelperBlocksUntilTheUserAnswers() = runBlocking {
-        val p = ScriptedProvider(delegate("Email Lerato: see you at 6 on Friday"), say("Sent a helper."), say("Done, Lerato has it."))
+        // The helper's approval goes to the main agent first; it forwards it (an email in the user's name).
+        val p = ScriptedProvider(delegate("Email Lerato: see you at 6 on Friday"), say("Sent a helper."),
+            call("escalation_triage", JSONObject().put("decision", "forward").put("needs", "in_their_name").put("message", "It sends an email in your name.")), say("HOLD"),
+            say("Done, Lerato has it."))
         p.helperQueue += call("request_approval", JSONObject().put("action", "Send email to Lerato").put("details", "Subject: Friday\nSee you at 6."))
         p.helperQueue += say("Email sent to Lerato.")
         val rt = runtime(p)
@@ -213,7 +216,8 @@ class RuntimeTest {
     }
 
     @Test fun typingWhileAHelperAsksTalksToTheMainAgent() = runBlocking {
-        val p = ScriptedProvider(delegate("Book a table"), say("On it."), say("Hello!"))
+        val p = ScriptedProvider(delegate("Book a table"), say("On it."),
+            call("escalation_triage", JSONObject().put("decision", "forward").put("needs", "their_choice").put("message", "Only you know when you're free.")), say("HOLD"), say("Hello!"))
         p.helperQueue += call("ask_user", JSONObject().put("question", "Which time?").put("options", JSONArray(listOf("7pm", "8pm"))))
         p.helperQueue += say("Booked for 7pm.")
         val rt = runtime(p)
