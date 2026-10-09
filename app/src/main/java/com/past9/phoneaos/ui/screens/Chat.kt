@@ -64,6 +64,8 @@ import com.past9.phoneaos.ui.StatusPill
 import com.past9.phoneaos.ui.theme.Eyebrow
 import com.past9.phoneaos.ui.theme.LocalExtra
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.File
@@ -113,6 +115,28 @@ sealed interface Row_ { val key: String
     /** A voice call's back-and-forth, folded into one row so the chat stays one readable thread. */
     data class Call(val items: List<ChatItem>) : Row_ { override val key = "c${items.first().id}" }
     data class Steps(val items: List<ChatItem>) : Row_ { override val key = "s${items.first().id}" }
+    /** "New messages" divider: sits above the first thing he has not seen. */
+    data class NewMarker(val count: Int) : Row_ { override val key = "new" }
+    /** Top of a long history that is only partly loaded. */
+    data object Earlier : Row_ { override val key = "earlier" }
+}
+
+/** How much of the history is drawn at once, and how much each "Earlier messages" tap adds. */
+const val CHAT_PAGE = 120
+
+/** The id of the first message after [readMark] that did not come from him, or null when nothing is unread. */
+fun firstUnread(items: List<ChatItem>, readMark: Long): ChatItem? =
+    items.firstOrNull { it.id > readMark && it.kind != "user" && !(it.kind == "activity") && !(it.kind == "helper") && !JSONObject(it.meta).has("helper") }
+
+/** Rows with the "new messages" divider put above the row that holds [firstId]. */
+fun withMarker(rows: List<Row_>, firstId: Long?, count: Int): List<Row_> {
+    if (firstId == null) return rows
+    val at = rows.indexOfFirst { r -> when (r) {
+        is Row_.Single -> r.item.id >= firstId
+        is Row_.Call -> r.items.any { it.id >= firstId }
+        is Row_.Steps -> r.items.any { it.id >= firstId }
+        else -> false } }
+    return if (at < 0) rows else rows.toMutableList().apply { add(at, Row_.NewMarker(count)) }
 }
 
 fun group(items: List<ChatItem>): List<Row_> {
@@ -152,20 +176,95 @@ fun ChatScreen(
     modelLabel: String = "",
     docs: List<String> = emptyList(),
     morning: MorningUi? = null,
+    /** Newest message id he had seen when he last looked at the chat (Long.MAX_VALUE: first run, nothing is unread). */
+    readMark: () -> Long = { Long.MAX_VALUE },
+    onRead: (Long) -> Unit = {},
+    listening: Boolean = false,
 ) {
-    val rows = remember(items) { group(items) }
     val byId = remember(items) { items.associateBy { it.id } }
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    /** Tap a quote: jump to the message it quotes. */
-    val jumpTo: (Long) -> Unit = { id -> rows.indexOfFirst { it.key == "i$id" }.takeIf { it >= 0 }?.let { i -> scope.launch { list.animateScrollToItem(i) } } }
-    LaunchedEffect(rows.size, items.lastOrNull()?.meta) { if (rows.isNotEmpty()) list.animateScrollToItem(rows.size) }
+    // The chat opens where he left off: at the first unread message, else at the latest. `baseline` is what he had
+    // seen when he came in; it stays put while he reads so the divider does not vanish under his thumb.
+    var baseline by remember { mutableLongStateOf(readMark()) }
+    // 0: not placed yet, 1: divider decided (rows rebuild), 2: scrolled into place.
+    var phase by remember { mutableIntStateOf(0) }
+    val positioned = phase == 2
+    var markerId by remember { mutableStateOf<Long?>(null) }
+    var markerCount by remember { mutableIntStateOf(0) }
+    var window by remember { mutableIntStateOf(CHAT_PAGE) }
+    // A window onto the history: a very long chat is not all composed at once. The unread divider's message is always inside it.
+    val firstShown = remember(items.size, window, markerId) {
+        val byWindow = (items.size - window).coerceAtLeast(0)
+        val byUnread = markerId?.let { u -> items.indexOfFirst { it.id == u }.let { i -> if (i < 0) byWindow else (i - 8).coerceAtLeast(0) } } ?: byWindow
+        minOf(byWindow, byUnread)
+    }
+    val rows = remember(items, firstShown, markerId, markerCount) {
+        val g = withMarker(group(items.drop(firstShown)), markerId, markerCount)
+        if (firstShown > 0) listOf<Row_>(Row_.Earlier) + g else g
+    }
+    /** Tap a quote: jump to the message it quotes (loading earlier history first if it is not on screen). */
+    val jumpTo: (Long) -> Unit = { id ->
+        val idx = items.indexOfFirst { it.id == id }
+        if (idx in 0 until firstShown) window = items.size - idx + 20
+        scope.launch {
+            snapshotFlow { rows.indexOfFirst { it.key == "i$id" } }.let { f -> kotlinx.coroutines.withTimeoutOrNull(1500) { f.first { it >= 0 } } }?.let { list.animateScrollToItem(it) }
+        }
+    }
+    val atBottom by remember { derivedStateOf { val li = list.layoutInfo; li.totalItemsCount == 0 || (li.visibleItemsInfo.lastOrNull()?.index ?: -1) >= li.totalItemsCount - 1 } }
+    // Following the bottom: true while he is at the end, so new messages scroll into view; false once he scrolls up to read.
+    var stick by remember { mutableStateOf(true) }
+    var seenId by remember { mutableLongStateOf(items.lastOrNull()?.id ?: 0L) }
+    val lastItem = items.lastOrNull()
+    val lastId = lastItem?.id ?: 0L
+
+    // First open (and every return from the background): land on the first unread, else the latest.
+    LaunchedEffect(phase, items.isNotEmpty()) {
+        if (items.isEmpty()) return@LaunchedEffect
+        when (phase) {
+            0 -> { val u = firstUnread(items, baseline); markerId = u?.id; markerCount = if (u == null) 0 else items.count { it.id >= u.id && (it.kind == "agent" || it.kind == "report") }; phase = 1 }
+            1 -> { val at = rows.indexOfFirst { it is Row_.NewMarker }
+                if (at >= 0) { list.scrollToItem(at); stick = false } else { list.scrollToItem(rows.size - 1); stick = true }
+                phase = 2 }
+        }
+    }
+    LaunchedEffect(list) { snapshotFlow { list.isScrollInProgress }.filter { !it }.collect { if (phase == 2) { stick = atBottom; if (atBottom) seenId = lastId } } }
+    // Grow with the conversation, but only while he is following it. A message of his own always brings him back down.
+    LaunchedEffect(lastId, lastItem?.meta, lastItem?.text?.length) {
+        if (phase != 2 || rows.isEmpty()) return@LaunchedEffect
+        if (lastItem?.kind == "user") stick = true
+        if (stick) { list.animateScrollToItem(rows.size - 1); seenId = lastId }
+    }
+    // Reading the latest counts as having read it; leaving and coming back re-lands him on what is new.
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var resumed by remember { mutableStateOf(owner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) }
+    val latestId by rememberUpdatedState(lastId)
+    val latestItems by rememberUpdatedState(items)
+    DisposableEffect(owner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            when (e) {
+                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> resumed = true
+                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> resumed = false
+                androidx.lifecycle.Lifecycle.Event.ON_STOP -> { if (stick) onRead(latestId) }
+                androidx.lifecycle.Lifecycle.Event.ON_START -> {
+                    // Back from the background: if he was following the end, or something new came in, re-land; if he was reading
+                    // older messages and nothing new came, leave him exactly where he was.
+                    val m = readMark()
+                    if (stick || latestItems.any { it.id > m && it.kind != "user" && it.id > seenId }) { baseline = m; phase = 0 }
+                }
+                else -> {}
+            }
+        }
+        owner.lifecycle.addObserver(obs); onDispose { owner.lifecycle.removeObserver(obs) }
+    }
+    LaunchedEffect(resumed, atBottom, lastId, positioned) { if (resumed && positioned && atBottom && lastId > 0) onRead(lastId) }
+    val newSince = items.count { it.id > seenId && it.kind != "user" && it.kind != "activity" && !JSONObject(it.meta).has("helper") }
     val waitingOnYou = items.any { it.kind == "question" && !JSONObject(it.meta).has("answer") }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = { ChatTopBar(agentName, status, browserLive, waitingOnYou, openCount, actions, modelLabel) },
-        bottomBar = { Composer(draft, onDraft, status.working, actions, attachments, docs) },
+        bottomBar = { Composer(draft, onDraft, status.working, actions, attachments, docs, listening) },
     ) { pad ->
         if (items.isEmpty() || morning != null) Welcome(userName, Modifier.padding(pad), actions.onSend, morning, hasChat = items.isNotEmpty())
         else LazyColumn(
@@ -175,6 +274,8 @@ fun ChatScreen(
         ) {
             items(rows, key = { it.key }) { r ->
                 when (r) {
+                    is Row_.Earlier -> TextButton(onClick = { window += CHAT_PAGE }, modifier = Modifier.fillMaxWidth()) { Text("Earlier messages") }
+                    is Row_.NewMarker -> NewMarker(r.count)
                     is Row_.Steps -> StepsRow(r.items)
                     is Row_.Call -> CallRow(r.items, agentName)
                     is Row_.Single -> when (r.item.kind) {
@@ -197,6 +298,27 @@ fun ChatScreen(
             }
             if (status.working && !waitingOnYou) item(key = "working") { WorkingRow(status) }
         }
+        // Reading older messages while new ones arrive: say so, and offer the way down.
+        Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.BottomCenter) {
+            AnimatedVisibility(!atBottom && items.isNotEmpty() && morning == null, enter = fadeIn() + scaleIn(), exit = fadeOut() + scaleOut()) {
+                ExtendedFloatingActionButton(
+                    onClick = { scope.launch { stick = true; list.animateScrollToItem(rows.size); seenId = lastId } },
+                    icon = { Icon(Icons.Rounded.KeyboardArrowDown, null) },
+                    text = { Text(if (newSince > 0) "$newSince new" else "Jump to latest") },
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
+            }
+        }
+    }
+}
+
+/** The line above the first message he has not read yet. */
+@Composable
+private fun NewMarker(count: Int) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        HorizontalDivider(Modifier.weight(1f), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f))
+        Text(if (count > 1) "  $count new messages  " else "  New messages  ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+        HorizontalDivider(Modifier.weight(1f), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f))
     }
 }
 
@@ -792,7 +914,7 @@ private fun WorkingRow(status: AgentStatus) {
 }
 
 @Composable
-private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean, actions: ChatActions, attachments: List<String>, docs: List<String> = emptyList()) {
+private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean, actions: ChatActions, attachments: List<String>, docs: List<String> = emptyList(), listening: Boolean = false) {
     var attachMenu by remember { mutableStateOf(false) }
     if (attachMenu) ModalBottomSheet(onDismissRequest = { attachMenu = false }) {
         Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
@@ -833,7 +955,7 @@ private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean,
                         BasicTextField(draft, onDraft, textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
                             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), maxLines = 6, modifier = Modifier.fillMaxWidth())
                     }
-                    IconButton(onClick = actions.onMic) { Icon(Icons.Rounded.Mic, "Speak", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    IconButton(onClick = actions.onMic) { Icon(if (listening) Icons.Rounded.Stop else Icons.Rounded.Mic, if (listening) "Stop listening" else "Speak", tint = if (listening) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
             }
             Spacer(Modifier.width(8.dp))
