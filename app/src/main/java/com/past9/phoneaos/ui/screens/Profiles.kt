@@ -1,5 +1,8 @@
 package com.past9.phoneaos.ui.screens
 
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import com.past9.phoneaos.R
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -48,7 +51,7 @@ private fun AccountRef.line(appName: String) = label.takeIf { it.isNotBlank() &&
 
 @Composable
 fun ProfilesSection(profiles: List<AgentProfile>, logos: Map<String, String>, onOpen: (String?) -> Unit) {
-    SectionHeader("Profiles", "Group accounts by part of your life. A helper given a profile can only use its accounts.", Modifier.padding(start = 4.dp, top = 16.dp, bottom = 2.dp))
+    SectionHeader(stringResource(R.string.profiles_title), stringResource(R.string.profiles_sub), Modifier.padding(start = 4.dp, top = 16.dp, bottom = 2.dp))
     if (profiles.isEmpty()) {
         AppCard(onClick = { onOpen(null) }) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -57,13 +60,13 @@ fun ProfilesSection(profiles: List<AgentProfile>, logos: Map<String, String>, on
                 }
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Make your first profile", style = MaterialTheme.typography.titleMedium)
-                    Text("Say “Work” with Slack, Outlook and Teams, or “Personal” with your own Gmail.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.profiles_first), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.profiles_first_sub), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             Spacer(Modifier.height(14.dp))
             FilledTonalButton(onClick = { onOpen(null) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shapes = ButtonDefaults.shapes()) {
-                Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("New profile")
+                Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.profiles_new))
             }
         }
         return
@@ -75,7 +78,7 @@ fun ProfilesSection(profiles: List<AgentProfile>, logos: Map<String, String>, on
             Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(16.dp))
-                Text("New profile", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.profiles_new), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
             }
         }
     }
@@ -89,7 +92,7 @@ private fun ProfileLine(p: AgentProfile, logos: Map<String, String>, onClick: ()
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(p.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(when (p.accounts.size) { 0 -> "No accounts"; 1 -> "1 account"; else -> "${p.accounts.size} accounts" },
+                Text(if (p.accounts.isEmpty()) stringResource(R.string.profiles_no_accounts) else pluralStringResource(R.plurals.profiles_accounts, p.accounts.size, p.accounts.size),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             LogoStack(p.accounts.map { it.slug }.distinct(), logos)
@@ -130,7 +133,7 @@ fun ColorSwatches(selected: String, onPick: (String) -> Unit) {
             Box(Modifier.size(44.dp).clip(CircleShape).background(if (on) MaterialTheme.colorScheme.onSurface else androidx.compose.ui.graphics.Color.Transparent).padding(3.dp)
                 .clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerLow).padding(3.dp).clip(CircleShape).background(bg)
                 .clickable { onPick(c) }, contentAlignment = Alignment.Center) {
-                if (on) Icon(Icons.Rounded.Check, "${a.label}, chosen", tint = fg, modifier = Modifier.size(20.dp))
+                if (on) Icon(Icons.Rounded.Check, stringResource(R.string.profiles_color_chosen, a.label), tint = fg, modifier = Modifier.size(20.dp))
             }
         }
     }
@@ -157,26 +160,26 @@ fun ProfileSheet(profile: AgentProfile?, accounts: List<AccountRef>, logos: Map<
     var color by remember(profile?.id) { mutableStateOf(profile?.color ?: AgentProfile.COLORS.first()) }
     // Accounts that left Composio still show (so they can be taken out), after the live ones.
     val all = (accounts + profile?.accounts.orEmpty()).distinctBy { it.id }
-    AppSheet(Icons.Rounded.Workspaces, if (profile == null) "New profile" else "Profile", if (profile == null) (name.ifBlank { "Name it" }) else name.ifBlank { profile.name }, onDismiss,
-        primary = if (profile == null) "Create profile" else "Save", primaryEnabled = name.isNotBlank(),
+    AppSheet(Icons.Rounded.Workspaces, if (profile == null) stringResource(R.string.profiles_new) else stringResource(R.string.profiles_profile), if (profile == null) (name.ifBlank { stringResource(R.string.profiles_name_it) }) else name.ifBlank { profile.name }, onDismiss,
+        primary = if (profile == null) stringResource(R.string.profiles_create) else stringResource(R.string.profiles_save), primaryEnabled = name.isNotBlank(),
         onPrimary = {
             val picked = all.filter { it.id in chosen }
             if (profile == null) actions.onCreate(name.trim(), picked, browser, color) else actions.onSave(profile.copy(name = name.trim(), accounts = picked, browser = browser, color = color))
             onDismiss()
         },
-        secondary = if (profile != null) ({ TextButton(onClick = { actions.onDelete(profile.id); onDismiss() }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) { Text("Delete profile", color = MaterialTheme.colorScheme.error) } }) else null,
+        secondary = if (profile != null) ({ TextButton(onClick = { actions.onDelete(profile.id); onDismiss() }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) { Text(stringResource(R.string.profiles_delete), color = MaterialTheme.colorScheme.error) } }) else null,
     ) {
-        SheetField(name, { name = it }, "Name", "Northwind work", big = true, singleLine = true)
+        SheetField(name, { name = it }, stringResource(R.string.profiles_name), stringResource(R.string.profiles_name_hint), big = true, singleLine = true)
         Spacer(Modifier.height(24.dp))
-        Text("COLOUR", style = Eyebrow, color = MaterialTheme.colorScheme.primary)
-        Text("Helpers working in this profile show in it, so you can tell them apart at a glance.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.profiles_colour), style = Eyebrow, color = MaterialTheme.colorScheme.primary)
+        Text(stringResource(R.string.profiles_colour_sub), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(12.dp))
         ColorSwatches(color) { color = it }
         Spacer(Modifier.height(24.dp))
-        Text("ACCOUNTS", style = Eyebrow, color = MaterialTheme.colorScheme.primary)
-        Text("Helpers given this profile can use these and nothing else.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.profiles_accounts_eyebrow), style = Eyebrow, color = MaterialTheme.colorScheme.primary)
+        Text(stringResource(R.string.profiles_accounts_sub), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(10.dp))
-        if (all.isEmpty()) Text("Connect an app below first, then add it here.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
+        if (all.isEmpty()) Text(stringResource(R.string.profiles_connect_first), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
         Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(vertical = 4.dp)) {
                 all.forEach { a ->
@@ -187,7 +190,7 @@ fun ProfileSheet(profile: AgentProfile?, accounts: List<AccountRef>, logos: Map<
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(prettySlug(a.slug), style = MaterialTheme.typography.titleSmall)
-                                Text(a.line(prettySlug(a.slug)).takeIf { it != prettySlug(a.slug) } ?: "Connected", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(a.line(prettySlug(a.slug)).takeIf { it != prettySlug(a.slug) } ?: stringResource(R.string.profiles_connected), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                             Checkbox(checked = on, onCheckedChange = { chosen = if (it) chosen + a.id else chosen - a.id })
                         }
@@ -197,12 +200,12 @@ fun ProfileSheet(profile: AgentProfile?, accounts: List<AccountRef>, logos: Map<
         }
         if (browserProfiles.size > 1 || browser.isNotBlank()) {
             Spacer(Modifier.height(24.dp))
-            Text("BROWSER SIGN-INS", style = Eyebrow, color = MaterialTheme.colorScheme.primary)
-            Text("Which of your browser profiles its helpers browse as.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.profiles_browser), style = Eyebrow, color = MaterialTheme.colorScheme.primary)
+            Text(stringResource(R.string.profiles_browser_sub), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(10.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 (listOf("") + browserProfiles).forEach { b ->
-                    FilterChip(selected = browser == b, onClick = { browser = b }, label = { Text(b.ifBlank { "Any" }, style = MaterialTheme.typography.labelLarge) },
+                    FilterChip(selected = browser == b, onClick = { browser = b }, label = { Text(b.ifBlank { stringResource(R.string.profiles_any) }, style = MaterialTheme.typography.labelLarge) },
                         leadingIcon = if (browser == b) ({ Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) }) else null, shape = RoundedCornerShape(50), modifier = Modifier.height(40.dp))
                 }
             }
@@ -223,7 +226,7 @@ fun RuleRow(title: String, line: String, rule: Rule, onRule: (Rule) -> Unit) {
             Rule.entries.forEachIndexed { i, r ->
                 SegmentedButton(selected = rule == r, onClick = { onRule(r) }, shape = SegmentedButtonDefaults.itemShape(i, Rule.entries.size), modifier = Modifier.heightIn(min = 48.dp),
                     colors = if (r == Rule.NEVER) SegmentedButtonDefaults.colors(activeContainerColor = MaterialTheme.colorScheme.errorContainer, activeContentColor = MaterialTheme.colorScheme.onErrorContainer) else SegmentedButtonDefaults.colors()) {
-                    Text(r.label, maxLines = 1)
+                    Text(when (r) { Rule.ALLOW -> stringResource(R.string.profiles_rule_allow); Rule.ASK -> stringResource(R.string.profiles_rule_ask); Rule.NEVER -> stringResource(R.string.profiles_rule_never) }, maxLines = 1)
                 }
             }
         }
@@ -241,16 +244,16 @@ private fun ProfileChips(account: AccountRef, profiles: List<AgentProfile>, acti
             FilterChip(selected = on, onClick = { actions.onMember(p.id, account, !on) }, label = { Text(p.name, style = MaterialTheme.typography.labelLarge) },
                 leadingIcon = if (on) ({ Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) }) else null, shape = RoundedCornerShape(50), modifier = Modifier.height(40.dp))
         }
-        if (!adding) AssistChip(onClick = { adding = true }, label = { Text("New profile", style = MaterialTheme.typography.labelLarge) },
+        if (!adding) AssistChip(onClick = { adding = true }, label = { Text(stringResource(R.string.profiles_new), style = MaterialTheme.typography.labelLarge) },
             leadingIcon = { Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)) }, shape = RoundedCornerShape(50), modifier = Modifier.height(40.dp))
     }
     if (adding) {
         Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.Bottom) {
-            Box(Modifier.weight(1f)) { SheetField(newName, { newName = it }, "New profile", "Personal", singleLine = true) }
+            Box(Modifier.weight(1f)) { SheetField(newName, { newName = it }, stringResource(R.string.profiles_new), stringResource(R.string.profiles_new_profile_hint), singleLine = true) }
             Spacer(Modifier.width(10.dp))
             FilledIconButton(onClick = { if (newName.isNotBlank()) { actions.onCreate(newName.trim(), listOf(account), "", null); newName = ""; adding = false } },
-                enabled = newName.isNotBlank(), modifier = Modifier.size(56.dp)) { Icon(Icons.Rounded.Check, "Add profile") }
+                enabled = newName.isNotBlank(), modifier = Modifier.size(56.dp)) { Icon(Icons.Rounded.Check, stringResource(R.string.profiles_add_profile)) }
         }
     }
 }
@@ -258,18 +261,18 @@ private fun ProfileChips(account: AccountRef, profiles: List<AgentProfile>, acti
 @Composable
 fun AccountSheet(account: AccountRef, logo: String, rules: AccountRules, profiles: List<AgentProfile>, actions: AccountProfileActions, onDisconnect: () -> Unit, onDismiss: () -> Unit) {
     val app = prettySlug(account.slug)
-    AppSheet(Icons.Rounded.Shield, "Account rules", app, onDismiss, primary = "Done", primaryEnabled = true, onPrimary = onDismiss,
-        secondary = { TextButton(onClick = { onDisconnect(); onDismiss() }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) { Text("Disconnect this account", color = MaterialTheme.colorScheme.error) } }) {
-        AccountHeader(account, app, logo, "Your agent and its helpers follow these rules here, whoever is asking.")
+    AppSheet(Icons.Rounded.Shield, stringResource(R.string.profiles_account_rules), app, onDismiss, primary = stringResource(R.string.profiles_done), primaryEnabled = true, onPrimary = onDismiss,
+        secondary = { TextButton(onClick = { onDisconnect(); onDismiss() }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) { Text(stringResource(R.string.profiles_disconnect), color = MaterialTheme.colorScheme.error) } }) {
+        AccountHeader(account, app, logo, stringResource(R.string.profiles_rules_note))
         Spacer(Modifier.height(24.dp))
-        Text("WHAT IT MAY DO", style = Eyebrow, color = MaterialTheme.colorScheme.primary)
+        Text(stringResource(R.string.profiles_may_do), style = Eyebrow, color = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(12.dp))
-        RuleRow("Read", "Search, open and list things", rules.read) { actions.onRules(account.id, rules.copy(read = it)) }
+        RuleRow(stringResource(R.string.profiles_read), stringResource(R.string.profiles_read_sub), rules.read) { actions.onRules(account.id, rules.copy(read = it)) }
         Spacer(Modifier.height(20.dp))
-        RuleRow("Send and change", "Send, post, reply, create, move or delete", rules.change) { actions.onRules(account.id, rules.copy(change = it)) }
+        RuleRow(stringResource(R.string.profiles_change), stringResource(R.string.profiles_change_sub), rules.change) { actions.onRules(account.id, rules.copy(change = it)) }
         Spacer(Modifier.height(28.dp))
-        Text("PROFILES", style = Eyebrow, color = MaterialTheme.colorScheme.primary)
-        Text("The parts of your life this account belongs to. It can be in several.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.profiles_profiles_eyebrow), style = Eyebrow, color = MaterialTheme.colorScheme.primary)
+        Text(stringResource(R.string.profiles_profiles_sub), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(12.dp))
         ProfileChips(account, profiles, actions)
     }
@@ -293,15 +296,15 @@ private fun AccountHeader(account: AccountRef, app: String, logo: String, note: 
 @Composable
 fun AddToProfileSheet(account: AccountRef, logo: String, rules: AccountRules, profiles: List<AgentProfile>, actions: AccountProfileActions, onDismiss: () -> Unit) {
     val app = prettySlug(account.slug)
-    AppSheet(Icons.Rounded.Link, "Just connected", app, onDismiss, primary = "Done", primaryEnabled = true, onPrimary = onDismiss,
-        secondary = { TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) { Text("Not now") } }) {
+    AppSheet(Icons.Rounded.Link, stringResource(R.string.profiles_just_connected), app, onDismiss, primary = stringResource(R.string.profiles_done), primaryEnabled = true, onPrimary = onDismiss,
+        secondary = { TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) { Text(stringResource(R.string.profiles_not_now)) } }) {
         AccountHeader(account, app, logo, null)
         Spacer(Modifier.height(24.dp))
-        Text("Which part of your life is it for?", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.profiles_which_part), style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(12.dp))
         ProfileChips(account, profiles, actions)
         Spacer(Modifier.height(28.dp))
-        RuleRow("Send and change", "Can your agent send, post or delete here without asking you?", rules.change) { actions.onRules(account.id, rules.copy(change = it)) }
+        RuleRow(stringResource(R.string.profiles_change), stringResource(R.string.profiles_change_ask), rules.change) { actions.onRules(account.id, rules.copy(change = it)) }
     }
 }
 
@@ -317,10 +320,10 @@ fun ProfileTags(names: List<String>, rules: AccountRules) {
             }
         }
         val note = when {
-            rules.read == Rule.NEVER && rules.change == Rule.NEVER -> "Off limits"
-            rules.change == Rule.ALLOW -> "Sends without asking"
-            rules.change == Rule.NEVER -> "Never sends"
-            rules.read == Rule.ASK -> "Asks to read"
+            rules.read == Rule.NEVER && rules.change == Rule.NEVER -> stringResource(R.string.profiles_off_limits)
+            rules.change == Rule.ALLOW -> stringResource(R.string.profiles_sends_without_asking)
+            rules.change == Rule.NEVER -> stringResource(R.string.profiles_never_sends)
+            rules.read == Rule.ASK -> stringResource(R.string.profiles_asks_to_read)
             else -> null
         }
         if (note != null) Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surfaceContainerHighest) {

@@ -36,14 +36,18 @@ object Routines {
         if (days.any { it < 1 } || days.isEmpty() || h !in 0..23 || m !in 0..59) null else Triple(days, h, m)
     }.getOrNull()
 
-    fun weeklyLabel(spec: String): String = parseWeekly(spec)?.let { (days, h, m) ->
-        val long = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+    /** @param context when given, the label is in the app's language (English without it). */
+    fun weeklyLabel(spec: String, context: Context? = null): String = parseWeekly(spec)?.let { (days, h, m) ->
+        val long = if (context == null) listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+            else (1..7).map { java.time.DayOfWeek.of(it).getDisplayName(java.time.format.TextStyle.FULL, context.resources.configuration.locales[0]) }
         val d = when {
-            days == setOf(1, 2, 3, 4, 5) -> "weekday"; days == setOf(6, 7) -> "weekend day"; days.size == 1 -> long[days.first() - 1]
+            days == setOf(1, 2, 3, 4, 5) -> context?.getString(com.past9.phoneaos.R.string.svc_weekly_weekday) ?: "weekday"
+            days == setOf(6, 7) -> context?.getString(com.past9.phoneaos.R.string.svc_weekly_weekend) ?: "weekend day"
+            days.size == 1 -> long[days.first() - 1]
             else -> days.sorted().joinToString(", ") { long[it - 1].take(3) }
         }
-        "Every $d at %02d:%02d".format(h, m)
-    } ?: "Weekly"
+        context?.getString(com.past9.phoneaos.R.string.svc_weekly_every, d, h, m) ?: "Every $d at %02d:%02d".format(h, m)
+    } ?: context?.getString(com.past9.phoneaos.R.string.svc_weekly) ?: "Weekly"
 
     private fun name(id: Long) = "routine-$id"
     private val net = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()

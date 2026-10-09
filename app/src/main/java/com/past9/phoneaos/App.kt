@@ -97,6 +97,8 @@ class Graph(context: Context) {
 class App : Application(), coil.ImageLoaderFactory {
     val graph by lazy { Graph(this) }
 
+    override fun attachBaseContext(base: Context) = super.attachBaseContext(com.past9.phoneaos.system.AppLocale.wrap(base))
+
     /** App logos from Composio are SVGs; teach the image loader to draw them. */
     override fun newImageLoader(): coil.ImageLoader = coil.ImageLoader.Builder(this).components { add(coil.decode.SvgDecoder.Factory()) }.crossfade(true).build()
 

@@ -54,6 +54,8 @@ class MainActivity : ComponentActivity() {
     /** Text shared in from another app, or a route asked for by a notification. */
     private val incoming = MutableStateFlow<Pair<String?, String?>>(null to null)
 
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(com.past9.phoneaos.system.AppLocale.wrap(newBase))
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -75,7 +77,7 @@ class MainActivity : ComponentActivity() {
         val g = App.graph(this)
         if (com.past9.phoneaos.data.MemoryPack.pending(this).isNotEmpty()) g.scope.launch {
             val n = com.past9.phoneaos.data.MemoryPack.importPending(this@MainActivity, g.db.memory())
-            if (n > 0) g.db.chat().insert(com.past9.phoneaos.data.ChatItem(kind = "notice", text = "Added $n memory pages from A.O.S"))
+            if (n > 0) g.db.chat().insert(com.past9.phoneaos.data.ChatItem(kind = "notice", text = resources.getQuantityString(R.plurals.main_memory_pack_added, n, n)))
         }
     }
 
@@ -96,7 +98,7 @@ class MainActivity : ComponentActivity() {
             App.graph(this).scope.launch { runCatching { BrowserService.await(this@MainActivity, "main", App.graph(this@MainActivity).settings.state.value.browserProfiles.first()).goto(u) } }
         }
         if (i.getStringExtra("open") == "testnotify") {
-            App.graph(this).phone.notify("Checking in", "This is how my messages look on your phone.")
+            App.graph(this).phone.notify(getString(R.string.main_testnotify_title), getString(R.string.main_testnotify_body))
             moveTaskToBack(true); return
         }
         val shared = if (i.action == Intent.ACTION_SEND) listOfNotNull(i.getStringExtra(Intent.EXTRA_SUBJECT), i.getStringExtra(Intent.EXTRA_TEXT)).joinToString("\n").ifBlank { null } else null
@@ -144,7 +146,7 @@ class MainActivity : ComponentActivity() {
                 runCatching {
                     modelList = if (onSub) com.past9.phoneaos.agent.ModelCatalog.forSubscription(this@MainActivity, settings.subKind)
                     else com.past9.phoneaos.agent.ModelCatalog.forKey(this@MainActivity, settings.provider, g.settings.apiKey(settings.provider).orEmpty(), settings.baseUrl, settings.allowHttp)
-                }.onFailure { modelErr = "Couldn't load models: ${it.message}" }
+                }.onFailure { modelErr = getString(R.string.main_models_load_failed, it.message) }
             }
         }
         val modelLabel = if (onSub) prettyModel(settings.subModel) else settings.model.substringAfterLast('/')
@@ -262,13 +264,13 @@ class MainActivity : ComponentActivity() {
                     // One row per signed-in account: four Gmails show as four lines, each with its email.
                     conn = conn.copy(loading = false, connected = st.values.flatten().filter { it.status == "ACTIVE" }.map { a -> com.past9.phoneaos.tools.Connection(a.id, a.slug, a.status, a.label.ifBlank { a.slug }) })
                     // A started-but-unfinished sign-in is just an expired link here: the app stays in the list with Connect.
-                } catch (e: Exception) { conn = conn.copy(loading = false, error = "Couldn't reach Composio: ${e.message}") }
+                } catch (e: Exception) { conn = conn.copy(loading = false, error = getString(R.string.main_composio_unreachable, e.message)) }
                 return@launch
             }
             try {
                 val c = g.runtime.composio.connections(); conn = conn.copy(connected = c)
                 val t = g.runtime.composio.toolkits(); conn = conn.copy(toolkits = t, loading = false)
-            } catch (e: Exception) { conn = conn.copy(loading = false, error = "Couldn't reach Composio: ${e.message}") }
+            } catch (e: Exception) { conn = conn.copy(loading = false, error = getString(R.string.main_composio_unreachable, e.message)) }
         }
         fun go(r: String) { if (r == "home") nav.popBackStack("home", false) else nav.navigate(r) { popUpTo("home"); launchSingleTop = true } }
         val cards by g.cards.cards.collectAsStateWithLifecycle()
@@ -417,7 +419,7 @@ class MainActivity : ComponentActivity() {
                                         // The same account again (same email or name, or the app names nobody): keep the one there was.
                                         if (fresh != null && now.any { it.id in beforeIds && com.past9.phoneaos.tools.ComposioConnect.sameAccount(it, fresh) }) {
                                             runCatching { com.past9.phoneaos.tools.ComposioConnect.disconnect(ck, slug, fresh.id) }
-                                            conn = conn.copy(error = "That ${com.past9.phoneaos.tools.AppCatalog.name(slug)} account was already connected, so nothing changed.")
+                                            conn = conn.copy(error = getString(R.string.main_account_already_connected, com.past9.phoneaos.tools.AppCatalog.name(slug)))
                                             refreshConnections(); return@launch
                                         }
                                         refreshConnections()
@@ -447,7 +449,7 @@ class MainActivity : ComponentActivity() {
                             runCatching { com.past9.phoneaos.tools.ComposioConnect.searchApps(ck, q) }.onSuccess { found ->
                                 conn = conn.copy(searching = false, searched = q, hits = found.map { it.first.slug }.toSet(), toolkits = (conn.toolkits + found.map { it.first }).distinctBy { it.slug })
                                 if (found.any { it.second }) refreshConnections() // a connected app we didn't know about: fetch its account
-                            }.onFailure { conn = conn.copy(searching = false, searched = q, error = "Search failed: ${it.message}") }
+                            }.onFailure { conn = conn.copy(searching = false, searched = q, error = getString(R.string.main_search_failed, it.message)) }
                         } },
                         onRefresh = { refreshConnections() }, onOpenUrl = ::open,
                         onAllowNotifications = { if (Build.VERSION.SDK_INT >= 33) notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS) },
@@ -465,7 +467,7 @@ class MainActivity : ComponentActivity() {
                         voice = VoiceActions(
                             setTts = { p, v -> g.settings.setTts(p, v) }, setKey = { p, k -> g.settings.setVoiceKey(p, k) },
                             hasKey = { p -> g.settings.voiceKey(p) != null }, setSpeak = g.settings::setSpeakReplies, setLive = g.settings::setLive, setAutoPlay = g.settings::setAutoPlayEarphones,
-                            preview = { g.speak("Hi ${settings.userName.ifBlank { "there" }}, this is how I sound.") }),
+                            preview = { g.speak(if (settings.userName.isBlank()) getString(R.string.main_voice_preview_anon) else getString(R.string.main_voice_preview, settings.userName)) }),
                         onChooseSub = { k ->
                             if (k == com.past9.phoneaos.data.SubKind.OPENCODE) { g.settings.setProvider(Provider.OPENCODE_GO); nav.navigate("key") }
                             else { g.settings.setSubKind(k); g.settings.setMode(PowerMode.SUBSCRIPTION); nav.navigate("sub") } },
@@ -473,6 +475,8 @@ class MainActivity : ComponentActivity() {
                         onClearChat = { g.runtime.clearConversation() },
                         onResetAll = { scope.launch { g.runtime.stop(); g.db.clearAllTables(); g.settings.resetAll() } },
                         onBattery = { runCatching { startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))) } },
+                        language = com.past9.phoneaos.system.AppLocale.current(this@MainActivity),
+                        setLanguage = { com.past9.phoneaos.system.AppLocale.set(this@MainActivity, it) },
                     ))
                 }
                 composable("key") {
@@ -495,7 +499,7 @@ class MainActivity : ComponentActivity() {
                         onAnswer = { id, o -> g.runtime.answer(id, o) }, onBrowser = { nav.navigate("browser") { launchSingleTop = true } })
                 }
                 composable("style") {
-                    com.past9.phoneaos.ui.SubScreen("Make it yours", "Colour and sidekick", { nav.popBackStack() }) { pad ->
+                    com.past9.phoneaos.ui.SubScreen(androidx.compose.ui.res.stringResource(R.string.main_style_title), androidx.compose.ui.res.stringResource(R.string.main_style_sub), { nav.popBackStack() }) { pad ->
                         androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 48.dp)) {
                             StylePicker(settings.userName, settings.agentName, settings.accent, settings.mascot, g.settings::setAccent, g.settings::setMascot)
                         }
@@ -536,14 +540,14 @@ class MainActivity : ComponentActivity() {
                 modelErr, g.runtime.helperRoster().filter { settings.helperRoster.isNotEmpty() },
                 onSave = { g.settings.setHelperRoster(it) }, onDismiss = { modelSheet = false }, kept = g.runtime.pins.agents.collectAsStateWithLifecycle().value)
             else if (modelSheet) ModelPickerSheet(
-                if (pickingHelper) "Helper model" else if (onSub) "${settings.subKind.label} model" else "${settings.provider.label} model",
-                if (pickingHelper && onSub) modelList?.map { if (it.id.isBlank()) it.copy(name = "Same as your agent", note = "Helpers use whatever your agent uses") else it } else modelList,
+                if (pickingHelper) androidx.compose.ui.res.stringResource(R.string.main_helper_model) else androidx.compose.ui.res.stringResource(R.string.main_provider_model, if (onSub) settings.subKind.label else settings.provider.label),
+                if (pickingHelper && onSub) modelList?.map { if (it.id.isBlank()) it.copy(name = getString(R.string.main_same_as_agent), note = getString(R.string.main_helpers_use_agent)) else it } else modelList,
                 when { pickingHelper && onSub -> settings.subHelperModel; pickingHelper -> settings.helperModel; onSub -> settings.subModel; else -> settings.model }, modelErr,
                 onPick = { m ->
                     when { pickingHelper && onSub -> g.settings.setSubHelperModel(m.id); pickingHelper -> g.settings.setHelperModel(m.id); onSub -> g.settings.setSubModel(m.id); else -> g.settings.setModel(m.id) }
                     modelSheet = false
                 }, onDismiss = { modelSheet = false },
-                subtitle = if (pickingHelper) "Your agent plans and hands the work to helpers. Pick what they run on." else null)
+                subtitle = if (pickingHelper) androidx.compose.ui.res.stringResource(R.string.main_helper_picker_sub) else null)
             androidx.compose.animation.AnimatedVisibility(route in barRoutes, modifier = androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
                 enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut()) {
                 HomeBar(route, ::go, onTalk = { nav.navigate("chat") })
@@ -573,8 +577,8 @@ class MainActivity : ComponentActivity() {
                 g.phone.workStarted()
                 val err = try { sub.login(onUrl = { url -> runOnUiThread { open(url) } }, progress = { l -> scope.launch { log += l } }, needsCode = { needsCode = true }) } finally { g.phone.workFinished() }
                 signingIn = false; needsCode = false; verifying = false; info = sub.info()
-                if (sub.signedIn) { g.settings.setSubKind(kind); g.settings.setMode(PowerMode.SUBSCRIPTION) } else signErr = err ?: "Sign-in didn't finish. Tap Sign in to try again." } },
-            onInstall = { scope.launch { installing = true; runCatching { sub.install { l -> scope.launch { log += l } } }.onFailure { log += "Failed: ${it.message}" }; installing = false; info = sub.info() } },
+                if (sub.signedIn) { g.settings.setSubKind(kind); g.settings.setMode(PowerMode.SUBSCRIPTION) } else signErr = err ?: getString(R.string.main_signin_not_finished) } },
+            onInstall = { scope.launch { installing = true; runCatching { sub.install { l -> scope.launch { log += l } } }.onFailure { log += getString(R.string.main_install_failed, it.message) }; installing = false; info = sub.info() } },
             onSaveToken = { t -> runCatching { sub.setToken(t); g.settings.setSubKind(kind); g.settings.setMode(PowerMode.SUBSCRIPTION) }.onFailure { signErr = it.message }; info = sub.info() },
             onUseKey = onUseKey)
     }
@@ -639,8 +643,8 @@ class MainActivity : ComponentActivity() {
             if (e.status == 404 && model != p.defaultModel) {
                 try { ping(p.defaultModel); g.settings.setModel(p.defaultModel); return null } catch (_: Exception) {}
             }
-            when (e.status) { 401, 403 -> "That key was rejected."; 404 -> "Key works, but the model $model isn't available to this key. Pick another model."; 429 -> "Key works but has no credit or is rate-limited."; else -> e.message }
-        } catch (e: Exception) { "Couldn't check: ${e.message}" }
+            when (e.status) { 401, 403 -> getString(R.string.main_key_rejected); 404 -> getString(R.string.main_key_model_unavailable, model); 429 -> getString(R.string.main_key_no_credit); else -> e.message }
+        } catch (e: Exception) { getString(R.string.main_key_check_failed, e.message) }
     }
 
     private suspend fun saveComposio(g: Graph, key: String): String? {
@@ -667,7 +671,7 @@ class MainActivity : ComponentActivity() {
 
     /** "claude-opus-5-5" -> "Opus 5.5", "sonnet" -> "Sonnet", "" -> "Default". */
     private fun prettyModel(id: String): String {
-        if (id.isBlank()) return "Default"
+        if (id.isBlank()) return getString(R.string.main_model_default)
         val m = Regex("claude-([a-z]+)-(\\d+)(?:-(\\d+))?").find(id) ?: return id.replaceFirstChar { it.uppercase() }
         val (tier, a, b) = m.destructured
         return tier.replaceFirstChar { it.uppercase() } + " " + a + (if (b.isNotBlank() && b.length <= 2) ".$b" else "")

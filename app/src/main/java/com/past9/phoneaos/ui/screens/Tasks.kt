@@ -25,6 +25,9 @@ import com.past9.phoneaos.ui.theme.LocalExtra
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import com.past9.phoneaos.R
 
 data class TaskActions(
     val onBack: () -> Unit = {},
@@ -46,40 +49,40 @@ fun TasksScreen(goals: List<GoalRow>, tasks: List<TaskRow>, actions: TaskActions
     val mine = tasks.filter { it.owner == "user" }
     val agents = tasks.filter { it.owner == "agent" }
     val open = mine.count { it.status != "done" }
-    SubScreen("Tasks", if (tab == 0) (if (open == 0) "Your list is clear" else "$open on your list") else "${goals.count { it.status == "open" }} goals your agent is working on", actions.onBack,
-        fab = { if (tab == 0) ExtendedFloatingActionButton(onClick = { adding = true }, icon = { Icon(Icons.Rounded.Add, null) }, text = { Text("Add to-do") }, modifier = Modifier.padding(bottom = bottomPadding - 40.dp)) }) { pad ->
+    SubScreen(stringResource(R.string.tasks_title), if (tab == 0) (if (open == 0) stringResource(R.string.tasks_clear) else stringResource(R.string.tasks_open_count, open)) else goals.count { it.status == "open" }.let { pluralStringResource(R.plurals.tasks_goals_count, it, it) }, actions.onBack,
+        fab = { if (tab == 0) ExtendedFloatingActionButton(onClick = { adding = true }, icon = { Icon(Icons.Rounded.Add, null) }, text = { Text(stringResource(R.string.tasks_add_todo)) }, modifier = Modifier.padding(bottom = bottomPadding - 40.dp)) }) { pad ->
         Column(Modifier.padding(pad)) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
-                listOf("Your to-dos", "Agent's work").forEachIndexed { i, label ->
+                listOf(stringResource(R.string.tasks_tab_mine), stringResource(R.string.tasks_tab_agent)).forEachIndexed { i, label ->
                     ToggleButton(tab == i, { tab = i }, modifier = Modifier.weight(1f).height(48.dp),
                         shapes = if (i == 0) ButtonGroupDefaults.connectedLeadingButtonShapes() else ButtonGroupDefaults.connectedTrailingButtonShapes()) { Text(label) }
                 }
             }
             if (tab == 0) {
-                if (mine.isEmpty()) { EmptyState("Your list is clear", "Add a to-do, or tell your agent \"remind me to…\". Everything you need to do lives here."); return@Column }
+                if (mine.isEmpty()) { EmptyState(stringResource(R.string.tasks_clear), stringResource(R.string.tasks_empty_body)); return@Column }
                 val today = java.time.LocalDate.now()
                 LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     val todo = mine.filter { it.status != "done" }.sortedWith(compareBy({ it.dueAt ?: Long.MAX_VALUE }, { it.createdAt }))
                     if (todo.isNotEmpty()) item { AppCard(padding = PaddingValues(vertical = 6.dp)) { todo.forEach { TodoLine(it, today, actions.onToggle) } } }
                     val done = mine.filter { it.status == "done" }
                     if (done.isNotEmpty()) {
-                        item { SectionHeader("Done", "Ticked off recently", Modifier.padding(top = 8.dp, start = 4.dp)) }
+                        item { SectionHeader(stringResource(R.string.tasks_done), stringResource(R.string.tasks_done_sub), Modifier.padding(top = 8.dp, start = 4.dp)) }
                         item { AppCard(padding = PaddingValues(vertical = 6.dp), container = MaterialTheme.colorScheme.surfaceContainerLowest) { done.take(30).forEach { TaskLine(it, actions) } } }
                     }
                 }
             } else {
                 val openGoals = goals.filter { it.status == "open" }
-                if (openGoals.isEmpty() && agents.isEmpty()) { EmptyState("Nothing in progress", "Give your agent something bigger, like \"plan my trip to Durban\". It breaks it into steps and works through them here."); return@Column }
+                if (openGoals.isEmpty() && agents.isEmpty()) { EmptyState(stringResource(R.string.tasks_none), stringResource(R.string.tasks_none_body)); return@Column }
                 LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(openGoals.sortedByDescending { g -> tasks.any { it.goalId == g.id && it.status == "blocked" } }, key = { "g${it.id}" }) { g -> GoalCard(g, tasks.filter { it.goalId == g.id }, actions) }
                     val loose = agents.filter { t -> t.goalId == null || openGoals.none { it.id == t.goalId } }.filter { it.status != "done" }
                     if (loose.isNotEmpty()) {
-                        item { SectionHeader("Other steps", "Things your agent is following up", Modifier.padding(top = 8.dp, start = 4.dp)) }
+                        item { SectionHeader(stringResource(R.string.tasks_other), stringResource(R.string.tasks_other_sub), Modifier.padding(top = 8.dp, start = 4.dp)) }
                         item { AppCard(padding = PaddingValues(vertical = 6.dp)) { loose.forEach { TaskLine(it, actions) } } }
                     }
                     val achieved = goals.filter { it.status == "achieved" }
                     if (achieved.isNotEmpty()) {
-                        item { SectionHeader("Achieved", "Goals where every step got done", Modifier.padding(top = 12.dp, start = 4.dp)) }
+                        item { SectionHeader(stringResource(R.string.tasks_achieved), stringResource(R.string.tasks_achieved_sub), Modifier.padding(top = 12.dp, start = 4.dp)) }
                         items(achieved, key = { "a${it.id}" }) { g -> Text("✓  ${g.title}", style = MaterialTheme.typography.bodyLarge, color = LocalExtra.current.success, modifier = Modifier.padding(horizontal = 8.dp)) }
                     }
                 }
@@ -96,7 +99,7 @@ private fun GoalCard(g: GoalRow, tasks: List<TaskRow>, actions: TaskActions) {
     AppCard(padding = PaddingValues(top = 18.dp, bottom = 8.dp)) {
         Row(Modifier.padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("GOAL · $done/${tasks.size} DONE", style = Eyebrow, color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.tasks_goal_eyebrow, done, tasks.size), style = Eyebrow, color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(4.dp))
                 Text(g.title, style = MaterialTheme.typography.titleLarge)
                 if (g.why.isNotBlank()) Text(g.why, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -120,15 +123,15 @@ fun TaskLine(t: TaskRow, actions: TaskActions) {
         Column(Modifier.weight(1f)) {
             Text(t.title, style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis,
                 textDecoration = if (done) TextDecoration.LineThrough else null, color = if (done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
-            val sub = listOfNotNull(t.blocker.takeIf { t.status == "blocked" && it.isNotBlank() }?.let { "Needs: $it" }, t.dueAt?.let { dueLabel(it) }, t.notes.takeIf { it.isNotBlank() }, "You".takeIf { t.owner == "user" && t.goalId != null }).joinToString(" · ")
+            val sub = listOfNotNull(t.blocker.takeIf { t.status == "blocked" && it.isNotBlank() }?.let { stringResource(R.string.tasks_needs, it) }, t.dueAt?.let { dueLabel(it) }, t.notes.takeIf { it.isNotBlank() }, stringResource(R.string.tasks_you).takeIf { t.owner == "user" && t.goalId != null }).joinToString(" · ")
             if (sub.isNotEmpty()) Text(sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         when (t.status) {
-            "doing" -> StatusPill("Doing", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
-            "blocked" -> StatusPill("Blocked", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
+            "doing" -> StatusPill(stringResource(R.string.tasks_doing), MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+            "blocked" -> StatusPill(stringResource(R.string.tasks_blocked), MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
         }
         if (t.status == "blocked" && t.blocker.isNotBlank()) Unit
-        if (!done && t.owner == "user") IconButton(onClick = { actions.onAsk("Help me with task #${t.id}: ${t.title}") }) { Icon(Icons.Rounded.AutoAwesome, "Ask your agent to do this", tint = MaterialTheme.colorScheme.primary) }
+        if (!done && t.owner == "user") IconButton(onClick = { actions.onAsk("Help me with task #${t.id}: ${t.title}") }) { Icon(Icons.Rounded.AutoAwesome, stringResource(R.string.tasks_ask_agent), tint = MaterialTheme.colorScheme.primary) }
     }
 }
 
@@ -150,20 +153,20 @@ internal fun AddTaskSheet(onDismiss: () -> Unit, onAsk: (String) -> Unit, onAdd:
     var text by remember { mutableStateOf("") }
     var due by remember { mutableStateOf("none") }
     val dueAt = dueChoice(due)
-    com.past9.phoneaos.ui.AppSheet(Icons.Rounded.TaskAlt, "Your list", "New to-do", onDismiss,
-        primary = if (dueAt == null) "Add to my list" else "Add for ${dueLabel(dueAt)}", primaryEnabled = text.isNotBlank(), onPrimary = { onAdd(text.trim(), dueAt) },
+    com.past9.phoneaos.ui.AppSheet(Icons.Rounded.TaskAlt, stringResource(R.string.tasks_your_list), stringResource(R.string.tasks_new_todo), onDismiss,
+        primary = if (dueAt == null) stringResource(R.string.tasks_add_to_list) else stringResource(R.string.tasks_add_for, dueLabel(dueAt)), primaryEnabled = text.isNotBlank(), onPrimary = { onAdd(text.trim(), dueAt) },
         shape = MaterialShapes.Cookie7Sided,
         secondary = {
             TextButton(onClick = { onAsk("Please take care of this for me: ${text.trim()}") }, enabled = text.isNotBlank(), modifier = Modifier.fillMaxWidth().height(52.dp)) {
-                Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Have my agent do it instead")
+                Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.tasks_agent_instead))
             }
         }) {
-        com.past9.phoneaos.ui.SheetField(text, { text = it }, "What needs doing", "Call the landlord about the geyser", big = true, minLines = 2)
+        com.past9.phoneaos.ui.SheetField(text, { text = it }, stringResource(R.string.tasks_what), stringResource(R.string.tasks_what_hint), big = true, minLines = 2)
         Spacer(Modifier.height(20.dp))
         com.past9.phoneaos.ui.ChoiceChips(listOf(
-            Triple("none", "No date", Icons.Rounded.AllInclusive), Triple("today", "Today", Icons.Rounded.WbTwilight),
-            Triple("tomorrow", "Tomorrow", Icons.Rounded.WbSunny), Triple("weekend", "This weekend", Icons.Rounded.Weekend),
-            Triple("nextweek", "Next week", Icons.Rounded.DateRange),
-        ), due, { due = it }, label = "When")
+            Triple("none", stringResource(R.string.tasks_no_date), Icons.Rounded.AllInclusive), Triple("today", stringResource(R.string.tasks_today), Icons.Rounded.WbTwilight),
+            Triple("tomorrow", stringResource(R.string.tasks_tomorrow), Icons.Rounded.WbSunny), Triple("weekend", stringResource(R.string.tasks_weekend), Icons.Rounded.Weekend),
+            Triple("nextweek", stringResource(R.string.tasks_next_week), Icons.Rounded.DateRange),
+        ), due, { due = it }, label = stringResource(R.string.tasks_when))
     }
 }

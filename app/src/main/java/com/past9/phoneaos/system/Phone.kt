@@ -26,15 +26,15 @@ class AndroidPhone(private val context: Context) : PhoneBridge {
 
     init {
         val nm = context.getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel(CH_MESSAGES, "Messages from your agent", NotificationManager.IMPORTANCE_HIGH))
-        nm.createNotificationChannel(NotificationChannel(CH_WORK, "Agent working", NotificationManager.IMPORTANCE_MIN))
+        nm.createNotificationChannel(NotificationChannel(CH_MESSAGES, context.getString(R.string.svc_messages_channel), NotificationManager.IMPORTANCE_HIGH))
+        nm.createNotificationChannel(NotificationChannel(CH_WORK, context.getString(R.string.svc_work_channel), NotificationManager.IMPORTANCE_MIN))
     }
 
     override fun notify(title: String, body: String, questionItemId: Long?, options: List<String>) {
         val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE)
         val st = App.graph(context).settings.state.value
         val agent = Identity.publishAgentShortcut(context, st.agentName, st.mascot, st.accent)
-        val me = androidx.core.app.Person.Builder().setName(st.userName.ifBlank { "You" }).setKey("me").build()
+        val me = androidx.core.app.Person.Builder().setName(st.userName.ifBlank { context.getString(R.string.svc_you) }).setKey("me").build()
         val style = NotificationCompat.MessagingStyle(me).setConversationTitle(null).addMessage("$title\n$body", System.currentTimeMillis(), agent)
         val b = NotificationCompat.Builder(context, CH_MESSAGES).setSmallIcon(Identity.statIcon(context, st.mascot)).setContentTitle(title)
             .setColor(com.past9.phoneaos.ui.theme.accentOf(st.accent).lP.let { android.graphics.Color.rgb((it.red * 255).toInt(), (it.green * 255).toInt(), (it.blue * 255).toInt()) })
@@ -79,8 +79,8 @@ class WorkService : Service() {
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         val st = App.graph(this).settings.state.value
         val n = Identity.asAgent(this, NotificationCompat.Builder(this, AndroidPhone.CH_WORK).setSmallIcon(Identity.statIcon(this, st.mascot))
-            .setContentTitle("${st.agentName.ifBlank { "Your agent" }} is working").setContentText("You can leave the app. I will let you know.").setOngoing(true).setContentIntent(open),
-            "", "Working on it. You can leave the app, I will let you know.").build()
+            .setContentTitle(if (st.agentName.isBlank() || st.agentName == "Your agent") getString(R.string.svc_work_title_default) else getString(R.string.svc_work_title, st.agentName)).setContentText(getString(R.string.svc_work_text)).setOngoing(true).setContentIntent(open),
+            "", getString(R.string.svc_work_body)).build()
         if (Build.VERSION.SDK_INT >= 34) startForeground(42, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(42, n)
     }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int) = START_NOT_STICKY

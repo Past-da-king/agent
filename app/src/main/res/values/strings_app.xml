@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- MainActivity -->
+    <plurals name="main_memory_pack_added">
+        <item quantity="one">Added %1$d memory pages from A.O.S</item>
+        <item quantity="other">Added %1$d memory pages from A.O.S</item>
+    </plurals>
+    <string name="main_testnotify_title">Checking in</string>
+    <string name="main_testnotify_body">This is how my messages look on your phone.</string>
+    <string name="main_models_load_failed">Couldn\'t load models: %1$s</string>
+    <string name="main_composio_unreachable">Couldn\'t reach Composio: %1$s</string>
+    <string name="main_account_already_connected">That %1$s account was already connected, so nothing changed.</string>
+    <string name="main_search_failed">Search failed: %1$s</string>
+    <string name="main_voice_preview">Hi %1$s, this is how I sound.</string>
+    <string name="main_voice_preview_anon">Hi there, this is how I sound.</string>
+    <string name="main_style_title">Make it yours</string>
+    <string name="main_style_sub">Colour and sidekick</string>
+    <string name="main_helper_model">Helper model</string>
+    <string name="main_provider_model">%1$s model</string>
+    <string name="main_same_as_agent">Same as your agent</string>
+    <string name="main_helpers_use_agent">Helpers use whatever your agent uses</string>
+    <string name="main_helper_picker_sub">Your agent plans and hands the work to helpers. Pick what they run on.</string>
+    <string name="main_signin_not_finished">Sign-in didn\'t finish. Tap Sign in to try again.</string>
+    <string name="main_install_failed">Failed: %1$s</string>
+    <string name="main_key_rejected">That key was rejected.</string>
+    <string name="main_key_model_unavailable">Key works, but the model %1$s isn\'t available to this key. Pick another model.</string>
+    <string name="main_key_no_credit">Key works but has no credit or is rate-limited.</string>
+    <string name="main_key_check_failed">Couldn\'t check: %1$s</string>
+    <string name="main_model_default">Default</string>
+
+    <!-- Services, notifications, triggers -->
+    <string name="svc_browser_channel">Background browsing</string>
+    <string name="svc_browser_title">%1$s is browsing</string>
+    <string name="svc_browser_title_default">Your agent is browsing</string>
+    <string name="svc_browser_text">Tap to watch or take over</string>
+    <string name="svc_browser_body">I\'m browsing. Tap to watch or take over.</string>
+    <string name="svc_calls_channel">Voice calls</string>
+    <string name="svc_your_agent">Your agent</string>
+    <string name="svc_you">You</string>
+    <string name="svc_call_text">On a call. Tap to go back to it.</string>
+    <string name="svc_call_needs_key">Add a Google (Gemini) key in Settings, Voice.</string>
+    <string name="svc_messages_channel">Messages from your agent</string>
+    <string name="svc_work_channel">Agent working</string>
+    <string name="svc_work_title">%1$s is working</string>
+    <string name="svc_work_title_default">Your agent is working</string>
+    <string name="svc_work_text">You can leave the app. I will let you know.</string>
+    <string name="svc_work_body">Working on it. You can leave the app, I will let you know.</string>
+    <string name="svc_morning_greeting">Morning %1$s.</string>
+    <string name="svc_morning_greeting_anon">Morning there.</string>
+    <string name="svc_weekly_every">Every %1$s at %2$02d:%3$02d</string>
+    <string name="svc_weekly_weekday">weekday</string>
+    <string name="svc_weekly_weekend">weekend day</string>
+    <string name="svc_weekly">Weekly</string>
+
+    <!-- Agent runtime / subscription runtime (UI-only lines) -->
+    <string name="rt_sub_not_setup">Your %1$s subscription isn\'t set up on this phone yet. Open Settings to finish setup, or switch to an API key.</string>
+    <string name="rt_add_key">Add an API key in Settings so I can start working.</string>
+    <string name="rt_stopped">Stopped.</string>
+    <string name="rt_signin_failed">Your %1$s sign-in didn\'t work. Open Settings, Subscription, and sign in again.</string>
+    <string name="rt_sub_version_too_old">This model needs a newer Claude Code than this version of the app has. Update the app, or pick another model.</string>
+    <string name="rt_sub_rate_limit">%1$s says you\'ve hit your plan\'s limit for now. Try again later or switch models.</string>
+    <string name="rt_sub_overloaded">%1$s is overloaded right now. Try again in a minute.</string>
+    <string name="rt_routine_failed">Routine \"%1$s\" failed: %2$s</string>
+    <string name="rt_done">Done</string>
+    <string name="rt_notify_connect">Connect %1$s?</string>
+    <string name="rt_notify_approve">Approve?</string>
+    <string name="rt_notify_needs_you">%1$s needs you</string>
+    <string name="rt_notify_question">Your agent has a question</string>
+    <string name="rt_note_no_pack">%1$s runtime pack not in this build</string>
+    <string name="rt_note_ready_setup">Ready to set up</string>
+    <string name="rt_note_installed">Installed · sign in with %1$s</string>
+    <string name="rt_note_ready">Ready · signed in to %1$s</string>
+    <string name="rt_not_claude_token">That isn\'t a Claude token. It starts with sk-ant-. Use Sign in with Claude instead.</string>
+    <string name="rt_opencode_signin_unavailable">OpenCode sign-in isn\'t available yet</string>
+    <string name="rt_signin_not_finished">Sign-in didn\'t finish. %1$s</string>
+    <string name="data_sub_claude_plan">Pro or Max</string>
+    <string name="data_sub_claude_line">Claude Code runs inside the app on your Claude plan.</string>
+    <string name="data_sub_claude_needs_pack">Claude Code runs inside the app on your plan. Needs the runtime pack.</string>
+    <string name="data_sub_codex_plan">Plus or Pro</string>
+    <string name="data_sub_codex_line">OpenAI\'s Codex runs inside the app on your ChatGPT plan.</string>
+    <string name="data_sub_codex_needs_pack">OpenAI\'s Codex runs inside the app on your plan. Needs the runtime pack.</string>
+    <string name="data_sub_opencode_plan">Zen or Go</string>
+    <string name="data_sub_opencode_line">Paste your OpenCode key and your agent runs on your OpenCode plan.</string>
+    <string name="rt_interrupted_by_close">I was partway through \"%1$s\" when the app closed. Tell me to carry on and I will.</string>
+    <string name="rt_branch_failed">A side thread (\"%1$s\") failed: %2$s</string>
+</resources>

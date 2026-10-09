@@ -23,6 +23,8 @@ import com.past9.phoneaos.ui.AgentAvatar
 import com.past9.phoneaos.ui.theme.Eyebrow
 import com.past9.phoneaos.voice.CallState
 import com.past9.phoneaos.voice.Tts
+import androidx.compose.ui.res.stringResource
+import com.past9.phoneaos.R
 
 data class VoiceActions(
     val setTts: (provider: String, voice: String) -> Unit = { _, _ -> },
@@ -38,12 +40,12 @@ data class VoiceActions(
 @Composable
 fun VoiceSheet(s: AgentSettings, actions: VoiceActions, onDismiss: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    val providers = listOf("system" to "Phone", "gemini" to "Google", "openai" to "OpenAI", "elevenlabs" to "ElevenLabs")
+    val providers = listOf("system" to stringResource(R.string.voice_provider_phone), "gemini" to "Google", "openai" to "OpenAI", "elevenlabs" to "ElevenLabs")
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
-            Text("VOICE", style = Eyebrow, color = cs.primary)
-            Text("How ${s.agentName} sounds", style = MaterialTheme.typography.headlineSmall)
-            Text("Use any key you already have. The phone's own voice works with none.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            Text(stringResource(R.string.voice_eyebrow), style = Eyebrow, color = cs.primary)
+            Text(stringResource(R.string.voice_how_sounds, s.agentName), style = MaterialTheme.typography.headlineSmall)
+            Text(stringResource(R.string.voice_intro), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             Spacer(Modifier.height(16.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
                 providers.forEachIndexed { i, (id, label) ->
@@ -58,11 +60,11 @@ fun VoiceSheet(s: AgentSettings, actions: VoiceActions, onDismiss: () -> Unit) {
                 var key by remember(s.ttsProvider) { mutableStateOf("") }
                 val has = actions.hasKey(s.ttsProvider)
                 OutlinedTextField(key, { key = it.trim() }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium,
-                    label = { Text(when (s.ttsProvider) { "gemini" -> "Google AI Studio key"; "openai" -> "OpenAI key"; else -> "ElevenLabs key" }) },
-                    supportingText = { Text(if (has) "Key saved. Paste a new one to replace it." else "Needed for this voice.") },
-                    trailingIcon = { if (key.length > 10) TextButton(onClick = { actions.setKey(s.ttsProvider, key); key = "" }) { Text("Save") } })
+                    label = { Text(when (s.ttsProvider) { "gemini" -> stringResource(R.string.voice_key_google); "openai" -> stringResource(R.string.voice_key_openai); else -> stringResource(R.string.voice_key_eleven) }) },
+                    supportingText = { Text(if (has) stringResource(R.string.voice_key_saved) else stringResource(R.string.voice_key_needed)) },
+                    trailingIcon = { if (key.length > 10) TextButton(onClick = { actions.setKey(s.ttsProvider, key); key = "" }) { Text(stringResource(R.string.voice_save)) } })
                 Spacer(Modifier.height(8.dp))
-                Text("VOICE", style = Eyebrow, color = cs.onSurfaceVariant)
+                Text(stringResource(R.string.voice_eyebrow), style = Eyebrow, color = cs.onSurfaceVariant)
                 Spacer(Modifier.height(8.dp))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Tts.voices[s.ttsProvider].orEmpty().forEachIndexed { i, v ->
@@ -71,14 +73,14 @@ fun VoiceSheet(s: AgentSettings, actions: VoiceActions, onDismiss: () -> Unit) {
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = actions.preview, enabled = has, shapes = ButtonDefaults.shapes()) { Icon(Icons.Rounded.PlayArrow, null); Spacer(Modifier.width(6.dp)); Text("Hear it") }
+                OutlinedButton(onClick = actions.preview, enabled = has, shapes = ButtonDefaults.shapes()) { Icon(Icons.Rounded.PlayArrow, null); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.voice_hear)) }
             }
             Spacer(Modifier.height(20.dp))
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Auto-play with earphones in", style = MaterialTheme.typography.titleSmall)
-                    Text("Voice notes play by themselves when you're wearing earphones", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    Text(stringResource(R.string.voice_autoplay), style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(R.string.voice_autoplay_sub), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
                 Switch(s.autoPlayEarphones, actions.setAutoPlay)
             }
@@ -89,14 +91,14 @@ fun VoiceSheet(s: AgentSettings, actions: VoiceActions, onDismiss: () -> Unit) {
                         Icon(Icons.Rounded.Call, null, tint = cs.primary)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("Live calls", style = MaterialTheme.typography.titleMedium)
-                            Text("Call ${s.agentName} and just talk. It hands real work to your main agent and tells you when something matters.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                            Text(stringResource(R.string.voice_live), style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(R.string.voice_live_sub, s.agentName), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
                         Switch(s.liveEnabled, actions.setLive, enabled = actions.hasKey("gemini"))
                     }
                     if (!actions.hasKey("gemini")) {
                         Spacer(Modifier.height(8.dp))
-                        Text("Needs a Google (Gemini) key: pick Google above and save one. It runs on Gemini Live.", style = MaterialTheme.typography.bodySmall, color = cs.tertiary)
+                        Text(stringResource(R.string.voice_live_needs), style = MaterialTheme.typography.bodySmall, color = cs.tertiary)
                     }
                 }
             }
@@ -116,7 +118,7 @@ fun CallScreen(name: String, st: CallState, onMute: () -> Unit, onEnd: () -> Uni
         Column(Modifier.fillMaxSize().systemBarsPadding().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(24.dp))
             Text(name, style = MaterialTheme.typography.headlineMedium, color = cs.onPrimaryContainer)
-            Text(when (st.phase) { "connecting" -> "Connecting…"; "listening" -> if (st.muted) "Muted" else "Listening"; "speaking" -> "Talking"; "failed" -> "Couldn't connect"; "ended" -> "Call ended"; else -> "" },
+            Text(when (st.phase) { "connecting" -> stringResource(R.string.voice_connecting); "listening" -> if (st.muted) stringResource(R.string.voice_muted) else stringResource(R.string.voice_listening); "speaking" -> stringResource(R.string.voice_talking); "failed" -> stringResource(R.string.voice_failed); "ended" -> stringResource(R.string.voice_ended); else -> "" },
                 style = MaterialTheme.typography.titleMedium, color = cs.onPrimaryContainer.copy(alpha = 0.8f))
             Spacer(Modifier.weight(1f))
             AgentAvatar(working = st.phase == "speaking" || st.phase == "connecting", size = 200.dp, modifier = Modifier.graphicsLayer { val sc = 1f + 0.18f * level; scaleX = sc; scaleY = sc })
@@ -124,7 +126,7 @@ fun CallScreen(name: String, st: CallState, onMute: () -> Unit, onEnd: () -> Uni
             if (st.delegated.isNotBlank()) Surface(shape = RoundedCornerShape(50), color = cs.surface.copy(alpha = 0.85f)) {
                 Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.Bolt, null, Modifier.size(16.dp), tint = cs.primary); Spacer(Modifier.width(6.dp))
-                    Text("Working on: ${st.delegated.take(60)}", style = MaterialTheme.typography.labelLarge, color = cs.onSurface, maxLines = 1)
+                    Text(stringResource(R.string.voice_working_on, st.delegated.take(60)), style = MaterialTheme.typography.labelLarge, color = cs.onSurface, maxLines = 1)
                 }
             }
             // The main agent needs the user: the same card as in the chat, on top of the call.
@@ -143,7 +145,7 @@ fun CallScreen(name: String, st: CallState, onMute: () -> Unit, onEnd: () -> Uni
                 Spacer(Modifier.height(10.dp))
                 Surface(shape = MaterialTheme.shapes.extraLarge, color = cs.surface.copy(alpha = 0.85f), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-                        Text("WHAT IT'S DOING", style = Eyebrow, color = cs.primary)
+                        Text(stringResource(R.string.voice_doing), style = Eyebrow, color = cs.primary)
                         actions.takeLast(4).forEach { a ->
                             Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Rounded.CheckCircle, null, Modifier.size(14.dp), tint = cs.primary); Spacer(Modifier.width(8.dp))
@@ -160,10 +162,10 @@ fun CallScreen(name: String, st: CallState, onMute: () -> Unit, onEnd: () -> Uni
             if (st.error.isNotBlank()) Text(st.error, color = cs.error, textAlign = TextAlign.Center)
             Spacer(Modifier.weight(1f))
             Row(horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
-                FilledTonalIconButton(onClick = onMute, modifier = Modifier.size(64.dp)) { Icon(if (st.muted) Icons.Rounded.MicOff else Icons.Rounded.Mic, if (st.muted) "Unmute" else "Mute") }
+                FilledTonalIconButton(onClick = onMute, modifier = Modifier.size(64.dp)) { Icon(if (st.muted) Icons.Rounded.MicOff else Icons.Rounded.Mic, if (st.muted) stringResource(R.string.voice_unmute) else stringResource(R.string.voice_mute)) }
                 if (st.active || st.phase == "connecting") FilledIconButton(onClick = onEnd, modifier = Modifier.size(80.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xFFD7141E), contentColor = Color.White)) {
-                    Icon(Icons.Rounded.CallEnd, "End call", Modifier.size(34.dp))
-                } else FilledIconButton(onClick = onStart, modifier = Modifier.size(80.dp)) { Icon(Icons.Rounded.Call, "Call again", Modifier.size(34.dp)) }
+                    Icon(Icons.Rounded.CallEnd, stringResource(R.string.voice_end_call), Modifier.size(34.dp))
+                } else FilledIconButton(onClick = onStart, modifier = Modifier.size(80.dp)) { Icon(Icons.Rounded.Call, stringResource(R.string.voice_call_again), Modifier.size(34.dp)) }
             }
             Spacer(Modifier.height(24.dp))
         }

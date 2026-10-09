@@ -19,6 +19,9 @@ import com.past9.phoneaos.ui.AppCard
 import com.past9.phoneaos.ui.SectionHeader
 import com.past9.phoneaos.ui.SubScreen
 import com.past9.phoneaos.ui.relativeTime
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import com.past9.phoneaos.R
 
 data class PhoneApp(val pkg: String, val label: String, val icon: ImageBitmap?)
 
@@ -32,23 +35,23 @@ data class NotificationsActions(
 @Composable
 fun NotificationsScreen(access: Boolean, apps: List<PhoneApp>, allowed: Set<String>, recent: List<NotificationRow>, actions: NotificationsActions) {
     var query by remember { mutableStateOf("") }
-    SubScreen("Notifications", "${allowed.size} app${if (allowed.size == 1) "" else "s"} your agent can read", actions.onBack) { pad ->
+    SubScreen(stringResource(R.string.notif_title), pluralStringResource(R.plurals.notif_sub, allowed.size, allowed.size), actions.onBack) { pad ->
         LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 48.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
-                Text("Your agent learns a lot from your notifications: bank alerts, deliveries, messages. It only reads the apps you switch on here, and keeps a week of them on this phone.",
+                Text(stringResource(R.string.notif_intro),
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(4.dp))
             }
             if (!access) item {
                 AppCard(container = MaterialTheme.colorScheme.tertiaryContainer) {
-                    Text("NOTIFICATION ACCESS IS OFF", style = com.past9.phoneaos.ui.theme.Eyebrow, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                    Text(stringResource(R.string.notif_access_off), style = com.past9.phoneaos.ui.theme.Eyebrow, color = MaterialTheme.colorScheme.onTertiaryContainer)
                     Spacer(Modifier.height(6.dp))
-                    Text("Turn it on for this app in Android settings. If Android says it's a restricted setting, open this app's info, tap the ⋮ menu, then Allow restricted settings.", color = MaterialTheme.colorScheme.onTertiaryContainer, style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.notif_access_body), color = MaterialTheme.colorScheme.onTertiaryContainer, style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(12.dp))
-                    Button(onClick = actions.onGrantAccess, shapes = ButtonDefaults.shapes()) { Text("Open settings") }
+                    Button(onClick = actions.onGrantAccess, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.notif_open_settings)) }
                 }
             }
             if (recent.isNotEmpty()) {
-                item { SectionHeader("Lately", "What your agent has seen", Modifier.padding(start = 4.dp, top = 6.dp)) }
+                item { SectionHeader(stringResource(R.string.notif_lately), stringResource(R.string.notif_lately_sub), Modifier.padding(start = 4.dp, top = 6.dp)) }
                 item {
                     AppCard(padding = PaddingValues(vertical = 6.dp)) {
                         recent.take(6).forEach { n ->
@@ -61,9 +64,9 @@ fun NotificationsScreen(access: Boolean, apps: List<PhoneApp>, allowed: Set<Stri
                     }
                 }
             }
-            item { SectionHeader("Apps", "Switch on the ones that matter", Modifier.padding(start = 4.dp, top = 6.dp)) }
+            item { SectionHeader(stringResource(R.string.notif_apps), stringResource(R.string.notif_apps_sub), Modifier.padding(start = 4.dp, top = 6.dp)) }
             item {
-                OutlinedTextField(query, { query = it }, placeholder = { Text("Search apps") }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true,
+                OutlinedTextField(query, { query = it }, placeholder = { Text(stringResource(R.string.notif_search)) }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true,
                     modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge)
             }
             val shown = apps.filter { query.isBlank() || it.label.contains(query, true) }.sortedWith(compareBy({ it.pkg !in allowed }, { it.label.lowercase() }))
