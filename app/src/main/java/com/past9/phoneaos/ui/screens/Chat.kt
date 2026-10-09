@@ -645,6 +645,7 @@ fun QuestionCard(item: ChatItem, onAnswer: (Long, String) -> Unit, onBrowser: ()
     AppCard(container = if (answer.isEmpty()) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceContainerLow) {
         Text(if (answer.isEmpty()) "NEEDS YOU" else "YOU ANSWERED", style = Eyebrow, color = if (answer.isEmpty()) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(6.dp))
+        if (answer.isEmpty()) WhyLine(meta, MaterialTheme.colorScheme.onTertiaryContainer)
         Text(item.text, style = MaterialTheme.typography.titleMedium, color = if (answer.isEmpty()) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurface)
         Spacer(Modifier.height(14.dp))
         if (answer.isNotEmpty()) StatusChip(answer)
@@ -656,6 +657,17 @@ fun QuestionCard(item: ChatItem, onAnswer: (Long, String) -> Unit, onBrowser: ()
             }
         }
     }
+}
+
+/**
+ * A helper's request the main agent passed on: its one line on why the user is needed ("Nova: X wants a code
+ * sent to your phone"), so a forwarded card never arrives without a reason.
+ */
+@Composable
+private fun WhyLine(meta: JSONObject, color: androidx.compose.ui.graphics.Color) {
+    val why = meta.optString("why").takeIf { it.isNotBlank() } ?: return
+    Text("${meta.optString("whyBy").ifBlank { "Your agent" }}: $why", style = MaterialTheme.typography.bodyMedium, color = color.copy(alpha = 0.85f))
+    Spacer(Modifier.height(8.dp))
 }
 
 @Composable
@@ -699,6 +711,7 @@ fun ConnectCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
                 }
             }
             Spacer(Modifier.height(14.dp))
+            WhyLine(JSONObject(item.meta), cs.onSurfaceVariant)
             val why = req.reason.removePrefix("so I can ").removePrefix("So I can ").trim().trimEnd('.', '?')
             Text(if (why.isNotBlank()) "So I can $why." else "This task needs ${req.name}.", style = MaterialTheme.typography.bodyLarge, color = cs.onSurface)
             Spacer(Modifier.height(10.dp))
@@ -755,6 +768,7 @@ fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
             Text("APPROVE BEFORE I DO THIS", style = Eyebrow, color = cs.onTertiaryContainer)
         }
         Spacer(Modifier.height(6.dp))
+        WhyLine(JSONObject(item.meta), cs.onTertiaryContainer)
         Text(action, style = MaterialTheme.typography.titleLarge, color = cs.onTertiaryContainer)
         Spacer(Modifier.height(12.dp))
         ApprovalDetails(details)
