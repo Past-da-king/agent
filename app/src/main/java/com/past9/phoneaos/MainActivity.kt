@@ -219,6 +219,34 @@ class MainActivity : ComponentActivity() {
         val voice = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
             r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let { draft = if (draft.isBlank()) it else "$draft $it" }
         }
+        // Dictation: Google's newest live transcription model when a Gemini key is set, the device recogniser otherwise.
+        var dictation by remember { mutableStateOf<com.past9.phoneaos.voice.Dictation?>(null) }
+        var dictating by remember { mutableStateOf(false) }
+        DisposableEffect(Unit) { onDispose { dictation?.cancel() } }
+        fun legacyMic() { runCatching { voice.launch(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)) } }
+        fun online(): Boolean = runCatching {
+            val cm = getSystemService(android.net.ConnectivityManager::class.java)
+            cm.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+        }.getOrDefault(false)
+        fun startDictation() {
+            val key = g.settings.voiceKey("gemini")
+            if (key == null || !online()) { legacyMic(); return }
+            val base = draft
+            fun join(t: String) = if (t.isBlank()) base else if (base.isBlank()) t else base.trimEnd() + " " + t
+            var heard = false
+            val vocab = listOf(settings.agentName, settings.userName).filter { it.isNotBlank() && it != "Your agent" }
+            val d = com.past9.phoneaos.voice.Dictation(key, vocab, onText = { t -> runOnUiThread { heard = heard || t.isNotBlank(); draft = join(t) } }, onEnd = { err ->
+                runOnUiThread { dictating = false; dictation = null; if (err != null && !heard) legacyMic() }
+            })
+            dictation = d; dictating = true; d.start()
+        }
+        val dictPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) startDictation() }
+        fun toggleMic() {
+            val d = dictation
+            if (d != null) { d.finish(); return }
+            if (androidx.core.content.ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) startDictation()
+            else if (g.settings.voiceKey("gemini") == null) legacyMic() else dictPerm.launch(Manifest.permission.RECORD_AUDIO)
+        }
         fun refreshConnections() = scope.launch {
             val has = g.settings.composioKey() != null
             conn = conn.copy(hasKey = has, loading = has, error = null, notificationsAllowed = notificationsAllowed())
@@ -291,7 +319,10 @@ class MainActivity : ComponentActivity() {
                 }
                 composable("chat") {
                     ChatScreen(items, status, settings.agentName, settings.userName, browserLive, draft, { draft = it },
-                        ChatActions(
+                        listening = dictating,
+                        readMark = { g.settings.extra("chatRead")?.toLongOrNull() ?: Long.MAX_VALUE },
+                        onRead = { id -> if (id > (g.settings.extra("chatRead")?.toLongOrNull() ?: 0L)) g.settings.setExtra("chatRead", id.toString()) },
+                        actions = ChatActions(
                             onCard = { openCard = it },
                             onSend = { g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity)
                                 val docText = docs.entries.joinToString("") { (n, d) -> "\n\n[Attached document: $n${docPaths[n]?.let { p -> ", file saved at $p (you can upload it with browser_upload)" }.orEmpty()}]\n${d.first.take(30_000)}" }
@@ -307,7 +338,7 @@ class MainActivity : ComponentActivity() {
                             onAnswer = { id, o -> g.runtime.answer(id, o) },
                             onReport = { path -> nav.navigate("report?path=" + Uri.encode(path)) },
                             onMenu = { nav.popBackStack() }, onBrowser = { nav.navigate("browser") }, onProfile = { nav.navigate("profile") },
-                            onMic = { runCatching { voice.launch(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)) } },
+                            onMic = { toggleMic() },
                         ), openCount = tasks.count { it.status != "done" }, attachments = attachments, modelLabel = modelLabel, docs = docs.keys.toList(),
                         morning = if (!morningNow) null else (brief?.takeIf { it.ideas.isNotEmpty() }?.let { b ->
                             com.past9.phoneaos.ui.screens.MorningUi(b.greeting, b.line, b.body, b.ideas.map { it.icon to it.text }, preparingBrief, { com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity) })
