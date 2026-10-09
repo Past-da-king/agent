@@ -22,7 +22,7 @@ Home, chat, memory, routines. The two demo recordings are on the [project page](
 
 It is not on the Play Store. You sideload the APK.
 
-1. Open [Releases](https://github.com/Past-da-king/agent/releases/latest) and download `Agent-0.11.0.apk` on your phone.
+1. Open [Releases](https://github.com/Past-da-king/agent/releases/latest) and download `Agent-0.11.4.apk` on your phone.
 2. Tap the file and allow the install when Android asks. That is the whole sideload.
 3. Open Agent, give it a name, pick how it looks, then pick how to power it. See [Setup](#setup).
 4. On a Samsung, Xiaomi or OnePlus phone, set the app's battery to **Unrestricted** under Settings, or Android will kill the browser and the routines while they work.
