@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,6 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.past9.phoneaos.agent.ModelInfo
 import com.past9.phoneaos.data.HelperModel
+import com.past9.phoneaos.data.PinnedAgent
 import com.past9.phoneaos.ui.LocalSheetPreview
 import com.past9.phoneaos.ui.theme.Eyebrow
 
@@ -32,7 +34,9 @@ private const val MAX_HELPERS = 6
  * these tags to send each job to the right helper, and writes a fuller brief for smaller models.
  */
 @Composable
-fun HelperRosterSheet(models: List<ModelInfo>?, error: String?, initial: List<HelperModel>, onSave: (List<HelperModel>) -> Unit, onDismiss: () -> Unit) {
+fun HelperRosterSheet(models: List<ModelInfo>?, error: String?, initial: List<HelperModel>, onSave: (List<HelperModel>) -> Unit, onDismiss: () -> Unit,
+                      /** Helpers the agent kept (pinned): shown quietly, nothing to manage. */
+                      kept: List<PinnedAgent> = emptyList()) {
     val cs = MaterialTheme.colorScheme
     // Picked models in the order they were picked: the first is the default helper.
     val picked = remember { mutableStateListOf<HelperModel>().apply { addAll(initial) } }
@@ -69,6 +73,16 @@ fun HelperRosterSheet(models: List<ModelInfo>?, error: String?, initial: List<He
                             onToggle = { if (index >= 0) picked.removeAt(index) else if (picked.size < MAX_HELPERS) picked += HelperModel(m.id, m.name) },
                             onTags = { tags -> if (index >= 0) picked[index] = picked[index].copy(tags = tags) })
                     }
+                    if (kept.isNotEmpty() && q.isBlank()) {
+                        item(key = "kept-header") {
+                            Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 20.dp, bottom = 4.dp)) {
+                                Text("KEPT BY YOUR AGENT", style = Eyebrow, color = cs.onSurfaceVariant)
+                                Spacer(Modifier.height(2.dp))
+                                Text("Helpers that cracked something, kept for jobs like it. Your agent looks after these itself.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                            }
+                        }
+                        items(kept.sortedByDescending { it.lastUsedAt }, key = { "kept-" + it.id }) { a -> KeptRow(a) }
+                    }
                 }
             }
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp, bottom = 20.dp)) {
@@ -81,6 +95,23 @@ fun HelperRosterSheet(models: List<ModelInfo>?, error: String?, initial: List<He
     if (LocalSheetPreview.current) Surface(color = cs.surfaceContainerLow, shape = shape, modifier = Modifier.fillMaxSize().padding(top = 48.dp)) {
         Column { Box(Modifier.align(Alignment.CenterHorizontally).padding(vertical = 22.dp).size(32.dp, 4.dp).clip(RoundedCornerShape(2.dp)).background(cs.onSurfaceVariant.copy(alpha = 0.4f))); body() }
     } else ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = cs.surfaceContainerLow, shape = shape) { body() }
+}
+
+/** One kept helper: its name and what it's good for. Read-only on purpose. */
+@Composable
+private fun KeptRow(a: PinnedAgent) {
+    val cs = MaterialTheme.colorScheme
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(28.dp).clip(CircleShape).background(cs.secondaryContainer), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.PushPin, null, Modifier.size(16.dp), tint = cs.onSecondaryContainer)
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(a.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(a.goodFor.joinToString(", ").ifBlank { a.summary }, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Text("${a.jobs.size} job${if (a.jobs.size == 1) "" else "s"}", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
+    }
 }
 
 @Composable

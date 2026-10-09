@@ -243,6 +243,21 @@ class ScreensTest(private val dark: Boolean) {
         com.past9.phoneaos.agent.ModelInfo("openai/gpt-5-mini", "GPT-5 mini", true, "2026-05-01")), null,
         listOf(com.past9.phoneaos.data.HelperModel("anthropic/claude-sonnet-5-5", "Claude Sonnet 5.5", listOf("Web research", "Browsing sites", "Writing")),
             com.past9.phoneaos.data.HelperModel("deepseek/deepseek-v4.1-flash", "DeepSeek V4.1 Flash", listOf("Quick lookups", "Cheap bulk work", "Job applications"))), {}, {}) } }
+    @Test fun helperRosterWithKeptHelpers() { sheet("87-sheet-helper-roster-kept") { HelperRosterSheet(listOf(
+        com.past9.phoneaos.agent.ModelInfo("anthropic/claude-sonnet-5-5", "Claude Sonnet 5.5", true, "2026-08-01"),
+        com.past9.phoneaos.agent.ModelInfo("anthropic/claude-haiku-5-5", "Claude Haiku 5.5", true, "2026-08-01")), null,
+        listOf(com.past9.phoneaos.data.HelperModel("anthropic/claude-sonnet-5-5", "Claude Sonnet 5.5", listOf("Web research", "Browsing sites"))), {}, {},
+        kept = listOf(PinnedAgent("a1", "Teams transcripts", "Pulls meeting transcripts through the SharePoint media API.", listOf("Teams transcripts", "Meeting notes"), jobs = listOf("6 Oct: transcript", "7 Oct: transcript", "8 Oct: transcript"), lastUsedAt = now),
+            PinnedAgent("a2", "X sign-ups", "Signs up to X with Google; birthday dropdowns need arrow keys.", listOf("X accounts"), jobs = listOf("8 Oct: X signup"), lastUsedAt = now - 3_600_000))) } }
+    /** A helper's request the main agent forwarded: the card carries its one-line reason. */
+    @Test fun chatForwarded() { shot("13-chat-forwarded") { ChatScreen(listOf(
+        item("user", "Make me an X account with my Google"),
+        item("agent", "A helper is on it."),
+        item("question", "Solve the captcha on the X sign-up page. Open the browser, do it, then tap Done.",
+            JSONObject().put("options", JSONArray(listOf("Open browser", "Done", "Skip"))).put("helper", 2).put("by", "X signup").put("why", "X wants a captcha solved, and only a person can.").put("whyBy", "Nova")),
+        item("question", "APPROVAL|Post your first tweet|\"Hello X\" from @sam_dlamini",
+            JSONObject().put("options", JSONArray(listOf("Approve", "Decline"))).put("why", "It posts in your name.").put("whyBy", "Nova"))),
+        AgentStatus(true, "Waiting for you"), "Nova", "Sam", true, "", {}, ChatActions()) } }
     @Test fun sheetTask() { sheet("80-sheet-task") { AddTaskSheet({}, {}) { _, _ -> } } }
     @Test fun sheetMemory() { sheet("81-sheet-memory") { PageEditor(MemoryRow(id = 3, title = "Lerato", body = "Lerato is his business partner at Acme. Invoices go to her on the 25th.", kind = "person", topics = "work, acme"), {}, {}, {}) } }
     @Test fun sheetMemoryNew() { sheet("82-sheet-memory-new") { PageEditor(MemoryRow(id = 0, title = "", body = "", source = "user"), {}, {}) } }

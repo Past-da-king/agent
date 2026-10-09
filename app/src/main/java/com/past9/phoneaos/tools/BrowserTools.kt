@@ -113,7 +113,7 @@ class BrowserHandoffTool(c: Context) : BrowserTool(c) {
         schema(listOf("reason"), "reason" to str("What they need to do, one line")))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         engine(ctx)
-        ctx.notify("Your agent needs a hand", input.optString("reason"))
+        // No notification of its own: a helper's handoff reaches the user only if the main agent forwards it (and that notifies).
         val a = ctx.ask("${input.optString("reason")} Open the browser, do it, then tap Done.", listOf("Open browser", "Done", "Skip"))
         return when (a) { null -> "No one is around to help right now."; "Skip" -> "The user skipped it."; else -> "The user says they are done. Read the page to check." }
     }

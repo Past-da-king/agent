@@ -102,7 +102,7 @@ fun quotedFor(item: ChatItem, items: List<ChatItem>, byId: Map<Long, ChatItem>):
     val meta = JSONObject(item.meta)
     val q = meta.optLong("replyTo").takeIf { it > 0 }?.let { byId[it] }?.takeIf { it.kind == "user" } ?: return null
     val between = items.filter { it.id > q.id && it.id < item.id }
-    val interrupted = meta.optBoolean("late") || between.any { it.kind == "user" }
+    val interrupted = meta.optBoolean("late") || meta.has("branch") || between.any { it.kind == "user" }
     // Quote once: the first message of a late answer carries it, the rest of that answer follows it.
     val alreadyQuoted = between.lastOrNull { it.kind == "agent" || it.kind == "report" || it.kind == "user" }
         ?.let { prev -> prev.kind != "user" && JSONObject(prev.meta).optLong("replyTo") == q.id && JSONObject(prev.meta).optBoolean("late") == meta.optBoolean("late") } == true
@@ -152,6 +152,7 @@ fun group(items: List<ChatItem>): List<Row_> {
         flushCall()
         when {
             it.kind == "activity" && m.has("helper") -> {} // shown inside its helper's card
+            it.kind == "activity" && m.has("branch") -> {} // shown inside its branch's sheet
             // A helper only shows while it works: once it's done or stopped it leaves the chat; its result lives in the agent's reply.
             it.kind == "helper" && m.optString("state", "working").let { st -> st == "stopped" || (st != "working" && lastAgentAt > m.optLong("endedAt", Long.MAX_VALUE)) } -> {}
             it.kind == "activity" && m.optString("image").isEmpty() && m.optString("file").isEmpty() -> buf += it
@@ -290,6 +291,7 @@ fun ChatScreen(
                         }
                         "voice" -> VoiceBubble(r.item)
                         "card" -> { val id = JSONObject(r.item.meta).optString("card"); com.past9.phoneaos.ui.CardChatRow(LocalCards.current.firstOrNull { it.id == id }, r.item.text) { actions.onCard(id) } }
+                        "branch" -> BranchRow(r.item, items.filter { a -> JSONObject(a.meta).optLong("branch") == r.item.id && (a.kind == "activity" || a.kind == "agent") })
                         "helper" -> HelperRow(r.item, items.filter { a -> a.kind == "activity" && JSONObject(a.meta).optLong("helper") == r.item.id })
                         "activity" -> if (JSONObject(r.item.meta).has("file")) FileCard(r.item) else ImageActivity(r.item)
                         else -> Notice(r.item)
@@ -632,6 +634,49 @@ private fun HelperRow(item: ChatItem, steps: List<ChatItem>) {
     if (open) com.past9.phoneaos.ui.HelperSheet(h, onStop, onDismiss = { open = false })
 }
 
+/**
+ * A message sent while the agent was busy ran as a branch of it. One quiet line in the chat; tap for the branch's own steps
+ * and what it said (a bottom sheet, never a dialog).
+ */
+@Composable
+fun BranchRow(item: ChatItem, steps: List<ChatItem>) {
+    var open by remember { mutableStateOf(false) }
+    val m = JSONObject(item.meta); val cs = MaterialTheme.colorScheme
+    val state = m.optString("state")
+    val label = branchStateLabel(state, m.optBoolean("merged"))
+    Surface(onClick = { open = true }, shape = RoundedCornerShape(50), color = cs.surfaceContainer, modifier = Modifier.padding(start = 4.dp)) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.CallSplit, null, Modifier.size(14.dp), tint = if (state == "failed") cs.error else cs.onSurfaceVariant)
+            Spacer(Modifier.width(6.dp))
+            Text("Branch · $label · ${item.text.take(32)}${if (item.text.length > 32) "..." else ""}", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+    if (open) ModalBottomSheet(onDismissRequest = { open = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = cs.surfaceContainerLow) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 32.dp)) {
+            Text("BRANCH", style = com.past9.phoneaos.ui.theme.Eyebrow, color = cs.onSurfaceVariant)
+            Text(item.text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp))
+            Text("${m.optString("relation").replaceFirstChar { it.uppercase() }} · $label", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp, bottom = 16.dp))
+            if (steps.isEmpty()) Text("Nothing logged yet.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+            steps.forEach { a ->
+                Text((if (a.kind == "agent") "Said: " else "") + a.text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 5.dp))
+            }
+            m.optString("error").takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.error, modifier = Modifier.padding(top = 10.dp)) }
+        }
+    }
+}
+
+/** "working", "done", "merged"... */
+fun branchStateLabel(state: String, merged: Boolean) = when {
+    merged -> "merged"
+    state == "running" -> "working"
+    state == "done" -> "done"
+    state == "superseded" -> "replaced by your correction"
+    state == "interrupted" -> "interrupted"
+    state == "failed" -> "failed"
+    state == "stopped" -> "stopped"
+    else -> state
+}
+
 /** The user's cards, so a card in the chat can show its live headline. */
 val LocalCards = androidx.compose.runtime.staticCompositionLocalOf<List<com.past9.phoneaos.cards.Card>> { emptyList() }
 
@@ -645,6 +690,7 @@ fun QuestionCard(item: ChatItem, onAnswer: (Long, String) -> Unit, onBrowser: ()
     AppCard(container = if (answer.isEmpty()) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceContainerLow) {
         Text(if (answer.isEmpty()) "NEEDS YOU" else "YOU ANSWERED", style = Eyebrow, color = if (answer.isEmpty()) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(6.dp))
+        if (answer.isEmpty()) WhyLine(meta, MaterialTheme.colorScheme.onTertiaryContainer)
         Text(item.text, style = MaterialTheme.typography.titleMedium, color = if (answer.isEmpty()) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurface)
         Spacer(Modifier.height(14.dp))
         if (answer.isNotEmpty()) StatusChip(answer)
@@ -656,6 +702,17 @@ fun QuestionCard(item: ChatItem, onAnswer: (Long, String) -> Unit, onBrowser: ()
             }
         }
     }
+}
+
+/**
+ * A helper's request the main agent passed on: its one line on why the user is needed ("Nova: X wants a code
+ * sent to your phone"), so a forwarded card never arrives without a reason.
+ */
+@Composable
+private fun WhyLine(meta: JSONObject, color: androidx.compose.ui.graphics.Color) {
+    val why = meta.optString("why").takeIf { it.isNotBlank() } ?: return
+    Text("${meta.optString("whyBy").ifBlank { "Your agent" }}: $why", style = MaterialTheme.typography.bodyMedium, color = color.copy(alpha = 0.85f))
+    Spacer(Modifier.height(8.dp))
 }
 
 @Composable
@@ -699,6 +756,7 @@ fun ConnectCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
                 }
             }
             Spacer(Modifier.height(14.dp))
+            WhyLine(JSONObject(item.meta), cs.onSurfaceVariant)
             val why = req.reason.removePrefix("so I can ").removePrefix("So I can ").trim().trimEnd('.', '?')
             Text(if (why.isNotBlank()) "So I can $why." else "This task needs ${req.name}.", style = MaterialTheme.typography.bodyLarge, color = cs.onSurface)
             Spacer(Modifier.height(10.dp))
@@ -755,6 +813,7 @@ fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
             Text("APPROVE BEFORE I DO THIS", style = Eyebrow, color = cs.onTertiaryContainer)
         }
         Spacer(Modifier.height(6.dp))
+        WhyLine(JSONObject(item.meta), cs.onTertiaryContainer)
         Text(action, style = MaterialTheme.typography.titleLarge, color = cs.onTertiaryContainer)
         Spacer(Modifier.height(12.dp))
         ApprovalDetails(details)

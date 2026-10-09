@@ -3,6 +3,7 @@ package com.past9.phoneaos
 import androidx.test.core.app.ApplicationProvider
 import com.past9.phoneaos.agent.*
 import com.past9.phoneaos.data.AppDb
+import com.past9.phoneaos.data.ChatItem
 import com.past9.phoneaos.data.PowerMode
 import com.past9.phoneaos.data.Provider
 import com.past9.phoneaos.data.SettingsStore
@@ -108,6 +109,29 @@ class RuntimeTest {
         assertTrue(p.seen.last().second.size >= 4)
     }
 
+    @Test fun helpersCutOffByAnAppDeathAreStartedAgainAndCappedAtTwoTries() = runBlocking {
+        // The app died with two helpers mid-job: one fresh, one that has already been picked up twice.
+        val fresh = db.chat().insert(ChatItem(kind = "helper", text = "Find the cheapest flight", meta = JSONObject().put("label", "Scout").put("state", "working").put("startedAt", 1L).put("model", "").toString()))
+        db.chat().insert(ChatItem(kind = "activity", text = "Opened the flights page", meta = JSONObject().put("tool", "browser").put("by", "Scout").put("helper", fresh).toString()))
+        val stuck = db.chat().insert(ChatItem(kind = "helper", text = "A job that keeps killing the app", meta = JSONObject().put("label", "Looper").put("state", "working").put("resumes", AgentRuntime.MAX_RESUMES).put("startedAt", 1L).toString()))
+        val p = ScriptedProvider()
+        val rt = runtime(p)
+        // The runtime's own startup recovery races this call, so wait for the helper to finish either way.
+        withTimeout(15_000) { while (JSONObject(db.chat().get(fresh)!!.meta).optString("state") != "done") delay(100) }
+        val freshMeta = JSONObject(db.chat().get(fresh)!!.meta)
+        assertEquals("done", freshMeta.optString("state"))
+        assertEquals(1, freshMeta.optInt("resumes"))
+        // It was told it had been cut off and what it had already done, and not to redo it.
+        val sent = p.seen.helper().first().second.first().text
+        assertTrue(sent.contains("Find the cheapest flight")); assertTrue(sent.contains("cut off")); assertTrue(sent.contains("Opened the flights page"))
+        assertTrue(db.chat().all().first().any { it.kind == "activity" && it.text.startsWith("Picked up again") })
+        // The one that already used up its tries is called failed, not started a third time.
+        withTimeout(5_000) { while (JSONObject(db.chat().get(stuck)!!.meta).optString("state") == "working") delay(50) }
+        val stuckMeta = JSONObject(db.chat().get(stuck)!!.meta)
+        assertEquals(stuckMeta.toString(), "failed", stuckMeta.optString("state")); assertTrue(stuckMeta.optString("result").contains("2 tries"))
+        rt.awaitIdle()
+    }
+
     @Test fun theMainAgentOrchestratesAndOnlyDoesSmallJobs() {
         val rt = runtime(ScriptedProvider())
         val main = rt.tools().map { it.spec.name }.toSet()
@@ -192,7 +216,10 @@ class RuntimeTest {
     }
 
     @Test fun approvalInAHelperBlocksUntilTheUserAnswers() = runBlocking {
-        val p = ScriptedProvider(delegate("Email Lerato: see you at 6 on Friday"), say("Sent a helper."), say("Done, Lerato has it."))
+        // The helper's approval goes to the main agent first; it forwards it (an email in the user's name).
+        val p = ScriptedProvider(delegate("Email Lerato: see you at 6 on Friday"), say("Sent a helper."),
+            call("escalation_triage", JSONObject().put("decision", "forward").put("needs", "in_their_name").put("message", "It sends an email in your name.")), say("HOLD"),
+            say("Done, Lerato has it."))
         p.helperQueue += call("request_approval", JSONObject().put("action", "Send email to Lerato").put("details", "Subject: Friday\nSee you at 6."))
         p.helperQueue += say("Email sent to Lerato.")
         val rt = runtime(p)
@@ -213,7 +240,8 @@ class RuntimeTest {
     }
 
     @Test fun typingWhileAHelperAsksTalksToTheMainAgent() = runBlocking {
-        val p = ScriptedProvider(delegate("Book a table"), say("On it."), say("Hello!"))
+        val p = ScriptedProvider(delegate("Book a table"), say("On it."),
+            call("escalation_triage", JSONObject().put("decision", "forward").put("needs", "their_choice").put("message", "Only you know when you're free.")), say("HOLD"), say("Hello!"))
         p.helperQueue += call("ask_user", JSONObject().put("question", "Which time?").put("options", JSONArray(listOf("7pm", "8pm"))))
         p.helperQueue += say("Booked for 7pm.")
         val rt = runtime(p)

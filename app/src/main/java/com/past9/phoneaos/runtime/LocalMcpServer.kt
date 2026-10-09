@@ -30,6 +30,8 @@ class LocalMcpServer(
     private val helper: ((Long) -> Pair<List<Tool>, ToolContext>?)? = null,
     /** Card scripts reading connected apps: /mcp/card, read-only app tools and nobody to approve anything. */
     private val card: (() -> Pair<List<Tool>, ToolContext>)? = null,
+    /** A branch of the main agent (double texting) has its own endpoint, /mcp/b/<item id>: the main tools, with its own step budget. */
+    private val branch: ((Long) -> Pair<List<Tool>, ToolContext>?)? = null,
 ) {
     private var server: ServerSocket? = null
     val boundPort: Int get() = server?.localPort ?: -1
@@ -67,6 +69,7 @@ class LocalMcpServer(
         val route: Pair<List<Tool>, ToolContext>? = when {
             path == "/mcp" -> null
             path == "/mcp/card" -> card?.invoke() ?: return reply(out, 404, "text/plain", "not found")
+            path.startsWith("/mcp/b/") -> path.removePrefix("/mcp/b/").toLongOrNull()?.let { branch?.invoke(it) } ?: return reply(out, 404, "text/plain", "no such branch")
             path.startsWith("/mcp/h/") -> path.removePrefix("/mcp/h/").toLongOrNull()?.let { helper?.invoke(it) } ?: return reply(out, 404, "text/plain", "no such helper")
             else -> return reply(out, 404, "text/plain", "not found")
         }

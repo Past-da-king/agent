@@ -86,6 +86,10 @@ class Graph(context: Context) {
             override fun forgetBadSignIn() { subRuntime().setToken(null) }
             override fun turn(prompt: String, system: String, resume: String?, mcpUrl: String, mcpToken: String, images: List<String>, model: String?, role: String) =
                 subRuntime().turn(prompt, system, resume, model ?: settings.state.value.subModel.ifBlank { null }, mcpUrl, mcpToken, images, role)
+            // Claude Code can fork a running session (the Agent SDK's forkSession); Codex and OpenCode can only continue one.
+            override val canFork get() = settings.state.value.subKind == com.past9.phoneaos.data.SubKind.CLAUDE
+            override fun forkTurn(prompt: String, system: String, parent: String, mcpUrl: String, mcpToken: String, images: List<String>, model: String?, role: String) =
+                subRuntime().turn(prompt, system, parent, model ?: settings.state.value.subModel.ifBlank { null }, mcpUrl, mcpToken, images, role, fork = true)
         }
     }
 }

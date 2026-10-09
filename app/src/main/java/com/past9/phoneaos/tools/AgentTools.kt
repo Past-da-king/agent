@@ -18,7 +18,7 @@ import org.json.JSONObject
  * in the background, then ends its turn, so the user can keep talking to it while helpers run.
  * When a helper finishes, its result comes back to the main agent as a new message.
  */
-class DelegateTool(private val start: suspend (task: String, label: String, model: String?, profile: String?, batch: String?) -> Long) : Tool {
+class DelegateTool(private val start: suspend (task: String, label: String, model: String?, profile: String?, batch: String?, pinned: String?) -> Long) : Tool {
     override val spec = ToolSpec("delegate", "Set helper agents working in the background. They do ALL the actual work: browsing, searching the web, apps, booking, " +
         "sending, files, code, machines, creating routines. Each brief must stand alone: the goal, everything you know that matters (names, dates, the user's " +
         "preferences and constraints from memory), exactly what to do or find, what to hand back, and anything that needs the user's approval. Returns at once; " +
@@ -27,16 +27,17 @@ class DelegateTool(private val start: suspend (task: String, label: String, mode
             "labels" to strList("A 2 to 4 word name per helper, same order (e.g. 'Uber to airport'). The user sees these."),
             "models" to strList("Optional: which helper model runs each brief, same order (an id or name from YOUR HELPERS). Leave out for the default."),
             "profiles" to strList("Optional: the user's profile each helper works in, same order (e.g. 'Northwind work'). It can then only use that profile's connected accounts."),
-            "together" to bool("These briefs are parts of ONE answer: hold every result until all are done and hand them to you as one message. Default false.")))
+            "together" to bool("These briefs are parts of ONE answer: hold every result until all are done and hand them to you as one message. Default false."),
+            "agents" to strList("Optional: send a brief to one of YOUR PINNED AGENTS instead of a fresh helper, same order (its name; an empty string means a fresh helper). It keeps its whole earlier context, so the brief can be just the new job.")))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val arr = input.optJSONArray("tasks") ?: return "No tasks given"
-        val labels = input.optJSONArray("labels"); val models = input.optJSONArray("models"); val profiles = input.optJSONArray("profiles")
+        val labels = input.optJSONArray("labels"); val models = input.optJSONArray("models"); val profiles = input.optJSONArray("profiles"); val agents = input.optJSONArray("agents")
         val tasks = (0 until arr.length()).map { arr.getString(it) }.filter { it.isNotBlank() }.take(5)
         if (tasks.isEmpty()) return "No tasks given"
         val batch = if (input.optBoolean("together") && tasks.size > 1) "b" + java.util.UUID.randomUUID().toString().take(8) else null
         val started = tasks.mapIndexed { i, t ->
             val label = labels?.optString(i)?.trim()?.takeIf { it.isNotBlank() }?.take(40) ?: t.trim().split(Regex("\\s+")).take(4).joinToString(" ")
-            val id = runCatching { start(t, label, models?.optString(i)?.takeIf { it.isNotBlank() }, profiles?.optString(i)?.takeIf { it.isNotBlank() }, batch) }
+            val id = runCatching { start(t, label, models?.optString(i)?.takeIf { it.isNotBlank() }, profiles?.optString(i)?.takeIf { it.isNotBlank() }, batch, agents?.optString(i)?.takeIf { it.isNotBlank() }) }
                 .getOrElse { return "Couldn't start helpers: ${it.message}" }
             "#$id $label"
         }
@@ -72,6 +73,49 @@ class HelperStopTool(private val stop: suspend (Long) -> Boolean) : Tool {
         schema(listOf("id"), "id" to int("Helper id")))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String =
         if (stop(input.optLong("id"))) "Stopped helper #${input.optLong("id")}." else "No running helper #${input.optLong("id")}."
+}
+
+/**
+ * A helper asked for the user and is waiting: the main agent decides whether it reaches them. See EscalationGate.
+ */
+class EscalationTriageTool(private val triage: suspend (helper: Long?, decision: String, message: String, needs: String) -> String) : Tool {
+    override val spec = ToolSpec("escalation_triage", "Decide on a helper's request for the user (it arrives as \"[Helper #N ... wants the user]\" and the helper waits until you decide). " +
+        "forward: it truly needs the user; they see it with your one-line reason. answer: you know the answer yourself (plain questions only). " +
+        "push_back: it's asking for the sake of asking or giving up; tell it exactly what to try next.",
+        schema(listOf("decision", "message"), "helper" to int("The helper's id (from the request)"),
+            "decision" to enumOf("What happens to the request", "forward", "answer", "push_back"),
+            "message" to str("forward: one short line telling the user why they're needed. answer: the answer. push_back: concrete next things for the helper to try."),
+            "needs" to enumOf("forward only: why it needs the person", *(com.past9.phoneaos.agent.EscalationGate.HUMAN_NEEDS + "other").toTypedArray())))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String =
+        triage(input.optLong("helper").takeIf { it > 0 }, input.optString("decision"), input.optString("message").trim(), input.optString("needs").trim())
+}
+
+/** Keep a helper that earned it, with its whole context, to send it later jobs. The user never manages these. */
+class AgentPinTool(private val pin: suspend (helper: Long?, name: String, summary: String, goodFor: List<String>, why: String) -> String) : Tool {
+    override val spec = ToolSpec("agent_pin", "Pin a helper that earned it: it cracked something non-obvious (a hard sign-up, an undocumented route, a site that fights back) or owns an ongoing area. " +
+        "It keeps its identity and whole context, and you can send it new jobs later (delegate with agents). Pin rarely and only for good reason; don't tell or ask the user. " +
+        "Call again with just the name to update what it knows.",
+        schema(listOf("name", "summary"), "helper" to int("The finished helper's id (leave out to update an existing pin by name)"),
+            "name" to str("A short name for it, e.g. 'X sign-ups' or 'Teams transcripts'"),
+            "summary" to str("What it knows and what it's good at, so you know when to reuse it: the route it found, the traps, what it can do again"),
+            "good_for" to strList("Kinds of job to send it"),
+            "why" to str("Why it earned a pin")))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String {
+        val g = input.optJSONArray("good_for")
+        return pin(input.optLong("helper").takeIf { it > 0 }, input.optString("name").trim(), input.optString("summary").trim(),
+            (0 until (g?.length() ?: 0)).map { g!!.getString(it).trim() }.filter { it.isNotEmpty() }, input.optString("why").trim())
+    }
+}
+
+class AgentUnpinTool(private val unpin: suspend (String) -> String) : Tool {
+    override val spec = ToolSpec("agent_unpin", "Let a pinned agent go (stale, wrong, or its area is finished). Its context is deleted.",
+        schema(listOf("name"), "name" to str("The pinned agent's name")))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String = unpin(input.optString("name"))
+}
+
+class AgentsPinnedTool(private val list: suspend () -> String) : Tool {
+    override val spec = ToolSpec("agents_pinned", "List your pinned agents: what each knows, what it's good for, its jobs so far, and whether it's busy.", schema())
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String = list()
 }
 
 /** A hard stop before anything goes out in the user's name or costs money. */

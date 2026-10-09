@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.Flow
 @Entity(tableName = "chat_items")
 data class ChatItem(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    /** user | agent | activity | helper | question | notice */
+    /** user | agent | activity | helper | question | notice | branch */
     val kind: String,
     val text: String,
     /** Free JSON: tool name, status, options, chosen answer... */
@@ -126,6 +126,7 @@ interface ChatDao {
     @Query("SELECT * FROM turns WHERE thread = :thread ORDER BY id DESC LIMIT :limit") suspend fun recentTurns(thread: String, limit: Int): List<TurnRow>
     @Insert suspend fun insertTurn(t: TurnRow): Long
     @Query("DELETE FROM turns WHERE thread = :thread") suspend fun clearTurns(thread: String)
+    @Query("DELETE FROM turns WHERE thread LIKE 'branch-%'") suspend fun clearBranchTurns()
 }
 
 @Dao
