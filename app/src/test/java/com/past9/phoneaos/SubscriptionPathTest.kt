@@ -138,4 +138,22 @@ class SubscriptionPathTest {
         assertEquals("console.log('npm')", File(dest, "bin/npm-cli.js").readText())
         assertTrue(File(dest, "package.json").exists())
     }
+
+    @Test fun signingOutForgetsTheAccountButKeepsTheRuntime() {
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val claude = SubscriptionRuntime(ctx, com.past9.phoneaos.data.SubKind.CLAUDE)
+        val pack = File(claude.dir, "node_modules/x/package.json").apply { parentFile!!.mkdirs(); writeText("{}") }
+        claude.setToken("sk-ant-oat01-" + "a".repeat(40))
+        File(claude.home, ".claude/.credentials.json").apply { parentFile!!.mkdirs(); writeText("{}") }
+        assertTrue(claude.signedIn)
+        claude.signOut()
+        assertFalse(claude.signedIn)
+        assertTrue(pack.exists())
+
+        val codex = SubscriptionRuntime(ctx, com.past9.phoneaos.data.SubKind.CODEX)
+        codex.setToken("""{"tokens":{"access_token":"x"}}""")
+        assertTrue(codex.signedIn)
+        codex.signOut()
+        assertFalse(codex.signedIn)
+    }
 }

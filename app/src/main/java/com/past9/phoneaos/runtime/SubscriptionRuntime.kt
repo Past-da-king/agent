@@ -89,6 +89,16 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
     /** Everything we unpacked or downloaded, for every subscription. The libs inside the APK stay. */
     fun delete() { dir.deleteRecursively() }
 
+    /** Forget this subscription's sign-in (a pasted token and the CLI's own login) but keep the runtime, so another account can sign in. */
+    fun signOut() {
+        setToken(null)
+        when (kind) {
+            SubKind.CLAUDE -> File(home, ".claude/.credentials.json").delete()
+            SubKind.CODEX -> File(home, ".codex/auth.json").delete()
+            SubKind.OPENCODE -> Unit
+        }
+    }
+
     val bin: File get() = File(dir, "bin")
 
     /** Node can run on its own (no sign-in needed): the agent's code tool uses it. */
