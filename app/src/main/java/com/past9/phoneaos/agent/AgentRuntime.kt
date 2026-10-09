@@ -221,6 +221,17 @@ class AgentRuntime(
     init {
         // A fresh process has no live helpers: anything still marked working was cut off. Pick it up again.
         scope.launch { resumeCutOffHelpers() }
+        // Same for branches: one still marked running was cut off. Keep what it did and fold it back into the main line cleanly.
+        // Its own turn (not inside the launch above), so awaitIdle and the merge bookkeeping see it.
+        launchTurn {
+            val rows = db.chat().all().first().filter { it.kind == "branch" }
+            rows.filter { JSONObject(it.meta).optString("state") == "running" }.forEach { r ->
+                db.chat().update(r.copy(meta = JSONObject(r.meta).put("state", "interrupted").put("error", "Interrupted when the app closed.").toString()))
+                db.chat().insert(ChatItem(kind = "notice", text = "I was partway through \"${r.text.take(80)}\" when the app closed. Tell me to carry on and I will."))
+            }
+            unmerged.set(rows.count { !JSONObject(it.meta).optBoolean("merged") })
+            if (unmerged.get() > 0) mergeBranches()
+        }
     }
 
     /**
@@ -256,16 +267,6 @@ class AgentRuntime(
             val prompt = if (session != null) note else row.text + "\n\n" + note
             // A subscription helper resumes its own session, so its history only names the task; an API helper starts from the note.
             launchHelper(row.id, label, mutableListOf(Msg.user(if (sub != null) row.text else prompt)), prompt, session, provider, sub, meta.optString("model"))
-        }
-        // Same for branches: one still marked running was cut off. Keep what it did and fold it back into the main line cleanly.
-        launchTurn {
-            val rows = db.chat().all().first().filter { it.kind == "branch" }
-            rows.filter { JSONObject(it.meta).optString("state") == "running" }.forEach { r ->
-                db.chat().update(r.copy(meta = JSONObject(r.meta).put("state", "interrupted").put("error", "Interrupted when the app closed.").toString()))
-                db.chat().insert(ChatItem(kind = "notice", text = "I was partway through \"${r.text.take(80)}\" when the app closed. Tell me to carry on and I will."))
-            }
-            unmerged.set(rows.count { !JSONObject(it.meta).optBoolean("merged") })
-            if (unmerged.get() > 0) mergeBranches()
         }
     }
 
