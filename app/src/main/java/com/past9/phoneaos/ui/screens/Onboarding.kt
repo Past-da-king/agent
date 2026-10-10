@@ -201,6 +201,8 @@ private fun Hello(next: () -> Unit) {
             Text("It does the busywork.\nYou get your day back.", style = MaterialTheme.typography.displaySmall)
             Spacer(Modifier.height(12.dp))
             Text("It browses, plans, remembers and follows up, right here on your phone. Even while you're in other apps.", style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant)
+            Spacer(Modifier.height(8.dp))
+            Text("It uses its own built-in browser and can't control your Chrome tabs, so you sign in to your sites inside it.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
             Spacer(Modifier.height(14.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Lock, null, Modifier.size(16.dp), tint = cs.primary)
