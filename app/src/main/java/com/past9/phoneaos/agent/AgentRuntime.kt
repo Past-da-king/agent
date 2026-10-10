@@ -435,6 +435,18 @@ class AgentRuntime(
             if (!s.composioEnabled) appendLine("- No apps are connected yet (Gmail, Calendar...). If a task needs one, tell the user they can connect apps in Connections.")
             else if (com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(settings.composioKey())) appendLine("- Connected apps run through the COMPOSIO_* tools (Composio Connect): search for the right tool, check or start connections, then execute. If an app isn't connected, COMPOSIO_MANAGE_CONNECTIONS with action add and a short reason: the user gets a Connect card and the tool waits until it's done. Never paste sign-in links into the chat. An app can have several accounts (two Outlooks, four Gmails): COMPOSIO_MANAGE_CONNECTIONS list shows each with its email, and COMPOSIO_MULTI_EXECUTE_TOOL takes `account` to pick one. Act in the account the task belongs to; for 'my email' in general check every account and say which one each result came from. Never move data from one account through another unless asked, and always name the account used. Actions that send, post, pay or delete ask the user first automatically.")
             else appendLine("- Connected apps run through apps_find_tools then apps_run (apps_connected lists accounts; pass `account` to pick one). If an app isn't connected, apps_connect asks the user and opens the sign-in. Act in the account the task belongs to and name the account used.")
+            // Composio Connect can't list the user's apps, so the agent would only ever try the ones it can name. Tell it which they are.
+            if (s.composioEnabled && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(settings.composioKey())) settings.composioApps().keys.sorted().takeIf { it.isNotEmpty() }?.let { apps ->
+                fun named(slugs: List<String>) = slugs.joinToString { "${com.past9.phoneaos.tools.AppCatalog.name(it)} ($it)" }
+                appendLine("- The user's connected apps (name and Composio toolkit slug): ${named(apps)}. This list can be out of date: search before telling the user an app isn't connected.")
+                // Toolkits the user built in Composio (custom_*): known to them by name only, and found by no catalogue.
+                apps.filter { it.startsWith("custom_") }.takeIf { it.isNotEmpty() }?.let { own ->
+                    val tools = settings.composioAppTools()
+                    appendLine("- Apps the user made in Composio hold their own data and services. What each one's tools say it's for:")
+                    own.forEach { slug -> appendLine("  - ${named(listOf(slug))}: ${tools[slug]?.joinToString().orEmpty().ifBlank { "find its tools with COMPOSIO_SEARCH_TOOLS" }}") }
+                    appendLine("  When a request could be about something in one of these (by its tools), use that app before saying you can't find it.")
+                }
+            }
             appendLine()
             appendLine("- To show the user an image (a product photo, a map, a chart), put it in the reply as markdown: ![what it is](https://...). Several images in a row become a swipeable strip.")
             if (main) appendLine("- voice_note scripts are plain spoken words: no emoji, no markdown, no lists, no URLs. After sending one, don't repeat it as text.")
