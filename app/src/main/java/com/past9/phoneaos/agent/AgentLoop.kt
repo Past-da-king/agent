@@ -89,6 +89,9 @@ class AgentLoop(
                     tool.run(call.input, ctx) to false
                 } catch (e: CancellationException) { throw e } catch (e: Exception) {
                     "Error: ${e.message ?: e::class.simpleName}" to true
+                } catch (e: Throwable) {
+                    // An Error from inside a tool (out of memory, a missing class) fails that one call, not the helper or the app.
+                    "Error: the tool crashed (${e::class.simpleName}: ${e.message})" to true
                 }
                 val clipped = if (out.length > 24_000) out.take(24_000) + "\n…(cut, ${out.length} chars total)" else out
                 onEvent(AgentEvent.ToolFinished(call, clipped, err))

@@ -53,10 +53,27 @@ class AndroidPhone(private val context: Context) : PhoneBridge {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
-    override fun workStarted() { if (active.incrementAndGet() == 1) runCatching { context.startForegroundService(Intent(context, WorkService::class.java)) } }
-    override fun workFinished() { if (active.decrementAndGet() <= 0) { active.set(0); context.stopService(Intent(context, WorkService::class.java)) } }
+    override fun workStarted() {
+        activeCount = active.incrementAndGet()
+        if (activeCount == 1) runCatching { context.startForegroundService(Intent(context, WorkService::class.java)) }
+    }
+    override fun workFinished() {
+        if (active.decrementAndGet() <= 0) { active.set(0); activeCount = 0; context.stopService(Intent(context, WorkService::class.java)) } else activeCount = active.get()
+    }
 
-    companion object { const val CH_MESSAGES = "messages"; const val CH_WORK = "work" }
+    /** The "Agent is working: N helpers" line follows the count, and a safety-net check runs while any helper is working. */
+    override fun helpersChanged(count: Int) {
+        helperCount = count
+        runCatching { WorkService.refresh(context) }
+        runCatching { if (count > 0) HelperWatchdog.ensure(context) else HelperWatchdog.cancel(context) }
+    }
+
+    companion object {
+        const val CH_MESSAGES = "messages"; const val CH_WORK = "work"
+        /** Work in this process right now (helpers, a chat turn, a routine) and how many of it is helpers. */
+        @Volatile var activeCount = 0
+        @Volatile var helperCount = 0
+    }
 }
 
 /** Answers a question card straight from the notification shade. */
@@ -71,26 +88,81 @@ class AnswerReceiver : BroadcastReceiver() {
     }
 }
 
-/** Keeps the process alive while the agent is mid-task and the user has left the app. */
+/**
+ * Keeps the process alive while the agent is mid-task and the user has left the app. It is sticky: if Android
+ * still kills the app, the system starts the service (and so the app) again, and the helpers that were cut off
+ * pick up from their last checkpoint. It stops itself when nothing is left to do.
+ */
 class WorkService : Service() {
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onCreate() {
         super.onCreate()
-        val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
-        val st = App.graph(this).settings.state.value
-        val n = Identity.asAgent(this, NotificationCompat.Builder(this, AndroidPhone.CH_WORK).setSmallIcon(Identity.statIcon(this, st.mascot))
-            .setContentTitle("${st.agentName.ifBlank { "Your agent" }} is working").setContentText("You can leave the app. I will let you know.").setOngoing(true).setContentIntent(open),
-            "", "Working on it. You can leave the app, I will let you know.").build()
+        val n = build(this)
         if (Build.VERSION.SDK_INT >= 34) startForeground(42, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(42, n)
     }
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int) = START_NOT_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // intent == null: Android restarted us after killing the app. Creating the graph (in build) resumes the cut-off helpers;
+        // if there turns out to be nothing to resume, don't hang around.
+        if (intent == null) handler.postDelayed({ if (AndroidPhone.activeCount <= 0) stopSelf() }, 45_000)
+        return START_STICKY
+    }
+
+    companion object {
+        fun text(helpers: Int) = if (helpers > 0) "Working: $helpers helper${if (helpers > 1) "s" else ""}" else "Working on it"
+
+        fun build(context: Context): android.app.Notification {
+            val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+            val st = App.graph(context).settings.state.value
+            val who = st.agentName.ifBlank { "Agent" }
+            val h = AndroidPhone.helperCount
+            return Identity.asAgent(context, NotificationCompat.Builder(context, AndroidPhone.CH_WORK).setSmallIcon(Identity.statIcon(context, st.mascot))
+                .setContentTitle(if (h > 0) "$who is working: $h helper${if (h > 1) "s" else ""}" else "$who is working")
+                .setContentText("You can leave the app. I will let you know.").setOngoing(true).setContentIntent(open),
+                "", text(h)).build()
+        }
+
+        /** Update the ongoing notification in place (the helper count changed). */
+        fun refresh(context: Context) {
+            if (AndroidPhone.activeCount <= 0) return
+            NotificationManagerCompat.from(context).notify(42, build(context))
+        }
+    }
+}
+
+/**
+ * The safety net: while helpers are working this wakes every 15 minutes. If the app died and nothing brought it
+ * back (a force-stop-free kill the service restart missed), starting the process here resumes the cut-off helpers.
+ */
+object HelperWatchdog {
+    private const val NAME = "helper-watchdog"
+    fun ensure(context: Context) {
+        androidx.work.WorkManager.getInstance(context).enqueueUniquePeriodicWork(NAME, androidx.work.ExistingPeriodicWorkPolicy.KEEP,
+            androidx.work.PeriodicWorkRequestBuilder<WatchdogWorker>(15, java.util.concurrent.TimeUnit.MINUTES).build())
+    }
+    fun cancel(context: Context) { androidx.work.WorkManager.getInstance(context).cancelUniqueWork(NAME) }
+}
+
+class WatchdogWorker(context: Context, params: androidx.work.WorkerParameters) : androidx.work.CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result {
+        val g = App.graph(applicationContext) // a fresh process resumes cut-off helpers as it starts
+        runCatching { g.runtime.resumeCutOffHelpers() } // a live process: pick up any helper that has lost its coroutine
+        if (g.runtime.status.value.helpers == 0 && g.runtime.workingHelperRows() == 0) HelperWatchdog.cancel(applicationContext)
+        return Result.success()
+    }
 }
 
 class BootReceiver : BroadcastReceiver() {
+    /** After a restart or an app update the process is gone: bring helpers and routines back, run what was missed once. */
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-            try { com.past9.phoneaos.triggers.Routines.rescheduleAll(context) } finally { pending.finish() }
+            try {
+                runCatching { App.graph(context) } // starting the process resumes helpers that were cut off
+                runCatching { com.past9.phoneaos.triggers.Routines.rescheduleAll(context) }
+                runCatching { com.past9.phoneaos.triggers.Routines.catchUp(context) }
+            } finally { pending.finish() }
         }
     }
 }

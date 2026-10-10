@@ -66,6 +66,60 @@ object Routines {
         else -> null // "notification" fires on arrival, not on a clock
     }
 
+    /** The scheduled moment (epoch ms) of the next run of a clock-based routine, or null. */
+    fun nextSlot(t: TriggerRow, now: ZonedDateTime = ZonedDateTime.now()): Long? = when (t.kind) {
+        "at" -> parseWhen(t.spec)?.takeIf { it > now.toInstant().toEpochMilli() }
+        else -> nextRunIn(t, now)?.let { now.toInstant().toEpochMilli() + it }
+    }
+
+    /** Kinds that fire at a set clock time: the ones that can be missed while the app is dead. */
+    private val timed = setOf("at", "daily", "weekly")
+
+    /** The latest moment this routine was due at or before [now] (epoch ms), or null if it has none. */
+    fun lastDue(t: TriggerRow, now: ZonedDateTime = ZonedDateTime.now()): Long? = when (t.kind) {
+        "at" -> parseWhen(t.spec)?.takeIf { it <= now.toInstant().toEpochMilli() }
+        "daily" -> runCatching {
+            val (h, m) = t.spec.split(":").map { it.toInt() }
+            var d = now.with(LocalTime.of(h, m)).withSecond(0).withNano(0)
+            if (d.isAfter(now)) d = d.minusDays(1)
+            d.toInstant().toEpochMilli()
+        }.getOrNull()
+        "weekly" -> parseWeekly(t.spec)?.let { (days, h, m) ->
+            (0..7).asSequence().map { now.toLocalDate().minusDays(it.toLong()).atTime(h, m).atZone(now.zone) }
+                .firstOrNull { !it.isAfter(now) && it.dayOfWeek.value in days }?.toInstant()?.toEpochMilli()
+        }
+        else -> null
+    }
+
+    /** Should a run that was due at [due] still be made up? Not if it ran since, or the routine did not exist yet. */
+    fun missed(t: TriggerRow, due: Long, store: RunStore, now: Long = System.currentTimeMillis()): Boolean =
+        t.enabled && t.kind in timed && due > t.createdAt && (t.lastRunAt ?: 0L) < due && RunLedger.owed(store, t.id, due, now)
+
+    /**
+     * After the app (or the phone) was off: every clock routine whose time passed without a run gets ONE run now, however
+     * many slots it missed. Also makes sure each routine has its next run queued. The ledger stops any double run.
+     */
+    suspend fun catchUp(context: Context, now: ZonedDateTime = ZonedDateTime.now()) {
+        val g = App.graph(context)
+        val store = PrefsRunStore(context)
+        val wm = WorkManager.getInstance(context)
+        for (t in g.db.triggers().list().filter { it.enabled }) {
+            ensureScheduled(context, t)
+            val due = lastDue(t, now) ?: continue
+            if (!missed(t, due, store, now.toInstant().toEpochMilli())) continue
+            wm.enqueueUniqueWork("routine-catchup-${t.id}-$due", ExistingWorkPolicy.KEEP,
+                OneTimeWorkRequestBuilder<RoutineWorker>().setInputData(workDataOf("id" to t.id, "slot" to due, "late" to true)).setConstraints(net).build())
+        }
+    }
+
+    /** Queue the next run if none is waiting. Leaves a pending or running job alone (unlike [schedule], which replaces it). */
+    fun ensureScheduled(context: Context, t: TriggerRow) {
+        if (!t.enabled || t.kind !in timed) return
+        val wm = WorkManager.getInstance(context)
+        val busy = runCatching { wm.getWorkInfosForUniqueWork(name(t.id)).get().any { !it.state.isFinished } }.getOrDefault(false)
+        if (!busy) schedule(context, t)
+    }
+
     fun schedule(context: Context, t: TriggerRow) {
         val wm = WorkManager.getInstance(context)
         if (!t.enabled) { wm.cancelUniqueWork(name(t.id)); return }
@@ -84,9 +138,12 @@ object Routines {
                     .setInputData(data).setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).setRequiresCharging(true).build()).build())
             }
             else -> {
-                val delay = nextRunIn(t) ?: run { wm.cancelUniqueWork(name(t.id)); return }
+                val now = ZonedDateTime.now()
+                val slot = nextSlot(t, now) ?: run { wm.cancelUniqueWork(name(t.id)); return }
+                val delay = slot - now.toInstant().toEpochMilli()
                 wm.enqueueUniqueWork(name(t.id), ExistingWorkPolicy.REPLACE,
-                    OneTimeWorkRequestBuilder<RoutineWorker>().setInitialDelay(delay, TimeUnit.MILLISECONDS).setInputData(data).setConstraints(net).build())
+                    OneTimeWorkRequestBuilder<RoutineWorker>().setInitialDelay(delay, TimeUnit.MILLISECONDS)
+                        .setInputData(workDataOf("id" to t.id, "slot" to slot)).setConstraints(net).build())
             }
         }
     }
@@ -132,7 +189,18 @@ class RoutineWorker(context: Context, params: WorkerParameters) : CoroutineWorke
             if (!manual) Routines.schedule(applicationContext, g.db.triggers().get(id)!!)
             return Result.success()
         }
-        var prompt = inputData.getString("context").orEmpty() + t.prompt
+        // Once per scheduled slot, however many things start it (the queued job, a catch-up, a WorkManager retry).
+        val slot = inputData.getLong("slot", 0L)
+        val store = PrefsRunStore(applicationContext)
+        val timedRun = slot > 0 && !inputData.getBoolean("manual", false) && t.kind in setOf("at", "daily", "weekly")
+        var lateNote = ""
+        if (timedRun) {
+            val verdict = RunLedger.claim(store, id, slot, retried = runAttemptCount > 0)
+            if (verdict == RunLedger.Verdict.SKIP) return Result.success()
+            if (verdict == RunLedger.Verdict.RERUN) lateNote = "(The app was closed partway through the last attempt at this, so some of it may already be done. Check before you redo anything.)\n"
+            if (System.currentTimeMillis() - slot > 10 * 60_000) lateNote += "(This was due at ${java.time.Instant.ofEpochMilli(slot).atZone(java.time.ZoneId.systemDefault()).toLocalTime().withSecond(0).withNano(0)} and runs late because the phone or app was off then. Run it once; don't repeat missed days.)\n"
+        }
+        var prompt = inputData.getString("context").orEmpty() + lateNote + t.prompt
         var cursor = t.cursor
         if (t.kind == "email" && !manual) {
             // Event trigger: only run when a NEW email matches the search.
@@ -146,9 +214,12 @@ class RoutineWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         }
 
         val out = g.runtime.runBackground(t.name, prompt)
-        g.db.triggers().upsert(t.copy(lastRunAt = System.currentTimeMillis(), lastResult = out.take(500), cursor = cursor,
-            enabled = if (t.kind == "at" && !manual) false else t.enabled))
-        if ((t.kind == "daily" || t.kind == "weekly") && !manual) Routines.schedule(applicationContext, g.db.triggers().get(id)!!)
+        // Re-read: the row may have been edited while this ran.
+        val now = g.db.triggers().get(id) ?: return Result.success()
+        g.db.triggers().upsert(now.copy(lastRunAt = System.currentTimeMillis(), lastResult = out.take(500), cursor = cursor,
+            enabled = if (t.kind == "at" && !manual) false else now.enabled))
+        if (timedRun) RunLedger.done(store, id, slot)
+        if ((t.kind == "daily" || t.kind == "weekly") && !manual) g.db.triggers().get(id)?.let { Routines.schedule(applicationContext, it) }
         return Result.success()
     }
 }

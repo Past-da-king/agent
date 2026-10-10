@@ -57,6 +57,8 @@ interface PhoneBridge {
     fun openLink(url: String)
     fun workStarted()
     fun workFinished()
+    /** How many helpers are working now: the "Agent is working" notification shows it, and a safety-net check runs while there are any. */
+    fun helpersChanged(count: Int) {}
 }
 
 /**
@@ -162,6 +164,9 @@ class AgentRuntime(
     /** Helper results waiting for the main agent to read them (with the helper whose request it is, for a request). */
     private data class Inbound(val note: String, val origin: Long?, val escalation: Long? = null)
     private val inbox = java.util.concurrent.ConcurrentLinkedQueue<Inbound>()
+    private val resumeLock = Mutex()
+    /** Helpers the database says are still working (for the safety-net check). */
+    suspend fun workingHelperRows(): Int = db.chat().all().first().count { it.kind == "helper" && JSONObject(it.meta).optString("state").let { s -> s == "working" || s == "interrupted" } }
 
     /** A helper's request for the user, waiting on the main agent's triage (one per helper: it's blocked until then). */
     private class Escalation(val helperId: Long, val label: String, val kind: EscalationGate.Kind, val question: String, val options: List<String>,
@@ -179,6 +184,7 @@ class AgentRuntime(
     private fun refreshHelpers() {
         _running.value = helpers.values.sortedBy { it.startedAt }
         _status.value = _status.value.copy(helpers = helpers.size)
+        runCatching { phone.helpersChanged(helpers.size) }
     }
 
     /** Servers and computers the user connected; the agent hands them heavy work over SSH. */
@@ -219,8 +225,6 @@ class AgentRuntime(
     val cards: com.past9.phoneaos.cards.CardStore get() = com.past9.phoneaos.App.graph(context).cards
 
     init {
-        // A fresh process has no live helpers: anything still marked working was cut off. Pick it up again.
-        scope.launch { resumeCutOffHelpers() }
         // Same for branches: one still marked running was cut off. Keep what it did and fold it back into the main line cleanly.
         // Its own turn (not inside the launch above), so awaitIdle and the merge bookkeeping see it.
         launchTurn {
@@ -239,35 +243,72 @@ class AgentRuntime(
      * left off, so a dead app no longer loses the job. A helper that keeps taking the app down with it gets
      * [MAX_RESUMES] tries, then is marked failed, so a bad job can't crash-loop the app.
      */
-    internal suspend fun resumeCutOffHelpers() {
-        val cut = db.chat().all().first().filter { it.kind == "helper" && JSONObject(it.meta).optString("state") == "working" }
+    internal suspend fun resumeCutOffHelpers(atStart: Boolean = false) = resumeLock.withLock {
+        val now = System.currentTimeMillis()
+        // Working or paused, and not running in this process. On the safety-net check a helper started a moment ago is left alone.
+        val cut = db.chat().all().first().filter { r ->
+            r.kind == "helper" && JSONObject(r.meta).optString("state").let { it == "working" || it == "interrupted" } && !helpers.containsKey(r.id) &&
+                (atStart || now - JSONObject(r.meta).optLong("startedAt", 0) > 45_000)
+        }
         // The subscription runtime can take a moment to be ready on a fresh start.
         if (cut.isNotEmpty() && settings.state.value.mode == PowerMode.SUBSCRIPTION) repeat(20) { if (subscription?.ready != true) kotlinx.coroutines.delay(500) }
+        val picked = mutableListOf<String>()
         for (row in cut) {
             val meta = JSONObject(row.meta)
-            val tries = meta.optInt("resumes")
+            val steps = meta.optInt("steps")
+            // A helper that got further since its last pick-up isn't crash-looping: the count starts again.
+            val tries = if (meta.has("stepsAtResume") && steps > meta.optInt("stepsAtResume")) 0 else meta.optInt("resumes")
             val st = settings.state.value
             val sub = subscription?.takeIf { st.mode == PowerMode.SUBSCRIPTION && it.ready }
             val provider = if (sub == null) runCatching { providerFactory(settings) }.getOrNull() else null
-            if (tries >= MAX_RESUMES || (sub == null && provider == null)) {
-                meta.put("state", "failed").put("result", if (tries >= MAX_RESUMES) "Interrupted when the app closed, and it didn't get further after $tries tries." else "Interrupted when the app closed.")
+            if (tries >= MAX_RESUMES) {
+                meta.put("state", "failed").put("result", "Interrupted when the app closed, and it didn't get further after $tries tries.")
                 meta.remove("now")
                 db.chat().update(row.copy(meta = meta.toString()))
+                HelperCheckpoint.clear(db, row.id)
+                continue
+            }
+            if (sub == null && provider == null) {
+                // No AI to run it on right now (nothing set up, or the subscription isn't ready). Keep it; the next start or check tries again.
+                if (meta.optString("state") != "interrupted") { meta.remove("now"); db.chat().update(row.copy(meta = meta.put("state", "interrupted").put("result", "Interrupted when the app closed. It carries on when an AI is set up.").toString())) }
                 continue
             }
             val label = meta.optString("label").ifBlank { "Helper" }
             val session = meta.optString("session").takeIf { it.isNotBlank() }
             // What it had already done, from its own activity trail, so it carries on instead of starting over.
             val trail = db.chat().all().first().filter { it.kind == "activity" && JSONObject(it.meta).optLong("helper") == row.id }.takeLast(8).joinToString("\n") { "- ${it.text}" }
-            val note = "[The app was closed while you were working, so you were cut off. Carry on from where you got to; don't redo what is already done." +
-                (if (trail.isNotBlank()) " What you had done so far:\n$trail" else "") + "]"
             meta.optString("profile").takeIf { it.isNotBlank() }?.let { n -> profiles.find(n)?.let { helperProfile[row.id] = it.id } }
-            db.chat().update(row.copy(meta = meta.put("resumes", tries + 1).put("startedAt", System.currentTimeMillis()).toString()))
+            meta.put("state", "working").remove("result")
+            db.chat().update(row.copy(meta = meta.put("resumes", tries + 1).put("totalResumes", meta.optInt("totalResumes") + 1).put("stepsAtResume", steps).put("startedAt", System.currentTimeMillis()).toString()))
             db.chat().insert(ChatItem(kind = "activity", text = "Picked up again after the app restarted", meta = JSONObject().put("tool", "agent").put("by", label).put("helper", row.id).toString()))
-            val prompt = if (session != null) note else row.text + "\n\n" + note
-            // A subscription helper resumes its own session, so its history only names the task; an API helper starts from the note.
-            launchHelper(row.id, label, mutableListOf(Msg.user(if (sub != null) row.text else prompt)), prompt, session, provider, sub, meta.optString("model"))
+            val saved = HelperCheckpoint.load(db, row.id)
+            val history: MutableList<Msg>; val prompt: String
+            if (sub != null) {
+                // A subscription helper resumes its own session, so its history only names the task.
+                val doing = meta.optString("now").takeIf { it.isNotBlank() }?.let { "\nThe last thing you were doing: $it." }.orEmpty()
+                val note = HelperCheckpoint.restartNote(emptyList(), trail) .removeSuffix("]") + doing + "]"
+                prompt = if (session != null) note else row.text + "\n\n" + note
+                history = mutableListOf(Msg.user(row.text))
+            } else {
+                // An API helper is rebuilt from its saved transcript; with none saved, from the brief and its trail.
+                history = HelperCheckpoint.resumeHistory(saved, row.text, trail)
+                    ?: mutableListOf(Msg.user(row.text + "\n\n" + HelperCheckpoint.restartNote(emptyList(), trail)))
+                prompt = history.first().text
+            }
+            picked += "#${row.id} \"$label\" (${steps} steps in)"
+            launchHelper(row.id, label, history, prompt, if (sub != null) session else null, provider, sub, meta.optString("model"), brief = row.text)
         }
+        if (picked.isNotEmpty()) {
+            val list = picked.joinToString("; ")
+            db.chat().insert(ChatItem(kind = "notice", text = "The app restarted. ${picked.size} helper${if (picked.size > 1) "s" else ""} picked up where ${if (picked.size > 1) "they" else "it"} left off."))
+            // The main agent hears it too, so it doesn't brief them again or tell the user they were lost.
+            deliver("[The app restarted. These helpers were cut off and have been resumed from their last checkpoint: $list. They carry on by themselves; don't start them again. Their results arrive as usual. Say nothing to the user unless it matters.]")
+        }
+    }
+
+    /** Run a background job so one failure is logged and never reaches the process. */
+    private suspend fun guarded(what: String, block: suspend () -> Unit) {
+        try { block() } catch (e: CancellationException) { throw e } catch (t: Throwable) { Crashes.record(context, "$what: ${t::class.java.simpleName} ${t.message}", t) }
     }
 
     /**
@@ -793,7 +834,7 @@ class AgentRuntime(
          * So: each assistant tool call gets its result placed straight after it (found anywhere before the
          * next assistant message, or a stub saying it was interrupted), and any result no call claims is dropped.
          */
-        fun repair(msgs: List<Msg>): MutableList<Msg> {
+        fun repair(msgs: List<Msg>, missing: String = INTERRUPTED): MutableList<Msg> {
             val out = mutableListOf<Msg>()
             for ((i, m) in msgs.withIndex()) {
                 if (m.role == Role.ASSISTANT) {
@@ -809,7 +850,7 @@ class AgentRuntime(
                     }
                     // Pictures a tool handed back ride in the same message as the results.
                     val images = msgs.getOrNull(i + 1)?.takeIf { carriesResults(it) }?.blocks?.filterIsInstance<Block.Image>().orEmpty()
-                    out += Msg(Role.USER, calls.map { c -> found[c.id] ?: Block.ToolResult(c.id, INTERRUPTED, true) } + images)
+                    out += Msg(Role.USER, calls.map { c -> found[c.id] ?: Block.ToolResult(c.id, missing, true) } + images)
                 } else {
                     val followsCalls = i > 0 && msgs[i - 1].role == Role.ASSISTANT && msgs[i - 1].toolCalls.isNotEmpty() && carriesResults(m)
                     val rest = m.blocks.filter { it !is Block.ToolResult && !(followsCalls && it is Block.Image) }
@@ -1011,6 +1052,7 @@ class AgentRuntime(
                 pin?.let { put("pinned", it.id).put("pinnedName", it.name) }
             }.toString()))
         helperProfile[itemId] = profile.id
+        batteryHint()
         turn.branchItem?.let { helperBranch[itemId] = it }
         if (profile.browser.isNotBlank()) com.past9.phoneaos.tools.BrowserTool.lastProfile["helper-$itemId"] = profile.browser
         batch?.let { helperBatch[itemId] = it }
@@ -1073,7 +1115,17 @@ class AgentRuntime(
         return "Helper #$id is back on it. Its new result will arrive as a message."
     }
 
-    private suspend fun setHelperMeta(itemId: Long, edit: (JSONObject) -> Unit) {
+    /** Once: Samsung and others stop background apps, which cuts helpers off. Say where to switch that off. */
+    private suspend fun batteryHint() {
+        val pm = context.getSystemService(android.os.PowerManager::class.java) ?: return
+        if (pm.isIgnoringBatteryOptimizations(context.packageName) || settings.extra("battery_hint") != null) return
+        settings.setExtra("battery_hint", "1")
+        db.chat().insert(ChatItem(kind = "notice", text = "Tip: helpers keep working with the app closed, but some phones (Samsung especially) stop background apps to save battery. Open Settings and tap \"Battery: unrestricted\" so they aren't cut off."))
+    }
+
+    /** One writer at a time: the step counter, the gate and the finish all edit the same row, and a read-modify-write that overlaps loses an edit. */
+    private val metaLock = Mutex()
+    private suspend fun setHelperMeta(itemId: Long, edit: (JSONObject) -> Unit) = metaLock.withLock {
         db.chat().get(itemId)?.let { row -> db.chat().update(row.copy(meta = JSONObject(row.meta).also(edit).toString())) }
     }
 
@@ -1202,18 +1254,27 @@ class AgentRuntime(
         var state = "failed"; var result = ""
         try {
             val sys = systemPrompt(brief, role = PromptRole.HELPER, profile = helperProfile[itemId]?.let { profiles.find(it) }, pinnedAgent = pins.agents.value.firstOrNull { it.lastHelper == itemId })
+            // Every step is saved as it happens, so a dead app resumes from the last one instead of starting over.
+            if (sub == null) HelperCheckpoint.replace(db, itemId, history)
             result = if (sub != null) runSubHelper(itemId, prompt, sys, resume, sub, model) else
                 AgentLoop(provider!!, model, tools(forHelper = true), maxSteps = 120).run(sys, history, ctx, onEvent = { e ->
                     if (e is AgentEvent.ToolStarted) setHelperMeta(itemId) { it.put("now", labelFor(e.call.name)) }
-                }, incoming = { steerInbox[itemId]?.let { q -> generateSequence { q.poll() }.toList() }.orEmpty() })
+                    if (e is AgentEvent.Thinking) setHelperMeta(itemId) { it.put("steps", it.optInt("steps") + 1).put("lastStepAt", System.currentTimeMillis()) }
+                }, onAppend = { m -> HelperCheckpoint.append(db, itemId, m) }, incoming = { steerInbox[itemId]?.let { q -> generateSequence { q.poll() }.toList() }.orEmpty() })
             state = "done"
         } catch (e: CancellationException) {
             state = "stopped"; result = "Stopped before it finished."
         } catch (e: Exception) {
             result = friendlyError(e)
+        } catch (t: Throwable) {
+            // An Error (out of memory, a missing class...) in this helper ends this helper only; the others carry on.
+            Crashes.record(context, "helper #$itemId \"$label\": ${t::class.java.simpleName} ${t.message}", t)
+            result = "This helper hit an internal error (${t::class.java.simpleName}) and stopped. The other helpers carry on."
         } finally {
             kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
                 if (sub == null) helperHistory[itemId] = history
+                // Finished one way or another: nothing left to resume from.
+                runCatching { HelperCheckpoint.clear(db, itemId) }
                 escalations.remove(itemId)?.result?.cancel(); redirects.remove(itemId)
                 // A pinned agent keeps what it just did (its conversation, or its harness session) for its next job.
                 pins.agents.value.firstOrNull { it.lastHelper == itemId }?.let { pin ->
@@ -1301,23 +1362,64 @@ class AgentRuntime(
         }
     }
 
-    /** Run a routine with nobody watching. Posts its summary into the chat and as a notification. */
+    private val routineIds = java.util.concurrent.atomic.AtomicLong(9_000_000_000L)
+
+    /**
+     * Run a routine with nobody watching. Posts its summary into the chat and as a notification. It runs on the SAME
+     * power as the chat: the user's subscription when that is how the agent is powered (the old code only looked for an
+     * API key, so every routine on a subscription failed with "No AI provider configured"), otherwise the API provider.
+     */
     suspend fun runBackground(name: String, prompt: String): String {
-        val provider = providerFactory(settings) ?: return "No AI provider configured"
+        val sub = subscriptionForBackground()
+        val provider = if (sub == null) providerFactory(settings) else null
+        if (sub == null && provider == null) {
+            val msg = if (settings.state.value.mode == PowerMode.SUBSCRIPTION)
+                "Your ${settings.state.value.subKind.label} subscription isn't signed in or ready on this phone, so \"$name\" couldn't run. Open Settings to sign in again."
+            else "No AI is set up (no API key and no subscription), so \"$name\" couldn't run. Open Settings to set one up."
+            db.chat().insert(ChatItem(kind = "notice", text = msg))
+            phone.notify("\"$name\" didn't run", msg)
+            return msg
+        }
         val ctx = ChatContext("routine", interactive = false)
-        val history = mutableListOf(Msg.user("Routine \"$name\": $prompt"))
         phone.workStarted()
         return try {
             // A routine is work, not conversation: it runs with the helpers' tools.
-            val out = AgentLoop(provider, settings.state.value.model, tools(forHelper = true)).run(systemPrompt(prompt, role = PromptRole.ROUTINE), history, ctx)
+            val sys = systemPrompt(prompt, role = PromptRole.ROUTINE)
+            val out = if (sub != null) runRoutineOnSubscription(sub, "Routine \"$name\": $prompt", sys, ctx)
+                else AgentLoop(provider!!, settings.state.value.model, tools(forHelper = true)).run(sys, mutableListOf(Msg.user("Routine \"$name\": $prompt")), ctx)
             db.chat().insert(ChatItem(kind = "agent", text = out, meta = JSONObject().put("routine", name).toString()))
             phone.notify(name, out.lineSequence().firstOrNull { it.isNotBlank() }?.take(180) ?: "Done")
             out
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             val msg = friendlyError(e)
             db.chat().insert(ChatItem(kind = "notice", text = "Routine \"$name\" failed: $msg"))
             msg
         } finally { phone.workFinished() }
+    }
+
+    /** The subscription engine, when the agent runs on one. A process a routine just woke needs a moment before it is ready. */
+    private suspend fun subscriptionForBackground(): SubscriptionEngine? {
+        if (settings.state.value.mode != PowerMode.SUBSCRIPTION) return null
+        val e = subscription ?: return null
+        repeat(20) { if (!e.ready) kotlinx.coroutines.delay(500) }
+        return e.takeIf { it.ready }
+    }
+
+    private suspend fun runRoutineOnSubscription(engine: SubscriptionEngine, prompt: String, sys: String, ctx: ToolContext): String {
+        val id = routineIds.incrementAndGet()
+        helperCtx[id] = ctx
+        var last = ""; var error: String? = null; var ok = false
+        try {
+            engine.turn(prompt, sys, null, mcp.url + "/h/$id", settings.localToken(), emptyList(), null, role = "helper").collect { e ->
+                when (e.optString("type")) {
+                    "text" -> e.optString("text").takeIf { it.isNotBlank() }?.let { last = it }
+                    "done" -> ok = e.optBoolean("ok", true)
+                    "error" -> error = e.optString("message").takeIf { it.isNotBlank() }
+                }
+            }
+        } finally { helperCtx.remove(id) }
+        if (!ok && last.isBlank()) throw IllegalStateException(error?.take(300) ?: "The routine stopped without an answer")
+        return last
     }
 
     /**
@@ -1393,6 +1495,10 @@ class AgentRuntime(
         }
         override suspend fun notify(title: String, body: String) = phone.notify(title, body)
     }
+
+    // Last, so every field above exists before the first coroutine runs. A fresh process has no live helpers:
+    // anything still marked working was cut off. Pick it up again.
+    init { scope.launch { guarded("resume helpers") { resumeCutOffHelpers(atStart = true) } } }
 
     companion object {
         /** How many times a cut-off helper is picked up again before it is called failed. */
