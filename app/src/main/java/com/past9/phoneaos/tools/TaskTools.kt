@@ -52,12 +52,18 @@ class TaskAddTool(private val dao: TaskDao) : Tool {
 }
 
 class TaskUpdateTool(private val dao: TaskDao) : Tool {
-    override val spec = ToolSpec("task_update", "Change a task's status (todo, doing, done, blocked), title or notes. Mark your steps doing/done as you go. When blocked, say exactly what would unblock it in 'blocker'.",
-        schema(listOf("id"), "id" to int("Task id"), "status" to enumOf("New status", "todo", "doing", "done", "blocked"), "title" to str("New title"), "notes" to str("New notes"), "blocker" to str("What is needed to unblock, from whom")))
+    override val spec = ToolSpec("task_update", "Change a task's status (todo, doing, done, blocked), title, notes or due date. Mark your steps doing/done as you go. When blocked, say exactly what would unblock it in 'blocker'. A task that no longer applies is removed with task_delete, not given another status.",
+        schema(listOf("id"), "id" to int("Task id"), "status" to enumOf("New status", *STATUSES.toTypedArray()), "title" to str("New title"), "notes" to str("New notes"), "blocker" to str("What is needed to unblock, from whom"),
+            "due" to str("New due date, ISO like 2026-10-06T14:00 or 2026-10-06; 'none' clears it")))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val t = dao.task(input.getLong("id")) ?: return "No such task"
-        val updated = t.copy(status = input.optString("status").ifBlank { t.status }, title = input.optString("title").ifBlank { t.title },
-            notes = input.optString("notes").ifBlank { t.notes }, updatedAt = System.currentTimeMillis(),
+        val status = input.optString("status")
+        // Anything else (cancelled, deleted...) would leave the task open on the user's list.
+        if (status.isNotBlank() && status !in STATUSES) return "Not changed: status is one of ${STATUSES.joinToString()}. To remove the task, use task_delete."
+        val due = input.optString("due").trim()
+        val dueAt = when { due.isBlank() -> t.dueAt; due.equals("none", true) -> null; else -> parseWhen(due) ?: return "Not changed: due must be ISO like 2026-10-06T14:00 or 2026-10-06, or 'none'." }
+        val updated = t.copy(status = status.ifBlank { t.status }, title = input.optString("title").ifBlank { t.title },
+            notes = input.optString("notes").ifBlank { t.notes }, dueAt = dueAt, updatedAt = System.currentTimeMillis(),
             blocker = if (input.optString("status") == "blocked") input.optString("blocker").ifBlank { t.blocker } else if (input.has("status")) "" else t.blocker)
         dao.updateTask(updated)
         // A goal is achieved when every one of its tasks is done.
@@ -66,8 +72,57 @@ class TaskUpdateTool(private val dao: TaskDao) : Tool {
             if (all.isNotEmpty() && all.all { it.status == "done" }) dao.goal(gid)?.let { dao.updateGoal(it.copy(status = "achieved")) }
         }
         ctx.activity(if (updated.status == "done") "Done: ${t.title}" else "Task ${t.title} → ${updated.status}", JSONObject().put("tool", "tasks"))
-        return "Task #${t.id} is ${updated.status}"
+        return "Task #${t.id} is ${updated.status}" + (updated.dueAt?.let { ", due ${dueText(it)}" } ?: "")
     }
+
+    companion object { val STATUSES = listOf("todo", "doing", "done", "blocked") }
+}
+
+class TaskDeleteTool(private val dao: TaskDao) : Tool {
+    override val spec = ToolSpec("task_delete", "Remove a task for good: it no longer applies, it's a duplicate, or the user asked. A finished task is marked done with task_update instead.",
+        schema(listOf("id"), "id" to int("Task id")))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String {
+        val t = dao.task(input.getLong("id")) ?: return "No such task"
+        dao.deleteTask(t.id)
+        // Its goal may now have only done tasks left: that's achieved.
+        t.goalId?.let { gid ->
+            val rest = dao.tasksFor(gid)
+            if (rest.isNotEmpty() && rest.all { it.status == "done" }) dao.goal(gid)?.let { dao.updateGoal(it.copy(status = "achieved")) }
+        }
+        ctx.activity("Removed from your to-dos: ${t.title}", JSONObject().put("tool", "tasks"))
+        return "Task #${t.id} deleted"
+    }
+}
+
+class GoalUpdateTool(private val dao: TaskDao) : Tool {
+    override val spec = ToolSpec("goal_update", "Change a goal's title or why, or its status: 'achieved' when the outcome is reached, 'open' to reopen it. A goal that no longer applies is removed with goal_delete.",
+        schema(listOf("id"), "id" to int("Goal id"), "title" to str("New title"), "why" to str("New why"), "status" to enumOf("New status", "open", "achieved")))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String {
+        val g = dao.goal(input.getLong("id")) ?: return "No such goal"
+        val status = input.optString("status")
+        if (status.isNotBlank() && status !in listOf("open", "achieved")) return "Not changed: status is open or achieved. To remove the goal, use goal_delete."
+        val updated = g.copy(title = input.optString("title").ifBlank { g.title }, why = input.optString("why").ifBlank { g.why }, status = status.ifBlank { g.status })
+        dao.updateGoal(updated)
+        ctx.activity("Goal ${updated.title} → ${updated.status}", JSONObject().put("tool", "tasks"))
+        return "Goal #${g.id} is ${updated.status}"
+    }
+}
+
+class GoalDeleteTool(private val dao: TaskDao) : Tool {
+    override val spec = ToolSpec("goal_delete", "Remove a goal and all its tasks for good: it no longer applies, or the user asked.", schema(listOf("id"), "id" to int("Goal id")))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String {
+        val g = dao.goal(input.getLong("id")) ?: return "No such goal"
+        val tasks = dao.tasksFor(g.id)
+        tasks.forEach { dao.deleteTask(it.id) }
+        dao.deleteGoal(g.id)
+        ctx.activity("Removed goal: ${g.title}", JSONObject().put("tool", "tasks"))
+        return "Goal #${g.id} deleted with its ${tasks.size} task(s)"
+    }
+}
+
+/** A due date the way the agent reads and writes it: 2026-10-16, or 2026-10-16T14:00 when it has a time. */
+private fun dueText(ms: Long): String = java.time.Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()).toLocalDateTime().let {
+    if (it.hour == 9 && it.minute == 0) it.toLocalDate().toString() else it.toString().take(16)
 }
 
 class TaskListTool(private val dao: TaskDao) : Tool {
@@ -76,7 +131,9 @@ class TaskListTool(private val dao: TaskDao) : Tool {
         val goals = dao.openGoals(); val tasks = dao.openTasks()
         if (goals.isEmpty() && tasks.isEmpty()) return "No open goals or tasks."
         return buildString {
-            fun line(t: TaskRow) = "#${t.id} [${t.status}${if (t.owner == "user") ", user's" else ""}] ${t.title}" + (if (t.blocker.isNotBlank()) " (blocked: ${t.blocker})" else "")
+            val now = System.currentTimeMillis()
+            fun line(t: TaskRow) = "#${t.id} [${t.status}${if (t.owner == "user") ", user's" else ""}] ${t.title}" +
+                (t.dueAt?.let { " (due ${dueText(it)}${if (it < now) ", overdue" else ""})" } ?: "") + (if (t.blocker.isNotBlank()) " (blocked: ${t.blocker})" else "")
             goals.forEach { g -> appendLine("Goal #${g.id}: ${g.title}"); tasks.filter { it.goalId == g.id }.forEach { appendLine("  " + line(it)) } }
             tasks.filter { t -> t.goalId == null || goals.none { it.id == t.goalId } }.forEach { appendLine(line(it)) }
         }
