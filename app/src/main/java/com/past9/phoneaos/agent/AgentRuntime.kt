@@ -83,6 +83,7 @@ class AgentRuntime(
             helper = { id -> helperCtx[id]?.let { ctx -> tools(forHelper = true) to ctx } },
             // A branch has its own endpoint, so its step budget and its activity are its own.
             branch = { id -> branches[id]?.let { b -> tools(turn = b.turn) to branchCtx.getValue(id) } },
+            routine = { id -> routineCtx[id]?.let { ctx -> tools(forHelper = true) to ctx } },
             // Card scripts: read-only app tools, and nobody to approve, so anything that writes is refused.
             card = { workerTools().filter { it.spec.name.startsWith("apps_") || it.spec.name.startsWith("COMPOSIO_") } to QuietContext() }).start()
     }
@@ -98,6 +99,9 @@ class AgentRuntime(
     /** Helpers working right now, by their chat item id. */
     private val helpers = ConcurrentHashMap<Long, HelperRun>()
     private val helperCtx = ConcurrentHashMap<Long, ToolContext>()
+    /** Routines running on a subscription, by run id: what their MCP endpoint acts as. */
+    private val routineCtx = ConcurrentHashMap<Long, ToolContext>()
+    private val routineRuns = java.util.concurrent.atomic.AtomicLong()
     /** A finished helper's own conversation (or its harness session), so it can be sent back to try again. */
     private val helperHistory = ConcurrentHashMap<Long, MutableList<Msg>>()
     private val helperSession = ConcurrentHashMap<Long, String>()
@@ -1303,13 +1307,16 @@ class AgentRuntime(
 
     /** Run a routine with nobody watching. Posts its summary into the chat and as a notification. */
     suspend fun runBackground(name: String, prompt: String): String {
-        val provider = providerFactory(settings) ?: return "No AI provider configured"
+        val sub = subscription?.takeIf { settings.state.value.mode == PowerMode.SUBSCRIPTION && it.ready }
+        val provider = if (sub == null) providerFactory(settings) ?: return "No AI provider configured" else null
         val ctx = ChatContext("routine", interactive = false)
         val history = mutableListOf(Msg.user("Routine \"$name\": $prompt"))
         phone.workStarted()
         return try {
             // A routine is work, not conversation: it runs with the helpers' tools.
-            val out = AgentLoop(provider, settings.state.value.model, tools(forHelper = true)).run(systemPrompt(prompt, role = PromptRole.ROUTINE), history, ctx)
+            val sys = systemPrompt(prompt, role = PromptRole.ROUTINE)
+            val out = if (sub != null) runSubRoutine(history.first().text, sys, sub, ctx)
+                else AgentLoop(provider!!, settings.state.value.model, tools(forHelper = true)).run(sys, history, ctx)
             db.chat().insert(ChatItem(kind = "agent", text = out, meta = JSONObject().put("routine", name).toString()))
             phone.notify(name, out.lineSequence().firstOrNull { it.isNotBlank() }?.take(180) ?: "Done")
             out
@@ -1318,6 +1325,24 @@ class AgentRuntime(
             db.chat().insert(ChatItem(kind = "notice", text = "Routine \"$name\" failed: $msg"))
             msg
         } finally { phone.workFinished() }
+    }
+
+    /** A routine on a subscription: the harness runs it as a worker, with the helpers' tools on the routine's own MCP endpoint. */
+    private suspend fun runSubRoutine(prompt: String, sys: String, engine: SubscriptionEngine, ctx: ToolContext): String {
+        val id = routineRuns.incrementAndGet()
+        routineCtx[id] = ctx
+        try {
+            var last = ""; var error: String? = null; var ok = false
+            engine.turn(prompt, sys, null, mcp.url + "/r/$id", settings.localToken(), role = "helper").collect { e ->
+                when (e.optString("type")) {
+                    "text" -> e.optString("text").takeIf { it.isNotBlank() }?.let { last = it }
+                    "done" -> ok = e.optBoolean("ok", true)
+                    "error" -> error = e.optString("message").takeIf { it.isNotBlank() && !it.matches(Regex("exit \\d+")) }
+                }
+            }
+            if (!ok && last.isBlank()) throw IllegalStateException(error?.take(300) ?: "The routine stopped without an answer")
+            return last
+        } finally { routineCtx.remove(id) }
     }
 
     /**

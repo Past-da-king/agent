@@ -32,6 +32,8 @@ class LocalMcpServer(
     private val card: (() -> Pair<List<Tool>, ToolContext>)? = null,
     /** A branch of the main agent (double texting) has its own endpoint, /mcp/b/<item id>: the main tools, with its own step budget. */
     private val branch: ((Long) -> Pair<List<Tool>, ToolContext>?)? = null,
+    /** A routine run on a subscription has its own endpoint, /mcp/r/<run id>: the worker tools, acting as that routine. */
+    private val routine: ((Long) -> Pair<List<Tool>, ToolContext>?)? = null,
 ) {
     private var server: ServerSocket? = null
     val boundPort: Int get() = server?.localPort ?: -1
@@ -71,6 +73,7 @@ class LocalMcpServer(
             path == "/mcp/card" -> card?.invoke() ?: return reply(out, 404, "text/plain", "not found")
             path.startsWith("/mcp/b/") -> path.removePrefix("/mcp/b/").toLongOrNull()?.let { branch?.invoke(it) } ?: return reply(out, 404, "text/plain", "no such branch")
             path.startsWith("/mcp/h/") -> path.removePrefix("/mcp/h/").toLongOrNull()?.let { helper?.invoke(it) } ?: return reply(out, 404, "text/plain", "no such helper")
+            path.startsWith("/mcp/r/") -> path.removePrefix("/mcp/r/").toLongOrNull()?.let { routine?.invoke(it) } ?: return reply(out, 404, "text/plain", "no such routine run")
             else -> return reply(out, 404, "text/plain", "not found")
         }
         if (headers["authorization"] != "Bearer $token") return reply(out, 401, "application/json", """{"error":"unauthorized"}""")

@@ -121,6 +121,29 @@ class SubscriptionPathTest {
         rt.mcp.stop()
     }
 
+    @Test fun routinesRunOnTheSubscriptionWithTheWorkerTools() = runBlocking {
+        val app = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val db = AppDb.inMemory(app); val settings = SettingsStore(app); settings.setMode(PowerMode.SUBSCRIPTION)
+        val rt = AgentRuntime(app, db, settings, CoroutineScope(SupervisorJob() + Dispatchers.IO), FakePhone(), { null })
+        var seenRole = ""; var routineTools = emptyList<String>()
+        rt.subscription = object : SubscriptionEngine {
+            override val ready = true
+            override fun turn(prompt: String, system: String, resume: String?, mcpUrl: String, mcpToken: String, images: List<String>, model: String?, role: String) = flow {
+                seenRole = role
+                assertTrue(mcpUrl.contains("/mcp/r/")); assertTrue(prompt.contains("Summarise yesterday's sales"))
+                val list = JSONObject(post(mcpUrl, mcpToken, """{"jsonrpc":"2.0","id":1,"method":"tools/list"}""").body!!.string()).getJSONObject("result").getJSONArray("tools")
+                routineTools = (0 until list.length()).map { list.getJSONObject(it).getString("name") }
+                emit(JSONObject().put("type", "text").put("text", "Sales were up 4% yesterday."))
+                emit(JSONObject().put("type", "done").put("ok", true))
+            }
+        }
+        assertEquals("Sales were up 4% yesterday.", rt.runBackground("Sales summary", "Summarise yesterday's sales"))
+        assertEquals("helper", seenRole)
+        assertTrue("browser_open" in routineTools && "delegate" !in routineTools)
+        assertEquals("Sales were up 4% yesterday.", db.chat().all().first().last { it.kind == "agent" }.text)
+        rt.mcp.stop()
+    }
+
     @Test fun untarsAnNpmStyleTarball() {
         fun header(name: String, size: Int, type: Char): ByteArray {
             val h = ByteArray(512); name.toByteArray().copyInto(h, 0)
