@@ -22,16 +22,16 @@ Home, chat, memory, routines. The two demo recordings are on the [project page](
 
 It is not on the Play Store. You sideload the APK.
 
-1. Open [Releases](https://github.com/Past-da-king/agent/releases/latest) and download `Agent-0.11.5.apk` on your phone.
+1. Open [Releases](https://github.com/Past-da-king/agent/releases/latest) and download `Agent-0.11.7.apk` on your phone.
 2. Tap the file and allow the install when Android asks. That is the whole sideload.
 3. Open Agent, give it a name, pick how it looks, then pick how to power it. See [Setup](#setup).
 4. On a Samsung, Xiaomi or OnePlus phone, set the app's battery to **Unrestricted** under Settings, or Android will kill the browser and the routines while they work.
 
-You need Android 10 or newer on an arm64 phone, which is every phone sold in the last few years. The APK is about 332 MB because the Node runtime, Codex and Claude Code ship inside it, so leave room for that and for its data.
+You need Android 10 or newer on an arm64 phone, which is every phone sold in the last few years. The APK is about 358 MB because the Node runtime, Codex and Claude Code ship inside it, so leave room for that and for its data.
 
 ## What it can actually do
 
-**It goes and looks.** Its own browser runs in a foreground service, so it keeps working while you are in another app or the screen is off. When a site throws a captcha or a sign-in at it, it hands the page to you and carries on when you are done. Profiles keep Personal and Work apart, and helper agents can split a big job up.
+**It goes and looks.** The agent drives its own built-in browser. It cannot control your existing Chrome tabs, so you sign in to your sites inside it. That browser runs in a foreground service, so it keeps working while you are in another app or the screen is off. When a site throws a captcha or a sign-in at it, it hands the page to you and carries on when you are done. Profiles keep Personal and Work apart, and helper agents can split a big job up.
 
 **It remembers you.** Everything it learns gets a page in a wiki on the phone, linked to the pages around it. Read it, change it, pin it or delete it. Nothing is kept that you cannot see.
 

@@ -82,7 +82,7 @@ class AgentRuntime(
     /** Our tools, served to Claude Code on 127.0.0.1 with a per-install token. Started on first use. */
     val mcp by lazy {
         com.past9.phoneaos.runtime.LocalMcpServer(settings.localToken(), { tools() }, { ChatContext("main", interactive = true) },
-            helper = { id -> helperCtx[id]?.let { ctx -> tools(forHelper = true) to ctx } },
+            helper = { id -> checkRoutes[id] ?: helperCtx[id]?.let { ctx -> tools(forHelper = true) to ctx } },
             // A branch has its own endpoint, so its step budget and its activity are its own.
             branch = { id -> branches[id]?.let { b -> tools(turn = b.turn) to branchCtx.getValue(id) } },
             // Card scripts: read-only app tools, and nobody to approve, so anything that writes is refused.
@@ -100,6 +100,9 @@ class AgentRuntime(
     /** Helpers working right now, by their chat item id. */
     private val helpers = ConcurrentHashMap<Long, HelperRun>()
     private val helperCtx = ConcurrentHashMap<Long, ToolContext>()
+    /** The start-up self-check's own tiny tool list, served on /mcp/h/<id> while it runs. */
+    private val checkRoutes = ConcurrentHashMap<Long, Pair<List<Tool>, ToolContext>>()
+    private val checkIds = java.util.concurrent.atomic.AtomicLong(8_000_000_000L)
     /** A finished helper's own conversation (or its harness session), so it can be sent back to try again. */
     private val helperHistory = ConcurrentHashMap<Long, MutableList<Msg>>()
     private val helperSession = ConcurrentHashMap<Long, String>()
@@ -401,6 +404,8 @@ class AgentRuntime(
             else appendLine("You are a worker for the user's personal agent on their Android phone. You get things done: find, fetch, book, send, build, follow up.")
             if (s.userName.isNotBlank()) appendLine("The user's name is ${s.userName}.")
             appendLine("Now: ${now.format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy, HH:mm"))} (${now.zone}). Always resolve 'today', 'tomorrow', '10am' in THIS timezone and read concrete dates back to the user.")
+            appendLine("If a tool fails and you can't get round it, tell the user in one plain line what failed. The user is not a developer and has nobody to send an error to: never tell them to send it, report it or pass it on to a developer.")
+            if (main) settings.extra("selfcheck_fail")?.let { appendLine("KNOWN FAULT: $it. If the user asks why jobs aren't working, say that plainly; it is a fault in the app, so don't ask them to report it.") }
             appendLine()
             if (main) {
                 appendLine("YOUR JOB")
@@ -1497,6 +1502,73 @@ class AgentRuntime(
     }
 
     // Last, so every field above exists before the first coroutine runs. A fresh process has no live helpers:
+
+    // ---- start-up self-check -------------------------------------------------------------------
+
+    /** What identifies the AI the agent runs on right now, or null when none is set up. A change means the check runs again. */
+    fun powerKey(): String? {
+        val s = settings.state.value
+        return when (s.mode) {
+            PowerMode.API_KEY -> if (settings.apiKey(s.provider) != null) "api:${s.provider.name}" else null
+            PowerMode.SUBSCRIPTION -> "sub:${s.subKind.name}"
+            PowerMode.NONE -> null
+        }
+    }
+
+    /**
+     * One trivial tool call on the AI in use. Passes once per app build and AI; a failure is shown in the chat and as a
+     * notification (once) and tried again at the next start. Null when there was nothing to check or it already passed.
+     */
+    suspend fun selfCheck(build: String, force: Boolean = false): SelfCheckResult? {
+        val key = powerKey() ?: return null
+        val stamp = "$build|$key"
+        if (!force && settings.extra("selfcheck_ok") == stamp) return null
+        val s = settings.state.value
+        val sub = s.mode == PowerMode.SUBSCRIPTION
+        val power = if (sub) s.subKind.label else s.provider.label
+        val ping = SelfCheckPing()
+        var detail = ""
+        try {
+            kotlinx.coroutines.withTimeout(150_000) {
+                if (sub) {
+                    val e = subscription ?: return@withTimeout
+                    repeat(60) { if (!e.ready) kotlinx.coroutines.delay(500) }
+                    if (!e.ready) return@withTimeout
+                    val id = checkIds.incrementAndGet()
+                    checkRoutes[id] = listOf<Tool>(ping) to QuietContext()
+                    var last = ""; var error: String? = null
+                    try {
+                        e.turn(SelfCheck.PROMPT, SelfCheck.SYSTEM, null, mcp.url + "/h/$id", settings.localToken(), emptyList(), null, role = "helper").collect { ev ->
+                            when (ev.optString("type")) {
+                                "text" -> ev.optString("text").takeIf { it.isNotBlank() }?.let { last = it }
+                                "error" -> error = ev.optString("message").takeIf { it.isNotBlank() }
+                            }
+                        }
+                    } finally { checkRoutes.remove(id) }
+                    if (ping.calls == 0) detail = (error ?: last.takeIf { it.isNotBlank() } ?: "the AI never called the test tool").take(300)
+                } else {
+                    val provider = providerFactory(settings) ?: return@withTimeout
+                    AgentLoop(provider, s.model, listOf(ping), maxSteps = 3).run(SelfCheck.SYSTEM, mutableListOf(Msg.user(SelfCheck.PROMPT)), QuietContext())
+                    if (ping.calls == 0) detail = "the AI never called the test tool"
+                }
+            }
+        } catch (e: CancellationException) { throw e } catch (e: Throwable) {
+            detail = (if (e is Exception) friendlyError(e) else "${e::class.java.simpleName}: ${e.message}").take(300)
+        }
+        if (ping.calls == 0 && detail.isBlank()) return null   // engine wasn't there to test
+        val result = SelfCheckResult(ping.calls > 0, power, detail)
+        if (result.ok) { settings.setExtra("selfcheck_ok", stamp); settings.setExtra("selfcheck_fail", null); return result }
+        val msg = "${power}: $detail"
+        val before = settings.extra("selfcheck_fail")
+        settings.setExtra("selfcheck_ok", null); settings.setExtra("selfcheck_fail", msg)
+        com.past9.phoneaos.agent.Crashes.record(context, "self-check failed: $msg", null)
+        if (before != msg) {
+            db.chat().insert(ChatItem(kind = "notice", text = SelfCheck.notice(result)))
+            phone.notify("Tools don't work with $power", detail.take(160))
+        }
+        return result
+    }
+
     // anything still marked working was cut off. Pick it up again.
     init { scope.launch { guarded("resume helpers") { resumeCutOffHelpers(atStart = true) } } }
 

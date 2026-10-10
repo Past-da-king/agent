@@ -72,7 +72,20 @@ cp musl/lib/ld-musl-aarch64.so.1 "$JNI/libldmusl.so"; chmod 755 "$JNI/libldmusl.
 CX=$(node -e "console.log(require('./node_modules/@openai/codex/package.json').version)")
 npm pack "@openai/codex@$CX-linux-arm64" >/dev/null
 mkdir -p cx && tar xzf openai-codex-*-linux-arm64.tgz -C cx
-cp cx/package/vendor/aarch64-unknown-linux-musl/bin/codex "$JNI/libcodex.so"
+# Codex 0.160 runs its tools through a second binary, codex-code-mode-host, which it looks for BESIDE its own
+# executable under that exact name. Android only runs lib*.so from nativeLibraryDir, so that file can't exist
+# there and every tool call failed ("failed to spawn code-mode host"). Ship the host as libcodex-modehost.so and
+# rename the lookup inside codex to match (same length, so nothing in the binary shifts).
+CXBIN=cx/package/vendor/aarch64-unknown-linux-musl/bin
+node -e '
+const fs=require("fs"),a=Buffer.from("codex-code-mode-host"),b=Buffer.from("libcodex-modehost.so");
+if(a.length!==b.length) throw new Error("length");
+const d=fs.readFileSync(process.argv[1]);let n=0,i=0;
+while((i=d.indexOf(a,i))>=0){b.copy(d,i);i+=a.length;n++}
+if(n<1) throw new Error("host name not found in codex: the layout changed, re-check the code-mode host lookup");
+fs.writeFileSync(process.argv[2],d);console.log("patched host name x"+n)' "$CXBIN/codex" "$JNI/libcodex.so"
+cp "$CXBIN/codex-code-mode-host" "$JNI/libcodex-modehost.so"
+chmod 755 "$JNI/libcodex-modehost.so"
 # ripgrep: newer SDKs no longer vendor it; keep the one already packed if so.
 [ -f node_modules/@anthropic-ai/claude-agent-sdk/vendor/ripgrep/arm64-linux/rg ] && cp node_modules/@anthropic-ai/claude-agent-sdk/vendor/ripgrep/arm64-linux/rg "$JNI/librg.so"
 chmod 755 "$JNI/libcodex.so" "$JNI/librg.so"
