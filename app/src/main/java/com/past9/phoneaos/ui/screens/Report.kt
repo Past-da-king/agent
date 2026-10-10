@@ -14,6 +14,8 @@ import androidx.compose.ui.unit.dp
 import com.past9.phoneaos.ui.Markdown
 import com.past9.phoneaos.ui.SubScreen
 import java.io.File
+import androidx.compose.ui.res.stringResource
+import com.past9.phoneaos.R
 
 /** A report, full screen inside the app: read it, share it, or save it to Downloads. */
 @Composable
@@ -21,19 +23,20 @@ fun ReportScreen(path: String, onBack: () -> Unit) {
     val ctx = LocalContext.current
     val file = remember(path) { File(path) }
     val text = remember(path) { runCatching { file.readText() }.getOrDefault("") }
-    val title = text.lineSequence().firstOrNull { it.startsWith("# ") }?.removePrefix("# ")?.trim() ?: "Report"
+    val title = text.lineSequence().firstOrNull { it.startsWith("# ") }?.removePrefix("# ")?.trim() ?: stringResource(R.string.report_title)
     val body = text.substringAfter("\n").trimStart()
     val words = remember(body) { body.split(Regex("\\s+")).count { it.isNotBlank() } }
     var note by remember { mutableStateOf<String?>(null) }
-    SubScreen(title, "${(words / 220).coerceAtLeast(1)} min read", onBack, actions = {
+    val savedNote = stringResource(R.string.report_saved)
+    SubScreen(title, stringResource(R.string.report_min_read, (words / 220).coerceAtLeast(1)), onBack, actions = {
         IconButton(onClick = {
             runCatching {
                 val uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", file)
                 val send = Intent(Intent.ACTION_SEND).setType("text/markdown").putExtra(Intent.EXTRA_SUBJECT, title).putExtra(Intent.EXTRA_TEXT, text)
                     .putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 ctx.startActivity(Intent.createChooser(send, title).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            }.onFailure { note = "Couldn't share: ${it.message}" }
-        }, enabled = file.exists()) { Icon(Icons.Rounded.Share, "Share") }
+            }.onFailure { note = ctx.getString(R.string.report_share_failed, it.message) }
+        }, enabled = file.exists()) { Icon(Icons.Rounded.Share, stringResource(R.string.report_share)) }
         IconButton(onClick = {
             note = runCatching {
                 val values = android.content.ContentValues().apply {
@@ -42,9 +45,9 @@ fun ReportScreen(path: String, onBack: () -> Unit) {
                 }
                 val uri = ctx.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: error("no Downloads folder")
                 ctx.contentResolver.openOutputStream(uri)!!.use { it.write(text.toByteArray()) }
-                "Saved to Downloads"
-            }.getOrElse { "Couldn't save: ${it.message}" }
-        }, enabled = file.exists()) { Icon(if (note == "Saved to Downloads") Icons.Rounded.DownloadDone else Icons.Rounded.Download, "Save to Downloads") }
+                savedNote
+            }.getOrElse { ctx.getString(R.string.report_save_failed, it.message) }
+        }, enabled = file.exists()) { Icon(if (note == savedNote) Icons.Rounded.DownloadDone else Icons.Rounded.Download, stringResource(R.string.report_save)) }
     }) { pad ->
         Column(Modifier.padding(pad).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 48.dp)) {
             note?.let {
@@ -52,7 +55,7 @@ fun ReportScreen(path: String, onBack: () -> Unit) {
                     Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
                 }
             }
-            if (text.isBlank()) Text("This report is no longer on the phone.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (text.isBlank()) Text(stringResource(R.string.report_gone), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             else Markdown(body, style = MaterialTheme.typography.bodyLarge)
         }
     }

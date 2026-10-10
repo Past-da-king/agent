@@ -69,7 +69,7 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
     fun setToken(t: String?) {
         if (t == null) { tokenFile.delete(); return }
         dir.mkdirs()
-        if (kind == SubKind.CLAUDE && !t.trim().startsWith("sk-ant-")) error("That isn't a Claude token. It starts with sk-ant-. Use Sign in with Claude instead.")
+        if (kind == SubKind.CLAUDE && !t.trim().startsWith("sk-ant-")) error(context.getString(com.past9.phoneaos.R.string.rt_not_claude_token))
         if (kind == SubKind.CODEX && t.trim().startsWith("{")) { File(home, ".codex").mkdirs(); File(home, ".codex/auth.json").writeText(t.trim()); return }
         tokenFile.writeText(t.trim()); tokenFile.setReadable(false, false); tokenFile.setReadable(true, true)
     }
@@ -79,10 +79,10 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
     fun info(): RuntimeInfo = RuntimeInfo(
         available = available, installedBytes = sizeBytes(), signedIn = signedIn,
         note = when {
-            !available -> "${kind.label} runtime pack not in this build"
-            !installed -> "Ready to set up"
-            !signedIn -> "Installed · sign in with ${kind.label}"
-            else -> "Ready · signed in to ${kind.label}"
+            !available -> context.getString(com.past9.phoneaos.R.string.rt_note_no_pack, kind.label)
+            !installed -> context.getString(com.past9.phoneaos.R.string.rt_note_ready_setup)
+            !signedIn -> context.getString(com.past9.phoneaos.R.string.rt_note_installed, kind.label)
+            else -> context.getString(com.past9.phoneaos.R.string.rt_note_ready, kind.label)
         },
     )
 
@@ -131,7 +131,7 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
         val cmd = when (kind) {
             SubKind.CLAUDE -> { if (!upToDate) install {}; listOf(File(bin, "claude").path, "auth", "login", "--claudeai") }
             SubKind.CODEX -> listOf(File(bin, "codex").path, "login")
-            SubKind.OPENCODE -> return@withContext "OpenCode sign-in isn't available yet"
+            SubKind.OPENCODE -> return@withContext context.getString(com.past9.phoneaos.R.string.rt_opencode_signin_unavailable)
         }
         context.assets.open("runtime/open-url-hook.cjs").use { i -> File(dir, "open-url-hook.cjs").outputStream().use { i.copyTo(it) } }
         val opened = File(home, ".open-url").apply { delete() }
@@ -160,7 +160,7 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
                 if (kind == SubKind.CODEX && !sent && url != null && (url.contains("oauth") || url.contains("authorize"))) { sent = true; onUrl(url) }
             }
             val code = p.waitFor()
-            if (code == 0 && signedIn) null else "Sign-in didn't finish. ${lines.lines().lastOrNull { it.isNotBlank() && !it.startsWith("http") }.orEmpty().take(200)}"
+            if (code == 0 && signedIn) null else context.getString(com.past9.phoneaos.R.string.rt_signin_not_finished, lines.lines().lastOrNull { it.isNotBlank() && !it.startsWith("http") }.orEmpty().take(200))
         } finally { watcher.cancel(); loginStdin = null; runCatching { p.destroy() } }
     }
 

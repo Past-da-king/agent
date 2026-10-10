@@ -1,5 +1,8 @@
 package com.past9.phoneaos.ui.screens
 
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import com.past9.phoneaos.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -101,26 +104,26 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
             onDismiss = { sheet = "list" }, onDone = { sheet = "list" })
     } }
     val activeCount = state.connected.count { it.status == "ACTIVE" }
-    SubScreen("Connections", if (state.hasKey) (if (activeCount == 1) "1 app connected" else "$activeCount apps connected") else "Connect your apps", actions.onBack,
-        actions = { if (state.hasKey) IconButton(onClick = actions.onRefresh) { Icon(Icons.Rounded.Refresh, "Refresh") } }) { pad ->
+    SubScreen(stringResource(R.string.conn_title), if (state.hasKey) pluralStringResource(R.plurals.conn_apps_connected, activeCount, activeCount) else stringResource(R.string.conn_connect_your_apps), actions.onBack,
+        actions = { if (state.hasKey) IconButton(onClick = actions.onRefresh) { Icon(Icons.Rounded.Refresh, stringResource(R.string.conn_refresh)) } }) { pad ->
         LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            item { SectionHeader("Built in", "On this phone, plus the machines you add", Modifier.padding(start = 4.dp, top = 4.dp)) }
+            item { SectionHeader(stringResource(R.string.conn_built_in), stringResource(R.string.conn_built_in_sub), Modifier.padding(start = 4.dp, top = 4.dp)) }
             item {
                 AppCard(padding = PaddingValues(vertical = 4.dp)) {
-                    PhoneLine(Icons.Rounded.Language, "Background browser", "Your agent's own browser keeps working while you use other apps", true, null)
-                    PhoneLine(Icons.Rounded.IosShare, "Share to your agent", "From any app, tap Share and pick your agent", true, null)
-                    PhoneLine(Icons.Rounded.Notifications, "Notifications", if (state.notificationsAllowed) "Results and questions reach you anywhere" else "Off: you'll only see results in the app",
+                    PhoneLine(Icons.Rounded.Language, stringResource(R.string.conn_browser), stringResource(R.string.conn_browser_sub), true, null)
+                    PhoneLine(Icons.Rounded.IosShare, stringResource(R.string.conn_share), stringResource(R.string.conn_share_sub), true, null)
+                    PhoneLine(Icons.Rounded.Notifications, stringResource(R.string.conn_notifications), if (state.notificationsAllowed) stringResource(R.string.conn_notifications_on) else stringResource(R.string.conn_notifications_off),
                         state.notificationsAllowed, if (state.notificationsAllowed) null else actions.onAllowNotifications)
                     Surface(onClick = actions.onNotifications, color = androidx.compose.ui.graphics.Color.Transparent) {
-                        PhoneLine(Icons.Rounded.MarkEmailUnread, "Read my notifications", "Pick the apps your agent may learn from", false, null)
+                        PhoneLine(Icons.Rounded.MarkEmailUnread, stringResource(R.string.conn_read_notifications), stringResource(R.string.conn_read_notifications_sub), false, null)
                     }
-                    PhoneLine(Icons.Rounded.FolderOpen, "Files on this phone", if (state.phoneFiles) "Your agent can find and upload your files" else "Let your agent find files to upload or send",
+                    PhoneLine(Icons.Rounded.FolderOpen, stringResource(R.string.conn_files), if (state.phoneFiles) stringResource(R.string.conn_files_on) else stringResource(R.string.conn_files_off),
                         state.phoneFiles, if (state.phoneFiles) null else actions.onAllowPhoneFiles)
                     MachinesLine(state.machines) { sheet = "list" }
                 }
             }
             if (state.hasKey) item { ProfilesSection(state.profiles, logos) { id -> sheet = "profile:" + (id ?: "new") } }
-            item { SectionHeader("Your apps", if (state.consumer) "Tap Connect and sign in. Your agent can use it straight away." else "Gmail, Calendar, Drive, Slack and 250+ more, through Composio with your own key", Modifier.padding(start = 4.dp, top = 16.dp)) }
+            item { SectionHeader(stringResource(R.string.conn_your_apps), if (state.consumer) stringResource(R.string.conn_your_apps_consumer) else stringResource(R.string.conn_your_apps_key), Modifier.padding(start = 4.dp, top = 16.dp)) }
             if (!state.hasKey) item {
                 AppCard { ComposioKeyForm(actions.onSaveKey, actions.onOpenUrl) {} }
             } else {
@@ -135,10 +138,10 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                             Icon(Icons.Rounded.ContentCopy, null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
-                                Text("$name is connected ${g.size} times", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
-                                Text(identityOf(g.first()).ifBlank { "As the same sign-in" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                                Text(stringResource(R.string.conn_dupe_title, name, g.size), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                                Text(identityOf(g.first()).ifBlank { stringResource(R.string.conn_same_sign_in) }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
                             }
-                            FilledTonalButton(onClick = { actions.onKeepOne(g.first(), g.drop(1)) }, shapes = ButtonDefaults.shapes()) { Text("Keep one") }
+                            FilledTonalButton(onClick = { actions.onKeepOne(g.first(), g.drop(1)) }, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.conn_keep_one)) }
                         }
                     }
                 }
@@ -152,7 +155,7 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                     }
                 }
                 if (appsOpen) item {
-                    OutlinedTextField(query, { query = it }, placeholder = { Text(if (state.consumer) "Search apps" else "Search ${if (state.toolkits.isEmpty()) "" else "${state.toolkits.size} "}apps") }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                    OutlinedTextField(query, { query = it }, placeholder = { Text(if (state.consumer || state.toolkits.isEmpty()) stringResource(R.string.conn_search_apps) else stringResource(R.string.conn_search_n_apps, state.toolkits.size)) }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
                         singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp), shape = MaterialTheme.shapes.extraLarge)
                 }
                 if (state.loading && appsOpen) item { Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { LoadingIndicator() } }
@@ -168,16 +171,16 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                             if (state.searching) LoadingIndicator(Modifier.size(24.dp)) else Icon(Icons.Rounded.TravelExplore, null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
                             Spacer(Modifier.width(14.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(if (state.searching) "Searching Composio…" else "Search all 500+ apps for \u201c${query.trim()}\u201d", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                                if (list.isEmpty() && !state.searching) Text("Not in the popular list", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                                Text(if (state.searching) stringResource(R.string.conn_searching) else stringResource(R.string.conn_search_all, query.trim()), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                                if (list.isEmpty() && !state.searching) Text(stringResource(R.string.conn_not_popular), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
                             }
                         }
                     }
                 }
                 if (appsOpen && state.consumer && query.isNotBlank() && state.searched == query.trim() && list.isEmpty()) item {
-                    Text("No app called \u201c${query.trim()}\u201d on Composio.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp))
+                    Text(stringResource(R.string.conn_no_app, query.trim()), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp))
                 }
-                if (appsOpen) item { TextButton(onClick = actions.onRemoveKey, modifier = Modifier.padding(top = 12.dp)) { Text("Remove Composio key", color = MaterialTheme.colorScheme.error) } }
+                if (appsOpen) item { TextButton(onClick = actions.onRemoveKey, modifier = Modifier.padding(top = 12.dp)) { Text(stringResource(R.string.conn_remove_key), color = MaterialTheme.colorScheme.error) } }
             }
         }
     }
@@ -192,8 +195,8 @@ private fun PhoneLine(icon: androidx.compose.ui.graphics.vector.ImageVector, tit
             Text(title, style = MaterialTheme.typography.titleSmall)
             Text(line, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        if (fix != null) FilledTonalButton(onClick = fix) { Text("Allow") }
-        else if (on) Icon(Icons.Rounded.CheckCircle, "On", tint = LocalExtra.current.success)
+        if (fix != null) FilledTonalButton(onClick = fix) { Text(stringResource(R.string.conn_allow)) }
+        else if (on) Icon(Icons.Rounded.CheckCircle, stringResource(R.string.conn_on), tint = LocalExtra.current.success)
         else Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -229,16 +232,16 @@ private fun ConnectedLine(c: Connection, name: String, actions: ConnectionsActio
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(name, style = MaterialTheme.typography.titleSmall)
-            Text(identityOf(c).ifBlank { if (c.status == "ACTIVE") "Connected" else "Sign-in not finished" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(identityOf(c).ifBlank { if (c.status == "ACTIVE") stringResource(R.string.conn_connected) else stringResource(R.string.conn_sign_in_unfinished) }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             ProfileTags(profiles, rules)
         }
         val extra = LocalExtra.current
         when (c.status) {
-            "ACTIVE" -> StatusPill("Connected", extra.successContainer, extra.success)
-            "INITIATED", "INITIALIZING" -> StatusPill("Finish sign-in", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
+            "ACTIVE" -> StatusPill(stringResource(R.string.conn_connected), extra.successContainer, extra.success)
+            "INITIATED", "INITIALIZING" -> StatusPill(stringResource(R.string.conn_finish_sign_in), MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
             else -> StatusPill(c.status.lowercase().replaceFirstChar { it.uppercase() }, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
         }
-        Icon(Icons.Rounded.ChevronRight, "Rules and profiles for ${c.toolkit}", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp))
+        Icon(Icons.Rounded.ChevronRight, stringResource(R.string.conn_rules_for, c.toolkit), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp))
     }
     }
 }
@@ -251,13 +254,13 @@ private fun ToolkitLine(t: Toolkit, connected: Boolean, canAddAnother: Boolean =
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(t.name, style = MaterialTheme.typography.titleSmall)
-                Text(t.description.ifBlank { "${t.toolsCount} actions" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(t.description.ifBlank { pluralStringResource(R.plurals.conn_actions, t.toolsCount, t.toolsCount) }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             Spacer(Modifier.width(8.dp))
             // Connected apps can take more accounts (work and personal Gmail, say).
-            if (connected && canAddAnother) OutlinedButton(onClick = onConnect, shapes = ButtonDefaults.shapes()) { Icon(Icons.Rounded.PersonAdd, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Add") }
-            else if (connected) StatusPill("Connected", LocalExtra.current.successContainer, LocalExtra.current.success)
-            else FilledTonalButton(onClick = onConnect, shapes = ButtonDefaults.shapes()) { Text("Connect") }
+            if (connected && canAddAnother) OutlinedButton(onClick = onConnect, shapes = ButtonDefaults.shapes()) { Icon(Icons.Rounded.PersonAdd, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.conn_add)) }
+            else if (connected) StatusPill(stringResource(R.string.conn_connected), LocalExtra.current.successContainer, LocalExtra.current.success)
+            else FilledTonalButton(onClick = onConnect, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.conn_connect)) }
         }
     }
 }
@@ -280,11 +283,11 @@ private fun AppsSummary(connected: List<Connection>, logos: Map<String, String>,
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(when (apps.size) { 0 -> "No apps connected"; 1 -> "1 app connected"; else -> "${apps.size} apps connected" }, style = MaterialTheme.typography.titleMedium)
-                Text(if (apps.isEmpty()) "Gmail, Calendar, Slack and 500+ more" else if (active.size > apps.size) "${active.size} accounts · tap to manage or add" else "Tap to manage or add",
+                Text(if (apps.isEmpty()) stringResource(R.string.conn_no_apps) else pluralStringResource(R.plurals.conn_apps_connected, apps.size, apps.size), style = MaterialTheme.typography.titleMedium)
+                Text(if (apps.isEmpty()) stringResource(R.string.conn_summary_empty) else if (active.size > apps.size) stringResource(R.string.conn_summary_accounts, active.size) else stringResource(R.string.conn_summary_manage),
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
-            Icon(Icons.Rounded.ExpandMore, if (open) "Fold" else "Open", tint = cs.onSurfaceVariant, modifier = Modifier.graphicsLayer { rotationZ = turn })
+            Icon(Icons.Rounded.ExpandMore, if (open) stringResource(R.string.conn_fold) else stringResource(R.string.conn_open), tint = cs.onSurfaceVariant, modifier = Modifier.graphicsLayer { rotationZ = turn })
         }
         if (apps.isNotEmpty()) {
             Spacer(Modifier.height(16.dp))
@@ -305,7 +308,7 @@ private fun AppsSummary(connected: List<Connection>, logos: Map<String, String>,
         } else if (!open) {
             Spacer(Modifier.height(14.dp))
             FilledTonalButton(onClick = onToggle, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shapes = ButtonDefaults.shapes()) {
-                Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Connect an app")
+                Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.conn_connect_an_app))
             }
         }
     }

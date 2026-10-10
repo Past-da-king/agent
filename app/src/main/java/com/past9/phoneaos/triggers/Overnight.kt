@@ -119,7 +119,7 @@ object Overnight {
             val json = runCatching { JSONObject(out.substring(out.indexOf('{'), out.lastIndexOf('}') + 1)) }.getOrNull()
                 ?: return "The overnight run didn't come back with a morning screen."
             val day = if (LocalTime.now().hour >= 20) LocalDate.now().plusDays(1).toString() else today()
-            val b = Brief(day, json.optString("greeting").ifBlank { "Morning $name." }, json.optString("line"), json.optString("body"),
+            val b = Brief(day, json.optString("greeting").ifBlank { if (s.userName.isBlank()) g.app.getString(com.past9.phoneaos.R.string.svc_morning_greeting_anon) else g.app.getString(com.past9.phoneaos.R.string.svc_morning_greeting, name) }, json.optString("line"), json.optString("body"),
                 (0 until (json.optJSONArray("ideas")?.length() ?: 0)).mapNotNull { i -> json.optJSONArray("ideas")?.optJSONObject(i) }
                     .map { Idea(it.optString("icon", "idea"), it.optString("text")) }.filter { it.text.isNotBlank() }.take(4))
             if (b.ideas.isNotEmpty()) { g.settings.setExtra("morning_brief", toJson(b)); _brief.value = b }

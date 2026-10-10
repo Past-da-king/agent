@@ -15,9 +15,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.past9.phoneaos.R
 import com.past9.phoneaos.data.ChatItem
 import com.past9.phoneaos.ui.screens.iconFor
 import com.past9.phoneaos.ui.theme.Eyebrow
@@ -53,9 +56,10 @@ data class HelperView(val item: ChatItem, val steps: List<ChatItem>) {
 }
 
 /** "under a minute", "4 min", "1 h 12 min". */
+@Composable
 fun spanLabel(ms: Long): String {
     val m = (ms / 60_000).coerceAtLeast(0)
-    return when { m < 1 -> "under a minute"; m < 60 -> "$m min"; else -> "${m / 60} h${if (m % 60 > 0) " ${m % 60} min" else ""}" }
+    return when { m < 1 -> stringResource(R.string.ui_under_a_minute); m < 60 -> stringResource(R.string.ui_span_min, m); m % 60 > 0 -> stringResource(R.string.ui_span_h_min, m / 60, m % 60); else -> stringResource(R.string.ui_span_h, m / 60) }
 }
 
 private fun plainFirstLine(md: String): String = md.lineSequence().map { it.trim().trimStart('-', '*', '#', '>', ' ').replace("**", "").replace("`", "") }
@@ -67,10 +71,10 @@ private data class StateLook(val container: Color, val content: Color, val word:
 private fun lookOf(state: String): StateLook {
     val cs = MaterialTheme.colorScheme; val extra = LocalExtra.current
     return when (state) {
-        "working" -> StateLook(cs.primaryContainer, cs.onPrimaryContainer, "Working")
-        "done" -> StateLook(extra.successContainer, extra.success, "Done")
-        "stopped" -> StateLook(cs.surfaceContainerHighest, cs.onSurfaceVariant, "Stopped")
-        else -> StateLook(cs.errorContainer, cs.onErrorContainer, "Didn't finish")
+        "working" -> StateLook(cs.primaryContainer, cs.onPrimaryContainer, stringResource(R.string.ui_helper_working))
+        "done" -> StateLook(extra.successContainer, extra.success, stringResource(R.string.ui_helper_done))
+        "stopped" -> StateLook(cs.surfaceContainerHighest, cs.onSurfaceVariant, stringResource(R.string.ui_helper_stopped))
+        else -> StateLook(cs.errorContainer, cs.onErrorContainer, stringResource(R.string.ui_helper_didnt_finish))
     }
 }
 
@@ -83,9 +87,9 @@ fun HelperOrb(state: String, size: Dp = 40.dp, profileColor: String? = null) {
     Box(Modifier.size(size).clip(CircleShape).background(tones.first), contentAlignment = Alignment.Center) {
         when (state) {
             "working" -> LoadingIndicator(Modifier.size(size * 0.8f), color = tones.second)
-            "done" -> Icon(Icons.Rounded.Check, "Done", Modifier.size(size * 0.5f), tint = look.content)
-            "stopped" -> Icon(Icons.Rounded.Stop, "Stopped", Modifier.size(size * 0.5f), tint = look.content)
-            else -> Icon(Icons.Rounded.PriorityHigh, "Didn't finish", Modifier.size(size * 0.5f), tint = look.content)
+            "done" -> Icon(Icons.Rounded.Check, stringResource(R.string.ui_helper_done), Modifier.size(size * 0.5f), tint = look.content)
+            "stopped" -> Icon(Icons.Rounded.Stop, stringResource(R.string.ui_helper_stopped), Modifier.size(size * 0.5f), tint = look.content)
+            else -> Icon(Icons.Rounded.PriorityHigh, stringResource(R.string.ui_helper_didnt_finish), Modifier.size(size * 0.5f), tint = look.content)
         }
     }
 }
@@ -107,13 +111,13 @@ fun HelperCard(h: HelperView, onClick: () -> Unit, modifier: Modifier = Modifier
                 }
                 if (h.profile.isNotBlank()) ProfileTag(h.profile, h.profileColor, Modifier.padding(top = 2.dp, bottom = 2.dp))
                 val line = when {
-                    h.working -> (h.now.ifBlank { h.steps.lastOrNull()?.text ?: "Getting started" }) + "…"
+                    h.working -> (h.now.ifBlank { h.steps.lastOrNull()?.text ?: stringResource(R.string.ui_getting_started) }) + "…"
                     h.result.isNotBlank() -> plainFirstLine(h.result)
                     else -> plainFirstLine(h.item.text)
                 }
                 Text(line, style = MaterialTheme.typography.bodyMedium, color = if (h.working) cs.primary else cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            Icon(Icons.Rounded.ChevronRight, "Open ${h.label}", tint = cs.onSurfaceVariant)
+            Icon(Icons.Rounded.ChevronRight, stringResource(R.string.ui_open_named, h.label), tint = cs.onSurfaceVariant)
         }
     }
 }
@@ -133,11 +137,11 @@ fun HelperSheet(h: HelperView, onStop: ((Long) -> Unit)?, onDismiss: () -> Unit,
                 HelperOrb(h.state, 52.dp, profileColor = h.profileColor.takeIf { h.profile.isNotBlank() })
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("HELPER", style = Eyebrow, color = cs.primary)
+                    Text(stringResource(R.string.ui_helper_eyebrow), style = Eyebrow, color = cs.primary)
                     Text(h.label, style = MaterialTheme.typography.headlineSmall)
-                    val took = if (h.working) "for ${spanLabel(now - h.startedAt)}" else if (h.endedAt > 0) "in ${spanLabel(h.endedAt - h.startedAt)}" else ""
+                    val took = if (h.working) stringResource(R.string.ui_took_for, spanLabel(now - h.startedAt)) else if (h.endedAt > 0) stringResource(R.string.ui_took_in, spanLabel(h.endedAt - h.startedAt)) else ""
                     Text(listOf(look.word + if (took.isNotBlank()) " $took" else "", h.model.takeIf { it.isNotBlank() },
-                        h.pushes.takeIf { it > 0 }?.let { "sent back ${if (it == 1) "once" else "$it times"}" }).filterNotNull().joinToString(" · "),
+                        h.pushes.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.ui_sent_back, it, it) }).filterNotNull().joinToString(" · "),
                         style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                     if (h.profile.isNotBlank()) ProfileTag(h.profile, h.profileColor, Modifier.padding(top = 6.dp))
                 }
@@ -146,40 +150,40 @@ fun HelperSheet(h: HelperView, onStop: ((Long) -> Unit)?, onDismiss: () -> Unit,
                 Spacer(Modifier.height(16.dp))
                 OutlinedButton(onClick = { onStop(h.id); onDismiss() }, modifier = Modifier.fillMaxWidth().height(48.dp), shapes = ButtonDefaults.shapes(),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = cs.error)) {
-                    Icon(Icons.Rounded.Stop, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Stop this helper")
+                    Icon(Icons.Rounded.Stop, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.ui_stop_this_helper))
                 }
             }
 
             if (h.working) {
-                Section("RIGHT NOW", null)
+                Section(stringResource(R.string.ui_right_now), null)
                 val (nowBg, nowFg) = if (h.profile.isNotBlank()) com.past9.phoneaos.ui.screens.profileTones(h.profileColor) else cs.primaryContainer to cs.onPrimaryContainer
                 Surface(shape = MaterialTheme.shapes.large, color = nowBg, modifier = Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         LoadingIndicator(Modifier.size(28.dp), color = nowFg)
                         Spacer(Modifier.width(12.dp))
-                        Text(h.now.ifBlank { h.steps.lastOrNull()?.text ?: "Getting started" }, style = MaterialTheme.typography.bodyLarge, color = nowFg)
+                        Text(h.now.ifBlank { h.steps.lastOrNull()?.text ?: stringResource(R.string.ui_getting_started) }, style = MaterialTheme.typography.bodyLarge, color = nowFg)
                     }
                 }
             }
 
             if (h.result.isNotBlank()) {
-                Section(if (h.state == "done") "WHAT IT BROUGHT BACK" else "WHAT HAPPENED", null)
+                Section(if (h.state == "done") stringResource(R.string.ui_what_it_brought_back) else stringResource(R.string.ui_what_happened), null)
                 Surface(shape = MaterialTheme.shapes.large, color = if (h.state == "done") cs.surfaceContainerHigh else look.container, modifier = Modifier.fillMaxWidth()) {
                     Markdown(h.result, Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium, color = if (h.state == "done") cs.onSurface else look.content)
                 }
             }
 
-            Section("THE BRIEF", "What your agent asked it to do")
+            Section(stringResource(R.string.ui_the_brief), stringResource(R.string.ui_the_brief_sub))
             var open by remember { mutableStateOf(false) }
             val long = h.item.text.length > 320
             Surface(onClick = { open = !open }, enabled = long, shape = MaterialTheme.shapes.large, color = cs.surfaceContainer, modifier = Modifier.fillMaxWidth().animateContentSize()) {
                 Column(Modifier.padding(16.dp)) {
                     Text(h.item.text, style = MaterialTheme.typography.bodyMedium, maxLines = if (long && !open) 6 else Int.MAX_VALUE, overflow = TextOverflow.Ellipsis)
-                    if (long) Text(if (open) "Show less" else "Show the whole brief", style = MaterialTheme.typography.labelLarge, color = cs.primary, modifier = Modifier.padding(top = 8.dp))
+                    if (long) Text(if (open) stringResource(R.string.ui_show_less) else stringResource(R.string.ui_show_whole_brief), style = MaterialTheme.typography.labelLarge, color = cs.primary, modifier = Modifier.padding(top = 8.dp))
                 }
             }
 
-            Section("STEPS", if (h.steps.isEmpty()) (if (h.working) "Nothing logged yet" else "It didn't log any steps") else "${h.steps.size} so far, oldest first")
+            Section(stringResource(R.string.ui_steps), if (h.steps.isEmpty()) (if (h.working) stringResource(R.string.ui_nothing_logged) else stringResource(R.string.ui_no_steps_logged)) else stringResource(R.string.ui_steps_so_far, h.steps.size))
             h.steps.forEachIndexed { i, a -> StepRow(a, last = i == h.steps.lastIndex, now = now) }
         }
     }

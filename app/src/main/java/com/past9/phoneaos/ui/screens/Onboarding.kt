@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -42,6 +43,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.Morph
 import androidx.graphics.shapes.RoundedPolygon
+import com.past9.phoneaos.R
 import com.past9.phoneaos.data.PowerMode
 import com.past9.phoneaos.data.Provider
 import com.past9.phoneaos.data.SubKind
@@ -103,7 +105,7 @@ fun OnboardingScreen(actions: OnboardingActions, start: OnbStep = OnbStep.HELLO,
             Column(Modifier.fillMaxSize().imePadding()) {
                 if (step != OnbStep.HELLO) {
                     Row(Modifier.fillMaxWidth().statusBarsPadding().height(56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        if (back != null) IconButton(onClick = back) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
+                        if (back != null) IconButton(onClick = back) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.onb_back)) }
                         Spacer(Modifier.weight(1f))
                         val idx = order.indexOf(if (step == OnbStep.SUB) OnbStep.KEY else step)
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(end = 16.dp)) {
@@ -191,24 +193,24 @@ private fun Hello(next: () -> Unit) {
                 AgentAvatar(working = true, size = 156.dp)
                 Spacer(Modifier.height(18.dp))
                 Surface(shape = RoundedCornerShape(50), color = cs.surface.copy(alpha = 0.9f)) {
-                    Text("Hi! I'm your agent.", Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.titleSmall, color = cs.onSurface)
+                    Text(stringResource(R.string.onb_hello_bubble), Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.titleSmall, color = cs.onSurface)
                 }
             }
         }
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 24.dp, vertical = 20.dp)) {
-            Text("MEET YOUR AGENT", style = Eyebrow, color = cs.primary)
+            Text(stringResource(R.string.onb_hello_eyebrow), style = Eyebrow, color = cs.primary)
             Spacer(Modifier.height(10.dp))
-            Text("It does the busywork.\nYou get your day back.", style = MaterialTheme.typography.displaySmall)
+            Text(stringResource(R.string.onb_hello_title), style = MaterialTheme.typography.displaySmall)
             Spacer(Modifier.height(12.dp))
-            Text("It browses, plans, remembers and follows up, right here on your phone. Even while you're in other apps.", style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant)
+            Text(stringResource(R.string.onb_hello_body), style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant)
             Spacer(Modifier.height(14.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Lock, null, Modifier.size(16.dp), tint = cs.primary)
                 Spacer(Modifier.width(8.dp))
-                Text("Your keys. Your phone. No servers of ours.", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
+                Text(stringResource(R.string.onb_hello_privacy), style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
             }
             Spacer(Modifier.height(22.dp))
-            BigButton("Get started", onClick = next)
+            BigButton(stringResource(R.string.onb_get_started), onClick = next)
         }
     }
 }
@@ -232,21 +234,21 @@ private fun BigField(value: String, onChange: (String) -> Unit, placeholder: Str
 
 @Composable
 private fun NameStep(user: String, agent: String, onUser: (String) -> Unit, onAgent: (String) -> Unit, next: () -> Unit) {
-    StepPage("About you", "First, what should I call you?", null, bottom = { BigButton("Continue", enabled = user.isNotBlank(), onClick = next) }) {
-        BigField(user, onUser, "Your name", big = true, autoFocus = true)
+    StepPage(stringResource(R.string.onb_name_eyebrow), stringResource(R.string.onb_name_title), null, bottom = { BigButton(stringResource(R.string.onb_continue), enabled = user.isNotBlank(), onClick = next) }) {
+        BigField(user, onUser, stringResource(R.string.onb_name_hint), big = true, autoFocus = true)
         Spacer(Modifier.height(36.dp))
-        Text("AND WHAT SHOULD YOU CALL ME?", style = Eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.onb_name_agent_q), style = Eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(10.dp))
-        BigField(agent, onAgent, "Your agent", big = false)
+        BigField(agent, onAgent, stringResource(R.string.onb_your_agent), big = false)
         Spacer(Modifier.height(8.dp))
-        Text("Optional. Give me a name if you like.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.onb_name_optional), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(32.dp))
         AnimatedVisibility(user.isNotBlank()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AgentAvatar(working = false, size = 44.dp)
                 Spacer(Modifier.width(12.dp))
                 Surface(shape = RoundedCornerShape(6.dp, 22.dp, 22.dp, 22.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                    Text("Nice to meet you, ${user.trim()}.${if (agent.isNotBlank()) " I'm ${agent.trim()}." else ""}", Modifier.padding(horizontal = 16.dp, vertical = 12.dp), style = MaterialTheme.typography.bodyLarge)
+                    Text(if (agent.isNotBlank()) stringResource(R.string.onb_nice_to_meet_named, user.trim(), agent.trim()) else stringResource(R.string.onb_nice_to_meet, user.trim()), Modifier.padding(horizontal = 16.dp, vertical = 12.dp), style = MaterialTheme.typography.bodyLarge)
                 }
             }
         }
@@ -255,7 +257,7 @@ private fun NameStep(user: String, agent: String, onUser: (String) -> Unit, onAg
 
 @Composable
 private fun StyleStep(user: String, agent: String, accent: String, mascot: String, onAccent: (String) -> Unit, onMascot: (String) -> Unit, next: () -> Unit) {
-    StepPage("Make it yours", "Pick your colour and your sidekick", null, bottom = { BigButton("Looks good", onClick = next) }) {
+    StepPage(stringResource(R.string.onb_style_eyebrow), stringResource(R.string.onb_style_title), null, bottom = { BigButton(stringResource(R.string.onb_looks_good), onClick = next) }) {
         StylePicker(user, agent, accent, mascot, onAccent, onMascot)
     }
 }
@@ -272,26 +274,26 @@ fun StylePicker(user: String, agent: String, accent: String, mascot: String, onA
                     AgentAvatar(working = true, size = 40.dp)
                     Spacer(Modifier.width(12.dp))
                     Column {
-                        Text(agent.ifBlank { "Your agent" }, style = MaterialTheme.typography.titleMedium)
-                        Text("Browsing · 2 helpers", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                        Text(agent.ifBlank { stringResource(R.string.onb_your_agent) }, style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.onb_preview_status), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     }
                 }
                 Spacer(Modifier.height(14.dp))
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
                     Surface(color = cs.primaryContainer, shape = RoundedCornerShape(22.dp, 22.dp, 6.dp, 22.dp)) {
-                        Text("Find me a quiet café near work", Modifier.padding(horizontal = 14.dp, vertical = 10.dp), color = cs.onPrimaryContainer)
+                        Text(stringResource(R.string.onb_preview_user_msg), Modifier.padding(horizontal = 14.dp, vertical = 10.dp), color = cs.onPrimaryContainer)
                     }
                 }
                 Spacer(Modifier.height(10.dp))
-                Text("On it${if (user.isNotBlank()) ", ${user.trim()}" else ""}. Three with good Wi-Fi, all under 10 minutes away.", style = MaterialTheme.typography.bodyLarge)
+                Text(if (user.isNotBlank()) stringResource(R.string.onb_preview_reply_named, user.trim()) else stringResource(R.string.onb_preview_reply), style = MaterialTheme.typography.bodyLarge)
                 Spacer(Modifier.height(12.dp))
                 Surface(color = cs.primary, shape = RoundedCornerShape(50)) {
-                    Text("Hold to approve", Modifier.padding(horizontal = 18.dp, vertical = 10.dp), color = cs.onPrimary, style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(R.string.onb_hold_to_approve), Modifier.padding(horizontal = 18.dp, vertical = 10.dp), color = cs.onPrimary, style = MaterialTheme.typography.labelLarge)
                 }
             }
         }
         Spacer(Modifier.height(28.dp))
-        Text("YOUR COLOUR", style = Eyebrow, color = cs.onSurfaceVariant)
+        Text(stringResource(R.string.onb_your_colour), style = Eyebrow, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(12.dp))
         val dark = cs.surface.luminance() < 0.5f
         FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -301,7 +303,7 @@ fun StylePicker(user: String, agent: String, accent: String, mascot: String, onA
                 val morph = remember { Morph(MaterialShapes.Circle.unit(), MaterialShapes.Cookie9Sided.unit()) }
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(64.dp).clickable { onAccent(a.id) }) {
                     Box(Modifier.size(52.dp).graphicsLayer { rotationZ = p * 20f; val s = 1f + 0.08f * p; scaleX = s; scaleY = s }.clip(MorphShape(morph, p)).background(if (dark) a.dP else a.lP), contentAlignment = Alignment.Center) {
-                        if (selected) Icon(Icons.Rounded.Check, "${a.label}, selected", tint = if (dark) a.dOnP else a.lOnP, modifier = Modifier.graphicsLayer { rotationZ = -p * 20f })
+                        if (selected) Icon(Icons.Rounded.Check, stringResource(R.string.onb_selected, a.label), tint = if (dark) a.dOnP else a.lOnP, modifier = Modifier.graphicsLayer { rotationZ = -p * 20f })
                     }
                     Spacer(Modifier.height(4.dp))
                     Text(a.label, style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false, color = if (selected) cs.onSurface else cs.onSurfaceVariant)
@@ -309,7 +311,7 @@ fun StylePicker(user: String, agent: String, accent: String, mascot: String, onA
             }
         }
         Spacer(Modifier.height(28.dp))
-        Text("YOUR SIDEKICK", style = Eyebrow, color = cs.onSurfaceVariant)
+        Text(stringResource(R.string.onb_your_sidekick), style = Eyebrow, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(12.dp))
         Mascots.chunked(3).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -341,8 +343,8 @@ private fun subMark(k: SubKind): Pair<Color, RoundedPolygon> = when (k) {
 @Composable
 private fun PowerStep(available: (SubKind) -> Boolean, onKey: () -> Unit, onSub: (SubKind) -> Unit) {
     val cs = MaterialTheme.colorScheme
-    StepPage("Power", "How do you want to power your agent?", "Your agent thinks with an AI you already pay for. You can switch any time.", bottom = {}) {
-        Text("USE A SUBSCRIPTION YOU ALREADY HAVE", style = Eyebrow, color = cs.onSurfaceVariant)
+    StepPage(stringResource(R.string.onb_power_eyebrow), stringResource(R.string.onb_power_title), stringResource(R.string.onb_power_line), bottom = {}) {
+        Text(stringResource(R.string.onb_power_sub_header), style = Eyebrow, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(10.dp))
         Surface(shape = MaterialTheme.shapes.extraLarge, color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(vertical = 6.dp)) {
@@ -353,8 +355,8 @@ private fun PowerStep(available: (SubKind) -> Boolean, onKey: () -> Unit, onSub:
                         Box(Modifier.size(44.dp).clip(MorphShape(morph, 0f)).background(c))
                         Spacer(Modifier.width(16.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("${k.label} ${k.plan}", style = MaterialTheme.typography.titleMedium)
-                            Text(if (available(k) || k == SubKind.OPENCODE) k.line else "${k.line.substringBefore(" on ")} on your plan. Needs the runtime pack.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                            Text("${k.label} ${stringResource(k.plan)}", style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(if (available(k) || k == SubKind.OPENCODE) k.line else k.needsPack), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
                         Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = cs.onSurfaceVariant)
                     }
@@ -363,19 +365,19 @@ private fun PowerStep(available: (SubKind) -> Boolean, onKey: () -> Unit, onSub:
             }
         }
         Spacer(Modifier.height(24.dp))
-        Text("OR BRING AN API KEY", style = Eyebrow, color = cs.onSurfaceVariant)
+        Text(stringResource(R.string.onb_power_key_header), style = Eyebrow, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(10.dp))
         Surface(onClick = onKey, shape = MaterialTheme.shapes.extraLarge, color = cs.primaryContainer, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(20.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.Key, null, tint = cs.onPrimaryContainer)
                     Spacer(Modifier.width(12.dp))
-                    Text("I have an API key", style = MaterialTheme.typography.titleLarge, color = cs.onPrimaryContainer, modifier = Modifier.weight(1f))
-                    Text("FASTEST", style = Eyebrow, color = cs.onPrimaryContainer)
+                    Text(stringResource(R.string.onb_have_key), style = MaterialTheme.typography.titleLarge, color = cs.onPrimaryContainer, modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.onb_fastest), style = Eyebrow, color = cs.onPrimaryContainer)
                 }
                 Spacer(Modifier.height(12.dp))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("Anthropic", "OpenAI", "Gemini", "DeepSeek", "OpenRouter", "Any OpenAI-compatible").forEach {
+                    listOf("Anthropic", "OpenAI", "Gemini", "DeepSeek", "OpenRouter", stringResource(R.string.onb_any_openai_compatible)).forEach {
                         Surface(shape = RoundedCornerShape(50), color = cs.surface.copy(alpha = 0.7f)) { Text(it, Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.labelMedium) }
                     }
                 }
@@ -386,44 +388,44 @@ private fun PowerStep(available: (SubKind) -> Boolean, onKey: () -> Unit, onSub:
 
 val keySteps = mapOf(
     Provider.ANTHROPIC to ("https://console.anthropic.com/settings/keys" to listOf(
-        "Tap Open below. It opens Anthropic's console in your browser. Sign up or sign in.",
-        "Go to Billing and add a little credit. It's pay as you go, and a few dollars lasts a long time.",
-        "Go to API keys and tap Create key. Name it anything, like Agent.",
-        "Tap Copy, come back to this app, paste the key in the box above and tap Check key.")),
+        R.string.onb_key_anthropic_1,
+        R.string.onb_key_anthropic_2,
+        R.string.onb_key_anthropic_3,
+        R.string.onb_key_anthropic_4)),
     Provider.OPENAI to ("https://platform.openai.com/api-keys" to listOf(
-        "Tap Open below. It opens OpenAI's platform in your browser. Sign up or sign in. (This is separate from a ChatGPT subscription.)",
-        "Go to Billing and add a little credit. A few dollars lasts a long time.",
-        "Go to API keys and tap Create new secret key. Name it anything, like Agent.",
-        "Tap Copy (you can only see the key once), come back here, paste it above and tap Check key.")),
+        R.string.onb_key_openai_1,
+        R.string.onb_key_openai_2,
+        R.string.onb_key_openai_3,
+        R.string.onb_key_step_copy_once)),
     Provider.GEMINI to ("https://aistudio.google.com/app/apikey" to listOf(
-        "Tap Open below. It opens Google AI Studio. Sign in with any Google account.",
-        "Tap Create API key. If it asks you to pick a project, choose the one it suggests.",
-        "It's free to start, no card needed.",
-        "Tap the copy button next to your new key, come back here, paste it above and tap Check key.")),
+        R.string.onb_key_gemini_1,
+        R.string.onb_key_gemini_2,
+        R.string.onb_key_gemini_3,
+        R.string.onb_key_gemini_4)),
     Provider.DEEPSEEK to ("https://platform.deepseek.com/api_keys" to listOf(
-        "Tap Open below. It opens DeepSeek's platform. Sign up or sign in.",
-        "Go to Top up and add a few dollars. DeepSeek is cheap, so it goes a long way.",
-        "Go to API keys and tap Create new API key. Name it anything.",
-        "Tap Copy (you can only see the key once), come back here, paste it above and tap Check key.")),
+        R.string.onb_key_deepseek_1,
+        R.string.onb_key_deepseek_2,
+        R.string.onb_key_deepseek_3,
+        R.string.onb_key_step_copy_once)),
     Provider.OPENCODE_GO to ("https://opencode.ai/auth" to listOf(
-        "Tap Open below. It opens OpenCode. Sign in.",
-        "Subscribe to the Go plan if you haven't yet.",
-        "Find API keys in your account and create one.",
-        "Copy it, come back here, paste it above and tap Check key.")),
+        R.string.onb_key_opencode_1,
+        R.string.onb_key_opencode_go_2,
+        R.string.onb_key_opencode_3,
+        R.string.onb_key_opencode_4)),
     Provider.OPENCODE_ZEN to ("https://opencode.ai/auth" to listOf(
-        "Tap Open below. It opens OpenCode. Sign in.",
-        "Add credit to Zen (pay as you go).",
-        "Find API keys in your account and create one.",
-        "Copy it, come back here, paste it above and tap Check key.")),
+        R.string.onb_key_opencode_1,
+        R.string.onb_key_opencode_zen_2,
+        R.string.onb_key_opencode_3,
+        R.string.onb_key_opencode_4)),
     Provider.OPENROUTER to ("https://openrouter.ai/settings/keys" to listOf(
-        "Tap Open below. It opens OpenRouter. Sign up or sign in.",
-        "Add credits to use paid models. Some models are free and need no credit.",
-        "Go to Keys and tap Create key. Name it anything.",
-        "Copy it (you can only see it once), come back here, paste it above and tap Check key.")),
+        R.string.onb_key_openrouter_1,
+        R.string.onb_key_openrouter_2,
+        R.string.onb_key_openrouter_3,
+        R.string.onb_key_openrouter_4)),
     Provider.CUSTOM to ("https://platform.openai.com/docs/api-reference/chat" to listOf(
-        "Any service with an OpenAI-style chat API works: Groq, Together, Mistral, or a server on your own computer.",
-        "In the boxes above, enter its base URL (it usually ends in /v1) and the exact model name from its docs.",
-        "Paste its API key and tap Check key.")),
+        R.string.onb_key_custom_1,
+        R.string.onb_key_custom_2,
+        R.string.onb_key_custom_3)),
 )
 
 @Composable
@@ -447,8 +449,8 @@ fun KeyStep(provider: Provider, onProvider: (Provider) -> Unit, actions: Onboard
     val plainHttp = custom && com.past9.phoneaos.agent.HttpPolicy.isHttp(baseUrl) && !com.past9.phoneaos.agent.HttpPolicy.isLoopback(baseUrl)
     val urlProblem = if (custom && baseUrl.isNotBlank()) com.past9.phoneaos.agent.HttpPolicy.blockReason(baseUrl, allowHttp) else null
     val ready = key.length > 10 && (!custom || (baseUrl.isNotBlank() && urlProblem == null && model.isNotBlank()))
-    StepPage("API key", "Paste your key", "Stored encrypted on this phone. Only ever sent to ${if (custom) "the service you enter" else provider.label}.", bottom = {
-        BigButton(if (result == "") "Continue" else if (busy) "Checking…" else "Check key", enabled = ready && !busy, icon = if (result == "") Icons.AutoMirrored.Rounded.ArrowForward else null) {
+    StepPage(stringResource(R.string.onb_key_eyebrow), stringResource(R.string.onb_key_title), stringResource(R.string.onb_key_line, if (custom) stringResource(R.string.onb_key_custom_service) else provider.label), bottom = {
+        BigButton(if (result == "") stringResource(R.string.onb_continue) else if (busy) stringResource(R.string.onb_checking) else stringResource(R.string.onb_check_key), enabled = ready && !busy, icon = if (result == "") Icons.AutoMirrored.Rounded.ArrowForward else null) {
             if (result == "") { actions.saveKey(provider, key); (picked ?: models?.firstOrNull())?.let { actions.saveModel(it.id) }; next() }
             else scope.launch {
                 busy = true
@@ -461,13 +463,13 @@ fun KeyStep(provider: Provider, onProvider: (Provider) -> Unit, actions: Onboard
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Provider.entries.forEach { p ->
                 val sel = p == provider
-                FilterChip(selected = sel, onClick = { onProvider(p) }, label = { Text(if (p == Provider.CUSTOM) "Other" else p.label.removePrefix("Google ")) },
+                FilterChip(selected = sel, onClick = { onProvider(p) }, label = { Text(if (p == Provider.CUSTOM) stringResource(R.string.onb_other) else p.label.removePrefix("Google ")) },
                     leadingIcon = if (sel) ({ Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) }) else null, shape = RoundedCornerShape(50), modifier = Modifier.height(40.dp))
             }
         }
         Spacer(Modifier.height(20.dp))
         if (custom) {
-            OutlinedTextField(baseUrl, { baseUrl = it.trim(); result = null }, label = { Text("Base URL") }, placeholder = { Text("https://api.example.com/v1") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium,
+            OutlinedTextField(baseUrl, { baseUrl = it.trim(); result = null }, label = { Text(stringResource(R.string.onb_base_url)) }, placeholder = { Text("https://api.example.com/v1") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium,
                 isError = urlProblem != null && !plainHttp, supportingText = urlProblem?.takeIf { !plainHttp }?.let { ({ Text(it, color = MaterialTheme.colorScheme.error) }) })
             if (plainHttp) {
                 Spacer(Modifier.height(10.dp))
@@ -476,28 +478,28 @@ fun KeyStep(provider: Provider, onProvider: (Provider) -> Unit, actions: Onboard
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Rounded.Warning, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onErrorContainer)
                             Spacer(Modifier.width(8.dp))
-                            Text("This address isn't encrypted", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onErrorContainer)
+                            Text(stringResource(R.string.onb_http_warning_title), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onErrorContainer)
                         }
                         Row(Modifier.fillMaxWidth().clickable { allowHttp = !allowHttp; result = null }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                             Checkbox(allowHttp, { allowHttp = it; result = null })
-                            Text("Allow unencrypted HTTP for this server. Requests and your API key are sent in plain text. Only use this on a network you trust, like your home LAN.",
+                            Text(stringResource(R.string.onb_http_allow),
                                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer)
                         }
-                        if (!allowHttp) Text("Plain HTTP is blocked until you tick the box. Or use an https:// address.", style = MaterialTheme.typography.bodySmall,
+                        if (!allowHttp) Text(stringResource(R.string.onb_http_blocked), style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
                     }
                 }
             }
             Spacer(Modifier.height(10.dp))
-            OutlinedTextField(model, { model = it.trim(); result = null }, label = { Text("Model") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
+            OutlinedTextField(model, { model = it.trim(); result = null }, label = { Text(stringResource(R.string.onb_model)) }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
             Spacer(Modifier.height(10.dp))
         }
-        OutlinedTextField(key, { key = it.trim(); result = null }, label = { Text("${if (custom) "Service" else provider.label} API key") }, placeholder = { Text(provider.keyHint) }, singleLine = true,
+        OutlinedTextField(key, { key = it.trim(); result = null }, label = { Text(if (custom) stringResource(R.string.onb_key_label_custom) else stringResource(R.string.onb_key_label, provider.label)) }, placeholder = { Text(stringResource(R.string.onb_key_hint)) }, singleLine = true,
             visualTransformation = if (show) VisualTransformation.None else PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium,
-            trailingIcon = { IconButton(onClick = { show = !show }) { Icon(if (show) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, if (show) "Hide key" else "Show key") } },
+            trailingIcon = { IconButton(onClick = { show = !show }) { Icon(if (show) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, if (show) stringResource(R.string.onb_hide_key) else stringResource(R.string.onb_show_key)) } },
             supportingText = when (result) {
                 null -> null
-                "" -> ({ Text("Key works.", color = extra.success) })
+                "" -> ({ Text(stringResource(R.string.onb_key_works), color = extra.success) })
                 else -> ({ Text(result!!, color = MaterialTheme.colorScheme.error) })
             })
         if (result == "" && !custom) {
@@ -505,25 +507,25 @@ fun KeyStep(provider: Provider, onProvider: (Provider) -> Unit, actions: Onboard
             Surface(onClick = { picking = true }, shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("MODEL", style = Eyebrow, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text(stringResource(R.string.onb_model_eyebrow), style = Eyebrow, color = MaterialTheme.colorScheme.onPrimaryContainer)
                         Text(picked?.name ?: models?.firstOrNull()?.name ?: provider.defaultModel, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
                     }
-                    Text("Change", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Text(stringResource(R.string.onb_change), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
                 }
             }
         }
-        if (picking) ModelPickerSheet("Pick your model", models, picked?.id ?: "", null, onPick = { picked = it; actions.saveModel(it.id); picking = false }, onDismiss = { picking = false })
+        if (picking) ModelPickerSheet(stringResource(R.string.onb_pick_model), models, picked?.id ?: "", null, onPick = { picked = it; actions.saveModel(it.id); picking = false }, onDismiss = { picking = false })
         Spacer(Modifier.height(16.dp))
         val (url, steps) = keySteps.getValue(provider)
         Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(20.dp)) {
-                Text("WHERE TO GET ONE", style = Eyebrow, color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.onb_where_to_get), style = Eyebrow, color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(10.dp))
-                steps.forEachIndexed { i, s -> NumberedLine(i + 1, s) }
+                steps.forEachIndexed { i, s -> NumberedLine(i + 1, stringResource(s)) }
                 if (!custom) {
                     Spacer(Modifier.height(10.dp))
                     FilledTonalButton(onClick = { actions.openUrl(url) }, shapes = ButtonDefaults.shapes()) {
-                        Icon(Icons.Rounded.OpenInNew, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Open ${provider.label}")
+                        Icon(Icons.Rounded.OpenInNew, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.onb_open_provider, provider.label))
                     }
                 }
             }
@@ -546,29 +548,29 @@ private fun NumberedLine(n: Int, text: String) {
 private fun SubStep(kind: SubKind, available: Boolean, onUseKey: () -> Unit, onSetup: () -> Unit, next: () -> Unit) {
     val (c, shape) = subMark(kind)
     val morph = remember(kind) { Morph(shape.unit(), shape.unit()) }
-    StepPage("${kind.label} subscription", "Use your ${kind.label} ${kind.plan}", "${kind.line} No API bill: it uses your plan's limits.", bottom = {
-        if (available) BigButton("Set it up") { onSetup(); next() }
+    StepPage(stringResource(R.string.onb_sub_eyebrow, kind.label), stringResource(R.string.onb_sub_title, kind.label, stringResource(kind.plan)), stringResource(R.string.onb_sub_line, stringResource(kind.line)), bottom = {
+        if (available) BigButton(stringResource(R.string.onb_set_it_up)) { onSetup(); next() }
         else {
-            BigButton("Use an API key instead", onClick = onUseKey)
-            TextButton(onClick = next, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("Continue anyway") }
+            BigButton(stringResource(R.string.onb_use_key_instead), onClick = onUseKey)
+            TextButton(onClick = next, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text(stringResource(R.string.onb_continue_anyway)) }
         }
     }) {
         Box(Modifier.size(72.dp).clip(MorphShape(morph, 0f)).background(c))
         Spacer(Modifier.height(20.dp))
         Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(20.dp)) {
-                Text("WHAT HAPPENS", style = Eyebrow, color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.onb_what_happens), style = Eyebrow, color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(10.dp))
-                NumberedLine(1, "We unpack a small runtime into the app. Nothing else to download.")
-                NumberedLine(2, "${kind.label}'s agent installs inside it.")
-                NumberedLine(3, "You sign in with your ${kind.label} account.")
-                NumberedLine(4, "Switch to an API key later and we delete the runtime to free the space.")
+                NumberedLine(1, stringResource(R.string.onb_sub_step_1))
+                NumberedLine(2, stringResource(R.string.onb_sub_step_2, kind.label))
+                NumberedLine(3, stringResource(R.string.onb_sub_step_3, kind.label))
+                NumberedLine(4, stringResource(R.string.onb_sub_step_4))
             }
         }
         if (!available) {
             Spacer(Modifier.height(12.dp))
             Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.fillMaxWidth()) {
-                Text("This build doesn't include the ${kind.label} runtime pack yet. Use an API key for now; your memory, tasks and routines carry over when you switch.",
+                Text(stringResource(R.string.onb_sub_unavailable, kind.label),
                     Modifier.padding(20.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onTertiaryContainer)
             }
         }
@@ -578,8 +580,8 @@ private fun SubStep(kind: SubKind, available: Boolean, onUseKey: () -> Unit, onS
 @Composable
 fun AppsStep(actions: OnboardingActions, next: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    StepPage("Your apps", "Connect Gmail, Calendar and 250+ apps", "Optional. Connections run through Composio with your own free key, so your accounts stay yours.", bottom = {
-        TextButton(onClick = next, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("Skip for now") }
+    StepPage(stringResource(R.string.onb_apps_eyebrow), stringResource(R.string.onb_apps_title), stringResource(R.string.onb_apps_line), bottom = {
+        TextButton(onClick = next, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text(stringResource(R.string.onb_skip_for_now)) }
     }) {
         Row(horizontalArrangement = Arrangement.spacedBy((-10).dp)) {
             listOf("Gmail" to Color(0xFFEA4335), "Calendar" to Color(0xFF4285F4), "Drive" to Color(0xFF0F9D58), "Slack" to Color(0xFF611F69), "Notion" to Color(0xFF2B2A33), "+250" to cs.primary).forEach { (n, c) ->
@@ -603,23 +605,23 @@ fun ComposioKeyForm(save: suspend (String) -> String?, openUrl: (String) -> Unit
     Column {
         Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(20.dp)) {
-                Text("GET YOUR KEY IN A MINUTE", style = Eyebrow, color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.onb_composio_header), style = Eyebrow, color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(10.dp))
-                NumberedLine(1, "Tap the button below. It opens Composio. Sign up, it's free.")
-                NumberedLine(2, "Open your project's Settings, then API Keys, and create a key. Your personal user key from your account settings works too.")
-                NumberedLine(3, "Copy the key, come back here and paste it below.")
-                NumberedLine(4, "Then pick the apps you want (Gmail, Calendar...) in Connections.")
+                NumberedLine(1, stringResource(R.string.onb_composio_step_1))
+                NumberedLine(2, stringResource(R.string.onb_composio_step_2))
+                NumberedLine(3, stringResource(R.string.onb_composio_step_3))
+                NumberedLine(4, stringResource(R.string.onb_composio_step_4))
                 Spacer(Modifier.height(10.dp))
                 FilledTonalButton(onClick = { openUrl("https://platform.composio.dev") }, shapes = ButtonDefaults.shapes()) {
-                    Icon(Icons.Rounded.OpenInNew, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Open Composio")
+                    Icon(Icons.Rounded.OpenInNew, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.onb_open_provider, "Composio"))
                 }
             }
         }
         Spacer(Modifier.height(16.dp))
-        OutlinedTextField(key, { key = it.trim(); error = null }, label = { Text("Composio API key") }, singleLine = true, visualTransformation = PasswordVisualTransformation(),
+        OutlinedTextField(key, { key = it.trim(); error = null }, label = { Text(stringResource(R.string.onb_key_label, "Composio")) }, singleLine = true, visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium, isError = error != null, supportingText = error?.let { { Text(it) } })
         Spacer(Modifier.height(12.dp))
-        BigButton(if (busy) "Checking…" else "Connect", enabled = key.length > 8 && !busy, icon = null) {
+        BigButton(if (busy) stringResource(R.string.onb_checking) else stringResource(R.string.onb_connect), enabled = key.length > 8 && !busy, icon = null) {
             scope.launch { busy = true; error = save(key); busy = false; if (error == null) onSaved() }
         }
     }
@@ -644,12 +646,12 @@ private fun ReadyStep(user: String, actions: OnboardingActions) {
             AgentAvatar(working = false, size = 112.dp)
         }
         Spacer(Modifier.height(24.dp))
-        Text(if (user.isNotBlank()) "You're set, ${user.trim()}." else "You're set.", style = MaterialTheme.typography.displaySmall)
+        Text(if (user.isNotBlank()) stringResource(R.string.onb_ready_title_named, user.trim()) else stringResource(R.string.onb_ready_title), style = MaterialTheme.typography.displaySmall)
         Spacer(Modifier.height(12.dp))
-        Text("One last thing: let me send you notifications, so I can tell you when something's done or when I need a yes from you.", style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant)
+        Text(stringResource(R.string.onb_ready_body), style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant)
         Spacer(Modifier.weight(1f))
-        BigButton("Allow notifications", icon = Icons.Rounded.NotificationsActive) { actions.requestNotifications(); actions.finish() }
-        TextButton(onClick = actions.finish, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("Not now") }
+        BigButton(stringResource(R.string.onb_allow_notifications), icon = Icons.Rounded.NotificationsActive) { actions.requestNotifications(); actions.finish() }
+        TextButton(onClick = actions.finish, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text(stringResource(R.string.onb_not_now)) }
         Spacer(Modifier.height(12.dp))
     }
 }

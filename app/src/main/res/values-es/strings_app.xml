@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- MainActivity -->
+    <plurals name="main_memory_pack_added">
+        <item quantity="one">Se ha añadido %1$d página de memoria de A.O.S</item>
+        <item quantity="many">Se han añadido %1$d páginas de memoria de A.O.S</item>
+        <item quantity="other">Se han añadido %1$d páginas de memoria de A.O.S</item>
+    </plurals>
+    <string name="main_testnotify_title">Paso a saludar</string>
+    <string name="main_testnotify_body">Así se ven mis mensajes en tu móvil.</string>
+    <string name="main_models_load_failed">No se han podido cargar los modelos: %1$s</string>
+    <string name="main_composio_unreachable">No se ha podido conectar con Composio: %1$s</string>
+    <string name="main_account_already_connected">Esa cuenta de %1$s ya estaba conectada, así que no ha cambiado nada.</string>
+    <string name="main_search_failed">La búsqueda ha fallado: %1$s</string>
+    <string name="main_voice_preview">Hola, %1$s, así suena mi voz.</string>
+    <string name="main_voice_preview_anon">Hola, así suena mi voz.</string>
+    <string name="main_style_title">Hazlo tuyo</string>
+    <string name="main_style_sub">Color y compañero</string>
+    <string name="main_helper_model">Modelo de los ayudantes</string>
+    <string name="main_provider_model">Modelo de %1$s</string>
+    <string name="main_same_as_agent">El mismo que tu agente</string>
+    <string name="main_helpers_use_agent">Los ayudantes usan lo mismo que tu agente</string>
+    <string name="main_helper_picker_sub">Tu agente planifica y reparte el trabajo entre los ayudantes. Elige con qué funcionan.</string>
+    <string name="main_signin_not_finished">No se ha completado el inicio de sesión. Toca Iniciar sesión para volver a intentarlo.</string>
+    <string name="main_install_failed">Error: %1$s</string>
+    <string name="main_key_rejected">Se ha rechazado esa clave.</string>
+    <string name="main_key_model_unavailable">La clave funciona, pero el modelo %1$s no está disponible con ella. Elige otro modelo.</string>
+    <string name="main_key_no_credit">La clave funciona, pero no tiene saldo o ha alcanzado el límite de uso.</string>
+    <string name="main_key_check_failed">No se ha podido comprobar: %1$s</string>
+    <string name="main_model_default">Predeterminado</string>
+
+    <!-- Services, notifications, triggers -->
+    <string name="svc_browser_channel">Navegación en segundo plano</string>
+    <string name="svc_browser_title">%1$s está navegando</string>
+    <string name="svc_browser_title_default">Tu agente está navegando</string>
+    <string name="svc_browser_text">Toca para mirar o tomar el control</string>
+    <string name="svc_browser_body">Estoy navegando. Toca para mirar o tomar el control.</string>
+    <string name="svc_calls_channel">Llamadas de voz</string>
+    <string name="svc_your_agent">Tu agente</string>
+    <string name="svc_you">Tú</string>
+    <string name="svc_call_text">En una llamada. Toca para volver.</string>
+    <string name="svc_call_needs_key">Añade una clave de Google (Gemini) en Ajustes, Voz.</string>
+    <string name="svc_messages_channel">Mensajes de tu agente</string>
+    <string name="svc_work_channel">Agente trabajando</string>
+    <string name="svc_work_title">%1$s está trabajando</string>
+    <string name="svc_work_title_default">Tu agente está trabajando</string>
+    <string name="svc_work_text">Puedes salir de la app. Ya te aviso.</string>
+    <string name="svc_work_body">Estoy en ello. Puedes salir de la app, ya te aviso.</string>
+    <string name="svc_morning_greeting">Buenos días, %1$s.</string>
+    <string name="svc_morning_greeting_anon">Buenos días.</string>
+    <string name="svc_weekly_every">Cada %1$s a las %2$02d:%3$02d</string>
+    <string name="svc_weekly_weekday">día laborable</string>
+    <string name="svc_weekly_weekend">día del fin de semana</string>
+    <string name="svc_weekly">Semanal</string>
+
+    <!-- Agent runtime / subscription runtime (UI-only lines) -->
+    <string name="rt_sub_not_setup">Tu suscripción de %1$s aún no está configurada en este móvil. Abre Ajustes para terminar de configurarla o cambia a una clave API.</string>
+    <string name="rt_add_key">Añade una clave API en Ajustes para que pueda empezar a trabajar.</string>
+    <string name="rt_stopped">Detenido.</string>
+    <string name="rt_signin_failed">No ha funcionado el inicio de sesión en %1$s. Abre Ajustes, Suscripción, y vuelve a iniciar sesión.</string>
+    <string name="rt_sub_version_too_old">Este modelo necesita una versión de Claude Code más nueva que la que trae esta versión de la app. Actualiza la app o elige otro modelo.</string>
+    <string name="rt_sub_rate_limit">%1$s dice que has alcanzado el límite de tu plan por ahora. Vuelve a intentarlo más tarde o cambia de modelo.</string>
+    <string name="rt_sub_overloaded">%1$s está saturado ahora mismo. Vuelve a intentarlo en un minuto.</string>
+    <string name="rt_routine_failed">La rutina «%1$s» ha fallado: %2$s</string>
+    <string name="rt_done">Listo</string>
+    <string name="rt_notify_connect">¿Conectar %1$s?</string>
+    <string name="rt_notify_approve">¿Aprobar?</string>
+    <string name="rt_notify_needs_you">%1$s te necesita</string>
+    <string name="rt_notify_question">Tu agente tiene una pregunta</string>
+    <string name="rt_note_no_pack">El paquete del entorno de %1$s no está en esta versión</string>
+    <string name="rt_note_ready_setup">Listo para configurar</string>
+    <string name="rt_note_installed">Instalado · inicia sesión con %1$s</string>
+    <string name="rt_note_ready">Listo · sesión iniciada en %1$s</string>
+    <string name="rt_not_claude_token">Eso no es un token de Claude: empiezan por sk-ant-. Usa Iniciar sesión con Claude.</string>
+    <string name="rt_opencode_signin_unavailable">El inicio de sesión de OpenCode aún no está disponible</string>
+    <string name="rt_signin_not_finished">No se ha completado el inicio de sesión. %1$s</string>
+    <string name="data_sub_claude_plan">Pro o Max</string>
+    <string name="data_sub_claude_line">Claude Code funciona dentro de la app con tu plan de Claude.</string>
+    <string name="data_sub_claude_needs_pack">Claude Code funciona dentro de la app con tu plan. Necesita el paquete del entorno.</string>
+    <string name="data_sub_codex_plan">Plus o Pro</string>
+    <string name="data_sub_codex_line">Codex de OpenAI funciona dentro de la app con tu plan de ChatGPT.</string>
+    <string name="data_sub_codex_needs_pack">Codex de OpenAI funciona dentro de la app con tu plan. Necesita el paquete del entorno.</string>
+    <string name="data_sub_opencode_plan">Zen o Go</string>
+    <string name="data_sub_opencode_line">Pega tu clave de OpenCode y tu agente funcionará con tu plan de OpenCode.</string>
+    <string name="rt_interrupted_by_close">Estaba a medias con «%1$s» cuando se cerró la app. Dime que siga y lo haré.</string>
+    <string name="rt_branch_failed">Un hilo paralelo («%1$s») ha fallado: %2$s</string>
+</resources>

@@ -28,6 +28,9 @@ import com.past9.phoneaos.ui.SectionHeader
 import com.past9.phoneaos.ui.SubScreen
 import com.past9.phoneaos.ui.relativeTime
 import com.past9.phoneaos.ui.theme.Eyebrow
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import com.past9.phoneaos.R
 
 data class MemoryActions(
     val onBack: () -> Unit = {},
@@ -39,6 +42,15 @@ data class MemoryActions(
 fun pageIcon(kind: String): ImageVector = when (kind) {
     "person" -> Icons.Rounded.Person; "company" -> Icons.Rounded.Business; "place" -> Icons.Rounded.Place; "project" -> Icons.Rounded.Flag
     "preference" -> Icons.Rounded.Favorite; "event" -> Icons.Rounded.Event; "how-to" -> Icons.Rounded.Lightbulb; else -> Icons.Rounded.Psychology
+}
+
+/** Display name of a page kind; unknown kinds are shown as written. */
+@Composable
+private fun kindLabel(k: String): String = when (k) {
+    "person" -> stringResource(R.string.memory_kind_person); "place" -> stringResource(R.string.memory_kind_place); "company" -> stringResource(R.string.memory_kind_company)
+    "project" -> stringResource(R.string.memory_kind_project); "preference" -> stringResource(R.string.memory_kind_preference); "event" -> stringResource(R.string.memory_kind_event)
+    "how-to" -> stringResource(R.string.memory_kind_howto); "fact" -> stringResource(R.string.memory_kind_fact)
+    else -> k.replaceFirstChar { it.uppercase() }
 }
 
 /** First readable line of a page, without markdown or link brackets. */
@@ -55,26 +67,26 @@ fun MemoryScreen(memories: List<MemoryRow>, actions: MemoryActions, bottomPaddin
         val k = memories.filter { kind == null || it.kind == kind }
         if (query.isBlank()) k else Recall.rank(query, k, 200)
     }
-    SubScreen("Memory", "${memories.size} pages your agent keeps about your world", actions.onBack,
-        fab = { ExtendedFloatingActionButton(onClick = { adding = true }, icon = { Icon(Icons.Rounded.Add, null) }, text = { Text("New page") }, modifier = Modifier.padding(bottom = (bottomPadding - 40.dp).coerceAtLeast(0.dp))) }) { pad ->
+    SubScreen(stringResource(R.string.memory_title), pluralStringResource(R.plurals.memory_sub, memories.size, memories.size), actions.onBack,
+        fab = { ExtendedFloatingActionButton(onClick = { adding = true }, icon = { Icon(Icons.Rounded.Add, null) }, text = { Text(stringResource(R.string.memory_new_page)) }, modifier = Modifier.padding(bottom = (bottomPadding - 40.dp).coerceAtLeast(0.dp))) }) { pad ->
         LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomPadding + 60.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
-                OutlinedTextField(query, { query = it }, placeholder = { Text("Search people, places, anything") }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true,
+                OutlinedTextField(query, { query = it }, placeholder = { Text(stringResource(R.string.memory_search)) }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true,
                     modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge)
             }
             if (kinds.size > 1) item {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item { FilterChip(kind == null, { kind = null }, label = { Text("All") }, shape = RoundedCornerShape(50)) }
-                    items(kinds) { k -> FilterChip(kind == k, { kind = if (kind == k) null else k }, label = { Text(k.replaceFirstChar { it.uppercase() }) }, leadingIcon = { Icon(pageIcon(k), null, Modifier.size(16.dp)) }, shape = RoundedCornerShape(50)) }
+                    item { FilterChip(kind == null, { kind = null }, label = { Text(stringResource(R.string.memory_all)) }, shape = RoundedCornerShape(50)) }
+                    items(kinds) { k -> FilterChip(kind == k, { kind = if (kind == k) null else k }, label = { Text(kindLabel(k)) }, leadingIcon = { Icon(pageIcon(k), null, Modifier.size(16.dp)) }, shape = RoundedCornerShape(50)) }
                 }
             }
-            if (memories.isEmpty()) item { EmptyState("Nothing remembered yet", "As you talk, your agent writes a page for each person, place and thing that matters, linked together like a wiki.") }
-            else if (shown.isEmpty()) item { EmptyState("No match", "Nothing in memory matches \"$query\".") }
+            if (memories.isEmpty()) item { EmptyState(stringResource(R.string.memory_empty), stringResource(R.string.memory_empty_body)) }
+            else if (shown.isEmpty()) item { EmptyState(stringResource(R.string.memory_no_match), stringResource(R.string.memory_no_match_body, query)) }
             val pinned = shown.filter { it.pinned }; val rest = shown.filter { !it.pinned }
             if (pinned.isNotEmpty() && query.isBlank()) {
-                item { SectionHeader("Pinned", "Always on your agent's mind", Modifier.padding(start = 4.dp, top = 6.dp)) }
+                item { SectionHeader(stringResource(R.string.memory_pinned), stringResource(R.string.memory_pinned_sub), Modifier.padding(start = 4.dp, top = 6.dp)) }
                 items(pinned, key = { "p${it.id}" }) { m -> PageRow(m, memories) { actions.onOpen(m) } }
-                item { SectionHeader("Everything else", "Newest first", Modifier.padding(start = 4.dp, top = 10.dp)) }
+                item { SectionHeader(stringResource(R.string.memory_rest), stringResource(R.string.memory_rest_sub), Modifier.padding(start = 4.dp, top = 10.dp)) }
                 items(rest, key = { it.id }) { m -> PageRow(m, memories) { actions.onOpen(m) } }
             } else items(shown, key = { it.id }) { m -> PageRow(m, memories) { actions.onOpen(m) } }
         }
@@ -95,7 +107,7 @@ private fun PageRow(m: MemoryRow, all: List<MemoryRow>, onClick: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 Text(m.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(summaryOf(m.body), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(listOfNotNull(m.kind.uppercase(), if (links > 0) "$links LINK${if (links > 1) "S" else ""}" else null, relativeTime(m.updatedAt).uppercase()).joinToString(" · "),
+                Text(listOfNotNull(kindLabel(m.kind).uppercase(), if (links > 0) pluralStringResource(R.plurals.memory_links, links, links) else null, relativeTime(m.updatedAt).uppercase()).joinToString(" · "),
                     style = Eyebrow, color = cs.outline, modifier = Modifier.padding(top = 4.dp))
             }
         }
@@ -107,12 +119,12 @@ private fun PageRow(m: MemoryRow, all: List<MemoryRow>, onClick: () -> Unit) {
 fun WikiPageScreen(page: MemoryRow?, all: List<MemoryRow>, onBack: () -> Unit, onOpenTitle: (String) -> Unit, onSave: (MemoryRow) -> Unit, onDelete: (MemoryRow) -> Unit, onAsk: (String) -> Unit) {
     val cs = MaterialTheme.colorScheme
     var editing by remember { mutableStateOf(false) }
-    if (page == null) { SubScreen("Not found", null, onBack) { pad -> Box(Modifier.padding(pad)) { EmptyState("This page is gone", "It may have been deleted.") } }; return }
+    if (page == null) { SubScreen(stringResource(R.string.memory_not_found), null, onBack) { pad -> Box(Modifier.padding(pad)) { EmptyState(stringResource(R.string.memory_gone), stringResource(R.string.memory_gone_body)) } }; return }
     val known = remember(all) { all.map { it.title }.toSet() }
     val backlinks = remember(all, page) { all.filter { o -> o.id != page.id && linksIn(o.body).any { it.equals(page.title, true) } } }
-    SubScreen(page.title, page.kind.replaceFirstChar { it.uppercase() } + " · updated " + relativeTime(page.updatedAt), onBack, actions = {
-        IconButton(onClick = { onSave(page.copy(pinned = !page.pinned)) }) { Icon(if (page.pinned) Icons.Rounded.PushPin else Icons.Rounded.PushPin, if (page.pinned) "Unpin" else "Pin", tint = if (page.pinned) cs.primary else cs.onSurfaceVariant) }
-        IconButton(onClick = { editing = true }) { Icon(Icons.Rounded.Edit, "Edit page") }
+    SubScreen(page.title, stringResource(R.string.memory_updated, kindLabel(page.kind), relativeTime(page.updatedAt)), onBack, actions = {
+        IconButton(onClick = { onSave(page.copy(pinned = !page.pinned)) }) { Icon(if (page.pinned) Icons.Rounded.PushPin else Icons.Rounded.PushPin, if (page.pinned) stringResource(R.string.memory_unpin) else stringResource(R.string.memory_pin), tint = if (page.pinned) cs.primary else cs.onSurfaceVariant) }
+        IconButton(onClick = { editing = true }) { Icon(Icons.Rounded.Edit, stringResource(R.string.memory_edit_page)) }
     }) { pad ->
         Column(Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 48.dp)) {
             if (page.topics.isNotBlank()) {
@@ -125,7 +137,7 @@ fun WikiPageScreen(page: MemoryRow?, all: List<MemoryRow>, onBack: () -> Unit, o
             Markdown(page.body, onWikiLink = onOpenTitle, knownPages = known)
             if (backlinks.isNotEmpty()) {
                 Spacer(Modifier.height(28.dp))
-                SectionHeader("Linked from", "Pages that mention ${page.title}")
+                SectionHeader(stringResource(R.string.memory_linked_from), stringResource(R.string.memory_linked_from_sub, page.title))
                 Spacer(Modifier.height(8.dp))
                 backlinks.forEach { b ->
                     Surface(onClick = { onOpenTitle(b.title) }, shape = MaterialTheme.shapes.large, color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
@@ -138,7 +150,7 @@ fun WikiPageScreen(page: MemoryRow?, all: List<MemoryRow>, onBack: () -> Unit, o
             }
             Spacer(Modifier.height(20.dp))
             OutlinedButton(onClick = { onAsk("Tell me what you know about ${page.title}, and fix anything on its memory page that's out of date.") }, shapes = ButtonDefaults.shapes()) {
-                Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Ask your agent about this")
+                Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.memory_ask))
             }
         }
     }
@@ -151,18 +163,18 @@ internal fun PageEditor(m: MemoryRow, onDismiss: () -> Unit, onSave: (MemoryRow)
     var body by remember { mutableStateOf(m.body) }
     var tags by remember { mutableStateOf(m.topics) }
     var kind by remember { mutableStateOf(m.kind) }
-    com.past9.phoneaos.ui.AppSheet(pageIcon(kind), if (m.id == 0L) "Your agent's memory" else "Editing a page", if (m.id == 0L) "New page" else m.title.ifBlank { "Page" }, onDismiss,
-        primary = if (m.id == 0L) "Save to memory" else "Save changes", primaryEnabled = title.isNotBlank() && body.isNotBlank(),
+    com.past9.phoneaos.ui.AppSheet(pageIcon(kind), if (m.id == 0L) stringResource(R.string.memory_agent_memory) else stringResource(R.string.memory_editing), if (m.id == 0L) stringResource(R.string.memory_new_page) else m.title.ifBlank { stringResource(R.string.memory_page) }, onDismiss,
+        primary = if (m.id == 0L) stringResource(R.string.memory_save_to) else stringResource(R.string.memory_save_changes), primaryEnabled = title.isNotBlank() && body.isNotBlank(),
         onPrimary = { onSave(m.copy(title = title.trim(), body = body.trim(), topics = tags.trim(), kind = kind, updatedAt = System.currentTimeMillis())) },
         shape = MaterialShapes.Flower,
-        secondary = onDelete?.let { del -> { TextButton(onClick = del, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("Forget this page", color = MaterialTheme.colorScheme.error) } } }) {
-        com.past9.phoneaos.ui.ChoiceChips(listOf("person" to "Person", "place" to "Place", "company" to "Company", "project" to "Project", "preference" to "Preference", "event" to "Event", "how-to" to "How-to", "fact" to "Fact")
-            .map { (id, l) -> Triple(id, l, pageIcon(id)) }, kind, { kind = it }, label = "What is it")
+        secondary = onDelete?.let { del -> { TextButton(onClick = del, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text(stringResource(R.string.memory_forget), color = MaterialTheme.colorScheme.error) } } }) {
+        com.past9.phoneaos.ui.ChoiceChips(listOf("person", "place", "company", "project", "preference", "event", "how-to", "fact")
+            .map { id -> Triple(id, kindLabel(id), pageIcon(id)) }, kind, { kind = it }, label = stringResource(R.string.memory_what_is))
         Spacer(Modifier.height(20.dp))
-        com.past9.phoneaos.ui.SheetField(title, { title = it }, "Title", "Lerato, Durban trip, Gym...", big = true, singleLine = true)
+        com.past9.phoneaos.ui.SheetField(title, { title = it }, stringResource(R.string.memory_title_field), stringResource(R.string.memory_title_hint), big = true, singleLine = true)
         Spacer(Modifier.height(16.dp))
-        com.past9.phoneaos.ui.SheetField(body, { body = it }, "The page", "What your agent should know. Link other pages with [[Name]].", minLines = 6)
+        com.past9.phoneaos.ui.SheetField(body, { body = it }, stringResource(R.string.memory_body), stringResource(R.string.memory_body_hint), minLines = 6)
         Spacer(Modifier.height(16.dp))
-        com.past9.phoneaos.ui.SheetField(tags, { tags = it }, "Tags", "family, work, health", singleLine = true)
+        com.past9.phoneaos.ui.SheetField(tags, { tags = it }, stringResource(R.string.memory_tags), stringResource(R.string.memory_tags_hint), singleLine = true)
     }
 }

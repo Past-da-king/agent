@@ -25,6 +25,10 @@ import com.past9.phoneaos.ui.EmptyState
 import com.past9.phoneaos.ui.SubScreen
 import com.past9.phoneaos.ui.relativeTime
 import com.past9.phoneaos.ui.theme.Eyebrow
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringArrayResource
+import com.past9.phoneaos.R
 
 data class RoutineActions(
     val onBack: () -> Unit = {},
@@ -34,21 +38,23 @@ data class RoutineActions(
     val onSave: (TriggerRow) -> Unit = {},
 )
 
+@Composable
 fun whenLabel(t: TriggerRow): String = when (t.kind) {
-    "at" -> parseWhen(t.spec)?.let { "Once, " + dueLabel(it) } ?: "Once"
-    "daily" -> "Every day at ${t.spec}"
-    "weekly" -> Routines.weeklyLabel(t.spec)
-    "nightly" -> "Every night while charging, from ${t.spec}"
-    "watch" -> (t.spec.toIntOrNull() ?: 1440).let { m -> "Checks " + when { m >= 1440 && m % 1440 == 0 -> if (m == 1440) "daily" else "every ${m / 1440} days"; m % 60 == 0 -> "every ${m / 60} h"; else -> "every $m min" } + ", wakes your agent only when it fires" }
-    "interval" -> (t.spec.toIntOrNull() ?: 60).let { if (it % 60 == 0) "Every ${it / 60} h" else "Every $it min" }
-    "email" -> "When a new email matches: ${t.spec}"
-    "notification" -> t.spec.split("|").let { "When ${it[0]} notifies" + (it.getOrNull(1)?.takeIf { w -> w.isNotBlank() }?.let { w -> " about \"$w\"" } ?: "") }
+    "at" -> parseWhen(t.spec)?.let { stringResource(R.string.routines_once_at, dueLabel(it)) } ?: stringResource(R.string.routines_once)
+    "daily" -> stringResource(R.string.routines_daily_at, t.spec)
+    "weekly" -> Routines.weeklyLabel(t.spec, androidx.compose.ui.platform.LocalContext.current)
+    "nightly" -> stringResource(R.string.routines_nightly_from, t.spec)
+    "watch" -> (t.spec.toIntOrNull() ?: 1440).let { m -> stringResource(R.string.routines_watch, when { m >= 1440 && m % 1440 == 0 -> if (m == 1440) stringResource(R.string.routines_freq_daily) else pluralStringResource(R.plurals.routines_freq_days, m / 1440, m / 1440); m % 60 == 0 -> stringResource(R.string.routines_freq_hours, m / 60); else -> stringResource(R.string.routines_freq_min, m) }) }
+    "interval" -> (t.spec.toIntOrNull() ?: 60).let { if (it % 60 == 0) stringResource(R.string.routines_every_h, it / 60) else stringResource(R.string.routines_every_min, it) }
+    "email" -> stringResource(R.string.routines_when_email, t.spec)
+    "notification" -> t.spec.split("|").let { it.getOrNull(1)?.takeIf { w -> w.isNotBlank() }?.let { w -> stringResource(R.string.routines_when_notif_about, it[0], w) } ?: stringResource(R.string.routines_when_notif, it[0]) }
     else -> t.kind
 }
 
+@Composable
 fun inLabel(ms: Long): String = when {
-    ms < 60_000 -> "in under a minute"; ms < 3_600_000 -> "in ${ms / 60_000} min"
-    ms < 86_400_000 -> "in ${ms / 3_600_000} h ${(ms % 3_600_000) / 60_000} min"; else -> "in ${ms / 86_400_000} d"
+    ms < 60_000 -> stringResource(R.string.routines_in_under_min); ms < 3_600_000 -> stringResource(R.string.routines_in_min, ms / 60_000)
+    ms < 86_400_000 -> stringResource(R.string.routines_in_h_min, ms / 3_600_000, (ms % 3_600_000) / 60_000); else -> stringResource(R.string.routines_in_d, ms / 86_400_000)
 }
 
 private fun kindIcon(kind: String): ImageVector = when (kind) { "at" -> Icons.Rounded.Event; "daily" -> Icons.Rounded.WbSunny; "weekly" -> Icons.Rounded.EventRepeat; "nightly" -> Icons.Rounded.Bedtime; "watch" -> Icons.Rounded.TrackChanges; "interval" -> Icons.Rounded.Autorenew; "notification" -> Icons.Rounded.NotificationsActive; else -> Icons.Rounded.Mail }
@@ -62,16 +68,16 @@ fun RoutinesScreen(routines: List<TriggerRow>, actions: RoutineActions, now: Lon
     val clock = setOf("daily", "weekly", "at", "interval", "nightly")
     val running = routines.filter { it.enabled }
     val next = running.filter { it.kind in clock }.mapNotNull { r -> Routines.nextRunIn(r, zNow)?.let { r to it } }.minByOrNull { it.second }
-    SubScreen("Routines", if (running.isEmpty()) "Things your agent does on its own" else "${running.size} running on their own", actions.onBack,
-        fab = { ExtendedFloatingActionButton(onClick = { editing = TriggerRow(name = "", kind = "daily", spec = "07:00", prompt = "") }, icon = { Icon(Icons.Rounded.Add, null) }, text = { Text("New routine") }, modifier = Modifier.padding(bottom = (bottomPadding - 40.dp).coerceAtLeast(0.dp))) }) { pad ->
-        if (routines.isEmpty()) { Box(Modifier.padding(pad)) { EmptyState("No routines yet", "Say \"every morning at 7, brief me on my day\" or \"when my bank emails, tell me what changed\". Or add one here.", shape = MaterialShapes.Sunny) }; return@SubScreen }
+    SubScreen(stringResource(R.string.routines_title), if (running.isEmpty()) stringResource(R.string.routines_sub_empty) else pluralStringResource(R.plurals.routines_running, running.size, running.size), actions.onBack,
+        fab = { ExtendedFloatingActionButton(onClick = { editing = TriggerRow(name = "", kind = "daily", spec = "07:00", prompt = "") }, icon = { Icon(Icons.Rounded.Add, null) }, text = { Text(stringResource(R.string.routines_new)) }, modifier = Modifier.padding(bottom = (bottomPadding - 40.dp).coerceAtLeast(0.dp))) }) { pad ->
+        if (routines.isEmpty()) { Box(Modifier.padding(pad)) { EmptyState(stringResource(R.string.routines_empty), stringResource(R.string.routines_empty_body), shape = MaterialShapes.Sunny) }; return@SubScreen }
+        val groups = listOf(
+            Triple(stringResource(R.string.routines_group_clock), stringResource(R.string.routines_group_clock_sub), routines.filter { it.enabled && it.kind in clock && it.id != next?.first?.id }),
+            Triple(stringResource(R.string.routines_group_watching), stringResource(R.string.routines_group_watching_sub), routines.filter { it.enabled && it.kind !in clock }),
+            Triple(stringResource(R.string.routines_group_paused), stringResource(R.string.routines_group_paused_sub), routines.filter { !it.enabled }),
+        )
         LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = bottomPadding + 72.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             next?.let { (r, ms) -> item(key = "next") { NextUp(r, ms, zNow, { actions.onRunNow(r) }) { editing = r } } }
-            val groups = listOf(
-                Triple("On a clock", "Runs at the times you set", routines.filter { it.enabled && it.kind in clock && it.id != next?.first?.id }),
-                Triple("Watching", "Waits for an email or a notification", routines.filter { it.enabled && it.kind !in clock }),
-                Triple("Paused", "Switched off, kept for later", routines.filter { !it.enabled }),
-            )
             groups.forEach { (title, line, list) ->
                 if (list.isNotEmpty()) {
                     item(key = "h-$title") { com.past9.phoneaos.ui.SectionHeader(title, line, Modifier.padding(start = 4.dp, top = 14.dp, bottom = 2.dp)) }
@@ -85,11 +91,12 @@ fun RoutinesScreen(routines: List<TriggerRow>, actions: RoutineActions, now: Lon
         onDelete = if (r.id != 0L) ({ actions.onDelete(r); editing = null }) else null) }
 }
 
+@Composable
 private fun clockLabel(ms: Long, now: java.time.ZonedDateTime): Pair<String, String> {
     val at = now.plusNanos(ms * 1_000_000)
     val time = at.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
-    val day = when (at.toLocalDate()) { now.toLocalDate() -> "Today"; now.toLocalDate().plusDays(1) -> "Tomorrow"; else -> at.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM")) }
-    return time to "$day, ${inLabel(ms)}"
+    val day = when (at.toLocalDate()) { now.toLocalDate() -> stringResource(R.string.routines_day_today); now.toLocalDate().plusDays(1) -> stringResource(R.string.routines_day_tomorrow); else -> at.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM")) }
+    return time to stringResource(R.string.routines_day_in, day, inLabel(ms))
 }
 
 /** The one loud thing on the page: what your agent does next, and when. */
@@ -100,7 +107,7 @@ private fun NextUp(r: TriggerRow, ms: Long, now: java.time.ZonedDateTime, onRun:
     Surface(onClick = onOpen, shape = MaterialTheme.shapes.extraLarge, color = cs.primaryContainer, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(22.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("NEXT UP", style = Eyebrow, color = cs.onPrimaryContainer.copy(alpha = 0.8f), modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.routines_next_up), style = Eyebrow, color = cs.onPrimaryContainer.copy(alpha = 0.8f), modifier = Modifier.weight(1f))
                 Icon(kindIcon(r.kind), null, tint = cs.onPrimaryContainer, modifier = Modifier.size(20.dp))
             }
             Spacer(Modifier.height(6.dp))
@@ -111,7 +118,7 @@ private fun NextUp(r: TriggerRow, ms: Long, now: java.time.ZonedDateTime, onRun:
             Text(r.prompt, style = MaterialTheme.typography.bodyMedium, color = cs.onPrimaryContainer.copy(alpha = 0.85f), maxLines = 2, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(16.dp))
             Button(onClick = onRun, shapes = ButtonDefaults.shapes(), colors = ButtonDefaults.buttonColors(containerColor = cs.primary, contentColor = cs.onPrimary)) {
-                Icon(Icons.Rounded.PlayArrow, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Run it now")
+                Icon(Icons.Rounded.PlayArrow, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.routines_run_it_now))
             }
         }
     }
@@ -123,12 +130,12 @@ private fun RoutineRow(r: TriggerRow, actions: RoutineActions, now: java.time.Zo
     val next = if (r.enabled) Routines.nextRunIn(r, now) else null
     val shape = remember(r.id) { val p = routineShapes[(r.id % routineShapes.size).toInt()].normalized(); com.past9.phoneaos.ui.MorphShape(androidx.graphics.shapes.Morph(p, p), 0f) }
     val status = when {
-        !r.enabled -> "Paused"
-        r.kind == "email" -> "Checks every 15 min"
-        r.kind == "notification" -> "Listening"
-        r.kind == "watch" -> "On watch"
-        next != null -> clockLabel(next, now).let { (t, d) -> "${d.substringBefore(",")} at $t" }
-        else -> "Finished"
+        !r.enabled -> stringResource(R.string.routines_status_paused)
+        r.kind == "email" -> stringResource(R.string.routines_status_email)
+        r.kind == "notification" -> stringResource(R.string.routines_status_listening)
+        r.kind == "watch" -> stringResource(R.string.routines_status_watch)
+        next != null -> clockLabel(next, now).let { (t, d) -> stringResource(R.string.routines_status_at, d.substringBefore(","), t) }
+        else -> stringResource(R.string.routines_status_finished)
     }
     Surface(onClick = onEdit, shape = MaterialTheme.shapes.large, color = if (r.enabled) cs.surfaceContainerLow else cs.surfaceContainerLowest, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(start = 16.dp, end = 12.dp, top = 14.dp, bottom = 14.dp)) {
@@ -149,7 +156,7 @@ private fun RoutineRow(r: TriggerRow, actions: RoutineActions, now: java.time.Zo
                 Text(status, style = MaterialTheme.typography.labelMedium, color = if (r.enabled) cs.primary else cs.onSurfaceVariant)
                 if (r.lastRunAt != null) {
                     Text("  ·  ", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                    Text("Last: " + r.lastResult.ifBlank { relativeTime(r.lastRunAt) }.lineSequence().first(), style = MaterialTheme.typography.labelMedium,
+                    Text(stringResource(R.string.routines_last, r.lastResult.ifBlank { relativeTime(r.lastRunAt) }.lineSequence().first()), style = MaterialTheme.typography.labelMedium,
                         color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 }
             }
@@ -175,17 +182,17 @@ internal fun RoutineEditor(r: TriggerRow, onDismiss: () -> Unit, onSave: (Trigge
         "daily", "nightly" -> Regex("^\\d{1,2}:\\d{2}$").matches(spec.trim()); "weekly" -> Routines.parseWeekly(spec) != null; "interval", "watch" -> (spec.trim().toIntOrNull() ?: 0) >= 15
         "at" -> (parseWhen(spec) ?: 0) > System.currentTimeMillis(); else -> spec.isNotBlank()
     }
-    com.past9.phoneaos.ui.AppSheet(kindIcon(kind), if (r.id == 0L) "Runs on its own" else whenLabel(r.copy(kind = kind, spec = spec)), if (r.id == 0L) "New routine" else "Edit routine", onDismiss,
-        primary = if (r.id == 0L) "Start this routine" else "Save routine", primaryEnabled = valid, shape = MaterialShapes.Sunny,
+    com.past9.phoneaos.ui.AppSheet(kindIcon(kind), if (r.id == 0L) stringResource(R.string.routines_runs_own) else whenLabel(r.copy(kind = kind, spec = spec)), if (r.id == 0L) stringResource(R.string.routines_new) else stringResource(R.string.routines_edit), onDismiss,
+        primary = if (r.id == 0L) stringResource(R.string.routines_start) else stringResource(R.string.routines_save), primaryEnabled = valid, shape = MaterialShapes.Sunny,
         onPrimary = { onSave(r.copy(name = name.trim(), prompt = prompt.trim(), kind = kind, spec = spec.trim(), cursor = if (kind != r.kind || spec != r.spec) "" else r.cursor, enabled = true)) },
         secondary = if (onRunNow == null && onDelete == null) null else ({
             Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                if (onRunNow != null) TextButton(onClick = onRunNow, modifier = Modifier.weight(1f).height(52.dp)) { Icon(Icons.Rounded.PlayArrow, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Run now") }
-                if (onDelete != null) TextButton(onClick = onDelete, modifier = Modifier.weight(1f).height(52.dp)) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                if (onRunNow != null) TextButton(onClick = onRunNow, modifier = Modifier.weight(1f).height(52.dp)) { Icon(Icons.Rounded.PlayArrow, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.routines_run_now)) }
+                if (onDelete != null) TextButton(onClick = onDelete, modifier = Modifier.weight(1f).height(52.dp)) { Text(stringResource(R.string.routines_delete), color = MaterialTheme.colorScheme.error) }
             }
         })) {
         if (r.id == 0L) {
-            Text("START FROM", style = Eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+            Text(stringResource(R.string.routines_start_from), style = Eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 templates.forEach { t ->
                     AssistChip(onClick = { name = t.name; prompt = t.prompt; kind = t.kind; spec = t.spec }, label = { Text(t.name) },
@@ -194,17 +201,17 @@ internal fun RoutineEditor(r: TriggerRow, onDismiss: () -> Unit, onSave: (Trigge
             }
             Spacer(Modifier.height(20.dp))
         }
-        com.past9.phoneaos.ui.SheetField(name, { name = it }, "Name", "Morning brief", big = true, singleLine = true)
+        com.past9.phoneaos.ui.SheetField(name, { name = it }, stringResource(R.string.routines_name), stringResource(R.string.routines_name_hint), big = true, singleLine = true)
         Spacer(Modifier.height(16.dp))
-        com.past9.phoneaos.ui.SheetField(prompt, { prompt = it }, "What your agent does", "Brief me on my calendar and anything due today", minLines = 3)
+        com.past9.phoneaos.ui.SheetField(prompt, { prompt = it }, stringResource(R.string.routines_what), stringResource(R.string.routines_what_hint), minLines = 3)
         Spacer(Modifier.height(20.dp))
-        Text("WHEN", style = Eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+        Text(stringResource(R.string.routines_when), style = Eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
         val kinds = buildList {
-            if (r.kind == "nightly") add(Triple("nightly", "Overnight", "While the phone charges"))
-            if (r.kind == "watch") add(Triple("watch", "Watcher", "A script checks, no agent needed"))
-            add(Triple("daily", "Every day", "At a time you pick")); add(Triple("weekly", "Weekly", "On the days you pick"))
-            add(Triple("at", "Once", "On one date and time"))
-            add(Triple("interval", "Repeat", "Every few minutes or hours")); add(Triple("email", "On email", "When a matching email lands"))
+            if (r.kind == "nightly") add(Triple("nightly", stringResource(R.string.routines_kind_nightly), stringResource(R.string.routines_kind_nightly_sub)))
+            if (r.kind == "watch") add(Triple("watch", stringResource(R.string.routines_kind_watch), stringResource(R.string.routines_kind_watch_sub)))
+            add(Triple("daily", stringResource(R.string.routines_kind_daily), stringResource(R.string.routines_kind_daily_sub))); add(Triple("weekly", stringResource(R.string.routines_kind_weekly), stringResource(R.string.routines_kind_weekly_sub)))
+            add(Triple("at", stringResource(R.string.routines_kind_at), stringResource(R.string.routines_kind_at_sub)))
+            add(Triple("interval", stringResource(R.string.routines_kind_interval), stringResource(R.string.routines_kind_interval_sub))); add(Triple("email", stringResource(R.string.routines_kind_email), stringResource(R.string.routines_kind_email_sub)))
         }
         kinds.chunked(2).forEach { pair ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -219,16 +226,16 @@ internal fun RoutineEditor(r: TriggerRow, onDismiss: () -> Unit, onSave: (Trigge
         }
         Spacer(Modifier.height(8.dp))
         when (kind) {
-            "daily", "nightly" -> com.past9.phoneaos.ui.ChoiceChips(listOf("06:00", "07:00", "08:00", "12:00", "18:00", "21:00").let { if (spec in it) it else it + spec }.map { Triple(it, it, null) }, spec, { spec = it }, label = "Time")
+            "daily", "nightly" -> com.past9.phoneaos.ui.ChoiceChips(listOf("06:00", "07:00", "08:00", "12:00", "18:00", "21:00").let { if (spec in it) it else it + spec }.map { Triple(it, it, null) }, spec, { spec = it }, label = stringResource(R.string.routines_time))
             "weekly" -> {
                 val parsed = Routines.parseWeekly(spec)
                 val days = parsed?.first ?: setOf(7)
                 val time = parsed?.let { "%02d:%02d".format(it.second, it.third) } ?: "18:00"
                 val codes = listOf("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
                 fun put(d: Set<Int>, t: String) { spec = d.sorted().joinToString(",") { codes[it - 1] } + " " + t }
-                Text("DAYS", style = Eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+                Text(stringResource(R.string.routines_days), style = Eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("M", "T", "W", "T", "F", "S", "S").forEachIndexed { i, l ->
+                    stringArrayResource(R.array.routines_day_letters).forEachIndexed { i, l ->
                         val on = (i + 1) in days
                         Surface(onClick = { val n = if (on) days - (i + 1) else days + (i + 1); if (n.isNotEmpty()) put(n, time) }, shape = androidx.compose.foundation.shape.CircleShape,
                             color = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.weight(1f).aspectRatio(1f)) {
@@ -237,13 +244,13 @@ internal fun RoutineEditor(r: TriggerRow, onDismiss: () -> Unit, onSave: (Trigge
                     }
                 }
                 Spacer(Modifier.height(16.dp))
-                com.past9.phoneaos.ui.ChoiceChips(listOf("07:00", "08:00", "12:00", "17:00", "18:00", "20:00").let { if (time in it) it else it + time }.map { Triple(it, it, null) }, time, { put(days, it) }, label = "Time")
+                com.past9.phoneaos.ui.ChoiceChips(listOf("07:00", "08:00", "12:00", "17:00", "18:00", "20:00").let { if (time in it) it else it + time }.map { Triple(it, it, null) }, time, { put(days, it) }, label = stringResource(R.string.routines_time))
             }
-            "interval", "watch" -> com.past9.phoneaos.ui.ChoiceChips(listOf("15" to "15 min", "60" to "Every hour", "180" to "3 hours", "360" to "6 hours", "720" to "12 hours", "1440" to "Daily").let { l -> if (l.any { it.first == spec }) l else l + (spec to "$spec min") }.map { Triple(it.first, it.second, null) }, spec, { spec = it }, label = "How often")
-            "at" -> com.past9.phoneaos.ui.SheetField(spec, { spec = it }, "Date and time", "2026-10-06T07:30", singleLine = true)
+            "interval", "watch" -> com.past9.phoneaos.ui.ChoiceChips(listOf("15" to stringResource(R.string.routines_int_15), "60" to stringResource(R.string.routines_int_hour), "180" to stringResource(R.string.routines_int_3h), "360" to stringResource(R.string.routines_int_6h), "720" to stringResource(R.string.routines_int_12h), "1440" to stringResource(R.string.routines_int_daily)).let { l -> if (l.any { it.first == spec }) l else l + (spec to stringResource(R.string.routines_int_min, spec)) }.map { Triple(it.first, it.second, null) }, spec, { spec = it }, label = stringResource(R.string.routines_how_often))
+            "at" -> com.past9.phoneaos.ui.SheetField(spec, { spec = it }, stringResource(R.string.routines_datetime), "2026-10-06T07:30", singleLine = true)
             else -> {
-                com.past9.phoneaos.ui.SheetField(spec, { spec = it }, "Gmail search", "from:bank@mybank.co.za", singleLine = true)
-                Text("Needs Gmail connected in Connections.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, top = 6.dp))
+                com.past9.phoneaos.ui.SheetField(spec, { spec = it }, stringResource(R.string.routines_gmail_search), "from:bank@mybank.co.za", singleLine = true)
+                Text(stringResource(R.string.routines_gmail_needed), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, top = 6.dp))
             }
         }
     }

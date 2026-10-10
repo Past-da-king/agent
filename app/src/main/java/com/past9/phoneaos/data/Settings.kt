@@ -11,10 +11,10 @@ import kotlinx.coroutines.flow.StateFlow
 enum class PowerMode { NONE, API_KEY, SUBSCRIPTION }
 
 /** Subscriptions people already pay for that come with a coding-agent CLI we can run in-app. */
-enum class SubKind(val label: String, val plan: String, val line: String) {
-    CLAUDE("Claude", "Pro or Max", "Claude Code runs inside the app on your Claude plan."),
-    CODEX("ChatGPT", "Plus or Pro", "OpenAI's Codex runs inside the app on your ChatGPT plan."),
-    OPENCODE("OpenCode", "Zen or Go", "Paste your OpenCode key and your agent runs on your OpenCode plan."),
+enum class SubKind(val label: String, @androidx.annotation.StringRes val plan: Int, @androidx.annotation.StringRes val line: Int, @androidx.annotation.StringRes val needsPack: Int) {
+    CLAUDE("Claude", com.past9.phoneaos.R.string.data_sub_claude_plan, com.past9.phoneaos.R.string.data_sub_claude_line, com.past9.phoneaos.R.string.data_sub_claude_needs_pack),
+    CODEX("ChatGPT", com.past9.phoneaos.R.string.data_sub_codex_plan, com.past9.phoneaos.R.string.data_sub_codex_line, com.past9.phoneaos.R.string.data_sub_codex_needs_pack),
+    OPENCODE("OpenCode", com.past9.phoneaos.R.string.data_sub_opencode_plan, com.past9.phoneaos.R.string.data_sub_opencode_line, com.past9.phoneaos.R.string.data_sub_opencode_line),
 }
 
 enum class Provider(val label: String, val defaultModel: String, val helperModel: String, val baseUrl: String, val keyHint: String) {
