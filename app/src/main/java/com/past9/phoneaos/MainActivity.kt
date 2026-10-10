@@ -259,6 +259,8 @@ class MainActivity : ComponentActivity() {
                 conn = conn.copy(consumer = true, toolkits = apps)
                 try {
                     val st = cc.accounts(ck, apps.map { it.slug })
+                    // A reconnected app has a new account id: profiles move onto it.
+                    st.forEach { (slug, accs) -> g.runtime.profiles.followReconnected(slug, accs.filter { it.status == "ACTIVE" }.map { com.past9.phoneaos.data.AccountRef(it.id, slug, it.label.ifBlank { com.past9.phoneaos.tools.AppCatalog.name(slug) }) }) }
                     // One row per signed-in account: four Gmails show as four lines, each with its email.
                     conn = conn.copy(loading = false, connected = st.values.flatten().filter { it.status == "ACTIVE" }.map { a -> com.past9.phoneaos.tools.Connection(a.id, a.slug, a.status, a.label.ifBlank { a.slug }) })
                     // A started-but-unfinished sign-in is just an expired link here: the app stays in the list with Connect.
