@@ -28,7 +28,7 @@ import com.past9.phoneaos.ui.theme.LocalExtra
 @Composable
 fun SubSetupScreen(kind: SubKind, signInHelp: String, info: RuntimeInfo, installed: Boolean, log: List<String>, installing: Boolean, onBack: () -> Unit, onInstall: () -> Unit, onSaveToken: (String) -> Unit, onUseKey: () -> Unit,
                    onSignIn: () -> Unit = {}, signingIn: Boolean = false, signInError: String? = null, needsCode: Boolean = false, onCode: (String) -> Unit = {},
-                   verifying: Boolean = false, onDone: () -> Unit = {}, modelLabel: String = "", onModel: () -> Unit = {}) {
+                   verifying: Boolean = false, onDone: () -> Unit = {}, modelLabel: String = "", onModel: () -> Unit = {}, onSignOut: () -> Unit = {}) {
     val cs = MaterialTheme.colorScheme
     var showToken by remember { mutableStateOf(false) }
     var showLog by remember { mutableStateOf(false) }
@@ -74,6 +74,7 @@ fun SubSetupScreen(kind: SubKind, signInHelp: String, info: RuntimeInfo, install
                     }
                     Spacer(Modifier.height(14.dp))
                     Button(onClick = onDone, modifier = Modifier.fillMaxWidth().height(52.dp), shapes = ButtonDefaults.shapes()) { Text("Start chatting") }
+                    TextButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) { Text("Sign out to use another account") }
                 }
                 // 3a. Checking the code
                 verifying -> AppCard {
