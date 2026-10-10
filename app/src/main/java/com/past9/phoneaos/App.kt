@@ -15,7 +15,10 @@ import kotlinx.coroutines.launch
 /** Everything long-lived, built once per process. */
 class Graph(context: Context) {
     val app: Context = context.applicationContext
-    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    /** A failure in any background job is logged and stays in that job: it never reaches the process. */
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + kotlinx.coroutines.CoroutineExceptionHandler { _, t ->
+        com.past9.phoneaos.agent.Crashes.record(context.applicationContext, "background job: ${t::class.java.simpleName} ${t.message}", t)
+    })
     val db = AppDb.open(app)
     val settings = SettingsStore(app)
     val phone = AndroidPhone(app)
@@ -27,6 +30,8 @@ class Graph(context: Context) {
     }
     init {
         scope.launch { runCatching { com.past9.phoneaos.triggers.Overnight.ensureRoutine(this@Graph) } }
+        // Anything scheduled that was missed while the app was dead runs once now.
+        scope.launch { runCatching { Routines.catchUp(app) } }
         // A consumer (ck_) Composio key: fetch Composio Connect's tools so the agent has them.
         settings.composioKey()?.takeIf { com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(it) }?.let { k -> scope.launch { com.past9.phoneaos.tools.ComposioConnect.load(k.trim()) } }
     }
@@ -97,6 +102,11 @@ class Graph(context: Context) {
 class App : Application(), coil.ImageLoaderFactory {
     val graph by lazy { Graph(this) }
 
+    override fun onCreate() {
+        super.onCreate()
+        CrashGuard.install(this)
+    }
+
     /** App logos from Composio are SVGs; teach the image loader to draw them. */
     override fun newImageLoader(): coil.ImageLoader = coil.ImageLoader.Builder(this).components { add(coil.decode.SvgDecoder.Factory()) }.crossfade(true).build()
 
@@ -104,5 +114,22 @@ class App : Application(), coil.ImageLoaderFactory {
         @Volatile private var fallback: Graph? = null
         fun graph(context: Context): Graph = (context.applicationContext as? App)?.graph
             ?: fallback ?: synchronized(this) { fallback ?: Graph(context).also { fallback = it } }
+    }
+}
+
+/**
+ * An exception on a background thread (a reader, a socket, a library's worker) must not take every helper down with
+ * it. It is logged and that thread ends; only a failure on the UI thread is left to crash as Android would.
+ */
+object CrashGuard {
+    /** True when the exception should be swallowed (logged only): anything not on the main thread. */
+    fun contain(thread: Thread, mainThread: Thread? = android.os.Looper.getMainLooper()?.thread) = thread !== mainThread
+
+    fun install(app: Application) {
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { t, e ->
+            com.past9.phoneaos.agent.Crashes.record(app, "thread ${t.name}: ${e::class.java.simpleName} ${e.message}", e)
+            if (!contain(t)) previous?.uncaughtException(t, e)
+        }
     }
 }

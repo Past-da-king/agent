@@ -70,6 +70,7 @@ private fun lookOf(state: String): StateLook {
         "working" -> StateLook(cs.primaryContainer, cs.onPrimaryContainer, "Working")
         "done" -> StateLook(extra.successContainer, extra.success, "Done")
         "stopped" -> StateLook(cs.surfaceContainerHighest, cs.onSurfaceVariant, "Stopped")
+        "interrupted" -> StateLook(cs.surfaceContainerHighest, cs.onSurfaceVariant, "Paused")
         else -> StateLook(cs.errorContainer, cs.onErrorContainer, "Didn't finish")
     }
 }
