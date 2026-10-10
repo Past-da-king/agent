@@ -10,6 +10,9 @@ import com.past9.phoneaos.triggers.Routines
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /** Everything long-lived, built once per process. */
@@ -95,6 +98,15 @@ class Graph(context: Context) {
             override val canFork get() = settings.state.value.subKind == com.past9.phoneaos.data.SubKind.CLAUDE
             override fun forkTurn(prompt: String, system: String, parent: String, mcpUrl: String, mcpToken: String, images: List<String>, model: String?, role: String) =
                 subRuntime().turn(prompt, system, parent, model ?: settings.state.value.subModel.ifBlank { null }, mcpUrl, mcpToken, images, role, fork = true)
+        }
+        // After a start or an update, and whenever the AI in use changes: one trivial tool call, so a provider that can't run tools is found now.
+        scope.launch {
+            kotlinx.coroutines.delay(20_000)
+            runCatching { runtime.selfCheck(com.past9.phoneaos.BuildConfig.VERSION_CODE.toString()) }
+            settings.state.map { runtime.powerKey() }.distinctUntilChanged().drop(1).collect {
+                kotlinx.coroutines.delay(3_000)
+                runCatching { runtime.selfCheck(com.past9.phoneaos.BuildConfig.VERSION_CODE.toString()) }
+            }
         }
     }
 }

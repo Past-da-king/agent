@@ -292,4 +292,70 @@ class SurviveTest {
         assertTrue(db.chat().all().first().any { it.kind == "notice" && it.text.contains("Morning brief") })
         assertTrue(phone.notes.any { it.contains("didn't run") })
     }
+
+    // ---- start-up self-check -----------------------------------------------------------------
+
+    /** A subscription engine that calls the check's tool through the phone's own MCP endpoint, as the real harness would. */
+    private fun callingEngine(callTool: Boolean, vararg events: JSONObject) = object : SubscriptionEngine {
+        override val ready = true
+        lateinit var rt: AgentRuntime
+        override fun turn(prompt: String, system: String, resume: String?, mcpUrl: String, mcpToken: String, images: List<String>, model: String?, role: String) =
+            kotlinx.coroutines.flow.flow {
+                if (callTool) {
+                    val route = mcpUrl.substringAfterLast("/h/").toLong()
+                    val body = JSONObject().put("jsonrpc", "2.0").put("id", 1).put("method", "tools/call").put("params", JSONObject().put("name", "selfcheck_ping").put("arguments", JSONObject()))
+                    val u = java.net.URL(mcpUrl); val c = u.openConnection() as java.net.HttpURLConnection
+                    c.requestMethod = "POST"; c.doOutput = true; c.setRequestProperty("Authorization", "Bearer $mcpToken"); c.setRequestProperty("Content-Type", "application/json")
+                    c.outputStream.use { it.write(body.toString().toByteArray()) }
+                    check(c.responseCode == 200 && route > 0) { "mcp ${c.responseCode}" }
+                }
+                events.forEach { emit(it) }
+            }
+    }
+
+    @Test fun theSelfCheckPassesWhenTheToolRunsAndIsNotRepeatedForTheSameBuild() = runBlocking {
+        settings.setMode(PowerMode.SUBSCRIPTION)
+        val rt = AgentRuntime(ApplicationProvider.getApplicationContext(), db, settings, CoroutineScope(SupervisorJob() + Dispatchers.IO), phone, { null })
+        rt.subscription = callingEngine(true, JSONObject().put("type", "text").put("text", "ok"), JSONObject().put("type", "done").put("ok", true))
+        val r = rt.selfCheck("59")!!
+        assertTrue(r.detail, r.ok)
+        assertNull("passed once for this build: not run again", rt.selfCheck("59"))
+        assertNotNull("a new build checks again", rt.selfCheck("60"))
+        assertTrue(db.chat().all().first().none { it.kind == "notice" })
+    }
+
+    @Test fun aProviderThatCannotRunToolsIsNamedInAClearNoticeAndNeverBlamesTheUser() = runBlocking {
+        settings.setMode(PowerMode.SUBSCRIPTION); settings.setSubKind(com.past9.phoneaos.data.SubKind.CODEX)
+        val rt = AgentRuntime(ApplicationProvider.getApplicationContext(), db, settings, CoroutineScope(SupervisorJob() + Dispatchers.IO), phone, { null })
+        // The tool never reaches the phone: Codex could not start its tool host.
+        rt.subscription = callingEngine(false, JSONObject().put("type", "error").put("message", "failed to spawn code-mode host /lib/arm64/codex-code-mode-host: No such file or directory (os error 2)"))
+        val r = rt.selfCheck("59")!!
+        assertFalse(r.ok); assertEquals("ChatGPT", r.power); assertTrue(r.detail.contains("code-mode host"))
+        val notice = db.chat().all().first().single { it.kind == "notice" }.text
+        assertTrue(notice, notice.contains("ChatGPT") && notice.contains("code-mode host"))
+        assertFalse(notice.contains("developer", true)); assertTrue(notice.contains("nothing for you to send"))
+        assertTrue(phone.notes.any { it.startsWith("Tools don't work with ChatGPT|") })
+        // It is told again only if it changes, and is retried at the next start.
+        rt.selfCheck("59", force = true)
+        assertEquals(1, db.chat().all().first().count { it.kind == "notice" })
+        // The main agent knows, and is told never to send the user to a developer.
+        val sys = rt.systemPrompt("hi")
+        assertTrue(sys.contains("KNOWN FAULT: ChatGPT")); assertTrue(sys.contains("never tell them to send it"))
+    }
+
+    @Test fun anApiProviderIsCheckedByOneRealToolCall() = runBlocking {
+        val p = ScriptedProvider(call("selfcheck_ping", JSONObject()), say("ok"))
+        val rt = runtime(p)
+        val r = rt.selfCheck("59")!!
+        assertTrue(r.detail, r.ok); assertEquals("Anthropic", r.power)
+        val bad = runtime(ScriptedProvider(say("I cannot use tools")))
+        settings.setExtra("selfcheck_ok", null)
+        val f = bad.selfCheck("60")!!
+        assertFalse(f.ok); assertTrue(f.detail.contains("never called"))
+    }
+
+    @Test fun noAiMeansNothingToCheck() = runBlocking {
+        settings.setMode(PowerMode.NONE)
+        assertNull(runtime(ScriptedProvider()).selfCheck("59"))
+    }
 }
