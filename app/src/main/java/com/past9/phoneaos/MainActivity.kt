@@ -124,6 +124,8 @@ class MainActivity : ComponentActivity() {
         val scope = rememberCoroutineScope()
         var draft by rememberSaveable { mutableStateOf("") }
         val attachments = remember { mutableStateListOf<String>() }
+        /** Where the camera button is, while the in-place camera card is open (it grows out of there). */
+        var cameraOrigin by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
         // Documents attached in chat: name -> (extracted text, page images)
         val docs = remember { mutableStateMapOf<String, Pair<String, List<String>>>() }
         val docPaths = remember { mutableStateMapOf<String, String>() }
@@ -200,6 +202,8 @@ class MainActivity : ComponentActivity() {
             if (last.kind == "voice" && ears) g.autoPlayVoice(org.json.JSONObject(last.meta).optString("path"), last.id)
         }
 
+        // Start CameraX early (no camera is opened, no permission is asked) so the camera card opens fast.
+        LaunchedEffect(route) { if (route == "chat") com.past9.phoneaos.camera.CameraWarm.warm(this@MainActivity) }
         val micPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) nav.navigate("call") }
         fun startCall() { if (androidx.core.content.ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) nav.navigate("call") else micPerm.launch(Manifest.permission.RECORD_AUDIO) }
         val notifPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { conn = conn.copy(notificationsAllowed = it) }
@@ -332,7 +336,7 @@ class MainActivity : ComponentActivity() {
                                 val docText = docs.entries.joinToString("") { (n, d) -> "\n\n[Attached document: $n${docPaths[n]?.let { p -> ", file saved at $p (you can upload it with browser_upload)" }.orEmpty()}]\n${d.first.take(30_000)}" }
                                 g.runtime.send(it + docText, attachments.toList() + docs.values.flatMap { d -> d.second }.take(6), docs.keys.toList(), voiceReply = true)
                                 attachments.clear(); docs.clear() }, onStop = { g.runtime.stop() },
-                            onAttachDoc = { docPicker.launch(arrayOf("*/*")) }, onRemoveDoc = { docs.remove(it) },
+                            onAttachDoc = { docPicker.launch(arrayOf("*/*")) }, onCamera = { cameraOrigin = it }, onRemoveDoc = { docs.remove(it) },
                             onAttach = { picker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                             onRemoveAttachment = { attachments.remove(it) }, onModel = { openModels() }, onCall = if (settings.liveEnabled) ({ startCall() }) else null, onStopSpeaking = if (speakingNow) ({ g.stopSpeaking() }) else null,
                             onAnswer = { id, o -> g.runtime.answer(id, o) },
@@ -544,6 +548,15 @@ class MainActivity : ComponentActivity() {
                     modelSheet = false
                 }, onDismiss = { modelSheet = false },
                 subtitle = if (pickingHelper) "Your agent plans and hands the work to helpers. Pick what they run on." else null)
+            LaunchedEffect(route) { if (route != "chat") cameraOrigin = null }
+            cameraOrigin?.let { o ->
+                com.past9.phoneaos.camera.CameraCard(o, onClosed = { cameraOrigin = null },
+                    onSend = { path, caption ->
+                        g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity)
+                        g.runtime.send(caption, listOf(path), emptyList()); cameraOrigin = null
+                    },
+                    onGallery = { cameraOrigin = null; picker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
+            }
             androidx.compose.animation.AnimatedVisibility(route in barRoutes, modifier = androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
                 enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut()) {
                 HomeBar(route, ::go, onTalk = { nav.navigate("chat") })
