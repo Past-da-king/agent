@@ -376,7 +376,7 @@ class LiveSession(
                 .apply { play() }
         } catch (e: Exception) {
             Log.w(TAG, "playback failed: ${e.message}")
-            onEvent(Event.Failed("speaker unavailable — ${e.message}"))
+            onEvent(Event.Failed("speaker unavailable: ${e.message}"))
         }
     }
 
@@ -424,7 +424,7 @@ class LiveSession(
             }
         } catch (e: Exception) {
             Log.w(TAG, "capture failed: ${e.message}")
-            onEvent(Event.Failed("microphone unavailable — ${e.message}"))
+            onEvent(Event.Failed("microphone unavailable: ${e.message}"))
         }
     }
 
