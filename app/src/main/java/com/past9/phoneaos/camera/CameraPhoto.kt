@@ -24,13 +24,19 @@ object CameraPhoto {
      * written into the file at capture), shrinks it, and saves a JPEG under uploads/ like a gallery photo.
      * Returns the new path, or null if the file could not be read. The raw capture is deleted.
      */
-    fun compress(ctx: Context, raw: File): String? = runCatching {
-        val bmp: Bitmap = ImageDecoder.decodeBitmap(ImageDecoder.createSource(raw)) { d, info, _ ->
+    fun compress(ctx: Context, raw: File): String? = runCatching { write(ctx, ImageDecoder.createSource(raw)) }.also { raw.delete() }.getOrNull()
+
+    /** Same shrink for a photo shared in from another app (a content:// uri). Returns the new path, or null if it could not be read. */
+    fun compressUri(ctx: Context, uri: android.net.Uri, name: String = "${System.currentTimeMillis()}"): String? =
+        runCatching { write(ctx, ImageDecoder.createSource(ctx.contentResolver, uri), name) }.getOrNull()
+
+    private fun write(ctx: Context, source: ImageDecoder.Source, name: String = "${System.currentTimeMillis()}"): String {
+        val bmp: Bitmap = ImageDecoder.decodeBitmap(source) { d, info, _ ->
             val (w, h) = scaledSize(info.size.width, info.size.height)
             d.setTargetSize(w, h); d.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
         }
-        val out = File(ctx.filesDir, "uploads/${System.currentTimeMillis()}.jpg").apply { parentFile?.mkdirs() }
+        val out = File(ctx.filesDir, "uploads/$name.jpg").apply { parentFile?.mkdirs() }
         out.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, QUALITY, it) }
-        out.path
-    }.also { raw.delete() }.getOrNull()
+        return out.path
+    }
 }
