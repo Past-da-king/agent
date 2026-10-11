@@ -553,7 +553,7 @@ class MainActivity : ComponentActivity() {
                 com.past9.phoneaos.camera.CameraCard(o, onClosed = { cameraOrigin = null },
                     onSend = { path, caption ->
                         g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity)
-                        g.runtime.send(caption, listOf(path), emptyList()); cameraOrigin = null
+                        g.runtime.send(caption, listOf(path), emptyList())
                     },
                     onGallery = { cameraOrigin = null; picker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
             }

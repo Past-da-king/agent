@@ -58,6 +58,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
@@ -65,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.LifecycleOwner
 import com.past9.phoneaos.ui.AgentAvatar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -91,8 +93,14 @@ private enum class Flash(val mode: Int, val label: String) {
  * to be sent exactly like a photo attached from the gallery.
  */
 @Composable
-fun CameraCard(origin: Rect, onClosed: () -> Unit, onSend: (path: String, caption: String) -> Unit, onGallery: () -> Unit) {
+fun CameraCard(origin: Rect, onClosed: () -> Unit, onSend: (path: String, caption: String) -> Unit, onGallery: () -> Unit, binder: CameraBinder? = null, startWith: String? = null) {
     val ctx = LocalContext.current
+    val cam = binder ?: remember { CameraXBinder(ctx) }
+    val host = LocalLifecycleOwner.current
+    val cardLife = remember { CardLifecycle(host.lifecycle) }
+    // Synchronous and idempotent: the camera is released the moment the card is closed or leaves the screen, by whatever path.
+    fun release() { cam.unbind(); cardLife.destroy() }
+    DisposableEffect(Unit) { onDispose { release() } }
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     var granted by remember { mutableStateOf(ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }
@@ -106,13 +114,17 @@ fun CameraCard(origin: Rect, onClosed: () -> Unit, onSend: (path: String, captio
     val dragY = remember { Animatable(0f) }
     var closing by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { progress.animateTo(1f, tween(340, easing = Emphasized)) }
+    val done = remember { BooleanArray(1) }
+    fun finish() { if (!done[0]) { done[0] = true; onClosed() } }
     fun close() {
         if (closing) return
         closing = true
-        scope.launch { progress.animateTo(0f, tween(280, easing = EmphasizedIn)); onClosed() }
+        release()
+        // Whatever happens to the animation, the card still goes away.
+        scope.launch { try { progress.animateTo(0f, tween(280, easing = EmphasizedIn)) } finally { finish() } }
     }
 
-    var photo by remember { mutableStateOf<String?>(null) }
+    var photo by remember { mutableStateOf<String?>(startWith) }
     var frozen by remember { mutableStateOf<Bitmap?>(null) }
     val reviewing = photo != null || frozen != null
     fun retake() { photo?.let { File(it).delete() }; photo = null; frozen = null }
@@ -139,10 +151,14 @@ fun CameraCard(origin: Rect, onClosed: () -> Unit, onSend: (path: String, captio
                     val p = m.measure(Constraints.fixed(w, h)); layout(w, h) { p.place(0, 0) }
                 }
                 .graphicsLayer { shape = RoundedCornerShape(lerp(cornerFrom, cornerTo, progress.value)); clip = true }
-                .background(Stage)
+                .background(Stage).testTag("camera-card")
                 .draggable(rememberDraggableState { d -> scope.launch { dragY.snapTo(if (dragY.value + d < 0f) dragY.value + d * 0.25f else dragY.value + d) } }, Orientation.Vertical,
                     onDragStopped = { v ->
-                        if (dragY.value > th * 0.25f || v > 1400f) { closing = true; dragY.animateTo(th + margin * 3, tween(220, easing = EmphasizedIn)); onClosed() }
+                        if (closing) return@draggable
+                        if (dragY.value > th * 0.25f || v > 1400f) {
+                            closing = true; release()
+                            try { dragY.animateTo(th + margin * 3, tween(220, easing = EmphasizedIn)) } finally { finish() }
+                        }
                         else dragY.animateTo(0f, spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMedium))
                     })
         ) {
@@ -156,7 +172,7 @@ fun CameraCard(origin: Rect, onClosed: () -> Unit, onSend: (path: String, captio
                     !granted -> Calm("The camera is off.", "Your agent only sees a photo when you take it and press Send.",
                         if (asked) "Open settings" else null, { runCatching { ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
                         onGallery, ::close, retry = if (asked) ({ perm.launch(Manifest.permission.CAMERA) }) else null)
-                    else -> Live(progress, frozen, photo, onFrozen = { frozen = it }, onPhoto = { photo = it }, onRetake = ::retake, onClose = ::close, onGallery = onGallery, onSend = { cap -> photo?.let { onSend(it, cap) } })
+                    else -> Live(cam, cardLife, progress, frozen, photo, onFrozen = { frozen = it }, onPhoto = { photo = it }, onRetake = ::retake, onClose = ::close, onGallery = onGallery, onSend = { cap -> photo?.let { onSend(it, cap); close() } })
                 }
             }
         }
@@ -183,11 +199,10 @@ private fun Calm(title: String, line: String, action: String?, onAction: (() -> 
 
 @Composable
 private fun Live(
-    progress: Animatable<Float, AnimationVector1D>, frozen: Bitmap?, photo: String?,
+    binder: CameraBinder, owner: LifecycleOwner, progress: Animatable<Float, AnimationVector1D>, frozen: Bitmap?, photo: String?,
     onFrozen: (Bitmap?) -> Unit, onPhoto: (String) -> Unit, onRetake: () -> Unit, onClose: () -> Unit, onGallery: () -> Unit, onSend: (String) -> Unit,
 ) {
     val ctx = LocalContext.current
-    val owner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     var front by remember { mutableStateOf(false) }
     var flash by remember { mutableStateOf(Flash.OFF) }
@@ -210,15 +225,10 @@ private fun Live(
     LaunchedEffect(front) {
         runCatching {
             snapshotFlow { progress.value }.first { it >= 0.6f }
-            val p = CameraWarm.provider(ctx)
-            p.unbindAll()
-            val sel = if (front) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
-            val preview = Preview.Builder().build().also { it.surfaceProvider = previewView.surfaceProvider }
-            val cam = p.bindToLifecycle(owner, sel, preview, capture)
-            camera = cam; hasFlash = cam.cameraInfo.hasFlashUnit(); failed = null
+            val cam = binder.bind(owner, front, previewView.surfaceProvider, capture)
+            camera = cam; hasFlash = cam?.cameraInfo?.hasFlashUnit() == true; failed = null
         }.onFailure { if (it !is kotlinx.coroutines.CancellationException) failed = "The camera would not start." }
     }
-    DisposableEffect(Unit) { onDispose { scope.launch { runCatching { CameraWarm.provider(ctx).unbindAll() } } } }
 
     fun shoot() {
         if (busy || !streaming) return
@@ -243,14 +253,17 @@ private fun Live(
         // Live preview, faded in only once the first frame is streaming.
         val previewAlpha by animateFloatAsState(if (streaming) 1f else 0f, tween(220), label = "preview")
         val shrink by animateFloatAsState(if (reviewing) 0.96f else 1f, spring(dampingRatio = 1f, stiffness = Spring.StiffnessMedium), label = "shrink")
-        AndroidView({ previewView }, Modifier.fillMaxSize().graphicsLayer { alpha = previewAlpha; scaleX = shrink; scaleY = shrink }.pointerInput(camera) {
-            // Two fingers zoom; one finger is left alone so the card can still be dragged down.
+        AndroidView({ previewView }, Modifier.fillMaxSize().testTag("camera-preview").graphicsLayer { alpha = previewAlpha; scaleX = shrink; scaleY = shrink })
+        // Touches never reach the preview view itself: this layer sits above it, zooms with two fingers, and leaves one finger
+        // alone so the card can be dragged down from anywhere on the picture.
+        val live by rememberUpdatedState(camera)
+        Box(Modifier.fillMaxSize().pointerInput(Unit) {
             awaitEachGesture {
                 awaitFirstDown(requireUnconsumed = false)
                 do {
                     val e = awaitPointerEvent()
                     if (e.changes.size >= 2 && e.changes.all { it.pressed }) {
-                        val z = e.calculateZoom(); val c = camera; val s = c?.cameraInfo?.zoomState?.value
+                        val z = e.calculateZoom(); val c = live; val s = c?.cameraInfo?.zoomState?.value
                         if (c != null && s != null && z != 1f) c.cameraControl.setZoomRatio((s.zoomRatio * z).coerceIn(s.minZoomRatio, s.maxZoomRatio))
                         e.changes.forEach { it.consume() }
                     }
