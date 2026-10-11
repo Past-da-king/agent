@@ -143,7 +143,7 @@ fun CardSheet(c: Card, dark: Boolean, accent: String, actions: CardSheetActions,
             } else {
                 var view by remember { mutableStateOf<WebView?>(null) }
                 AndroidView(modifier = Modifier.fillMaxWidth().weight(1f), factory = { ctx ->
-                    WebView(ctx).also { wv ->
+                    CardSheetWebView(ctx).also { wv ->
                         val bridge = CardBridge(
                             data = { latest.data },
                             onRun = { id, input -> wv.post { scope.launchRun(wv, id) { actions.onRun(latest, input) } } },
@@ -171,5 +171,20 @@ private fun kotlinx.coroutines.CoroutineScope.launchRun(wv: WebView, id: String,
     launch {
         val (ok, json) = runCatching { block() }.getOrElse { false to JSONObject().put("error", it.message ?: "failed").toString() }
         wv.evaluateJavascript("window.__cardResolve(${JSONObject.quote(id)}, $ok, ${JSONObject.quote(json)})", null)
+    }
+}
+
+/**
+ * The card's WebView inside the bottom sheet. Without this, the sheet's own drag gesture saw every vertical
+ * swipe too: once the finger passed touch slop the sheet claimed the gesture and the WebView got a cancel,
+ * so a swipe moved the page only a few pixels and never flung. Asking the parent not to intercept on
+ * ACTION_DOWN makes Compose hand the whole gesture to the page (scroll, fling, momentum). The sheet still
+ * drags and closes from its handle and header.
+ */
+class CardSheetWebView(context: android.content.Context) : WebView(context) {
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
+        if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN) parent?.requestDisallowInterceptTouchEvent(true)
+        return super.onTouchEvent(event)
     }
 }

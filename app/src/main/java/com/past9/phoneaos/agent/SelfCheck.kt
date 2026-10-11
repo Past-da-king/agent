@@ -22,6 +22,6 @@ object SelfCheck {
 
     /** The notice the user sees when tools don't work on their AI. Never asks them to send anything anywhere. */
     fun notice(r: SelfCheckResult) =
-        "Tools don't work with ${r.power} right now, so I can't do jobs on it. This is a fault in the app, not something you did wrong, and there is nothing for you to send anyone. " +
+        "Tools don't work with ${r.power} right now, so I can't do jobs on it. This is a fault in the app. You did nothing wrong, and there is nothing for you to send anyone. " +
             "I'll test again the next time the app starts. What failed: ${r.detail}"
 }
