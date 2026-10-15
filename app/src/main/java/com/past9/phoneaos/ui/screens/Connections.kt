@@ -47,6 +47,8 @@ data class ConnectionsState(
     /** Per account: what the agent may do there. */
     val rules: Map<String, com.past9.phoneaos.data.AccountRules> = emptyMap(),
     val browserProfiles: List<String> = listOf("Personal"),
+    /** PayPal: a short label when the user's PayPal app is connected ("Sandbox · AbC1…"), null when not. */
+    val paypal: String? = null,
 )
 
 data class ConnectionsActions(
@@ -67,6 +69,9 @@ data class ConnectionsActions(
     val profile: AccountProfileActions = AccountProfileActions(),
     /** The same sign-in is connected more than once: keep the first, remove the copies. */
     val onKeepOne: (keep: Connection, remove: List<Connection>) -> Unit = { _, _ -> },
+    /** PayPal: check the client ID and secret with a token call, then save; null on success, else what's wrong. */
+    val onSavePayPal: suspend (String, String) -> String? = { _, _ -> null },
+    val onRemovePayPal: () -> Unit = {},
 )
 
 /** Accounts of one app that are the same sign-in (same email or name, or none shared). The first is the keeper. */
@@ -117,6 +122,7 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                     PhoneLine(Icons.Rounded.FolderOpen, "Files on this phone", if (state.phoneFiles) "Your agent can find and upload your files" else "Let your agent find files to upload or send",
                         state.phoneFiles, if (state.phoneFiles) null else actions.onAllowPhoneFiles)
                     MachinesLine(state.machines) { sheet = "list" }
+                    PayPalLine(state.paypal, actions.onSavePayPal, actions.onRemovePayPal)
                 }
             }
             if (state.hasKey) item { ProfilesSection(state.profiles, logos) { id -> sheet = "profile:" + (id ?: "new") } }

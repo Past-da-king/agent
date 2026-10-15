@@ -6,3 +6,14 @@ local.properties
 app/src/main/jniLibs/
 app/src/main/assets/runtime/node_modules.zip
 app/src/main/assets/runtime/cacert.pem
+
+# Secrets never go in the repo: keys live in the phone's encrypted storage or in env vars for tests.
+CREDENTIALS*
+*.env
+.env
+.env.*
+*.pem
+*.p12
+*.jks
+*.keystore
+signing.properties
