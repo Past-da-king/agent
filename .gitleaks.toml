@@ -1,0 +1,17 @@
+# Secret scan for this repo (pre-commit hook in tools/hooks and the Secret scan workflow).
+title = "agent secret scan"
+
+[extend]
+useDefault = true
+
+# PayPal: REST client secrets and live access tokens.
+[[rules]]
+id = "paypal-access-token"
+description = "PayPal OAuth access token"
+regex = '''A21AA[A-Za-z0-9_-]{40,}'''
+
+# Pay links carry the order id as token=...; logs written to the repo must mask it.
+[[rules]]
+id = "paypal-checkout-token"
+description = "PayPal checkout token in a pay link"
+regex = '''checkoutnow\?token=[A-Z0-9]{12,}'''

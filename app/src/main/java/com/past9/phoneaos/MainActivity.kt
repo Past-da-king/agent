@@ -384,11 +384,12 @@ class MainActivity : ComponentActivity() {
                 }
                 composable("connections") {
                     LaunchedEffect(Unit) { refreshConnections() }
+                    var paypalLabel by remember { mutableStateOf(g.settings.paypal()?.let { "Sandbox · " + it.clientId.take(6) + "…" }) }
                     val machines by g.runtime.machines.store.machines.collectAsStateWithLifecycle()
                     // Re-read on every return to this screen: the user may have just switched All files access on.
                     val resumed = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsStateWithLifecycle().value
                     val phoneFiles = remember(resumed) { com.past9.phoneaos.tools.phoneFilesAllowed() }
-                    ConnectionsScreen(conn.copy(machines = machines, phoneFiles = phoneFiles, profiles = profileList, rules = accountRules, browserProfiles = settings.browserProfiles), bottomPadding = barPad + 24.dp, actions = ConnectionsActions(
+                    ConnectionsScreen(conn.copy(machines = machines, phoneFiles = phoneFiles, profiles = profileList, rules = accountRules, browserProfiles = settings.browserProfiles, paypal = paypalLabel), bottomPadding = barPad + 24.dp, actions = ConnectionsActions(
                         profile = profileActions,
                         onKeepOne = { keep, remove -> scope.launch {
                             val ck = g.settings.composioKey()?.trim()
@@ -404,6 +405,13 @@ class MainActivity : ComponentActivity() {
                         onBack = { nav.popBackStack() },
                         onSaveKey = { k -> saveComposio(g, k).also { if (it == null) refreshConnections() } },
                         onRemoveKey = { g.settings.setComposioKey(null); conn = ConnectionsState(hasKey = false) },
+                        onSavePayPal = { id, secret ->
+                            // Prove the pair works (a token call to the sandbox) before keeping it.
+                            val probe = com.past9.phoneaos.paypal.PayPalApi({ com.past9.phoneaos.paypal.PayPalCreds(id, secret) })
+                            val err = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { probe.accessToken() }.exceptionOrNull() }
+                            if (err != null) err.message ?: "PayPal didn't accept those." else { g.settings.setPayPal(id, secret); paypalLabel = "Sandbox · " + id.take(6) + "…"; null }
+                        },
+                        onRemovePayPal = { g.settings.setPayPal(null, null); paypalLabel = null },
                         onConnect = { slug -> scope.launch {
                             val ck = g.settings.composioKey()?.trim()
                             if (ck != null && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(ck)) {
