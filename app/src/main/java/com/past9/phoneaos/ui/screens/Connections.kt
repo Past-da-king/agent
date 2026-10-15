@@ -55,6 +55,8 @@ data class ConnectionsState(
     val browserProfiles: List<String> = listOf("Personal"),
     /** Web apps the agent mapped and wrote its own tools for. */
     val learned: List<com.past9.phoneaos.connections.LearnedApp> = emptyList(),
+    /** PayPal: a short label when the user's PayPal app is connected ("Sandbox · AbC1…"), null when not. */
+    val paypal: String? = null,
 )
 
 data class ConnectionsActions(
@@ -80,6 +82,9 @@ data class ConnectionsActions(
     val onRemoveLearned: (id: String) -> Unit = {},
     /** Ask the agent to learn this site or app (opens the chat so the user can watch). */
     val onTeach: (String) -> Unit = {},
+    /** PayPal: check the client ID and secret with a token call, then save; null on success, else what's wrong. */
+    val onSavePayPal: suspend (String, String) -> String? = { _, _ -> null },
+    val onRemovePayPal: () -> Unit = {},
 )
 
 /** Accounts of one app that are the same sign-in (same email or name, or none shared). The first is the keeper. */
@@ -132,6 +137,7 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                         state.phoneFiles, if (state.phoneFiles) null else actions.onAllowPhoneFiles)
                     MachinesLine(state.machines) { sheet = "list" }
                     LearnedLine(state.learned) { sheet = "learned" }
+                    PayPalLine(state.paypal, actions.onSavePayPal, actions.onRemovePayPal)
                 }
             }
             if (state.hasKey) item { ProfilesSection(state.profiles, logos) { id -> sheet = "profile:" + (id ?: "new") } }
