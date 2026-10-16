@@ -259,14 +259,24 @@ class MainActivity : ComponentActivity() {
             if (ck != null && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(ck)) {
                 // Composio Connect can't list its catalogue: show the popular apps (plus anything found by search) and ask for their status.
                 val cc = com.past9.phoneaos.tools.ComposioConnect
-                val apps = (com.past9.phoneaos.tools.AppCatalog.popular + conn.toolkits).distinctBy { it.slug }
+                // Plus the account's own apps and anything connected beyond the popular list, as Composio's replies showed them.
+                val catalog = com.past9.phoneaos.tools.AppCatalog
+                val apps = (catalog.popular + catalog.known(g.settings.composioApps()) + conn.toolkits).distinctBy { it.slug }
                 conn = conn.copy(consumer = true, toolkits = apps)
+                fun rows(st: Map<String, List<com.past9.phoneaos.tools.ComposioConnect.Account>>) = st.values.flatten().filter { it.status == "ACTIVE" }
+                    .map { a -> com.past9.phoneaos.tools.Connection(a.id, a.slug, a.status, a.label.ifBlank { a.slug }) }
                 try {
                     val st = cc.accounts(ck, apps.map { it.slug })
                     // One row per signed-in account: four Gmails show as four lines, each with its email.
-                    conn = conn.copy(loading = false, connected = st.values.flatten().filter { it.status == "ACTIVE" }.map { a -> com.past9.phoneaos.tools.Connection(a.id, a.slug, a.status, a.label.ifBlank { a.slug }) })
+                    conn = conn.copy(loading = false, connected = rows(st))
                     // A started-but-unfinished sign-in is just an expired link here: the app stays in the list with Connect.
                 } catch (e: Exception) { conn = conn.copy(loading = false, error = "Couldn't reach Composio: ${e.message}") }
+                // Then look for apps made for this account (they're in no catalogue) and add any new ones with their accounts.
+                runCatching {
+                    cc.discoverOwnApps(ck)
+                    val found = catalog.known(g.settings.composioApps()).filter { t -> conn.toolkits.none { it.slug == t.slug } }
+                    if (found.isNotEmpty()) conn = conn.copy(toolkits = conn.toolkits + found, connected = conn.connected + rows(cc.accounts(ck, found.map { it.slug })))
+                }
                 return@launch
             }
             try {
@@ -483,7 +493,10 @@ class MainActivity : ComponentActivity() {
                     var p by remember { mutableStateOf(settings.provider) }
                     androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.surface) {
                         androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.systemBarsPadding()) {
-                            KeyStep(p, { p = it }, onboardingActions(g)) { g.settings.setProvider(p); g.settings.setMode(PowerMode.API_KEY); nav.popBackStack() }
+                            // Changing the key of an Other server: its address and model are already filled in.
+                            val other = p == Provider.CUSTOM && settings.provider == Provider.CUSTOM
+                            KeyStep(p, { p = it }, onboardingActions(g), initialBaseUrl = if (other) settings.baseUrl else "", initialModel = if (other) settings.model else "") {
+                                g.settings.setProvider(p); g.settings.setMode(PowerMode.API_KEY); nav.popBackStack() }
                         }
                     }
                 }
@@ -589,6 +602,7 @@ class MainActivity : ComponentActivity() {
                 if (sub.signedIn) { g.settings.setSubKind(kind); g.settings.setMode(PowerMode.SUBSCRIPTION) } else signErr = err ?: "Sign-in didn't finish. Tap Sign in to try again." } },
             onInstall = { scope.launch { installing = true; runCatching { sub.install { l -> scope.launch { log += l } } }.onFailure { log += "Failed: ${it.message}" }; installing = false; info = sub.info() } },
             onSaveToken = { t -> runCatching { sub.setToken(t); g.settings.setSubKind(kind); g.settings.setMode(PowerMode.SUBSCRIPTION) }.onFailure { signErr = it.message }; info = sub.info() },
+            onSignOut = { sub.signOut(); signErr = null; info = sub.info() },
             onUseKey = onUseKey)
     }
 
