@@ -23,16 +23,18 @@ class AppGuard(
 
     suspend fun check(ctx: ToolContext, actions: List<String>, account: String?, detail: String): Verdict {
         if (actions.isEmpty()) return Verdict(account = account)
-        val profile = profileOf(ctx)
+        val profileAtStart = profileOf(ctx)
         val asks = mutableListOf<String>()
         /** The account each action resolved to, when the profile picked it. */
         val resolved = mutableSetOf<String>()
         for (action in actions.map { it.uppercase() }) {
             val cands = candidates(action)
             val all = runCatching { accountsFor(cands) }.getOrElse {
-                if (profile != null) return Verdict("Couldn't check which accounts this profile may use (${it.message}). Try again in a moment.")
+                if (profileAtStart != null) return Verdict("Couldn't check which accounts this profile may use (${it.message}). Try again in a moment.")
                 emptyList()
             }
+            // Looking the accounts up can move the profile onto a reconnected account: read it again.
+            val profile = profileOf(ctx)
             // The app is the longest slug the user actually has accounts for ("microsoft_teams" over "microsoft").
             val slug = cands.sortedByDescending { it.length }.firstOrNull { c -> all.any { it.slug.equals(c, true) } } ?: cands.first()
             val mine = all.filter { it.slug.equals(slug, true) }

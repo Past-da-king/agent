@@ -213,7 +213,7 @@ class AgentRuntime(
                 com.past9.phoneaos.tools.ComposioConnect.accounts(k, listOf(slug))[slug].orEmpty().filter { it.status == "ACTIVE" }
                     .map { com.past9.phoneaos.data.AccountRef(it.id, slug, it.label.ifBlank { com.past9.phoneaos.tools.AppCatalog.name(slug) }) }
             else composio.connections().filter { it.toolkit == slug && it.status == "ACTIVE" }.map { com.past9.phoneaos.data.AccountRef(it.id, slug, it.label) }
-            list.also { accountCache[slug] = System.currentTimeMillis() to it }
+            list.also { accountCache[slug] = System.currentTimeMillis() to it; profiles.followReconnected(slug, it) }
         }
     }
     val appGuard = com.past9.phoneaos.tools.AppGuard({ profiles.rules(it) }, { slugs -> slugs.flatMap { s -> runCatching { appAccounts(listOf(s)) }.getOrDefault(emptyList()) } }, ::profileOf)
