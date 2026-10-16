@@ -63,6 +63,8 @@ class MemorySaveTool(private val dao: MemoryDao) : Tool {
             "tags" to str("Comma-separated tags for search, e.g. 'family, durban, birthday'"), "pinned" to bool("Pin it (core facts like the user's own page)")))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val title = input.optString("title").trim()
+        // An empty body would wipe an existing page and still read as saved.
+        if (input.optString("body").isBlank()) return "Not saved: body is empty. Pass the whole page as body (memory_get an existing page first and merge)."
         val existing = dao.byTitle(title)
         val tags = input.optString("tags").ifBlank { input.optString("topics") }
         return if (existing != null) {
@@ -93,6 +95,7 @@ class MemoryUpdateTool(private val dao: MemoryDao) : Tool {
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val id = input.getLong("id"); val m = dao.get(id) ?: return "No memory #$id"
         if (input.optBoolean("delete")) { dao.delete(id); ctx.activity("Forgot: ${m.title}"); return "Deleted #$id" }
+        if (input.optString("body").isBlank() && input.optString("title").isBlank()) return "Not changed: pass a new body or title (or delete)."
         dao.update(m.copy(title = input.optString("title").ifBlank { m.title }, body = input.optString("body").ifBlank { m.body }, updatedAt = System.currentTimeMillis()))
         ctx.activity("Updated memory: ${m.title}")
         return "Updated #$id"

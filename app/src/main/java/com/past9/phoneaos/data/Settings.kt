@@ -151,7 +151,12 @@ class SettingsStore(context: Context) {
     private fun edit(block: SharedPreferences.Editor.() -> Unit) { prefs.edit().apply(block).apply(); _state.value = read() }
 
     fun setMode(mode: PowerMode) = edit { putString("mode", mode.name) }
-    fun setProvider(p: Provider) = edit { putString("provider", p.name); remove("model"); remove("helperModel"); remove("baseUrl"); remove("allowHttp") }
+    /** Another provider starts clean. Picking the same one again (Continue after Check key) keeps its server address and model. */
+    fun setProvider(p: Provider) = edit {
+        val same = prefs.getString("provider", null) == p.name
+        putString("provider", p.name)
+        if (!same) { remove("model"); remove("helperModel"); remove("baseUrl"); remove("allowHttp") }
+    }
     fun setBaseUrl(url: String) = edit { putString("baseUrl", url.trim().trimEnd('/')) }
     fun setAllowHttp(on: Boolean) = edit { putBoolean("allowHttp", on) }
     fun setNotifApp(pkg: String, on: Boolean) = edit { putStringSet("notifApps", (_state.value.notifApps.toMutableSet().apply { if (on) add(pkg) else remove(pkg) })) }
@@ -181,7 +186,33 @@ class SettingsStore(context: Context) {
     fun clearApiKey(p: Provider) { secrets.edit().remove("key_${p.name}").apply(); _state.value = read() }
 
     fun composioKey(): String? = secrets.getString("composio", null)
-    fun setComposioKey(key: String?) { secrets.edit().apply { if (key.isNullOrBlank()) remove("composio") else putString("composio", key.trim()) }.apply(); _state.value = read() }
+    fun setComposioKey(key: String?) {
+        // Another key is another account: the apps learned for the old one aren't its apps.
+        if (key?.trim() != composioKey()) prefs.edit().remove("composio_apps").remove("composio_app_tools").apply()
+        secrets.edit().apply { if (key.isNullOrBlank()) remove("composio") else putString("composio", key.trim()) }.apply(); _state.value = read()
+    }
+
+    /** Apps this Composio account has connected that aren't in the popular list (slug -> description), learned as they turn up. */
+    fun composioApps(): Map<String, String> = runCatching {
+        org.json.JSONObject(prefs.getString("composio_apps", null) ?: "{}").let { o -> o.keys().asSequence().associateWith { o.optString(it) } }
+    }.getOrDefault(emptyMap())
+    /** The tools seen for the account's own apps (slug -> tool slugs, at most 15 each): they say what each app is for. */
+    fun composioAppTools(): Map<String, List<String>> = runCatching {
+        org.json.JSONObject(prefs.getString("composio_app_tools", null) ?: "{}").let { o ->
+            o.keys().asSequence().associateWith { k -> o.getJSONArray(k).let { a -> (0 until a.length()).map { a.getString(it) } } }
+        }
+    }.getOrDefault(emptyMap())
+    @Synchronized fun rememberComposioAppTools(tools: Map<String, List<String>>) {
+        val all = composioAppTools().toMutableMap()
+        tools.forEach { (slug, t) -> all[slug] = (all[slug].orEmpty() + t).distinct().take(15) }
+        prefs.edit().putString("composio_app_tools", org.json.JSONObject(all.mapValues { org.json.JSONArray(it.value) } as Map<*, *>).toString()).apply()
+    }
+
+    @Synchronized fun rememberComposioApps(apps: Map<String, String>) {
+        val all = composioApps().toMutableMap()
+        apps.forEach { (slug, about) -> if (about.isNotBlank() || slug !in all) all[slug] = about }
+        prefs.edit().putString("composio_apps", org.json.JSONObject(all as Map<*, *>).toString()).apply()
+    }
 
     /** Stable per-install id: our Composio user id, so connections survive restarts. */
     fun installId(): String = prefs.getString("install_id", null) ?: ("phone-" + java.util.UUID.randomUUID().toString().take(12)).also {

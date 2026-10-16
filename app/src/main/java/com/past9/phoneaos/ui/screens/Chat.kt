@@ -1,5 +1,7 @@
 package com.past9.phoneaos.ui.screens
 
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.AnimatedVisibility
@@ -82,6 +84,7 @@ data class ChatActions(
     val onProfile: () -> Unit = {},
     val onAttach: () -> Unit = {},
     val onAttachDoc: () -> Unit = {},
+    val onCamera: (androidx.compose.ui.geometry.Rect) -> Unit = {},
     val onRemoveDoc: (String) -> Unit = {},
     val onRemoveAttachment: (String) -> Unit = {},
     val onModel: () -> Unit = {},
@@ -472,7 +475,7 @@ private fun UserBubble(item: ChatItem) {
     }
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
         Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(24.dp, 24.dp, 6.dp, 24.dp), modifier = Modifier.widthIn(max = 320.dp).padding(start = 48.dp)) {
-            Text(text.substringBefore("\n\n[Attached document:").ifBlank { "Here's a document." }, Modifier.padding(horizontal = 16.dp, vertical = 11.dp), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            Text(text.substringBefore("\n\n[Attached document:").substringBefore("\n\n[Shared with you").ifBlank { "Here's a document." }, Modifier.padding(horizontal = 16.dp, vertical = 11.dp), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
         }
     }
 }
@@ -1009,6 +1012,8 @@ private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean,
             Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp, end = 4.dp)) {
                     IconButton(onClick = { attachMenu = true }) { Icon(Icons.Rounded.AttachFile, "Attach a photo or document", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    var camBounds by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+                    IconButton(onClick = { actions.onCamera(camBounds) }, modifier = Modifier.onGloballyPositioned { camBounds = it.boundsInRoot() }) { Icon(Icons.Rounded.PhotoCamera, "Take a photo", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                     Box(Modifier.weight(1f).padding(vertical = 16.dp)) {
                         if (draft.isEmpty()) Text("Ask for anything", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         BasicTextField(draft, onDraft, textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),

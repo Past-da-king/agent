@@ -16,8 +16,8 @@ android {
     applicationId = "com.past9.phoneaos"
     minSdk = 29
     targetSdk = 36
-    versionCode = 61
-    versionName = "0.11.8"
+    versionCode = 65
+    versionName = "0.11.12"
     // Android never lets an installed app rename itself or change the icon Samsung shows on
     // notifications, so a personal build bakes the owner's agent in: -PagentName=Iris -PagentIcon=ic_app_heart_red
     resValue("string", "app_name", (project.findProperty("agentName") as String?) ?: "Agent")
@@ -116,6 +116,11 @@ dependencies {
   // On-device OCR (bundled model, works offline): scans and photos become text for any AI model.
   implementation(libs.mlkit.text)
   implementation(libs.androidx.webkit)
+  // Built-in camera (CameraX only, no ML Kit).
+  implementation(libs.androidx.camera.core)
+  implementation(libs.androidx.camera.camera2)
+  implementation(libs.androidx.camera.lifecycle)
+  implementation(libs.androidx.camera.view)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.androidx.credentials)
   implementation(libs.androidx.credentials.play.services)
