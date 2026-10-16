@@ -49,7 +49,7 @@ fun TasksScreen(goals: List<GoalRow>, tasks: List<TaskRow>, actions: TaskActions
     SubScreen("Tasks", if (tab == 0) (if (open == 0) "Your list is clear" else "$open on your list") else "${goals.count { it.status == "open" }} goals your agent is working on", actions.onBack,
         fab = { if (tab == 0) ExtendedFloatingActionButton(onClick = { adding = true }, icon = { Icon(Icons.Rounded.Add, null) }, text = { Text("Add to-do") }, modifier = Modifier.padding(bottom = bottomPadding - 40.dp)) }) { pad ->
         Column(Modifier.padding(pad)) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = com.past9.phoneaos.ui.sidePad(16.dp), vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
                 listOf("Your to-dos", "Agent's work").forEachIndexed { i, label ->
                     ToggleButton(tab == i, { tab = i }, modifier = Modifier.weight(1f).height(48.dp),
                         shapes = if (i == 0) ButtonGroupDefaults.connectedLeadingButtonShapes() else ButtonGroupDefaults.connectedTrailingButtonShapes()) { Text(label) }
@@ -58,7 +58,7 @@ fun TasksScreen(goals: List<GoalRow>, tasks: List<TaskRow>, actions: TaskActions
             if (tab == 0) {
                 if (mine.isEmpty()) { EmptyState("Your list is clear", "Add a to-do, or tell your agent \"remind me to…\". Everything you need to do lives here."); return@Column }
                 val today = java.time.LocalDate.now()
-                LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                LazyColumn(contentPadding = PaddingValues(start = com.past9.phoneaos.ui.sidePad(16.dp), end = com.past9.phoneaos.ui.sidePad(16.dp), top = 8.dp, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     val todo = mine.filter { it.status != "done" }.sortedWith(compareBy({ it.dueAt ?: Long.MAX_VALUE }, { it.createdAt }))
                     if (todo.isNotEmpty()) item { AppCard(padding = PaddingValues(vertical = 6.dp)) { todo.forEach { TodoLine(it, today, actions.onToggle) } } }
                     val done = mine.filter { it.status == "done" }
@@ -70,7 +70,7 @@ fun TasksScreen(goals: List<GoalRow>, tasks: List<TaskRow>, actions: TaskActions
             } else {
                 val openGoals = goals.filter { it.status == "open" }
                 if (openGoals.isEmpty() && agents.isEmpty()) { EmptyState("Nothing in progress", "Give your agent something bigger, like \"plan my trip to Durban\". It breaks it into steps and works through them here."); return@Column }
-                LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                LazyColumn(contentPadding = PaddingValues(start = com.past9.phoneaos.ui.sidePad(16.dp), end = com.past9.phoneaos.ui.sidePad(16.dp), top = 8.dp, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(openGoals.sortedByDescending { g -> tasks.any { it.goalId == g.id && it.status == "blocked" } }, key = { "g${it.id}" }) { g -> GoalCard(g, tasks.filter { it.goalId == g.id }, actions) }
                     val loose = agents.filter { t -> t.goalId == null || openGoals.none { it.id == t.goalId } }.filter { it.status != "done" }
                     if (loose.isNotEmpty()) {

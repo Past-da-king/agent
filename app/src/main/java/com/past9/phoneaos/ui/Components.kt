@@ -177,16 +177,20 @@ fun SubScreen(title: String, subtitle: String?, onBack: () -> Unit, actions: @Co
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
+            val wide = com.past9.phoneaos.ui.widthClass() != com.past9.phoneaos.ui.WidthClass.COMPACT
             LargeFlexibleTopAppBar(
+                modifier = Modifier.padding(horizontal = com.past9.phoneaos.ui.sidePad(16.dp) - 16.dp),
                 title = { Text(title) },
                 subtitle = subtitle?.let { { Text(it) } },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") } },
                 actions = actions,
                 scrollBehavior = scroll,
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface, scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer),
+                // On a wide screen the bar is inset to the content column, so it keeps one colour: a tinted band in the middle would read as a frame.
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface, scrolledContainerColor = if (wide) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceContainer),
             )
         },
-        floatingActionButton = fab,
+        // The button sits at the content column's edge, not the far edge of a tablet.
+        floatingActionButton = { Box(Modifier.padding(end = com.past9.phoneaos.ui.sidePad(16.dp) - 16.dp)) { fab() } },
         content = content,
     )
 }

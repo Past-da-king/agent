@@ -268,12 +268,12 @@ fun ChatScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = { ChatTopBar(agentName, status, browserLive, waitingOnYou, openCount, actions, modelLabel) },
-        bottomBar = { Composer(draft, onDraft, status.working, actions, attachments, docs, listening) },
+        bottomBar = { Box(Modifier.fillMaxWidth().padding(horizontal = com.past9.phoneaos.ui.sidePad(0.dp, com.past9.phoneaos.ui.Readable.CHAT + 32.dp))) { Composer(draft, onDraft, status.working, actions, attachments, docs, listening) } },
     ) { pad ->
         if (items.isEmpty() || morning != null) Welcome(userName, Modifier.padding(pad), actions.onSend, morning, hasChat = items.isNotEmpty())
         else LazyColumn(
             state = list, modifier = Modifier.fillMaxSize().padding(pad),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+            contentPadding = PaddingValues(start = com.past9.phoneaos.ui.sidePad(16.dp, com.past9.phoneaos.ui.Readable.CHAT), end = com.past9.phoneaos.ui.sidePad(16.dp, com.past9.phoneaos.ui.Readable.CHAT), top = 8.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(rows, key = { it.key }) { r ->
@@ -330,7 +330,7 @@ private fun NewMarker(count: Int) {
 @Composable
 private fun ChatTopBar(agentName: String, status: AgentStatus, browserLive: Boolean, needsYou: Boolean, openCount: Int, actions: ChatActions, modelLabel: String = "") {
     Surface(color = MaterialTheme.colorScheme.surface) {
-        Row(Modifier.fillMaxWidth().statusBarsPadding().padding(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().statusBarsPadding().padding(start = com.past9.phoneaos.ui.sidePad(16.dp, com.past9.phoneaos.ui.Readable.CHAT) - 8.dp, end = com.past9.phoneaos.ui.sidePad(16.dp, com.past9.phoneaos.ui.Readable.CHAT) - 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = actions.onMenu) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to home") }
             Row(Modifier.weight(1f).clip(MaterialTheme.shapes.medium).clickable(onClick = actions.onProfile).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             AgentAvatar(working = status.working, needsYou = needsYou, size = 36.dp)
@@ -391,7 +391,7 @@ private fun Welcome(userName: String, modifier: Modifier, onSend: (String) -> Un
     )
     // Centred like the first-day screen, but it scrolls when the agent writes longer lines.
     BoxWithConstraints(modifier.fillMaxSize()) {
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = maxHeight).padding(horizontal = 24.dp, vertical = 16.dp), verticalArrangement = Arrangement.Center) {
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = maxHeight).padding(horizontal = com.past9.phoneaos.ui.sidePad(24.dp, com.past9.phoneaos.ui.Readable.FORM + 48.dp), vertical = 16.dp), verticalArrangement = Arrangement.Center) {
         AgentAvatar(working = morning?.preparing == true, size = 88.dp)
         Spacer(Modifier.height(28.dp))
         Text(greeting, style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.onSurface)

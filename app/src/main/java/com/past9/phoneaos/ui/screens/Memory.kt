@@ -57,7 +57,7 @@ fun MemoryScreen(memories: List<MemoryRow>, actions: MemoryActions, bottomPaddin
     }
     SubScreen("Memory", "${memories.size} pages your agent keeps about your world", actions.onBack,
         fab = { ExtendedFloatingActionButton(onClick = { adding = true }, icon = { Icon(Icons.Rounded.Add, null) }, text = { Text("New page") }, modifier = Modifier.padding(bottom = (bottomPadding - 40.dp).coerceAtLeast(0.dp))) }) { pad ->
-        LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomPadding + 60.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = com.past9.phoneaos.ui.sidePad(16.dp), end = com.past9.phoneaos.ui.sidePad(16.dp), bottom = bottomPadding + 60.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
                 OutlinedTextField(query, { query = it }, placeholder = { Text("Search people, places, anything") }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true,
                     modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge)
@@ -114,7 +114,7 @@ fun WikiPageScreen(page: MemoryRow?, all: List<MemoryRow>, onBack: () -> Unit, o
         IconButton(onClick = { onSave(page.copy(pinned = !page.pinned)) }) { Icon(if (page.pinned) Icons.Rounded.PushPin else Icons.Rounded.PushPin, if (page.pinned) "Unpin" else "Pin", tint = if (page.pinned) cs.primary else cs.onSurfaceVariant) }
         IconButton(onClick = { editing = true }) { Icon(Icons.Rounded.Edit, "Edit page") }
     }) { pad ->
-        Column(Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 48.dp)) {
+        Column(Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(horizontal = com.past9.phoneaos.ui.sidePad(20.dp)).padding(bottom = 48.dp)) {
             if (page.topics.isNotBlank()) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 16.dp)) {
                     page.topics.split(",").map { it.trim() }.filter { it.isNotEmpty() }.forEach { t ->
@@ -164,5 +164,31 @@ internal fun PageEditor(m: MemoryRow, onDismiss: () -> Unit, onSave: (MemoryRow)
         com.past9.phoneaos.ui.SheetField(body, { body = it }, "The page", "What your agent should know. Link other pages with [[Name]].", minLines = 6)
         Spacer(Modifier.height(16.dp))
         com.past9.phoneaos.ui.SheetField(tags, { tags = it }, "Tags", "family, work, health", singleLine = true)
+    }
+}
+
+
+/**
+ * Memory on a landscape tablet: the list on the left, the open page on the right (the pinned page, else the newest,
+ * until one is picked). No frame around either pane: a hairline divides them.
+ */
+@Composable
+fun MemoryTwoPane(memories: List<MemoryRow>, openId: Long?, onPick: (Long?) -> Unit, actions: MemoryActions, bottomPadding: androidx.compose.ui.unit.Dp,
+                  onOpenTitle: (String) -> Unit, onAsk: (String) -> Unit) {
+    val listWidth = 400.dp
+    val shown = memories.firstOrNull { it.id == openId } ?: memories.firstOrNull { it.pinned } ?: memories.maxByOrNull { it.updatedAt }
+    Row(Modifier.fillMaxSize()) {
+        androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.LocalPaneWidth provides listWidth) {
+            Box(Modifier.width(listWidth).fillMaxHeight()) { MemoryScreen(memories, actions, bottomPadding) }
+        }
+        androidx.compose.material3.VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        val rest = com.past9.phoneaos.ui.windowWidthDp() - listWidth
+        androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.LocalPaneWidth provides rest) {
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+                if (shown == null) EmptyState("No pages yet", "Tell your agent about people, places and plans, and their pages show up here.", Modifier.align(Alignment.Center))
+                else WikiPageScreen(shown, memories, onBack = actions.onBack, onOpenTitle = onOpenTitle, onSave = actions.onSave,
+                    onDelete = { m -> actions.onDelete(m); onPick(null) }, onAsk = onAsk)
+            }
+        }
     }
 }

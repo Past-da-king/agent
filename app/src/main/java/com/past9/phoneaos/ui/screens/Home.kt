@@ -97,7 +97,9 @@ fun HomeScreen(s: HomeState, actions: HomeActions, bottomPadding: Dp = 120.dp) {
     val blockedMine = s.tasks.filter { it.status == "blocked" && it.blocker.isNotBlank() && it.owner == "agent" }
     val openGoals = s.goals.filter { it.status == "open" }
     val lastAgent = s.items.lastOrNull { it.kind == "agent" }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    // What the agent is doing and what needs you; then your list, goals and what's coming.
+    // A phone shows them in one column; a landscape tablet side by side.
+    val primary: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
         item {
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 8.dp, start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -166,6 +168,8 @@ fun HomeScreen(s: HomeState, actions: HomeActions, bottomPadding: Dp = 120.dp) {
             item { SectionHeader("Your cards", "Kept up to date for you. Tap one to open it", Modifier.padding(start = 4.dp, top = 6.dp)) }
             item { com.past9.phoneaos.ui.CardTiles(s.cards, actions.onCard, s.now) }
         }
+    }
+    val secondary: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
         item { SectionHeader("Your to-dos", if (myTodos.isEmpty()) "Nothing on your list" else "${myTodos.size} open, soonest first", Modifier.padding(start = 4.dp, top = 6.dp)) {
             TextButton(onClick = actions.onTasks) { Text("All") }
         } }
@@ -230,6 +234,13 @@ fun HomeScreen(s: HomeState, actions: HomeActions, bottomPadding: Dp = 120.dp) {
                 }
             }
         }
+    }
+    if (com.past9.phoneaos.ui.widthClass() != com.past9.phoneaos.ui.WidthClass.EXPANDED) {
+        val side = com.past9.phoneaos.ui.sidePad(16.dp)
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = side, end = side, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(14.dp)) { primary(); secondary() }
+    } else Row(Modifier.fillMaxSize().padding(horizontal = com.past9.phoneaos.ui.sidePad(24.dp, com.past9.phoneaos.ui.Readable.WIDE)), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+        LazyColumn(Modifier.weight(1f).fillMaxHeight(), contentPadding = PaddingValues(bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(14.dp)) { primary() }
+        LazyColumn(Modifier.weight(1f).fillMaxHeight().statusBarsPadding(), contentPadding = PaddingValues(top = 8.dp, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(14.dp)) { secondary() }
     }
 }
 
