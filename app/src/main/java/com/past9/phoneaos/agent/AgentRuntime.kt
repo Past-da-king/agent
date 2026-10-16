@@ -1650,6 +1650,7 @@ class AgentRuntime(
         fun friendlyError(e: Exception): String = when {
             e is ProviderException && e.status == 401 -> "Your API key was rejected. Check it in Settings."
             e is ProviderException && e.status == 429 -> "The AI provider says we are sending too much right now (rate limit or out of credit). Try again shortly."
+            e is ProviderException && e.status == HttpPolicy.BLOCKED -> e.message.orEmpty()
             e is ProviderException && e.status == 0 -> "I could not reach the AI provider. Check your connection."
             e is ProviderException && e.status == 400 && (e.message ?: "").contains("image", true) -> "This model can't look at images. Pick a vision model in Settings, or send it as text."
             else -> "Something went wrong: ${e.message?.take(240)}"

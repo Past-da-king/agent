@@ -5,6 +5,9 @@ package com.past9.phoneaos.agent
  * user has explicitly opted in for a self-hosted server on a network they trust.
  */
 object HttpPolicy {
+    /** ProviderException status for an address we refuse before sending anything: not a network failure. */
+    const val BLOCKED = -1
+    const val NO_ADDRESS = "No server address is saved for this provider. Open Settings, tap Change key, pick Other and enter the address, like https://your-server/v1."
     const val NEEDS_OPT_IN = "This server uses plain HTTP, which doesn't encrypt your requests or API key. Use an https:// address, or tick \"Allow unencrypted HTTP for this server\"."
 
     fun isHttp(url: String) = url.trim().startsWith("http://", ignoreCase = true)
@@ -19,11 +22,12 @@ object HttpPolicy {
     fun blockReason(url: String, allowHttp: Boolean): String? {
         val u = url.trim()
         return when {
+            u.isEmpty() -> NO_ADDRESS
             u.startsWith("https://", ignoreCase = true) -> null
             isHttp(u) -> if (allowHttp || isLoopback(u)) null else NEEDS_OPT_IN
             else -> "The base URL must start with https:// (or http:// with the opt-in)."
         }
     }
 
-    fun check(url: String, allowHttp: Boolean) { blockReason(url, allowHttp)?.let { throw ProviderException(it) } }
+    fun check(url: String, allowHttp: Boolean) { blockReason(url, allowHttp)?.let { throw ProviderException(it, BLOCKED) } }
 }
