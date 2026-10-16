@@ -479,7 +479,10 @@ class MainActivity : ComponentActivity() {
                     var p by remember { mutableStateOf(settings.provider) }
                     androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.surface) {
                         androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.systemBarsPadding()) {
-                            KeyStep(p, { p = it }, onboardingActions(g)) { g.settings.setProvider(p); g.settings.setMode(PowerMode.API_KEY); nav.popBackStack() }
+                            // Changing the key of an Other server: its address and model are already filled in.
+                            val other = p == Provider.CUSTOM && settings.provider == Provider.CUSTOM
+                            KeyStep(p, { p = it }, onboardingActions(g), initialBaseUrl = if (other) settings.baseUrl else "", initialModel = if (other) settings.model else "") {
+                                g.settings.setProvider(p); g.settings.setMode(PowerMode.API_KEY); nav.popBackStack() }
                         }
                     }
                 }

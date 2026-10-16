@@ -151,7 +151,12 @@ class SettingsStore(context: Context) {
     private fun edit(block: SharedPreferences.Editor.() -> Unit) { prefs.edit().apply(block).apply(); _state.value = read() }
 
     fun setMode(mode: PowerMode) = edit { putString("mode", mode.name) }
-    fun setProvider(p: Provider) = edit { putString("provider", p.name); remove("model"); remove("helperModel"); remove("baseUrl"); remove("allowHttp") }
+    /** Another provider starts clean. Picking the same one again (Continue after Check key) keeps its server address and model. */
+    fun setProvider(p: Provider) = edit {
+        val same = prefs.getString("provider", null) == p.name
+        putString("provider", p.name)
+        if (!same) { remove("model"); remove("helperModel"); remove("baseUrl"); remove("allowHttp") }
+    }
     fun setBaseUrl(url: String) = edit { putString("baseUrl", url.trim().trimEnd('/')) }
     fun setAllowHttp(on: Boolean) = edit { putBoolean("allowHttp", on) }
     fun setNotifApp(pkg: String, on: Boolean) = edit { putStringSet("notifApps", (_state.value.notifApps.toMutableSet().apply { if (on) add(pkg) else remove(pkg) })) }
