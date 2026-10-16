@@ -263,7 +263,7 @@ private fun ToolkitLine(t: Toolkit, connected: Boolean, canAddAnother: Boolean =
 }
 
 private val known = mapOf("googlecalendar" to "Google Calendar", "googledrive" to "Google Drive", "googledocs" to "Google Docs", "googlesheets" to "Google Sheets", "github" to "GitHub", "linkedin" to "LinkedIn", "whatsapp" to "WhatsApp", "microsoft_teams" to "Microsoft Teams", "outlook" to "Outlook", "one_drive" to "OneDrive", "sharepoint" to "SharePoint")
-fun prettySlug(slug: String) = known[slug] ?: slug.replace('_', ' ').replaceFirstChar { it.uppercase() }
+fun prettySlug(slug: String) = known[slug] ?: slug.removePrefix("custom_").replace('_', ' ').replaceFirstChar { it.uppercase() }
 
 
 /** Your apps, folded: how many are connected, a few of their logos (each app once), open to manage or add. */

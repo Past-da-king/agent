@@ -124,6 +124,8 @@ class MainActivity : ComponentActivity() {
         val scope = rememberCoroutineScope()
         var draft by rememberSaveable { mutableStateOf("") }
         val attachments = remember { mutableStateListOf<String>() }
+        /** Where the camera button is, while the in-place camera card is open (it grows out of there). */
+        var cameraOrigin by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
         // Documents attached in chat: name -> (extracted text, page images)
         val docs = remember { mutableStateMapOf<String, Pair<String, List<String>>>() }
         val docPaths = remember { mutableStateMapOf<String, String>() }
@@ -200,6 +202,8 @@ class MainActivity : ComponentActivity() {
             if (last.kind == "voice" && ears) g.autoPlayVoice(org.json.JSONObject(last.meta).optString("path"), last.id)
         }
 
+        // Start CameraX early (no camera is opened, no permission is asked) so the camera card opens fast.
+        LaunchedEffect(route) { if (route == "chat") com.past9.phoneaos.camera.CameraWarm.warm(this@MainActivity) }
         val micPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) nav.navigate("call") }
         fun startCall() { if (androidx.core.content.ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) nav.navigate("call") else micPerm.launch(Manifest.permission.RECORD_AUDIO) }
         val notifPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { conn = conn.copy(notificationsAllowed = it) }
@@ -255,14 +259,24 @@ class MainActivity : ComponentActivity() {
             if (ck != null && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(ck)) {
                 // Composio Connect can't list its catalogue: show the popular apps (plus anything found by search) and ask for their status.
                 val cc = com.past9.phoneaos.tools.ComposioConnect
-                val apps = (com.past9.phoneaos.tools.AppCatalog.popular + conn.toolkits).distinctBy { it.slug }
+                // Plus the account's own apps and anything connected beyond the popular list, as Composio's replies showed them.
+                val catalog = com.past9.phoneaos.tools.AppCatalog
+                val apps = (catalog.popular + catalog.known(g.settings.composioApps()) + conn.toolkits).distinctBy { it.slug }
                 conn = conn.copy(consumer = true, toolkits = apps)
+                fun rows(st: Map<String, List<com.past9.phoneaos.tools.ComposioConnect.Account>>) = st.values.flatten().filter { it.status == "ACTIVE" }
+                    .map { a -> com.past9.phoneaos.tools.Connection(a.id, a.slug, a.status, a.label.ifBlank { a.slug }) }
                 try {
                     val st = cc.accounts(ck, apps.map { it.slug })
                     // One row per signed-in account: four Gmails show as four lines, each with its email.
-                    conn = conn.copy(loading = false, connected = st.values.flatten().filter { it.status == "ACTIVE" }.map { a -> com.past9.phoneaos.tools.Connection(a.id, a.slug, a.status, a.label.ifBlank { a.slug }) })
+                    conn = conn.copy(loading = false, connected = rows(st))
                     // A started-but-unfinished sign-in is just an expired link here: the app stays in the list with Connect.
                 } catch (e: Exception) { conn = conn.copy(loading = false, error = "Couldn't reach Composio: ${e.message}") }
+                // Then look for apps made for this account (they're in no catalogue) and add any new ones with their accounts.
+                runCatching {
+                    cc.discoverOwnApps(ck)
+                    val found = catalog.known(g.settings.composioApps()).filter { t -> conn.toolkits.none { it.slug == t.slug } }
+                    if (found.isNotEmpty()) conn = conn.copy(toolkits = conn.toolkits + found, connected = conn.connected + rows(cc.accounts(ck, found.map { it.slug })))
+                }
                 return@launch
             }
             try {
@@ -332,7 +346,7 @@ class MainActivity : ComponentActivity() {
                                 val docText = docs.entries.joinToString("") { (n, d) -> "\n\n[Attached document: $n${docPaths[n]?.let { p -> ", file saved at $p (you can upload it with browser_upload)" }.orEmpty()}]\n${d.first.take(30_000)}" }
                                 g.runtime.send(it + docText, attachments.toList() + docs.values.flatMap { d -> d.second }.take(6), docs.keys.toList(), voiceReply = true)
                                 attachments.clear(); docs.clear() }, onStop = { g.runtime.stop() },
-                            onAttachDoc = { docPicker.launch(arrayOf("*/*")) }, onRemoveDoc = { docs.remove(it) },
+                            onAttachDoc = { docPicker.launch(arrayOf("*/*")) }, onCamera = { cameraOrigin = it }, onRemoveDoc = { docs.remove(it) },
                             onAttach = { picker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                             onRemoveAttachment = { attachments.remove(it) }, onModel = { openModels() }, onCall = if (settings.liveEnabled) ({ startCall() }) else null, onStopSpeaking = if (speakingNow) ({ g.stopSpeaking() }) else null,
                             onAnswer = { id, o -> g.runtime.answer(id, o) },
@@ -479,7 +493,10 @@ class MainActivity : ComponentActivity() {
                     var p by remember { mutableStateOf(settings.provider) }
                     androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.surface) {
                         androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.systemBarsPadding()) {
-                            KeyStep(p, { p = it }, onboardingActions(g)) { g.settings.setProvider(p); g.settings.setMode(PowerMode.API_KEY); nav.popBackStack() }
+                            // Changing the key of an Other server: its address and model are already filled in.
+                            val other = p == Provider.CUSTOM && settings.provider == Provider.CUSTOM
+                            KeyStep(p, { p = it }, onboardingActions(g), initialBaseUrl = if (other) settings.baseUrl else "", initialModel = if (other) settings.model else "") {
+                                g.settings.setProvider(p); g.settings.setMode(PowerMode.API_KEY); nav.popBackStack() }
                         }
                     }
                 }
@@ -544,6 +561,15 @@ class MainActivity : ComponentActivity() {
                     modelSheet = false
                 }, onDismiss = { modelSheet = false },
                 subtitle = if (pickingHelper) "Your agent plans and hands the work to helpers. Pick what they run on." else null)
+            LaunchedEffect(route) { if (route != "chat") cameraOrigin = null }
+            cameraOrigin?.let { o ->
+                com.past9.phoneaos.camera.CameraCard(o, onClosed = { cameraOrigin = null },
+                    onSend = { path, caption ->
+                        g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity)
+                        g.runtime.send(caption, listOf(path), emptyList())
+                    },
+                    onGallery = { cameraOrigin = null; picker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
+            }
             androidx.compose.animation.AnimatedVisibility(route in barRoutes, modifier = androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
                 enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut()) {
                 HomeBar(route, ::go, onTalk = { nav.navigate("chat") })
@@ -576,6 +602,7 @@ class MainActivity : ComponentActivity() {
                 if (sub.signedIn) { g.settings.setSubKind(kind); g.settings.setMode(PowerMode.SUBSCRIPTION) } else signErr = err ?: "Sign-in didn't finish. Tap Sign in to try again." } },
             onInstall = { scope.launch { installing = true; runCatching { sub.install { l -> scope.launch { log += l } } }.onFailure { log += "Failed: ${it.message}" }; installing = false; info = sub.info() } },
             onSaveToken = { t -> runCatching { sub.setToken(t); g.settings.setSubKind(kind); g.settings.setMode(PowerMode.SUBSCRIPTION) }.onFailure { signErr = it.message }; info = sub.info() },
+            onSignOut = { sub.signOut(); signErr = null; info = sub.info() },
             onUseKey = onUseKey)
     }
 

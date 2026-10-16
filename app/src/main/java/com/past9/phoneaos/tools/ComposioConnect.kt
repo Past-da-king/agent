@@ -95,6 +95,55 @@ object ComposioConnect {
         }.getOrElse { session = null; sessionKey = null; it.message ?: "Couldn't reach Composio Connect" }
     }
 
+    /**
+     * Apps the account has an active connection to, as they turn up in any reply (slug -> Composio's description).
+     * Composio Connect can't list an account's apps, so whoever sets this keeps them (Connections shows them).
+     */
+    @Volatile var onActiveApps: (Map<String, String>) -> Unit = {}
+
+    /** The tools a search showed for each app (slug -> tool slugs): what the account's own apps can do. */
+    @Volatile var onAppTools: (Map<String, List<String>>) -> Unit = {}
+
+    /** A reply's JSON: the first block (Composio can add a plain-text hint after it). */
+    private fun replyData(text: String): JSONObject? = runCatching { org.json.JSONTokener(text).nextValue() as? JSONObject }.getOrNull()?.optJSONObject("data")
+
+    /** Every app a reply shows with an active connection: a search's connection statuses, or the toolkits a list returned. */
+    fun activeApps(text: String): Map<String, String> {
+        val d = replyData(text) ?: return emptyMap()
+        val out = mutableMapOf<String, String>()
+        d.optJSONArray("toolkit_connection_statuses")?.let { a ->
+            for (i in 0 until a.length()) a.optJSONObject(i)?.takeIf { it.optBoolean("has_active_connection") }?.let { out[it.optString("toolkit")] = it.optString("description") }
+        }
+        d.optJSONObject("results")?.let { r -> r.keys().forEach { k -> r.optJSONObject(k)?.takeIf { it.optString("status").equals("active", true) }?.let { out.putIfAbsent(k, "") } } }
+        return out.filterKeys { it.isNotBlank() }
+    }
+
+    /** The tool slugs a search found, under the app each belongs to (CUSTOM_RECIPES_GET_RECIPE -> custom_recipes). */
+    fun appTools(text: String): Map<String, List<String>> {
+        val results = replyData(text)?.optJSONArray("results") ?: return emptyMap()
+        val out = mutableMapOf<String, MutableSet<String>>()
+        for (i in 0 until results.length()) {
+            val r = results.optJSONObject(i) ?: continue
+            val kits = r.optJSONArray("toolkits")?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty().filter { it.isNotBlank() }
+            listOf("primary_tool_slugs", "related_tool_slugs").forEach { k -> r.optJSONArray(k)?.let { a -> for (j in 0 until a.length()) {
+                val tool = a.optString(j)
+                kits.firstOrNull { tool.startsWith(it.uppercase() + "_") }?.let { out.getOrPut(it) { linkedSetOf() } += tool }
+            } } }
+        }
+        return out.mapValues { it.value.toList() }
+    }
+
+    private fun search(useCase: String) = JSONObject().put("queries", JSONArray().put(JSONObject().put("use_case", useCase)))
+
+    /**
+     * Apps made for this account (custom toolkits) are in no catalogue and never searched for by name: one search turns them up,
+     * and one more per app shows its main tools (they say what it's for: a question about recipes belongs to the app with GET_RECIPE).
+     */
+    suspend fun discoverOwnApps(key: String) {
+        val own = activeApps(call(key, "COMPOSIO_SEARCH_TOOLS", search("custom toolkit"))).keys.filter { it.startsWith("custom_") }
+        own.forEach { slug -> call(key, "COMPOSIO_SEARCH_TOOLS", search("use the $slug app")) }
+    }
+
     suspend fun call(key: String, name: String, args: JSONObject): String = lock.withLock {
         suspend fun once(): String {
             ensureSession(key)
@@ -105,6 +154,10 @@ object ComposioConnect {
         }
         // Sessions expire: start a fresh one once before giving up.
         runCatching { once() }.getOrElse { session = null; sessionKey = null; runCatching { once() }.getOrElse { "Error: ${it.message}" } }
+            .also { text ->
+                activeApps(text).takeIf { it.isNotEmpty() }?.let { runCatching { onActiveApps(it) } }
+                appTools(text).takeIf { it.isNotEmpty() }?.let { runCatching { onAppTools(it) } }
+            }
     }
 
     /** A Composio Connect tool's JSON reply ({data, error, successful}), as its data object. */

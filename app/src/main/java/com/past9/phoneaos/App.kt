@@ -36,6 +36,9 @@ class Graph(context: Context) {
         // Anything scheduled that was missed while the app was dead runs once now.
         scope.launch { runCatching { Routines.catchUp(app) } }
         // A consumer (ck_) Composio key: fetch Composio Connect's tools so the agent has them.
+        com.past9.phoneaos.tools.ComposioConnect.onActiveApps = { settings.rememberComposioApps(it) }
+        // Only the account's own apps need their tools spelled out; the catalogue ones are known by name.
+        com.past9.phoneaos.tools.ComposioConnect.onAppTools = { t -> t.filterKeys { it.startsWith("custom_") }.takeIf { it.isNotEmpty() }?.let { settings.rememberComposioAppTools(it) } }
         settings.composioKey()?.takeIf { com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(it) }?.let { k -> scope.launch { com.past9.phoneaos.tools.ComposioConnect.load(k.trim()) } }
     }
     val call by lazy { com.past9.phoneaos.voice.CallController(app, db, settings, runtime, scope) }

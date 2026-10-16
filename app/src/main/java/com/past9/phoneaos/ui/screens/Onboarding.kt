@@ -429,10 +429,10 @@ val keySteps = mapOf(
 )
 
 @Composable
-fun KeyStep(provider: Provider, onProvider: (Provider) -> Unit, actions: OnboardingActions, initialBaseUrl: String = "", next: () -> Unit) {
+fun KeyStep(provider: Provider, onProvider: (Provider) -> Unit, actions: OnboardingActions, initialBaseUrl: String = "", initialModel: String = "", next: () -> Unit) {
     var key by remember(provider) { mutableStateOf("") }
     var baseUrl by remember(provider) { mutableStateOf(initialBaseUrl) }
-    var model by remember(provider) { mutableStateOf("") }
+    var model by remember(provider) { mutableStateOf(initialModel) }
     var allowHttp by remember(provider) { mutableStateOf(false) }
     var show by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }

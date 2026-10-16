@@ -129,22 +129,17 @@ class ApprovalTool : Tool {
 }
 
 class ScheduleCreateTool(private val dao: TriggerDao, private val onChange: suspend (TriggerRow) -> Unit) : Tool {
-    override val spec = ToolSpec("routine_create", "Create a routine: a prompt you will run later by yourself. kind 'at' = once at a time (spec ISO like 2026-10-06T07:30); 'daily' = every day (spec HH:mm); 'weekly' = on certain weekdays (spec 'SUN 18:00' or 'MON,WED,FRI 07:30'), use this for anything weekly, never daily-with-a-day-check; 'interval' = every N minutes (spec minutes, min 15); 'email' = when a new email matches a Gmail search (spec e.g. 'from:bank@x.com', needs Gmail connected); 'notification' = the moment a phone notification arrives (spec 'App name|keyword', keyword optional, app must be allowed in Connections).",
+    override val spec = ToolSpec("routine_create", "Create a NEW routine (to change one that exists, use routine_update: never create a copy and delete the old one): a prompt you will run later by yourself. kind 'at' = once at a time (spec ISO like 2026-10-06T07:30); 'daily' = every day (spec HH:mm); 'weekly' = on certain weekdays (spec 'SUN 18:00' or 'MON,WED,FRI 07:30'), use this for anything weekly, never daily-with-a-day-check; 'interval' = every N minutes (spec minutes, min 15); 'email' = when a new email matches a Gmail search (spec e.g. 'from:bank@x.com', needs Gmail connected); 'notification' = the moment a phone notification arrives (spec 'App name|keyword', keyword optional, app must be allowed in Connections).",
         schema(listOf("name", "kind", "spec", "prompt"), "name" to str("Short name"), "kind" to enumOf("When it runs", "at", "daily", "weekly", "interval", "email", "notification"),
             "spec" to str("Time/interval/query per kind"), "prompt" to str("What you will do each time, written as an instruction to yourself")))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val kind = input.optString("kind")
         val spec = input.optString("spec").trim()
-        val err = when (kind) {
-            "at" -> if (parseWhen(spec) == null) "spec must be an ISO date-time" else if (parseWhen(spec)!! < System.currentTimeMillis()) "that time is in the past" else null
-            "daily" -> if (!Regex("^\\d{1,2}:\\d{2}$").matches(spec)) "spec must be HH:mm" else null
-            "weekly" -> if (com.past9.phoneaos.triggers.Routines.parseWeekly(spec) == null) "spec must be days then time, e.g. 'SUN 18:00' or 'MON,WED,FRI 07:30'" else null
-            "interval" -> if ((spec.toIntOrNull() ?: 0) < 15) "spec must be minutes, at least 15" else null
-            "email" -> null
-            "notification" -> if (spec.substringBefore('|').isBlank()) "spec must start with the app name" else null
-            else -> "unknown kind"
+        routineSpecError(kind, spec)?.let { return "Not created: $it" }
+        // Editing by recreating loses the id (and too often part of the prompt): send it to routine_update instead.
+        dao.list().firstOrNull { it.name.trim().equals(input.optString("name").trim(), true) }?.let {
+            return "Not created: routine #${it.id} is already called \"${it.name}\". Change it in place with routine_update (id ${it.id}); for a second routine, give it another name."
         }
-        if (err != null) return "Not created: $err"
         val row = TriggerRow(name = input.optString("name"), kind = kind, spec = spec, prompt = input.optString("prompt"))
         val id = dao.upsert(row)
         onChange(row.copy(id = id))
@@ -153,14 +148,45 @@ class ScheduleCreateTool(private val dao: TriggerDao, private val onChange: susp
     }
 }
 
+/** Why a routine's schedule is wrong for its kind, or null when it's fine. */
+fun routineSpecError(kind: String, spec: String): String? = when (kind) {
+    "at" -> if (parseWhen(spec) == null) "spec must be an ISO date-time" else if (parseWhen(spec)!! < System.currentTimeMillis()) "that time is in the past" else null
+    "daily" -> if (!Regex("^\\d{1,2}:\\d{2}$").matches(spec)) "spec must be HH:mm" else null
+    "weekly" -> if (com.past9.phoneaos.triggers.Routines.parseWeekly(spec) == null) "spec must be days then time, e.g. 'SUN 18:00' or 'MON,WED,FRI 07:30'" else null
+    "interval" -> if ((spec.toIntOrNull() ?: 0) < 15) "spec must be minutes, at least 15" else null
+    "email" -> null
+    "notification" -> if (spec.substringBefore('|').isBlank()) "spec must start with the app name" else null
+    else -> "unknown kind"
+}
+
 class ScheduleListTool(private val dao: TriggerDao) : Tool {
-    override val spec = ToolSpec("routine_list", "List the routines (scheduled and triggered runs).", schema())
+    override val spec = ToolSpec("routine_list", "List the routines (scheduled and triggered runs), each with its whole prompt.", schema())
+    // The whole prompt: a routine is changed with routine_update from what this shows, and a cut one would lose the rest.
     override suspend fun run(input: JSONObject, ctx: ToolContext): String =
-        dao.list().joinToString("\n") { "#${it.id} ${it.name} [${it.kind} ${it.spec}]${if (!it.enabled) " (paused)" else ""}: ${it.prompt.take(100)}" }.ifBlank { "No routines." }
+        dao.list().joinToString("\n\n") { "#${it.id} ${it.name} [${it.kind} ${it.spec}]${if (!it.enabled) " (paused)" else ""}:\n${it.prompt}" }.ifBlank { "No routines." }
+}
+
+class ScheduleUpdateTool(private val dao: TriggerDao, private val onChange: suspend (TriggerRow) -> Unit) : Tool {
+    override val spec = ToolSpec("routine_update", "Change a routine in place: its name, schedule (kind and spec as in routine_create), prompt, or pause/resume it. Only what you pass changes. " +
+        "To change part of the prompt, start from the whole prompt routine_list shows and keep everything the user didn't ask to change. Never recreate a routine to edit it.",
+        schema(listOf("id"), "id" to int("Routine id"), "name" to str("New name"), "kind" to enumOf("When it runs", "at", "daily", "weekly", "interval", "email", "notification"),
+            "spec" to str("New time/interval/query per kind"), "prompt" to str("The new whole prompt"), "enabled" to bool("false pauses it, true resumes it")))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String {
+        val t = dao.get(input.getLong("id")) ?: return "No such routine"
+        val kind = input.optString("kind").ifBlank { t.kind }
+        val spec = input.optString("spec").trim().ifBlank { t.spec }
+        if (kind != t.kind || spec != t.spec) routineSpecError(kind, spec)?.let { return "Not changed: $it" }
+        val updated = t.copy(name = input.optString("name").ifBlank { t.name }, kind = kind, spec = spec, prompt = input.optString("prompt").ifBlank { t.prompt },
+            enabled = if (input.has("enabled")) input.optBoolean("enabled") else t.enabled)
+        dao.upsert(updated)
+        onChange(updated)
+        ctx.activity("Changed routine: ${updated.name}", JSONObject().put("tool", "routines"))
+        return "Routine #${t.id} updated${if (!updated.enabled) " (paused)" else ""}."
+    }
 }
 
 class ScheduleDeleteTool(private val dao: TriggerDao, private val onDelete: suspend (Long) -> Unit) : Tool {
-    override val spec = ToolSpec("routine_delete", "Delete a routine by id.", schema(listOf("id"), "id" to int("Routine id")))
+    override val spec = ToolSpec("routine_delete", "Delete a routine for good, by id. Not for changing one: that's routine_update.", schema(listOf("id"), "id" to int("Routine id")))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val id = input.getLong("id"); dao.delete(id); onDelete(id); ctx.activity("Removed routine #$id"); return "Deleted."
     }
