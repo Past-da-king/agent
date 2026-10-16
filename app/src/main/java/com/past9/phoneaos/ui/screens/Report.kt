@@ -46,7 +46,7 @@ fun ReportScreen(path: String, onBack: () -> Unit) {
             }.getOrElse { "Couldn't save: ${it.message}" }
         }, enabled = file.exists()) { Icon(if (note == "Saved to Downloads") Icons.Rounded.DownloadDone else Icons.Rounded.Download, "Save to Downloads") }
     }) { pad ->
-        Column(Modifier.padding(pad).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 48.dp)) {
+        Column(Modifier.padding(pad).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = com.past9.phoneaos.ui.sidePad(20.dp)).padding(bottom = 48.dp)) {
             note?.let {
                 Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
                     Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))

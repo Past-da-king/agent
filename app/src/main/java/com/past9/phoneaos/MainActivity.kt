@@ -371,12 +371,20 @@ class MainActivity : ComponentActivity() {
                     ))
                 }
                 composable("memory") {
-                    MemoryScreen(memories, bottomPadding = barPad, actions = MemoryActions(
+                    // A landscape tablet shows the list and a page side by side; a phone opens the page full screen.
+                    val twoPane = com.past9.phoneaos.ui.widthClass() == com.past9.phoneaos.ui.WidthClass.EXPANDED
+                    var openId by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<Long?>(null) }
+                    val memoryActions = MemoryActions(
                         onBack = { nav.popBackStack() },
-                        onOpen = { m -> nav.navigate("page/${m.id}") },
+                        onOpen = { m -> if (twoPane) openId = m.id else nav.navigate("page/${m.id}") },
                         onSave = { m -> scope.launch { if (m.id == 0L) g.db.memory().insert(m) else g.db.memory().update(m) } },
                         onDelete = { m -> scope.launch { g.db.memory().delete(m.id) } },
-                    ))
+                    )
+                    if (!twoPane) MemoryScreen(memories, bottomPadding = barPad, actions = memoryActions)
+                    else MemoryTwoPane(memories, openId, { openId = it }, memoryActions, barPad,
+                        onOpenTitle = { t -> val target = memories.firstOrNull { it.title.equals(t, true) }
+                            if (target != null) openId = target.id else { g.runtime.send("Start a memory page about $t with what you know."); nav.navigate("chat") } },
+                        onAsk = { p -> g.runtime.send(p); nav.navigate("chat") })
                 }
                 composable("page/{id}") { e ->
                     val id = e.arguments?.getString("id")?.toLongOrNull()
