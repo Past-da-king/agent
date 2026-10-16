@@ -89,6 +89,28 @@ class ProfileStore(context: Context) {
     }
     fun profilesWith(accountId: String) = _profiles.value.filter { it.has(accountId) }
 
+    /**
+     * Reconnecting an app (in Composio, or after its sign-in expired) makes a new account with a new id, and profiles
+     * still name the old one, so helpers in them are refused the app. Given an app's live accounts: a profile's account
+     * of that app that no longer exists is replaced by the app's one account no profile has yet, with its rules.
+     * With several such accounts it can't tell which is which, so nothing changes. Returns whether anything did.
+     */
+    fun followReconnected(slug: String, live: List<AccountRef>): Boolean {
+        if (live.isEmpty()) return false
+        val fresh = live.filter { a -> _profiles.value.none { it.has(a.id) } }.singleOrNull() ?: return false
+        var changed = false
+        val list = _profiles.value.map { p ->
+            val stale = p.accounts.filter { it.slug.equals(slug, true) && live.none { a -> a.id == it.id } }
+            if (stale.isEmpty()) p else {
+                changed = true
+                stale.firstNotNullOfOrNull { _rules.value[it.id] }?.takeIf { _rules.value[fresh.id] == null }?.let { setRules(fresh.id, it) }
+                p.copy(accounts = p.accounts.filter { it !in stale } + fresh)
+            }
+        }
+        if (changed) saveProfiles(list)
+        return changed
+    }
+
     fun rules(accountId: String?): AccountRules = accountId?.let { _rules.value[it] } ?: AccountRules.DEFAULT
     fun setRules(accountId: String, r: AccountRules) {
         val all = _rules.value + (accountId to r)
