@@ -103,7 +103,7 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
     val activeCount = state.connected.count { it.status == "ACTIVE" }
     SubScreen("Connections", if (state.hasKey) (if (activeCount == 1) "1 app connected" else "$activeCount apps connected") else "Connect your apps", actions.onBack,
         actions = { if (state.hasKey) IconButton(onClick = actions.onRefresh) { Icon(Icons.Rounded.Refresh, "Refresh") } }) { pad ->
-        LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = com.past9.phoneaos.ui.sidePad(16.dp), end = com.past9.phoneaos.ui.sidePad(16.dp), bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item { SectionHeader("Built in", "On this phone, plus the machines you add", Modifier.padding(start = 4.dp, top = 4.dp)) }
             item {
                 AppCard(padding = PaddingValues(vertical = 4.dp)) {

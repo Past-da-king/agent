@@ -33,7 +33,7 @@ data class NotificationsActions(
 fun NotificationsScreen(access: Boolean, apps: List<PhoneApp>, allowed: Set<String>, recent: List<NotificationRow>, actions: NotificationsActions) {
     var query by remember { mutableStateOf("") }
     SubScreen("Notifications", "${allowed.size} app${if (allowed.size == 1) "" else "s"} your agent can read", actions.onBack) { pad ->
-        LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 48.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = com.past9.phoneaos.ui.sidePad(16.dp), end = com.past9.phoneaos.ui.sidePad(16.dp), bottom = 48.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
                 Text("Your agent learns a lot from your notifications: bank alerts, deliveries, messages. It only reads the apps you switch on here, and keeps a week of them on this phone.",
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(4.dp))
