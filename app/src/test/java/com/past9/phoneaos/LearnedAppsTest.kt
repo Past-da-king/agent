@@ -163,6 +163,23 @@ class LearnedAppsTest {
         assertTrue(result.content, result.isError && result.content.contains("hit the length limit") && result.content.contains("4090 characters arrived") && result.content.contains("Nothing ran"))
     }
 
+    @Test fun aSingleBackslashInsideJsonIsKeptNotQuietlyDropped() {
+        // What a model writes for regex code: single backslashes, which are not valid JSON escapes.
+        val raw = """{"name":"search","js":"const m = /\d+\.\d+/.exec(s); const q = document.querySelector([data-x=\"y\"]); return m && m[0]"}"""
+        // Android's reader alone would eat them:
+        val eaten = JSONObject(raw).getString("js")
+        assertTrue("without the repair the regex loses its backslashes: $eaten", eaten.contains("/d+.d+/"))
+        val kept = JSONObject(com.past9.phoneaos.agent.ToolArgs.fixEscapes(raw)).getString("js")
+        assertEquals("""const m = /\d+\.\d+/.exec(s); const q = document.querySelector([data-x="y"]); return m && m[0]""", kept)
+    }
+
+    @Test fun properlyEscapedJsonIsLeftExactlyAsItWas() {
+        val good = JSONObject().put("js", "const m = /\\d+\\/dp\\//.exec(s); return \"a\\nb\"").toString()   // valid JSON a model got right
+        assertEquals(good, com.past9.phoneaos.agent.ToolArgs.fixEscapes(good))
+        assertEquals("""{"a":"x\\w y\n z \"q\" \/ \u00e9"}""", com.past9.phoneaos.agent.ToolArgs.fixEscapes("""{"a":"x\\w y\n z \"q\" \/ \u00e9"}"""))
+        assertEquals("no backslashes at all", com.past9.phoneaos.agent.ToolArgs.fixEscapes("no backslashes at all"))
+    }
+
     @Test fun missingInputIsSaidNotRun() = runBlocking {
         val st = store(); app(st); val r = Runner()
         val out = LearnedCallTool("wa", st.find("wa")!!.tools[1], st, r).run(JSONObject().put("chat", "Mom"), Ctx())

@@ -75,6 +75,30 @@ interface LlmProvider {
 /** Set on a tool call whose arguments could not be read as JSON; the value is how many characters arrived. */
 const val BAD_ARGUMENTS = "__bad_arguments"
 
+/**
+ * Models often write code inside JSON with a single backslash (a regex like \d+ or \w, a selector like [data-x=\"y\"]).
+ * That is not valid JSON, and Android's JSON reader does not complain: it drops the backslash, so \w becomes w and
+ * /\/dp\/(\w+)/ becomes //dp/(w+)/, which is a comment. A backslash before a character JSON has no escape for is
+ * meant literally, so it is doubled before reading. (\/ and \b are valid JSON escapes with other meanings; those stay.)
+ */
+object ToolArgs {
+    private const val VALID = "\"\\/bfnrtu"
+    fun fixEscapes(raw: String): String {
+        if (!raw.contains('\\')) return raw
+        val sb = StringBuilder(raw.length + 16); var i = 0
+        while (i < raw.length) {
+            val c = raw[i]
+            if (c == '\\' && i + 1 < raw.length) {
+                val n = raw[i + 1]
+                if (n in VALID) { sb.append(c).append(n); i += 2; continue }
+                sb.append("\\\\"); i++; continue
+            }
+            sb.append(c); i++
+        }
+        return sb.toString()
+    }
+}
+
 /** Tiny builder so tool schemas read like documentation. */
 fun schema(required: List<String> = emptyList(), vararg props: Pair<String, JSONObject>): JSONObject =
     JSONObject().put("type", "object").put("properties", JSONObject().apply { props.forEach { (k, v) -> put(k, v) } })

@@ -56,6 +56,8 @@ The idea: map the app once, then write tools so next time you call a tool instea
 5. TEST BEFORE SAVING. Run the body with browser_eval first (set `const args = {...}` at the top for the test), then save with webapp_save, then run each tool once with webapp_test. If a tool fails, fix it and save again (same name replaces).
 6. IT SAVES FOR NEXT TIME. webapp_save asks the user to approve the tool set. After that the tools exist as web_<app>_<tool> for you and your helpers. If the site changes and a tool breaks, remap that tool and save again.
 
+BACKSLASHES: your tool call is JSON, and backslashes inside code are the number one reason a save fails. Write code that needs none: [0-9] not \d, [A-Za-z0-9_] not \w, [.] not \., [/] not \/, single quotes inside selectors ([data-x='y']) and inside strings, and new RegExp(...) built from those. If you really need a backslash character, use String.fromCharCode(92). A regex literal containing \/ is the worst offender: the slash loses its backslash on the way in and the rest of the line becomes a comment.
+
 Rules: never put a password, token or cookie value in a tool or in your reply. Reading is fine; anything that sends, posts or deletes on the user's behalf goes through the normal approval. If a site's terms forbid automation, or it needs a CAPTCHA every time, say so instead of working around it."""
 
     /** What the model is shown for an example of the contract. */
@@ -177,7 +179,7 @@ class WebAppSaveTool(private val store: LearnedStore, private val runner: PageRu
         // A syntax check that can't run (no browser open right now) never blocks the save.
         for (t in tools) runCatching { runner.syntaxError(t.js, ctx) }.getOrDefault("").takeIf { it.isNotBlank() }?.let {
             return "Not saved: the js of ${t.name} doesn't parse: $it. It arrived as ${t.js.length} characters, starting \"${t.js.take(50).replace('\n', ' ')}\" and ending \"${t.js.takeLast(50).replace('\n', ' ')}\". " +
-                "If it ends mid-statement the reply was cut off: send fewer or shorter tools per call."
+                "If it ends mid-statement the reply was cut off: send fewer or shorter tools per call. If it has a regex or a selector with backslashes or escaped quotes, rewrite it without them ([0-9] for a digit, [/] for a slash, single quotes inside selectors): backslashes do not survive the trip."
         }
         val app = LearnedApp(id, name, url, input.optString("about").trim(), input.optString("profile").trim(), input.optBoolean("desktop", false), tools,
             logo = input.optString("logo").trim().takeIf { it.startsWith("https://") } ?: "")

@@ -115,7 +115,7 @@ class OpenAiCompatProvider(override val name: String, private val apiKey: String
                 val c = calls.getJSONObject(i); val f = c.getJSONObject("function")
                 // Arguments that don't parse (a long call cut off by the length limit, say) are flagged, never quietly turned into an empty call.
                 val raw = f.optString("arguments").ifBlank { "{}" }
-                val args = runCatching { JSONObject(raw) }.getOrElse { JSONObject().put(BAD_ARGUMENTS, raw.length) }
+                val args = runCatching { JSONObject(ToolArgs.fixEscapes(raw)) }.getOrElse { JSONObject().put(BAD_ARGUMENTS, raw.length) }
                 blocks += Block.ToolCall(c.optString("id").ifBlank { "call_$i" }, f.getString("name"), args, c.optJSONObject("extra_content"))
             }
         }
