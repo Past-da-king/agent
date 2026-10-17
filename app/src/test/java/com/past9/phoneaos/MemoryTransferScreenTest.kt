@@ -37,7 +37,7 @@ class MemoryTransferScreenTest {
     @get:Rule val rule = createComposeRule()
 
     private val pages = listOf(
-        MemoryRow(id = 1, title = "Ayanda Mokoena", body = "Founder of Impetix. Plain words, no pop-ups.", kind = "person", topics = "ayanda,owner", pinned = true),
+        MemoryRow(id = 1, title = "Sam Dlamini", body = "Founder of Northwind. Plain words, no pop-ups.", kind = "person", topics = "sam,owner", pinned = true),
         MemoryRow(id = 2, title = "Agent app", body = "The phone agent. 0.11.17 installed.", kind = "fact", topics = "agent,phone"),
         MemoryRow(id = 3, title = "Car insurance", body = "Renews every March.", kind = "fact", topics = "car,vehicle,imported,unsorted"),
     )
