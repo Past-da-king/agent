@@ -8,7 +8,7 @@ start=t.index("## Inline Mode"); end=t.index("## Important Rules")
 t=t[:start]+'''## How to use it in this chat
 Write one short sentence, then the block:
 
-You have three 1-bed flats under R10k in Umhlanga Ridge.
+You have three 1-bed flats under R8k in Northcliff.
 
 ```openui-lang
 root = Stack([flat1, flat2], "row")

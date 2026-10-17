@@ -1,8 +1,8 @@
-Your flight leaves Cape Town at 07:10 today and lands in Durban at 09:15.
+Your flight leaves Johannesburg at 08:20 today and lands in George at 10:25.
 
 ```openui-lang
 root = Stack([flight])
-flight = Card([CardHeader("GE372", "Cape Town to Durban, today"), EntityList(rows), Buttons([passBtn], "row")])
-rows = [{left: "Departs", right: "07:10 CPT", rightVariant: "text"}, {left: "Arrives", right: "09:15 DUR", rightVariant: "text"}, {left: "Boarding", right: "06:40, Group B", rightVariant: "text"}, {left: "Seat", right: "15E", rightVariant: "text"}, {left: "Booking ref", right: "385E655C", rightVariant: "text"}, {left: "Baggage", right: "1 checked bag", rightVariant: "text"}]
-passBtn = Button("Show boarding pass", @ToAssistant("Show my boarding pass", {booking: "385E655C", flight: "GE372"}))
+flight = Card([CardHeader("FN204", "Johannesburg to George, today"), EntityList(rows), Buttons([passBtn], "row")])
+rows = [{left: "Departs", right: "08:20 JNB", rightVariant: "text"}, {left: "Arrives", right: "10:25 GRJ", rightVariant: "text"}, {left: "Boarding", right: "07:50, Group C", rightVariant: "text"}, {left: "Seat", right: "21C", rightVariant: "text"}, {left: "Booking ref", right: "K7Q2ZP", rightVariant: "text"}, {left: "Baggage", right: "1 checked bag", rightVariant: "text"}]
+passBtn = Button("Show boarding pass", @ToAssistant("Show my boarding pass", {booking: "K7Q2ZP", flight: "FN204"}))
 ```

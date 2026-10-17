@@ -1,7 +1,7 @@
-find me 1-bed flats to rent in Umhlanga Ridge under R10k
+find me 1-bed flats to rent in Northcliff under R8k
 
-Facts from the search (privateproperty.co.za, checked Sat 17 Oct 2026):
-1. R9,500 a month, 1 bed, 98 m², available from 1 Nov 2026, deposit R9,500. Listing: https://www.privateproperty.co.za/to-rent/kwazulu-natal/durban/umhlanga/umhlanga-ridge/RR4794507 Photo: https://images.pp.co.za/listing/12122338/Hyyli5R3aokEClguZNSV32/1600/1066/contain/jpegorpng
-2. R8,500 a month, 1 bed, 43 m², The Gateway, available now, deposit R8,500. Listing: https://www.privateproperty.co.za/to-rent/kwazulu-natal/durban/umhlanga/umhlanga-ridge/RR4787859 Photo: https://images.pp.co.za/listing/12107340/SYJ3Ur69TCw3DamxqVpZI4/1600/1066/contain/jpegorpng
-3. R8,850 a month, 1 bed, 45 m², available from 1 Nov 2026, deposit R8,850. Listing: https://www.privateproperty.co.za/to-rent/kwazulu-natal/durban/umhlanga/umhlanga-ridge/RR4762518 Photo: https://images.pp.co.za/listing/12048389/uzoYTZR76U2IcL0q12eVU0/600/450/contain/jpegorpng
+Facts from the search (flats.example, checked Sat 17 Oct 2026):
+1. R7,200 a month, 1 bed, 62 m², available from 1 Nov 2026, deposit R7,200. Listing: https://flats.example/listing/RR1000001 Photo: https://flats.example/photos/1.jpg
+2. R6,800 a month, 1 bed, 38 m², Parkview, available now, deposit R6,800. Listing: https://flats.example/listing/RR1000002 Photo: https://flats.example/photos/2.jpg
+3. R6,950 a month, 1 bed, 40 m², available from 1 Nov 2026, deposit R6,950. Listing: https://flats.example/listing/RR1000003 Photo: https://flats.example/photos/3.jpg
 Each flat needs a "Book viewing" button and an "Open listing" button.

@@ -53,42 +53,42 @@ class OpenUiButtonsAndPromptTest {
         rule.onAllNodesWithText("Book viewing")[0].performClick()
         val msg = sent.single()
         assertTrue(msg, msg.startsWith("Book a viewing"))
-        assertTrue(msg, msg.contains("RR4794507") && msg.contains("R9,500"))
-        assertFalse("not the other flats", msg.contains("RR4787859") || msg.contains("RR4762518"))
+        assertTrue(msg, msg.contains("RR1000001") && msg.contains("R7,200"))
+        assertFalse("not the other flats", msg.contains("RR1000002") || msg.contains("RR1000003"))
     }
 
     @Test fun openListingOpensTheLinkAndSendsNothing() {
         show("flats")
         rule.onAllNodesWithText("Open listing")[0].performClick()
-        assertEquals(listOf("https://www.privateproperty.co.za/to-rent/kwazulu-natal/durban/umhlanga/umhlanga-ridge/RR4794507"), opened)
+        assertEquals(listOf("https://flats.example/listing/RR1000001"), opened)
         assertTrue(sent.isEmpty())
     }
 
     @Test fun detailsNamesTheJob() {
         show("helpers")
         rule.onAllNodesWithText("Details")[1].performClick()
-        assertTrue(sent.single(), sent.single().contains("Sne"))
+        assertTrue(sent.single(), sent.single().contains("Lindiwe"))
     }
 
     @Test fun sendOnlyAsksTheAgentItNeverSendsByItself() {
         show("approval")
         rule.onAllNodesWithText("Send")[0].performClick()
         val msg = sent.single()
-        assertTrue(msg, msg.contains("Send the invoice email to Shey") && msg.contains("Invoice Submission"))
+        assertTrue(msg, msg.contains("Send the invoice email to Lerato") && msg.contains("March invoice"))
         assertTrue(opened.isEmpty())
     }
 
     @Test fun messageNamesCardItemAndContextOnce() {
-        val a = OpenUiLang.Action.ToAssistant("Research more", mapOf("listing" to "RR4794507", "item" to "R9,500 1-bed"))
-        val m = OpenUiLang.messageFor(a, OpenUiLang.Scope(card = "Flats in Umhlanga Ridge", item = "R9,500 1-bed"))
-        assertEquals("Research more\n↳ R9,500 1-bed · Flats in Umhlanga Ridge · listing: RR4794507", m)
+        val a = OpenUiLang.Action.ToAssistant("Research more", mapOf("listing" to "RR1000001", "item" to "R7,200 1-bed"))
+        val m = OpenUiLang.messageFor(a, OpenUiLang.Scope(card = "Flats in Northcliff", item = "R7,200 1-bed"))
+        assertEquals("Research more\n↳ R7,200 1-bed · Flats in Northcliff · listing: RR1000001", m)
         assertEquals("Do it", OpenUiLang.messageFor(OpenUiLang.Action.ToAssistant("Do it", null), OpenUiLang.Scope()))
     }
 
     @Test fun placesWithoutCardsGetTitlesNotCode() {
         val t = OpenUiLang.plainText(res("flats.md"))
         assertFalse(t, t.contains("openui") || t.contains("root ="))
-        assertTrue(t, t.contains("R9,500 a month") && t.startsWith("Here are three"))
+        assertTrue(t, t.contains("R7,200 a month") && t.startsWith("Here are three"))
     }
 
     @Test fun thePromptSectionTeachesOnlyWhatTheAppDraws() {
