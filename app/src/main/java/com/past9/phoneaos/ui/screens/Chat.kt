@@ -265,6 +265,8 @@ fun ChatScreen(
     val newSince = items.count { it.id > seenId && it.kind != "user" && it.kind != "activity" && !JSONObject(it.meta).has("helper") }
     val waitingOnYou = items.any { it.kind == "question" && !JSONObject(it.meta).has("answer") }
 
+    // A tap on a generated UI's button (OpenUI @ToAssistant) is sent like a message he typed.
+    androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.openui.LocalOpenUiSend provides actions.onSend) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = { ChatTopBar(agentName, status, browserLive, waitingOnYou, openCount, actions, modelLabel) },
@@ -314,6 +316,7 @@ fun ChatScreen(
                 )
             }
         }
+    }
     }
 }
 
