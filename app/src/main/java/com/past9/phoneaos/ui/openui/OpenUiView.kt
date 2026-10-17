@@ -32,6 +32,9 @@ import com.past9.phoneaos.ui.openui.OpenUiLang.Node
 /** What a tap on a generated button sends back to the agent (the chat sets it; elsewhere taps only open links). */
 val LocalOpenUiSend = compositionLocalOf<(String) -> Unit> { {} }
 
+/** Tests hand in already-loaded pictures by URL; the app loads them with Coil. */
+val LocalOpenUiImages = compositionLocalOf<(String) -> androidx.compose.ui.graphics.ImageBitmap?> { { null } }
+
 /**
  * An OpenUI Lang block drawn natively in Compose, in the app's own theme (accent, dark mode, type), with no WebView.
  * Re-parsed on every change, so a streaming answer builds up line by line.
@@ -81,6 +84,14 @@ private fun Comp(n: Node) {
             }
         }
         "Separator" -> HorizontalDivider(color = cs.outlineVariant)
+        "ImageBlock" -> n.str("src")?.let { Picture(it, n.str("alt"), Modifier.fillMaxWidth().aspectRatio(16f / 10f).clip(RoundedCornerShape(16.dp))) }
+        "Image" -> n.str("src")?.let { Picture(it, n.str("alt"), Modifier.fillMaxWidth().aspectRatio(16f / 10f).clip(RoundedCornerShape(16.dp))) }
+        "InlineHeader" -> Column {
+            n.str("heading")?.let { Text(it, style = MaterialTheme.typography.titleMedium) }
+            n.str("description")?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant) }
+        }
+        "EntityList" -> EntityRows(n)
+        "TextCallout" -> Comp(Node("Callout", n.props + ("variant" to (n.str("variant")?.replace("danger", "error") ?: "neutral"))))
         "Table" -> TableComp(n.nodes("columns"))
         "BarChart" -> Chart(n, bars = true)
         "LineChart" -> Chart(n, bars = false)
@@ -109,6 +120,36 @@ private fun Comp(n: Node) {
     }
 }
 
+/** A photo from a URL, cropped to fill; a soft block while it loads or if it can't. */
+@Composable
+private fun Picture(url: String, alt: String?, modifier: Modifier) {
+    val cs = MaterialTheme.colorScheme
+    val local = LocalOpenUiImages.current(url)
+    if (local != null) androidx.compose.foundation.Image(local, alt, modifier, contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+    else coil.compose.SubcomposeAsyncImage(model = url, contentDescription = alt, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = modifier,
+        loading = { Box(Modifier.fillMaxSize().background(cs.surfaceContainerHigh)) }, error = { Box(Modifier.fillMaxSize().background(cs.surfaceContainerHigh)) })
+}
+
+/** Label on the left, value on the right (numbers in tabular figures), with an optional header and total row. */
+@Composable
+private fun EntityRows(n: Node) {
+    val cs = MaterialTheme.colorScheme
+    @Composable fun row(m: Map<*, *>, strong: Boolean) {
+        Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), verticalAlignment = Alignment.Top) {
+            Text(m["left"]?.toString() ?: "", Modifier.weight(1f), style = if (strong) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodyMedium,
+                color = if (strong) cs.onSurface else cs.onSurfaceVariant)
+            Spacer(Modifier.width(12.dp))
+            Text(m["right"]?.let { fmt(it) } ?: "", style = (if (strong) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodyMedium)
+                .copy(fontFeatureSettings = if (m["rightVariant"] == "number") "tnum" else null), textAlign = TextAlign.End)
+        }
+    }
+    Column {
+        (n.props["header"] as? Map<*, *>)?.let { row(it, true); HorizontalDivider(color = cs.outlineVariant) }
+        n.list("rows").filterIsInstance<Map<*, *>>().forEachIndexed { i, r -> if (i > 0) HorizontalDivider(color = cs.outlineVariant.copy(alpha = 0.4f)); row(r, false) }
+        (n.props["footer"] as? Map<*, *>)?.let { HorizontalDivider(color = cs.outlineVariant); row(it, true) }
+    }
+}
+
 @Composable
 private fun runner(action: Any?): () -> Unit {
     val send = LocalOpenUiSend.current; val uri = LocalUriHandler.current
@@ -122,7 +163,9 @@ private fun ListRow(i: Int, it: Node, numbered: Boolean) {
     val clickable = it.props["action"] != null
     Surface(onClick = run, enabled = clickable, color = Color.Transparent, shape = RoundedCornerShape(14.dp)) {
         Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.Top) {
-            if (numbered) Box(Modifier.size(26.dp).clip(CircleShape).background(cs.primaryContainer), contentAlignment = Alignment.Center) {
+            val img = (it.props["image"] as? Map<*, *>)?.get("src") as? String
+            if (img != null) Picture(img, null, Modifier.size(52.dp).clip(RoundedCornerShape(12.dp)))
+            else if (numbered) Box(Modifier.size(26.dp).clip(CircleShape).background(cs.primaryContainer), contentAlignment = Alignment.Center) {
                 Text("$i", style = MaterialTheme.typography.labelMedium, color = cs.onPrimaryContainer) }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -155,9 +198,10 @@ private fun TableComp(cols: List<Node>) {
     val data = cols.map { it.list("data") }; val rows = data.maxOf { it.size }
     val numeric = data.map { d -> d.isNotEmpty() && d.all { it is Double } }
     Surface(shape = RoundedCornerShape(16.dp), color = cs.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+        BoxWithConstraints { val minW = maxWidth
         Row(Modifier.horizontalScroll(rememberScrollState())) {
             cols.forEachIndexed { c, col ->
-                Column(Modifier.width(IntrinsicSize.Max)) {
+                Column(Modifier.width(IntrinsicSize.Max).widthIn(min = minW / cols.size)) {
                     val align = if (numeric[c]) Alignment.End else Alignment.Start
                     Box(Modifier.fillMaxWidth().background(cs.surfaceContainerHigh).padding(horizontal = 14.dp, vertical = 10.dp), contentAlignment = if (numeric[c]) Alignment.CenterEnd else Alignment.CenterStart) {
                         Text(col.str("label") ?: "", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold) }
@@ -166,7 +210,7 @@ private fun TableComp(cols: List<Node>) {
                         Text(fmt(data[c].getOrNull(r)), style = MaterialTheme.typography.bodyMedium, textAlign = if (align == Alignment.End) TextAlign.End else TextAlign.Start) }
                 }
             }
-        }
+        } }
     }
 }
 
