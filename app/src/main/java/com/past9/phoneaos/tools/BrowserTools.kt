@@ -1,6 +1,7 @@
 package com.past9.phoneaos.tools
 
 import android.content.Context
+import com.past9.phoneaos.agent.AskOptions
 import com.past9.phoneaos.agent.Tool
 import com.past9.phoneaos.agent.ToolContext
 import com.past9.phoneaos.agent.ToolSpec
@@ -115,7 +116,7 @@ class BrowserHandoffTool(c: Context) : BrowserTool(c) {
         engine(ctx)
         // No notification of its own: a helper's handoff reaches the user only if the main agent forwards it (and that notifies).
         val a = ctx.ask("${input.optString("reason")} Open the browser, do it, then tap Done.", listOf("Open browser", "Done", "Skip"))
-        return when (a) { null -> "No one is around to help right now."; "Skip" -> "The user skipped it."; else -> "The user says they are done. Read the page to check." }
+        return when (a) { null -> "No one is around to help right now."; "Skip" -> "The user skipped it."; AskOptions.NO -> AskOptions.TURNED_DOWN; else -> "The user says they are done. Read the page to check." }
     }
 }
 

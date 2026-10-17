@@ -19,6 +19,10 @@ import androidx.compose.material.icons.rounded.CallMade
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CallReceived
 import androidx.compose.material.icons.rounded.Insights
+import androidx.compose.material.icons.rounded.ShoppingBag
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material.icons.rounded.StarHalf
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
@@ -31,6 +35,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -57,6 +63,12 @@ val LocalOpenUiSend = compositionLocalOf<(String) -> Unit> { {} }
  * Null where the screen has no quiet path; a tap then falls back to [LocalOpenUiSend].
  */
 val LocalOpenUiAct = compositionLocalOf<((String) -> Unit)?> { null }
+
+/**
+ * Set where a button is an answer rather than a message (a question the agent is waiting on): a tap hands the button's
+ * own words to this and nothing is sent to the chat.
+ */
+val LocalOpenUiPick = compositionLocalOf<((String) -> Unit)?> { null }
 
 /** Which card and item the composable being drawn sits in, so a tap can say what it is about. */
 private val LocalOpenUiScope = compositionLocalOf { OpenUiLang.Scope() }
@@ -97,6 +109,7 @@ private fun Comp(n: Node) {
     when (n.type) {
         "Stack" -> StackComp(n)
         "Card" -> CardComp(n)
+        "Product" -> ProductComp(n)
         "CardHeader" -> CardHeaderComp(n)
         "TextContent" -> n.str("text")?.let { t ->
             val style = when (n.str("size")) { "small" -> MaterialTheme.typography.bodyMedium; "large" -> MaterialTheme.typography.bodyLarge
@@ -325,6 +338,68 @@ private fun FactList(rows: List<Map<*, *>>) {
     }
 }
 
+// ---- Product: photo, name, price, stars, buttons ----
+
+/** Amber on dark, a deeper amber on light so the stars stay visible against a pale card. */
+@Composable private fun starGold() = if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) Color(0xFFF2A900) else Color(0xFFC77700)
+
+/** Whole stars, a half and the empty ones, for a rating out of 5. */
+private fun starKinds(rating: Double): List<Int> = (1..5).map { i -> if (rating >= i - 0.25) 2 else if (rating >= i - 0.75) 1 else 0 }
+
+@Composable
+private fun Stars(rating: Double, reviews: Double?) {
+    val cs = MaterialTheme.colorScheme
+    val said = "Rated ${fmtRating(rating)} out of 5" + (reviews?.let { ", ${count(it)} reviews" } ?: "")
+    Row(Modifier.semantics { contentDescription = said }, verticalAlignment = Alignment.CenterVertically) {
+        starKinds(rating).forEach { k -> Icon(when (k) { 2 -> Icons.Rounded.Star; 1 -> Icons.Rounded.StarHalf; else -> Icons.Rounded.StarBorder }, null, Modifier.size(16.dp), tint = if (k == 0) cs.outline else starGold()) }
+        Spacer(Modifier.width(6.dp))
+        Text(fmtRating(rating), style = MaterialTheme.typography.labelLarge, color = cs.onSurface)
+        reviews?.let { Text(" (${count(it)})", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant) }
+    }
+}
+
+private fun count(v: Double) = String.format(java.util.Locale.US, "%,d", v.toLong())
+
+private fun fmtRating(r: Double) = String.format(java.util.Locale.US, "%.1f", r.coerceIn(0.0, 5.0))
+
+@Composable
+private fun ProductComp(n: Node) {
+    val cs = MaterialTheme.colorScheme
+    val name = n.str("name").orEmpty()
+    val rating = (n.props["rating"] as? Double)?.takeIf { it > 0 }
+    val reviews = (n.props["reviews"] as? Double)?.takeIf { it > 0 }
+    val price = n.str("price"); val was = n.str("was")?.takeIf { it != price }
+    Surface(shape = RoundedCornerShape(24.dp), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
+        Column {
+            Box {
+                val img = n.str("image")
+                if (img != null) Picture(img, name, Modifier.fillMaxWidth().aspectRatio(1f))
+                else Box(Modifier.fillMaxWidth().aspectRatio(1f).background(cs.surfaceContainerHighest), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.ShoppingBag, null, Modifier.size(40.dp), tint = cs.onSurfaceVariant) }
+                n.str("tag")?.takeIf { it.isNotBlank() }?.let { t ->
+                    Surface(shape = RoundedCornerShape(50), color = cs.primaryContainer, contentColor = cs.onPrimaryContainer, modifier = Modifier.padding(10.dp).align(Alignment.TopStart)) {
+                        Text(t, Modifier.padding(horizontal = 10.dp, vertical = 5.dp), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+            Column(Modifier.padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                n.str("seller")?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                // Two lines always, so every card in the row has its price and buttons at the same height.
+                Text(name, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold), maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis)
+                if (rating != null) Stars(rating, reviews)
+                if (price != null) Row(verticalAlignment = Alignment.Bottom) {
+                    Text(price, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"), color = cs.onSurface, maxLines = 1)
+                    was?.let { Text(it, Modifier.padding(start = 8.dp, bottom = 2.dp), style = MaterialTheme.typography.bodyMedium.copy(textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough), color = cs.onSurfaceVariant, maxLines = 1) }
+                }
+                (n.props["actions"] as? Node)?.let { a ->
+                    Spacer(Modifier.height(4.dp))
+                    // A tap names this product, so "Add to cart" is about this one.
+                    androidx.compose.runtime.CompositionLocalProvider(LocalOpenUiScope provides OpenUiLang.Scope(card = name)) { Comp(a) }
+                }
+            }
+        }
+    }
+}
+
 // ---- Buttons: big pills that squash when pressed ----
 
 @Composable
@@ -342,7 +417,8 @@ private fun ButtonsComp(n: Node) {
 private fun ActionButton(n: Node, modifier: Modifier) {
     val cs = MaterialTheme.colorScheme
     val run = runner(n.props["action"]); val label = n.str("label") ?: ""
-    val tellsAgent = n.props["action"].let { a -> a is Action.ToAssistant || (a is List<*> && a.any { it is Action.ToAssistant }) }
+    val picking = LocalOpenUiPick.current != null
+    val tellsAgent = !picking && n.props["action"].let { a -> a is Action.ToAssistant || (a is List<*> && a.any { it is Action.ToAssistant }) }
     // The tap leaves no message in the chat, so the button itself says it went.
     var sent by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     val interaction = remember { MutableInteractionSource() }
@@ -373,10 +449,10 @@ private fun Picture(url: String, alt: String?, modifier: Modifier) {
 
 @Composable
 private fun runner(action: Any?, item: String? = null): () -> Unit {
-    val send = LocalOpenUiAct.current ?: LocalOpenUiSend.current; val uri = LocalUriHandler.current
+    val send = LocalOpenUiAct.current ?: LocalOpenUiSend.current; val pick = LocalOpenUiPick.current; val uri = LocalUriHandler.current
     val scope = LocalOpenUiScope.current.let { if (item != null) it.copy(item = item) else it }
     val list = when (action) { is Action -> listOf(action); is List<*> -> action.filterIsInstance<Action>(); else -> emptyList() }
-    return { list.forEach { a -> when (a) { is Action.ToAssistant -> send(OpenUiLang.messageFor(a, scope)); is Action.OpenUrl -> runCatching { uri.openUri(a.url) } } } }
+    return { list.forEach { a -> when (a) { is Action.ToAssistant -> if (pick != null) pick(a.text) else send(OpenUiLang.messageFor(a, scope)); is Action.OpenUrl -> runCatching { uri.openUri(a.url) } } } }
 }
 
 /** Several cards, one per item: side by side to swipe through ("row"), or one under another. */
@@ -386,7 +462,8 @@ private fun StackComp(n: Node) {
     if (kids.isEmpty()) return
     if (n.str("direction") != "row" || kids.size == 1) Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { kids.forEach { Comp(it) } }
     else BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val w = (maxWidth * 0.86f).coerceAtMost(380.dp)
+        val products = kids.all { it.type == "Product" }
+        val w = if (products) (maxWidth * 0.6f).coerceIn(168.dp, 250.dp) else (maxWidth * 0.86f).coerceAtMost(380.dp)
         val state = androidx.compose.foundation.lazy.rememberLazyListState()
         androidx.compose.foundation.lazy.LazyRow(state = state, horizontalArrangement = Arrangement.spacedBy(10.dp),
             flingBehavior = androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior(state)) {

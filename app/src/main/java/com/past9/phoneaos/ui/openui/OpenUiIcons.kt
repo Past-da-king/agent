@@ -88,6 +88,7 @@ object OpenUiIcons {
             Regex("open|view|see|visit|read|details|listing|link").containsMatchIn(t) -> Icons.Rounded.OpenInNew
             Regex("call|phone|ring").containsMatchIn(t) -> Icons.Rounded.Call
             Regex("boarding|ticket|pass\\b").containsMatchIn(t) -> Icons.Rounded.ConfirmationNumber
+            Regex("cart|basket|bag").containsMatchIn(t) -> Icons.Rounded.AddShoppingCart
             Regex("pay|buy|order|checkout|tip").containsMatchIn(t) -> Icons.Rounded.Payments
             Regex("send|reply|message|email|forward|share").containsMatchIn(t) -> Icons.AutoMirrored.Rounded.Send
             Regex("remind|snooze|later").containsMatchIn(t) -> Icons.Rounded.Alarm

@@ -1,5 +1,6 @@
 package com.past9.phoneaos.tools
 
+import com.past9.phoneaos.agent.AskOptions
 import com.past9.phoneaos.agent.Tool
 import com.past9.phoneaos.agent.ToolContext
 import com.past9.phoneaos.agent.ToolSpec
@@ -26,7 +27,7 @@ class AskUserTool : Tool {
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val arr = input.optJSONArray("options")
         val opts = (0 until (arr?.length() ?: 0)).map { arr!!.getString(it) }.ifEmpty { listOf("Yes", "No") }
-        return ctx.ask(input.optString("question"), opts)?.let { "The user answered: $it" }
+        return ctx.ask(input.optString("question"), opts)?.let { if (it == AskOptions.NO && !AskOptions.hasRefusal(opts)) AskOptions.TURNED_DOWN else "The user answered: $it" }
             ?: "Nobody could answer right now (this is a background run). Make the safe choice or leave it for the user."
     }
 }

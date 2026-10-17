@@ -1527,7 +1527,8 @@ class AgentRuntime(
         }
 
         /** Put the question to the user (a card and a notification) and wait. @param why the main agent's reason, on a forwarded request. */
-        suspend fun askUser(question: String, options: List<String>, why: String?): String? {
+        suspend fun askUser(question: String, asked: List<String>, why: String?): String? {
+            val options = AskOptions.withNo(asked)
             val id = db.chat().insert(ChatItem(kind = "question", text = question, meta = JSONObject().put("options", org.json.JSONArray(options))
                 .apply { helperItem?.let { put("helper", it).put("by", display) }; why?.let { put("why", it).put("whyBy", agentName()) }; branchItem?.let { put("branch", it) } }.toString()))
             val d = CompletableDeferred<String>(); pending[id] = d
