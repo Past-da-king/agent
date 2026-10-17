@@ -32,7 +32,8 @@ class EnginePageRunner(private val context: Context, private val owner: () -> St
 
     override suspend fun ensure(app: LearnedApp, ctx: ToolContext) {
         val e = engine(app, ctx)
-        val onSite = app.host.isNotBlank() && Regex("^https?://([^/]*\\.)?${Regex.escape(app.host)}([:/]|$)", RegexOption.IGNORE_CASE).containsMatchIn(e.page.value.url)
+        val now = runCatching { java.net.URI(e.page.value.url).host.orEmpty().lowercase().removePrefix("www.") }.getOrDefault("")
+        val onSite = app.host.isNotBlank() && (now == app.host.lowercase() || now.endsWith("." + app.host.lowercase()))
         if (e.desktop != app.desktop || !onSite) {
             if (e.desktop != app.desktop) e.setDesktop(app.desktop)
             e.goto(app.startUrl)
