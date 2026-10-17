@@ -41,16 +41,18 @@ data class MemoryActions(
 )
 
 /** What an import or export did, shown as a card in the Memory list (never a pop-up). */
-data class TransferNote(val headline: String, val sub: String, val rows: List<Pair<String, Int>> = emptyList(), val unsorted: Int = 0) { companion object }
+data class TransferNote(val headline: String, val sub: String, val rows: List<Pair<String, Int>> = emptyList(), val unsorted: Int = 0, val footnote: String? = null, val ok: Boolean = true) { companion object }
 
 fun TransferNote.Companion.imported(s: com.past9.phoneaos.data.MemoryTransfer.Summary): TransferNote {
     val r = s.result
-    if (s.pages == 0) return TransferNote("Nothing to import", "No memory pages were found in that file." + if (s.ignored > 0) " ${s.ignored} file${if (s.ignored == 1) "" else "s"} couldn't be read." else "")
-    return TransferNote("${s.pages} page${if (s.pages == 1) "" else "s"} ${if (r.added == s.pages) "added" else "imported"}", "Your agent can search them now.",
-        listOf("New" to r.added, "Updated" to r.updated, "Already there" to r.skipped, "Unsorted, to classify" to r.unsorted, "Not pinned (the limit is ${com.past9.phoneaos.data.MemoryTransfer.MAX_PINNED})" to r.pinnedDropped).filter { (l, n) -> n > 0 || l == "New" }, r.unsorted)
+    if (s.pages == 0) return TransferNote("Nothing to import", "No memory pages were found in that file." + if (s.ignored > 0) " ${s.ignored} file${if (s.ignored == 1) "" else "s"} couldn't be read." else "", ok = false)
+    val unsortedLine = if (r.unsorted > 0) " ${r.unsorted} came in unsorted: tap Show unsorted to classify them." else ""
+    return TransferNote("${s.pages} page${if (s.pages == 1) "" else "s"} ${if (r.added == s.pages) "added" else "imported"}", "Your agent can search them now.$unsortedLine",
+        listOf("New" to r.added, "Updated" to r.updated, "Already there" to r.skipped, "Unsorted" to r.unsorted, "Not pinned" to r.pinnedDropped).filter { (l, n) -> n > 0 || l == "New" }, r.unsorted,
+        if (r.pinnedDropped > 0) "Only ${com.past9.phoneaos.data.MemoryTransfer.MAX_PINNED} pages can be pinned, so ${r.pinnedDropped} came in unpinned." else null)
 }
 fun TransferNote.Companion.exported(n: Int) = TransferNote("$n page${if (n == 1) "" else "s"} saved", "One zip file. Import memories brings every page back.")
-fun TransferNote.Companion.failed(what: String, why: String?) = TransferNote("That didn't work", "$what${why?.takeIf { it.isNotBlank() }?.let { ": $it" } ?: ""}")
+fun TransferNote.Companion.failed(what: String, why: String?) = TransferNote("That didn't work", "$what${why?.takeIf { it.isNotBlank() }?.let { ": $it" } ?: ""}", ok = false)
 
 fun pageIcon(kind: String): ImageVector = when (kind) {
     "person" -> Icons.Rounded.Person; "company" -> Icons.Rounded.Business; "place" -> Icons.Rounded.Place; "project" -> Icons.Rounded.Flag
@@ -138,44 +140,36 @@ private fun TransferBusy(what: String) {
     }
 }
 
-/** The result, drawn as one of the app's OpenUI cards: what happened, the numbers, and the next step. */
+/** The result of an import or export: what happened, the numbers as tiles, and the next step. Drawn like the app's other cards. */
 @Composable
 internal fun TransferCard(n: TransferNote, onPick: (String) -> Unit) {
-    val source = remember(n) {
-        val q = com.past9.phoneaos.ui.openui.AskProgram::q
-        buildString {
-            appendLine("root = Card([head" + (if (n.rows.isNotEmpty()) ", facts" else "") + ", actions])")
-            appendLine("head = CardHeader(${q(n.headline)}, ${q(n.sub)})")
-            if (n.rows.isNotEmpty()) {
-                appendLine("facts = EntityList([${n.rows.indices.joinToString(", ") { "r$it" }}], \"small\")")
-                n.rows.forEachIndexed { i, (l, c) -> appendLine("r$i = {left: ${q(l)}, right: ${q(c.toString())}, rightVariant: \"number\"}") }
-            }
-            val buttons = (if (n.unsorted > 0) listOf("Show unsorted" to "unsorted") else emptyList()) + ("Done" to "done")
-            appendLine("actions = Buttons([${buttons.indices.joinToString(", ") { "b$it" }}], \"column\")")
-            buttons.forEachIndexed { i, (label, id) -> appendLine("b$i = Button(${q(label)}, Action([@ToAssistant(${q(id)})]), ${q(if (i == 0) "primary" else "secondary")})") }
-        }
-    }
-    androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.openui.LocalOpenUiPick provides onPick) { com.past9.phoneaos.ui.openui.OpenUiBlock(source) }
-}
-
-/** Came in from a file that didn't say what it is: waiting to be looked at. Saving the page by hand clears it. */
-fun isUnsorted(m: MemoryRow) = m.topics.split(',').any { it.trim().equals(com.past9.phoneaos.data.MemoryTransfer.UNSORTED, true) }
-
-@Composable
-private fun PageRow(m: MemoryRow, all: List<MemoryRow>, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    val links = remember(m.body) { linksIn(m.body).size }
-    Surface(onClick = onClick, shape = MaterialTheme.shapes.large, color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(44.dp).clip(MaterialTheme.shapes.medium).background(if (m.pinned) cs.primaryContainer else cs.secondaryContainer), contentAlignment = Alignment.Center) {
-                Icon(pageIcon(m.kind), null, tint = if (m.pinned) cs.onPrimaryContainer else cs.onSecondaryContainer)
+    Surface(shape = RoundedCornerShape(28.dp), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Box(Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(if (n.ok) cs.primaryContainer else cs.errorContainer), contentAlignment = Alignment.Center) {
+                    Icon(if (n.ok) Icons.Rounded.Check else Icons.Rounded.ErrorOutline, null, Modifier.size(26.dp), tint = if (n.ok) cs.onPrimaryContainer else cs.onErrorContainer)
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(n.headline, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold))
+                    Text(n.sub, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                }
             }
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(m.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(summaryOf(m.body), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(listOfNotNull(m.kind.uppercase(), if (links > 0) "$links LINK${if (links > 1) "S" else ""}" else null, relativeTime(m.updatedAt).uppercase()).joinToString(" · "),
-                    style = Eyebrow, color = cs.outline, modifier = Modifier.padding(top = 4.dp))
+            if (n.rows.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                n.rows.forEach { (label, count) ->
+                    Surface(shape = RoundedCornerShape(18.dp), color = cs.surfaceContainerHighest) {
+                        Column(Modifier.widthIn(min = 92.dp).padding(horizontal = 16.dp, vertical = 12.dp)) {
+                            Text(count.toString(), style = MaterialTheme.typography.titleLarge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontFeatureSettings = "tnum"), color = cs.onSurface)
+                            Text(label, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
+                        }
+                    }
+                }
+            }
+            n.footnote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (n.unsorted > 0) Button(onClick = { onPick("unsorted") }, shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Icon(Icons.Rounded.Inbox, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Show unsorted") }
+                if (n.unsorted > 0) FilledTonalButton(onClick = { onPick("done") }, shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Icon(Icons.Rounded.Check, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Done") }
+                else Button(onClick = { onPick("done") }, shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Icon(Icons.Rounded.Check, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Done") }
             }
         }
     }

@@ -53,20 +53,23 @@ class MemoryTransferScreenTest {
         show(true, pages, bigImport)
         rule.onNodeWithText("992 pages added").assertExists()
         rule.onNodeWithText("Your agent can search them now.").assertExists()
-        for (t in listOf("New", "992", "Unsorted, to classify", "41", "Show unsorted", "Done")) rule.onAllNodesWithText(t)[0].assertExists()
+        for (t in listOf("New", "992", "Unsorted", "41", "Show unsorted", "Done")) rule.onAllNodesWithText(t)[0].assertExists()
         assertTrue("no dialog window", rule.onAllNodes(isDialog()).fetchSemanticsNodes().isEmpty())
         shot("import-dark")
     }
 
     @Test fun lightModeToo() { show(false, pages, bigImport); rule.onNodeWithText("992 pages added").assertExists(); shot("import-light") }
 
-    @Test fun doneClearsItAndShowUnsortedFiltersTheList() {
+    @Test fun showUnsortedFiltersTheListAndClearsTheCard() {
         show(true, pages, bigImport)
         rule.onNodeWithText("Show unsorted").performClick()
         rule.onAllNodesWithText("992 pages added").assertCountEquals(0)
         rule.onAllNodesWithText("Car insurance").assertCountEquals(1)
         rule.onAllNodesWithText("Agent app").assertCountEquals(0)   // filtered out: it isn't unsorted
         shot("unsorted-filter")
+    }
+
+    @Test fun doneClearsTheCard() {
         show(true, pages, bigImport)
         rule.onNodeWithText("Done").performClick()
         rule.onAllNodesWithText("992 pages added").assertCountEquals(0)
@@ -75,7 +78,7 @@ class MemoryTransferScreenTest {
 
     @Test fun backupSectionIsInTheListAndNothingPopsUp() {
         show(true, pages, null)
-        rule.onNodeWithText("Back up and restore").assertExists()
+        rule.onNodeWithText("Back up and restore", ignoreCase = true).assertExists()
         rule.onNodeWithText("Import").assertExists(); rule.onNodeWithText("Export").assertExists()
         assertTrue(rule.onAllNodes(isDialog()).fetchSemanticsNodes().isEmpty())
         shot("backup-section")
@@ -83,7 +86,7 @@ class MemoryTransferScreenTest {
 
     @Test fun afterAWipeRestoreIsTheFirstThingOffered() {
         show(true, emptyList(), null)
-        rule.onNodeWithText("Back up and restore").assertExists(); rule.onNodeWithText("Import").assertExists()
+        rule.onNodeWithText("Back up and restore", ignoreCase = true).assertExists(); rule.onNodeWithText("Import").assertExists()
         rule.onAllNodesWithText("Export").assertCountEquals(0)
         shot("empty-restore")
     }
