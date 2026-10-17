@@ -550,13 +550,13 @@ class MainActivity : ComponentActivity() {
                 CardSheet(c, androidx.compose.foundation.isSystemInDarkTheme(), settings.accent, CardSheetActions(
                     onRefresh = { card -> refreshingCard = card.id; scope.launch {
                         val r = com.past9.phoneaos.cards.CardScripts.run(this@MainActivity, card)
-                        g.cards.update(card.id) { x -> if (r.ok) x.copy(data = r.data!!, headline = com.past9.phoneaos.cards.CardScripts.headlineFrom(r.data) ?: x.headline, updatedAt = System.currentTimeMillis(), error = "") else x.copy(error = r.log.takeLast(400)) }
+                        g.cards.update(card.id) { x -> if (r.ok) x.withData(r.data!!) else x.copy(error = r.log.takeLast(400)) }
                         refreshingCard = null } },
                     onPin = { card, on -> g.cards.update(card.id) { it.copy(pinned = on) } },
                     onAsk = { card, text -> openCard = null; g.runtime.send("[About the card \"${card.title}\" (id ${card.id})] $text"); nav.navigate("chat") },
                     onOpenLink = { url -> scope.launch { com.past9.phoneaos.system.UiBus.openInBrowser.emit(com.past9.phoneaos.system.UiBus.OpenInBrowser(url)) } },
                     onRun = { card, input -> val r = com.past9.phoneaos.cards.CardScripts.run(this@MainActivity, card, input)
-                        if (r.ok) { g.cards.update(card.id) { it.copy(data = r.data!!, updatedAt = System.currentTimeMillis()) }; true to r.data!! } else false to org.json.JSONObject().put("error", r.log.takeLast(300)).toString() },
+                        if (r.ok) { g.cards.update(card.id) { it.withData(r.data!!) }; true to r.data!! } else false to org.json.JSONObject().put("error", r.log.takeLast(300)).toString() },
                 ), onDismiss = { openCard = null }, refreshing = refreshingCard == c.id)
             }
             if (modelSheet && pickingHelper) HelperRosterSheet(
