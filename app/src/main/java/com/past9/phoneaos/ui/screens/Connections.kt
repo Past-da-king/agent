@@ -106,7 +106,7 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
     when (val sh = sheet) {
         null -> {}
         else -> if (sh.startsWith("profile:") || sh.startsWith("account:")) {} else when (sh) {
-        "learned" -> LearnedSheet(state.learned, actions) { sheet = null }
+        "learned" -> LearnedSheet(state.learned, actions, onDismiss = { sheet = null })
         "list" -> MachinesSheet(state.machines, actions.machine, onDismiss = { sheet = null }, onOpen = { sheet = it ?: "new" })
         else -> MachineSheet(state.machines.firstOrNull { it.id == sh }, state.machines, actions.machine.copy(onDelete = { actions.machine.onDelete(it); sheet = "list" }),
             onDismiss = { sheet = "list" }, onDone = { sheet = "list" })
