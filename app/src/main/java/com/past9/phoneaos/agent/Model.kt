@@ -69,8 +69,11 @@ class ProviderException(message: String, val status: Int = 0, val retryable: Boo
 
 interface LlmProvider {
     val name: String
-    suspend fun complete(system: String, messages: List<Msg>, tools: List<ToolSpec>, model: String, maxTokens: Int = 4096): Completion
+    suspend fun complete(system: String, messages: List<Msg>, tools: List<ToolSpec>, model: String, maxTokens: Int = 8192): Completion
 }
+
+/** Set on a tool call whose arguments could not be read as JSON; the value is how many characters arrived. */
+const val BAD_ARGUMENTS = "__bad_arguments"
 
 /** Tiny builder so tool schemas read like documentation. */
 fun schema(required: List<String> = emptyList(), vararg props: Pair<String, JSONObject>): JSONObject =

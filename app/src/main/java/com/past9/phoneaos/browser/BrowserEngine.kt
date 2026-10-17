@@ -213,10 +213,21 @@ class BrowserEngine(private val context: Context, val profile: String = "Persona
         while (nativeLog.size > 300) nativeLog.pollFirst()
     }
 
+    /** Run script text in the page as the app itself (no site security policy applies); returns what it evaluates to, as JSON. */
+    suspend fun evalRaw(script: String): String = onMain<String> { w, cb -> w.evaluateJavascript(script) { cb(it ?: "null") } } ?: "timeout"
+
     /** Evaluate [body] (an async function body that sees `args`) in the page and wait for what it returns, as JSON {ok,v} or {ok:false,e}. */
     suspend fun runAsync(body: String, args: JSONObject, timeoutMs: Long = 30_000): String {
+        val P = com.past9.phoneaos.connections.PageJs
         val slot = "__aosR" + System.nanoTime()
-        if (js(com.past9.phoneaos.connections.PageJs.start(slot, body, args)) == "timeout") return """{"ok":false,"e":"The page didn't respond"}"""
+        when (js(P.start(slot, body, args))) {
+            "timeout" -> return """{"ok":false,"e":"The page didn't respond"}"""
+            "blocked" -> {
+                // This site forbids building a function from text. Inject the body as script text instead.
+                js(P.pending(slot)); evalRaw(P.direct(slot, body, args)); kotlinx.coroutines.delay(250)
+                if (js(P.startedState(slot)) == "0") { js(P.clear(slot)); return """{"ok":false,"e":"Syntax: the body doesn't parse (${body.length} characters)"}""" }
+            }
+        }
         val end = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < end) {
             val r = js(com.past9.phoneaos.connections.PageJs.poll(slot))

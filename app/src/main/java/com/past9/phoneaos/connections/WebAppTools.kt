@@ -81,7 +81,7 @@ Rules: never put a password, token or cookie value in a tool or in your reply. R
     fun problem(t: LearnedTool): String? = when {
         !toolNameRx.matches(t.name) -> "Tool name \"${t.name}\" must be lower-case letters, digits and underscores, 2 to 30 characters, starting with a letter."
         t.description.isBlank() -> "${t.name}: add a description saying what it does and when to use it."
-        t.js.isBlank() -> "${t.name}: the js body is empty."
+        t.js.isBlank() -> "${t.name}: the js body is empty (0 characters arrived). If you did write it, the call may have been cut off: send fewer tools per call."
         t.js.length > LearnedStore.MAX_JS -> "${t.name}: the js is too long (${t.js.length} characters, limit ${LearnedStore.MAX_JS}). Split it into smaller tools."
         t.params.keys().asSequence().any { k -> !Regex("^[a-zA-Z][a-zA-Z0-9_]{0,29}$").matches(k) || t.params.optJSONObject(k)?.optString("type") !in paramTypes } ->
             "${t.name}: each input needs a plain name and a type of string, number, integer or boolean."
@@ -174,7 +174,10 @@ class WebAppSaveTool(private val store: LearnedStore, private val runner: PageRu
         tools.firstNotNullOfOrNull { WebApps.problem(it) }?.let { return "Not saved: $it" }
         if (store.find(id) == null && store.apps.value.size >= LearnedStore.MAX_APPS) return "Not saved: too many apps (${LearnedStore.MAX_APPS}). Remove one first."
         // A syntax check that can't run (no browser open right now) never blocks the save.
-        for (t in tools) runCatching { runner.syntaxError(t.js, ctx) }.getOrDefault("").takeIf { it.isNotBlank() }?.let { return "Not saved: the js of ${t.name} doesn't parse: $it" }
+        for (t in tools) runCatching { runner.syntaxError(t.js, ctx) }.getOrDefault("").takeIf { it.isNotBlank() }?.let {
+            return "Not saved: the js of ${t.name} doesn't parse: $it. It arrived as ${t.js.length} characters, starting \"${t.js.take(50).replace('\n', ' ')}\" and ending \"${t.js.takeLast(50).replace('\n', ' ')}\". " +
+                "If it ends mid-statement the reply was cut off: send fewer or shorter tools per call."
+        }
         val app = LearnedApp(id, name, url, input.optString("about").trim(), input.optString("profile").trim(), input.optBoolean("desktop", false), tools)
         val replacing = store.find(id) != null
         val details = buildString {

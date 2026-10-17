@@ -4,24 +4,42 @@ import org.json.JSONObject
 
 /** The JavaScript the app puts into pages: running a learned tool, and watching what a site sends while the agent maps it. */
 object PageJs {
+    private fun q(s: String) = JSONObject.quote(s)
+
     /**
      * Runs `body` (the text of an async function that sees `args` and may `return` anything JSON-able) in the page and
      * leaves the outcome in window[slot] for the app to poll: {p:true} while it runs, then {ok:true,v:...} or {ok:false,e:"..."}.
+     * Returns "started", "syntax" (the body doesn't parse; the slot already says so) or "blocked": the site's own security
+     * policy forbids building a function from text (GitHub, Reddit and others), so [direct] must be used instead.
      */
     fun start(slot: String, body: String, args: JSONObject): String =
-        "(function(){var k=${JSONObject.quote(slot)};window[k]={p:true};" +
-        "try{var f=new (Object.getPrototypeOf(async function(){}).constructor)('args',${JSONObject.quote(body)});" +
-        "f(${args}).then(function(v){window[k]={ok:true,v:v===undefined?null:v}},function(e){window[k]={ok:false,e:String(e&&e.message||e)}})}" +
-        "catch(e){window[k]={ok:false,e:'Syntax: '+String(e&&e.message||e)}}return 1})()"
+        "(function(){var k=${q(slot)};window[k]={p:true};" +
+        "try{var f=new (Object.getPrototypeOf(async function(){}).constructor)('args',${q(body)});" +
+        "f(${args}).then(function(v){window[k]={ok:true,v:v===undefined?null:v}},function(e){window[k]={ok:false,e:String(e&&e.message||e)}});return 'started'}" +
+        "catch(e){if(e&&(e.name==='EvalError'||/unsafe-eval|Content Security Policy|code generation/i.test(String(e.message))))return 'blocked';" +
+        "window[k]={ok:false,e:'Syntax: '+String(e&&e.message||e)};return 'syntax'}})()"
+
+    /** Marks the slot as waiting, with "not started" (s:0), before [direct] runs. */
+    fun pending(slot: String): String = "(function(){window[${q(slot)}]={p:true,s:0};return 1})()"
+
+    /**
+     * The same run, written straight into the page as script text. The app injects it itself, so a site's policy
+     * doesn't apply. A body that doesn't parse stops the whole script, so s stays 0 and [startedState] says so.
+     */
+    fun direct(slot: String, body: String, args: JSONObject): String =
+        "(function(){var k=${q(slot)};window[k].s=1;(async function(args){\n$body\n})(${args}).then(function(v){window[k]={ok:true,v:v===undefined?null:v}},function(e){window[k]={ok:false,e:String(e&&e.message||e)}})})()"
+
+    /** 0: the script never started (it doesn't parse); 1: running; 2: finished; -1: slot missing. */
+    fun startedState(slot: String): String = "(function(){var r=window[${q(slot)}];return r?(r.p?(r.s?1:0):2):-1})()"
 
     /** What to read to see how it went: null while still running. */
-    fun poll(slot: String): String = "(function(){var r=window[${JSONObject.quote(slot)}];return r&&!r.p?r:null})()"
+    fun poll(slot: String): String = "(function(){var r=window[${q(slot)}];return r&&!r.p?r:null})()"
 
-    fun clear(slot: String): String = "(function(){delete window[${JSONObject.quote(slot)}];return 1})()"
+    fun clear(slot: String): String = "(function(){delete window[${q(slot)}];return 1})()"
 
-    /** Only checks that the body parses as an async function, without running it. Returns "" or the error. */
+    /** Only checks that the body parses as an async function, without running it. "" when it parses, or when the site's policy stops the check. */
     fun syntax(body: String): String =
-        "(function(){try{new (Object.getPrototypeOf(async function(){}).constructor)('args',${JSONObject.quote(body)});return ''}catch(e){return String(e&&e.message||e)}})()"
+        "(function(){try{new (Object.getPrototypeOf(async function(){}).constructor)('args',${q(body)});return ''}catch(e){if(e&&(e.name==='EvalError'||/unsafe-eval|Content Security Policy|code generation/i.test(String(e.message))))return '';return String(e&&e.message||e)}})()"
 
     /**
      * Put in every page at document start. It does nothing until sessionStorage.__aosNet is "1" (browser_network start),

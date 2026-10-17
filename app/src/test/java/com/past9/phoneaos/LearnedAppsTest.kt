@@ -132,6 +132,36 @@ class LearnedAppsTest {
         assertEquals(listOf("main", "WhatsApp helper"), r.ranFor)
     }
 
+    @Test fun aSyntaxErrorSaysHowMuchArrivedAndHowItStartedAndEnded() {
+        val st = store(); val c = Ctx()
+        val out = save(input(tool("search", true, js = "const r = await fetch('/s?k=' + args.q); const html = await r.text(); return html.sl")), st, c, Runner(syntax = "Unexpected end of input"))
+        assertTrue(out, out.startsWith("Not saved: the js of search doesn't parse: Unexpected end of input"))
+        assertTrue(out, out.contains("arrived as 83 characters") && out.contains("ending \"") && out.contains("html.sl") && out.contains("cut off"))
+        val empty = save(input(tool("search", true, js = "")), st, c, Runner()); assertTrue(empty, empty.contains("0 characters arrived"))
+    }
+
+    @Test fun argumentsThatCouldNotBeReadAreSaidNotQuietlyEmptied() = runBlocking {
+        val ran = mutableListOf<String>()
+        val tool = object : com.past9.phoneaos.agent.Tool {
+            override val spec = com.past9.phoneaos.agent.ToolSpec("webapp_save", "x", JSONObject().put("type", "object"))
+            override suspend fun run(input: JSONObject, ctx: ToolContext): String { ran += "ran"; return "ok" }
+        }
+        var turn = 0
+        val provider = object : com.past9.phoneaos.agent.LlmProvider {
+            override val name = "fake"
+            override suspend fun complete(system: String, messages: List<com.past9.phoneaos.agent.Msg>, tools: List<com.past9.phoneaos.agent.ToolSpec>, model: String, maxTokens: Int): com.past9.phoneaos.agent.Completion {
+                turn++
+                return if (turn == 1) com.past9.phoneaos.agent.Completion(com.past9.phoneaos.agent.Msg(com.past9.phoneaos.agent.Role.ASSISTANT, listOf(com.past9.phoneaos.agent.Block.ToolCall("c1", "webapp_save", JSONObject().put(com.past9.phoneaos.agent.BAD_ARGUMENTS, 4090)))), "length")
+                else com.past9.phoneaos.agent.Completion(com.past9.phoneaos.agent.Msg(com.past9.phoneaos.agent.Role.ASSISTANT, listOf(com.past9.phoneaos.agent.Block.Text("done"))), "stop")
+            }
+        }
+        val history = mutableListOf(com.past9.phoneaos.agent.Msg.user("save it"))
+        com.past9.phoneaos.agent.AgentLoop(provider, "m", listOf(tool), maxSteps = 3).run("sys", history, Ctx())
+        assertTrue("the tool never ran on cut-off arguments", ran.isEmpty())
+        val result = history.flatMap { it.blocks }.filterIsInstance<com.past9.phoneaos.agent.Block.ToolResult>().single()
+        assertTrue(result.content, result.isError && result.content.contains("hit the length limit") && result.content.contains("4090 characters arrived") && result.content.contains("Nothing ran"))
+    }
+
     @Test fun missingInputIsSaidNotRun() = runBlocking {
         val st = store(); app(st); val r = Runner()
         val out = LearnedCallTool("wa", st.find("wa")!!.tools[1], st, r).run(JSONObject().put("chat", "Mom"), Ctx())
@@ -166,6 +196,12 @@ class LearnedAppsTest {
         File("build/pagejs").mkdirs()
         File("build/pagejs/start.js").writeText(PageJs.start("__aosR1", "const r = args.n * 2; return {r, s: 'it\\'s \"quoted\"'}", JSONObject().put("n", 21)))
         File("build/pagejs/poll.js").writeText(PageJs.poll("__aosR1"))
+        File("build/pagejs/pending.js").writeText(PageJs.pending("__aosD1"))
+        File("build/pagejs/direct.js").writeText(PageJs.direct("__aosD1", "const v = await new Promise(r => setTimeout(() => r(args.x * 3), 5)); return {v}", JSONObject().put("x", 4)))
+        File("build/pagejs/state_d1.js").writeText(PageJs.startedState("__aosD1"))
+        File("build/pagejs/pending2.js").writeText(PageJs.pending("__aosD2"))
+        File("build/pagejs/direct_syntax.js").writeText(PageJs.direct("__aosD2", "return }", JSONObject()))
+        File("build/pagejs/state_d2.js").writeText(PageJs.startedState("__aosD2"))
         File("build/pagejs/start_throw.js").writeText(PageJs.start("__aosE1", "throw new Error('not signed in')", JSONObject()))
         File("build/pagejs/start_syntax.js").writeText(PageJs.start("__aosE2", "return }", JSONObject()))
         File("build/pagejs/start_await.js").writeText(PageJs.start("__aosE3", "const v = await new Promise(r => setTimeout(() => r(args.x + 1), 5)); return [v, undefined]", JSONObject().put("x", 1)))
