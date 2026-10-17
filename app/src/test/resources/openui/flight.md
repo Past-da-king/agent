@@ -1,26 +1,8 @@
-Your flight GE372 leaves Cape Town at 07:10 today — boarding 06:40, group B.
+Your flight leaves Cape Town at 07:10 today and lands in Durban at 09:15.
 
 ```openui-lang
-root = Card([header, flightInfo, sep, boarding, bagNote, buttons])
-
-header = CardHeader("Flight today", "Friday, 16 Oct 2026")
-
-flightInfo = EntityList([route, depart, arrive, status])
-route = {left: "Flight", right: "GE372"}
-depart = {left: "Cape Town (CPT)", right: "07:10"}
-arrive = {left: "Durban (DUR)", right: "09:15"}
-status = {left: "Status", right: "Checked in"}
-
-sep = Separator("horizontal")
-
-boarding = EntityList([boardingTime, group, seat, ref])
-boardingTime = {left: "Boarding", right: "06:40"}
-group = {left: "Group", right: "B"}
-seat = {left: "Seat", right: "15E (middle)"}
-ref = {left: "Booking ref", right: "385E655C"}
-
-bagNote = TextContent("One checked bag · Boarding pass saved on phone")
-
-buttons = Buttons([bp])
-bp = Button("Show boarding pass", @ToAssistant("Show boarding pass"), "primary")
+root = Stack([flight])
+flight = Card([CardHeader("GE372", "Cape Town to Durban, today"), EntityList(rows), Buttons([passBtn], "row")])
+rows = [{left: "Departs", right: "07:10 CPT", rightVariant: "text"}, {left: "Arrives", right: "09:15 DUR", rightVariant: "text"}, {left: "Boarding", right: "06:40, Group B", rightVariant: "text"}, {left: "Seat", right: "15E", rightVariant: "text"}, {left: "Booking ref", right: "385E655C", rightVariant: "text"}, {left: "Baggage", right: "1 checked bag", rightVariant: "text"}]
+passBtn = Button("Show boarding pass", @ToAssistant("Show my boarding pass", {booking: "385E655C", flight: "GE372"}))
 ```

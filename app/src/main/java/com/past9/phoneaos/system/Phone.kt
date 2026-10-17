@@ -31,14 +31,16 @@ class AndroidPhone(private val context: Context) : PhoneBridge {
     }
 
     override fun notify(title: String, body: String, questionItemId: Long?, options: List<String>) {
+        // A notification can't draw cards: show what they are about instead of their code.
+        val shown = com.past9.phoneaos.ui.openui.OpenUiLang.plainText(body)
         val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE)
         val st = App.graph(context).settings.state.value
         val agent = Identity.publishAgentShortcut(context, st.agentName, st.mascot, st.accent)
         val me = androidx.core.app.Person.Builder().setName(st.userName.ifBlank { "You" }).setKey("me").build()
-        val style = NotificationCompat.MessagingStyle(me).setConversationTitle(null).addMessage("$title\n$body", System.currentTimeMillis(), agent)
+        val style = NotificationCompat.MessagingStyle(me).setConversationTitle(null).addMessage("$title\n$shown", System.currentTimeMillis(), agent)
         val b = NotificationCompat.Builder(context, CH_MESSAGES).setSmallIcon(Identity.statIcon(context, st.mascot)).setContentTitle(title)
             .setColor(com.past9.phoneaos.ui.theme.accentOf(st.accent).lP.let { android.graphics.Color.rgb((it.red * 255).toInt(), (it.green * 255).toInt(), (it.blue * 255).toInt()) })
-            .setContentText(body).setStyle(style).setShortcutId("agent").setLargeIcon(Identity.avatar(context, st.mascot, st.accent, 192))
+            .setContentText(shown).setStyle(style).setShortcutId("agent").setLargeIcon(Identity.avatar(context, st.mascot, st.accent, 192))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE).setAutoCancel(true).setContentIntent(open)
         val nid = questionItemId?.toInt() ?: (System.currentTimeMillis() % 100000).toInt()
         if (questionItemId != null) options.take(3).forEachIndexed { i, opt ->

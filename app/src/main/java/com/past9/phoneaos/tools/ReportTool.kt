@@ -19,7 +19,7 @@ class ReportTool(private val context: Context, private val post: suspend (ChatIt
         "In the chat you then say only the one-line takeaway.",
         schema(listOf("title", "summary", "markdown"), "title" to str("Short title, e.g. 'Cyber tender readiness'"),
             "summary" to str("The takeaway in one or two short sentences: shown on the card"),
-            "markdown" to str("The full report in markdown: headings, bullets, tables, links to sources")))
+            "markdown" to str("The full report in markdown: headings, bullets, tables, links to sources. Structured parts (listings, options, statuses, money) can be ```openui-lang blocks, drawn as cards and buttons like in the chat")))
 
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val title = input.optString("title").trim().ifBlank { "Report" }.take(80)

@@ -66,9 +66,9 @@ class OpenUiRealCasesTest {
         rule.onRoot().captureRoboImage(File("build/screens-openui/openui-$name.png").path)
     }
 
-    @Test fun flats() = case("flats", 2280)
-    @Test fun flight() = case("flight", 900)
-    @Test fun approval() = case("approval", 860)
-    @Test fun helpers() = case("helpers", 800)
-    @Test fun money() = case("money", 1060)
+    @Test fun flats() = case("flats", 1250)
+    @Test fun flight() = case("flight", 800)
+    @Test fun approval() = case("approval", 1000)
+    @Test fun helpers() = case("helpers", 1250)
+    @Test fun money() = case("money", 1150)
 }

@@ -4,7 +4,7 @@ package com.past9.phoneaos.ui.openui
  * OpenUI Lang 1.0 (https://github.com/thesysdev/openui/tree/main/spec), the compact line language a model writes to
  * describe a UI: `root = Card([header, chart])`, one statement per line, names usable before they are defined.
  *
- * SPIKE: parses literals, arrays, objects, component calls, references, `$state` and `@` actions, closes open
+ * Parses literals, arrays, objects, component calls, references, `$state` and `@` actions, closes open
  * brackets and strings so a half-streamed program still renders, and drops only a broken statement. Operators,
  * queries, mutations and forms are not run yet.
  */
@@ -139,6 +139,8 @@ object OpenUiLang {
 
     /** Prop names by position, from OpenUI's chat library (react-ui 0.18). Unknown components are dropped. */
     val LIBRARY: Map<String, List<String>> = mapOf(
+        // From OpenUI's playground library: several Cards, one per item ("row" swipes, "column" stacks).
+        "Stack" to listOf("children", "direction", "gap", "align", "justify", "wrap"),
         "Card" to listOf("children", "sources"), "CardHeader" to listOf("title", "subtitle"),
         "TextContent" to listOf("text", "size"), "MarkDownRenderer" to listOf("textMarkdown", "variant"),
         "Callout" to listOf("variant", "title", "description", "visible"), "Separator" to listOf("orientation", "decorative"),
@@ -158,14 +160,60 @@ object OpenUiLang {
         // Lucide icons (Tag's optional icon): accepted, not drawn yet.
         "Icon" to listOf("name", "category"),
     )
-    const val ROOT = "Card"
+    /** The library's root is Stack (one Card per item); a lone Card is accepted too. */
+    val ROOTS = setOf("Stack", "Card")
+
+    /** Where a tap happened: the card it is on and the item inside it (a section heading or a list row). */
+    data class Scope(val card: String? = null, val item: String? = null)
+
+    /**
+     * What a tap on @ToAssistant sends into the chat as the user's message: the instruction, then one line saying which
+     * card and item it is about plus the model's context, so the agent acts on that specific one.
+     */
+    fun messageFor(a: Action.ToAssistant, scope: Scope): String {
+        val parts = mutableListOf<String>()
+        fun add(s: String?) { val v = s?.trim().orEmpty(); if (v.isNotEmpty() && parts.none { it.equals(v, true) } && !a.text.trim().equals(v, true)) parts += v }
+        add(scope.item); add(scope.card)
+        when (val c = a.context) {
+            is Map<*, *> -> c.forEach { (k, v) -> val s = value(v); if (s.isNotBlank()) add(if (k == "item" || k == "name" || k == "title") s else "$k: $s") }
+            null -> {}
+            else -> add(value(c))
+        }
+        return if (parts.isEmpty()) a.text.trim() else a.text.trim() + "\n\u21b3 " + parts.joinToString(" \u00b7 ")
+    }
+
+    private fun value(v: Any?): String = when (v) {
+        null -> ""
+        is Double -> if (v == Math.floor(v) && kotlin.math.abs(v) < 1e15) v.toLong().toString() else v.toString()
+        is Map<*, *> -> v.entries.joinToString(", ") { "${it.key}: ${value(it.value)}" }
+        is List<*> -> v.joinToString(", ") { value(it) }
+        else -> v.toString()
+    }
+
+    private val FENCE = Regex("```openui[^\\n]*\\n([\\s\\S]*?)(```|\\z)")
+
+    /**
+     * The message for places that can't draw cards (a notification, the Home preview): each openui-lang block becomes
+     * the titles of what it shows, e.g. "R9,500 / month, 98 m2 · R8,500 / month, 43 m2".
+     */
+    fun plainText(md: String): String = FENCE.replace(md) { m ->
+        val titles = mutableListOf<String>()
+        fun walk(v: Any?) { when (v) {
+            is Node -> { when (v.type) { "CardHeader" -> v.props["title"]; "InlineHeader" -> v.props["heading"]; "ListItem", "StepsItem" -> v.props["title"]; else -> null }
+                ?.let { (it as? String)?.takeIf { s -> s.isNotBlank() }?.let { s -> titles += s } }
+                v.props.values.forEach { walk(it) } }
+            is List<*> -> v.forEach { walk(it) }
+        } }
+        walk(render(parse(m.groupValues[1])).root)
+        titles.distinct().take(4).joinToString(" \u00b7 ")
+    }.replace(Regex("\\n{3,}"), "\n\n").trim()
 
     data class Rendered(val root: Node?, val unresolved: Set<String>, val errors: List<String>)
 
     /** The tree from the entry: `root`, else the first statement that calls the root component. */
     fun render(p: Program): Rendered {
         val unresolved = linkedSetOf<String>(); val errors = p.errors.toMutableList()
-        val entry = p.statements["root"] ?: p.order.map { p.statements.getValue(it) }.firstOrNull { (it.value as? Call)?.name == ROOT }
+        val entry = p.statements["root"] ?: p.order.map { p.statements.getValue(it) }.firstOrNull { (it.value as? Call)?.name in ROOTS }
             ?: return Rendered(null, unresolved, errors + "no-root")
         fun eval(v: V, seen: Set<String>): Any? = when (v) {
             is Str -> v.v; is Num -> v.v; is Bool -> v.v; Null -> null
