@@ -175,7 +175,6 @@ internal fun TransferCard(n: TransferNote, onPick: (String) -> Unit) {
     }
 }
 
-/** A memory page, full screen, like a wiki article. Links open the linked page. */
 /** Came in from a file that didn't say what it is: waiting to be looked at. Saving the page by hand clears it. */
 fun isUnsorted(m: MemoryRow) = m.topics.split(',').any { it.trim().equals(com.past9.phoneaos.data.MemoryTransfer.UNSORTED, true) }
 

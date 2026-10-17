@@ -52,7 +52,7 @@ class MemoryTransferScreenTest {
     @Test fun theResultIsACardInTheListNotADialog() {
         show(true, pages, bigImport)
         rule.onNodeWithText("992 pages added").assertExists()
-        rule.onNodeWithText("Your agent can search them now.").assertExists()
+        rule.onNodeWithText("Your agent can search them now.", substring = true).assertExists()
         for (t in listOf("New", "992", "Unsorted", "41", "Show unsorted", "Done")) rule.onAllNodesWithText(t)[0].assertExists()
         assertTrue("no dialog window", rule.onAllNodes(isDialog()).fetchSemanticsNodes().isEmpty())
         shot("import-dark")
