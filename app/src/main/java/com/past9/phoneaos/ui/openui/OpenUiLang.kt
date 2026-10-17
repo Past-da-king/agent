@@ -151,6 +151,12 @@ object OpenUiLang {
         "FollowUpBlock" to listOf("items"), "FollowUpItem" to listOf("text"),
         "Steps" to listOf("items"), "StepsItem" to listOf("title", "details"),
         "TagBlock" to listOf("tags", "size"), "Tag" to listOf("text", "icon", "size", "variant"),
+        "ImageBlock" to listOf("src", "alt"), "Image" to listOf("alt", "src"),
+        "InlineHeader" to listOf("heading", "description"),
+        "EntityList" to listOf("rows", "size", "header", "footer"),
+        "TextCallout" to listOf("variant", "title", "description"),
+        // Lucide icons (Tag's optional icon): accepted, not drawn yet.
+        "Icon" to listOf("name", "category"),
     )
     const val ROOT = "Card"
 

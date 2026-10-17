@@ -1,0 +1,5 @@
+send Shey my invoice
+
+Facts: email drafted and ready, not sent yet.
+To: Shey (Bo-Smart). Subject: Invoice Submission. Body: "Hi Shey, please find attached my invoice for this month. Thanks, Ayanda". Attachment: GF-13 invoice 07.pdf, amount R20 000.
+I need his approval before sending: buttons "Send" (asks me to send it), "Edit" (asks me to change it) and "Not now" (asks me to hold it).
