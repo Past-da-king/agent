@@ -159,7 +159,8 @@ class WebAppSaveTool(private val store: LearnedStore, private val runner: PageRu
     override val spec = ToolSpec("webapp_save", "Save the tools you wrote for a web app, so next time you call them instead of clicking through the app. Read webapp_guide first, and test each body with browser_eval. The user is shown the tool list and approves it. Saving an app that exists replaces its tools.",
         schema(listOf("name", "start_url", "tools"), "name" to str("The app's name, e.g. WhatsApp Web"), "start_url" to str("Where it lives: https://web.whatsapp.com"),
             "about" to str("One or two lines: what it is and anything to know (sign-in, quirks)"), "desktop" to JSONObject().put("type", "boolean").put("description", "Load it as a desktop browser (WhatsApp Web needs this)"),
-            "profile" to str("Browser profile that is signed in to it; default is the one you used"), "tools" to JSONObject().put("type", "array").put("items", toolSchema)))
+            "profile" to str("Browser profile that is signed in to it; default is the one you used"),
+            "logo" to str("Optional https URL of the app's icon, shown in the app's list; default is the site's favicon"), "tools" to JSONObject().put("type", "array").put("items", toolSchema)))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val name = input.optString("name").trim()
         val url = input.optString("start_url").trim().let { if (it.startsWith("http")) it else "https://$it" }
@@ -178,7 +179,8 @@ class WebAppSaveTool(private val store: LearnedStore, private val runner: PageRu
             return "Not saved: the js of ${t.name} doesn't parse: $it. It arrived as ${t.js.length} characters, starting \"${t.js.take(50).replace('\n', ' ')}\" and ending \"${t.js.takeLast(50).replace('\n', ' ')}\". " +
                 "If it ends mid-statement the reply was cut off: send fewer or shorter tools per call."
         }
-        val app = LearnedApp(id, name, url, input.optString("about").trim(), input.optString("profile").trim(), input.optBoolean("desktop", false), tools)
+        val app = LearnedApp(id, name, url, input.optString("about").trim(), input.optString("profile").trim(), input.optBoolean("desktop", false), tools,
+            logo = input.optString("logo").trim().takeIf { it.startsWith("https://") } ?: "")
         val replacing = store.find(id) != null
         val details = buildString {
             appendLine("Site: $url${if (app.desktop) " (as a desktop browser)" else ""}")

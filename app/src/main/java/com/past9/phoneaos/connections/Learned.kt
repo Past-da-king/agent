@@ -44,16 +44,20 @@ data class LearnedApp(
     /** Let its tools that change things run without asking each time. Only the user can turn this on. */
     val trusted: Boolean = false,
     val updatedAt: Long = System.currentTimeMillis(),
+    /** An https image of the app's icon; blank means the site's own favicon. */
+    val logo: String = "",
 ) {
+    /** What to draw as the app's logo: the one the agent gave, else the site's favicon (an initial letter if neither loads). */
+    val logoUrl: String get() = logo.ifBlank { if (host.isBlank()) "" else "https://$host/favicon.ico" }
     val host: String get() = runCatching { java.net.URI(startUrl).host.orEmpty().removePrefix("www.") }.getOrDefault("")
     val writes: Int get() = tools.count { !it.readOnly }
 
     fun toJson(): JSONObject = JSONObject().put("id", id).put("name", name).put("startUrl", startUrl).put("about", about).put("profile", profile).put("desktop", desktop)
-        .put("tools", JSONArray().apply { tools.forEach { put(it.toJson()) } }).put("trusted", trusted).put("updatedAt", updatedAt)
+        .put("tools", JSONArray().apply { tools.forEach { put(it.toJson()) } }).put("trusted", trusted).put("updatedAt", updatedAt).put("logo", logo)
 
     companion object {
         fun fromJson(o: JSONObject) = LearnedApp(o.getString("id"), o.optString("name"), o.optString("startUrl"), o.optString("about"), o.optString("profile"), o.optBoolean("desktop"),
-            o.optJSONArray("tools")?.let { a -> (0 until a.length()).map { LearnedTool.fromJson(a.getJSONObject(it)) } } ?: emptyList(), o.optBoolean("trusted"), o.optLong("updatedAt"))
+            o.optJSONArray("tools")?.let { a -> (0 until a.length()).map { LearnedTool.fromJson(a.getJSONObject(it)) } } ?: emptyList(), o.optBoolean("trusted"), o.optLong("updatedAt"), o.optString("logo"))
 
         /** a-z, 0-9 and underscores: what a tool name may be made of. */
         fun slug(s: String) = s.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_').take(24)
