@@ -134,9 +134,10 @@ class LearnedAppsTest {
 
     @Test fun aSyntaxErrorSaysHowMuchArrivedAndHowItStartedAndEnded() {
         val st = store(); val c = Ctx()
-        val out = save(input(tool("search", true, js = "const r = await fetch('/s?k=' + args.q); const html = await r.text(); return html.sl")), st, c, Runner(syntax = "Unexpected end of input"))
+        val cutJs = "const r = await fetch('/s?k=' + args.q); const html = await r.text(); return html.sl"
+        val out = save(input(tool("search", true, js = cutJs)), st, c, Runner(syntax = "Unexpected end of input"))
         assertTrue(out, out.startsWith("Not saved: the js of search doesn't parse: Unexpected end of input"))
-        assertTrue(out, out.contains("arrived as 83 characters") && out.contains("ending \"") && out.contains("html.sl") && out.contains("cut off"))
+        assertTrue(out, out.contains("arrived as ${cutJs.length} characters") && out.contains("ending \"") && out.contains("html.sl") && out.contains("cut off"))
         val empty = save(input(tool("search", true, js = "")), st, c, Runner()); assertTrue(empty, empty.contains("0 characters arrived"))
     }
 
