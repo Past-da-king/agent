@@ -159,6 +159,8 @@ object OpenUiLang {
         "TextCallout" to listOf("variant", "title", "description"),
         // Lucide icons (Tag's optional icon): accepted, not drawn yet.
         "Icon" to listOf("name", "category"),
+        // Ours, not OpenUI's: one thing for sale, for a row of them to swipe through (research, shopping).
+        "Product" to listOf("image", "name", "price", "rating", "reviews", "seller", "was", "tag", "actions"),
     )
     /** The library's root is Stack (one Card per item); a lone Card is accepted too. */
     val ROOTS = setOf("Stack", "Card")

@@ -85,6 +85,9 @@ class BrowserService : Service() {
             return e
         }
 
+        /** The browser this agent already has open, if any. Never starts one. */
+        fun existing(owner: String): BrowserEngine? = engines.entries.firstOrNull { it.key.startsWith("$owner/") }?.value
+
         /** A helper finished: close its browser. The main agent's stays open. */
         fun release(owner: String) {
             if (owner == "main") return

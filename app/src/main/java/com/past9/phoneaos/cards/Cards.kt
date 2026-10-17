@@ -108,7 +108,7 @@ class CardStore(context: Context) {
 
 /** Fills `{{key}}` placeholders in an OpenUI body from a card's JSON data (dotted paths and array indexes: `{{items.0.price}}`). */
 object CardBody {
-    private val slot = Regex("""\{\{\s*([A-Za-z0-9_.\-]+)\s*}}""")
+    private val slot = Regex("""\{\{\s*([A-Za-z0-9_.\-]+)\s*\}\}""")
 
     fun fill(body: String, dataJson: String): String {
         if (!body.contains("{{")) return body

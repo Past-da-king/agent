@@ -100,6 +100,8 @@ data class CardSheetActions(
     val onRefresh: (Card) -> Unit = {},
     val onPin: (Card, Boolean) -> Unit = { _, _ -> },
     val onAsk: (Card, String) -> Unit = { _, _ -> },
+    /** A tap on a button in an OpenUI card: to the agent in the background. Null: asked like onAsk. */
+    val onAct: ((Card, String) -> Unit)? = null,
     val onOpenLink: (String) -> Unit = {},
     /** A search box in the card: run its script with this input, return {ok, data or error}. */
     val onRun: suspend (Card, String) -> Pair<Boolean, String> = { _, _ -> false to "{}" },
@@ -142,7 +144,8 @@ fun CardSheet(c: Card, dark: Boolean, accent: String, actions: CardSheetActions,
             if (c.isOpenUi) {
                 // New cards: drawn natively in the live accent and theme. A tap on a button asks the agent, a link opens the browser.
                 val src = remember(c.openui, c.data) { c.openUiSource() }
-                CompositionLocalProvider(com.past9.phoneaos.ui.openui.LocalOpenUiSend provides { text -> actions.onAsk(c, text) }) {
+                CompositionLocalProvider(com.past9.phoneaos.ui.openui.LocalOpenUiSend provides { text -> actions.onAsk(c, text) },
+                    com.past9.phoneaos.ui.openui.LocalOpenUiAct provides actions.onAct?.let { act -> { text: String -> act(c, text) } }) {
                     Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp).navigationBarsPadding()) {
                         com.past9.phoneaos.ui.openui.OpenUiBlock(src)
                     }

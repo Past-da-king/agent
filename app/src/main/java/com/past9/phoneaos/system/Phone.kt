@@ -43,7 +43,7 @@ class AndroidPhone(private val context: Context) : PhoneBridge {
             .setContentText(shown).setStyle(style).setShortcutId("agent").setLargeIcon(Identity.avatar(context, st.mascot, st.accent, 192))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE).setAutoCancel(true).setContentIntent(open)
         val nid = questionItemId?.toInt() ?: (System.currentTimeMillis() % 100000).toInt()
-        if (questionItemId != null) options.take(3).forEachIndexed { i, opt ->
+        if (questionItemId != null) com.past9.phoneaos.agent.AskOptions.fit(options, 3).forEachIndexed { i, opt ->
             val pi = PendingIntent.getBroadcast(context, nid * 10 + i,
                 Intent(context, AnswerReceiver::class.java).putExtra("item", questionItemId).putExtra("option", opt).putExtra("nid", nid), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             b.addAction(0, opt, pi)
