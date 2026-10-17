@@ -42,6 +42,7 @@ fun Markdown(text: String, modifier: Modifier = Modifier, style: TextStyle = Mat
             when (p) {
                 is MdPart.Prose -> Prose(p.text, Modifier, style, color, onWikiLink, knownPages)
                 is MdPart.Table -> TableView(p.table, style, color, onWikiLink, knownPages)
+                is MdPart.OpenUi -> com.past9.phoneaos.ui.openui.OpenUiBlock(p.source)
             }
         }
     }
@@ -118,6 +119,8 @@ fun inline(s: String, linkColor: Color, codeBg: Color, onWiki: ((String) -> Unit
 sealed interface MdPart {
     data class Prose(val text: String) : MdPart
     data class Table(val table: MdTable) : MdPart
+    /** A generated UI: an ```openui-lang fence (OpenUI Lang 1.0), drawn natively. Unclosed while it streams. */
+    data class OpenUi(val source: String) : MdPart
 }
 
 /** A GitHub-style markdown table: header, column alignments, rows (padded to the header's width). */
@@ -156,7 +159,11 @@ data class MdTable(val header: List<String>, val align: List<Char>, val rows: Li
             var i = 0
             while (i < lines.size) {
                 val l = lines[i]
-                if (l.contains('|') && i + 1 < lines.size && sep.matches(lines[i + 1]) && lines[i + 1].contains('-')) {
+                if (l.trim().startsWith("```openui")) {
+                    var j = i + 1; val body = mutableListOf<String>()
+                    while (j < lines.size && !lines[j].trim().startsWith("```")) { body += lines[j]; j++ }
+                    flush(); out += MdPart.OpenUi(body.joinToString("\n")); i = j + 1
+                } else if (l.contains('|') && i + 1 < lines.size && sep.matches(lines[i + 1]) && lines[i + 1].contains('-')) {
                     val header = cells(l)
                     val align = cells(lines[i + 1]).map { c -> val t = c.trim(); when { t.startsWith(":") && t.endsWith(":") -> 'c'; t.endsWith(":") -> 'r'; else -> 'l' } }
                     var j = i + 2; val rows = mutableListOf<List<String>>()

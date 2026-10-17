@@ -89,6 +89,11 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
             }
             SectionHeader("Background", "So routines and browsing keep going", Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                var reliability by remember { mutableStateOf(false) }
+                val problems = remember(reliability) { com.past9.phoneaos.system.Background.problems(com.past9.phoneaos.system.Background.check(ctx)) }
+                Line(Icons.Rounded.NotificationsActive, "Reminders on time", if (problems.isEmpty()) "All set: it can speak up by itself" else problems.first().replaceFirstChar { it.uppercase() }) { reliability = true }
+                if (reliability) ReliabilitySheet { reliability = false }
                 Line(Icons.Rounded.BatteryChargingFull, "Battery: unrestricted", "Samsung and others stop background apps. Allow this one to keep working.") { actions.onBattery() }
             }
             SectionHeader("Your data", "It all lives on this phone", Modifier.padding(start = 4.dp, top = 12.dp))

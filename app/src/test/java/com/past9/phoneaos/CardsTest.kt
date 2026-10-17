@@ -47,7 +47,9 @@ class CardsTest {
         assertTrue(light.contains("--primary:#D7141E;") && light.contains("color-scheme:light"))
         assertTrue(CardKit.page(app, "", dark = true, accent = "red").contains("--primary:#FF5A4F;"))
         assertTrue(light.contains(".hero") && light.contains("window.card") && light.contains("Content-Security-Policy"))
-        assertTrue(CardKit.guide(app).contains("card.data()"))
+        val guide = CardKit.guide(app)
+        assertTrue(guide.contains("OpenUI") && guide.contains("{{key}}") && guide.contains("root = Stack"))
+        assertFalse("em dash in the card guide", guide.contains('\u2014') || guide.contains('\u2013'))
     }
 
     /** Writes the sample cards as full pages (with a stand-in bridge) for a real-browser render check: build/cards/. */
@@ -63,5 +65,40 @@ class CardsTest {
             }
             JSONObject(data) // sample data is valid JSON
         }
+    }
+
+    @Test fun openUiBodyFillsPlaceholdersFromData() {
+        val body = """root = Stack([c])
+c = Card([CardHeader("{{store}}", "{{rows.1.n}}"), TextContent("{{quote}}")])"""
+        val data = """{"store":"Takealot","rows":[{"n":"a"},{"n":"b"}],"quote":"say \"hi\"\nnow"}"""
+        val filled = Card(id = "x", title = "t", html = "", openui = body, data = data).openUiSource()
+        assertTrue(filled.contains("""CardHeader("Takealot", "b")"""))
+        assertTrue(filled.contains("""TextContent("say \"hi\"\nnow")"""))
+        // The filled body still parses and draws.
+        assertNotNull(com.past9.phoneaos.ui.openui.OpenUiLang.render(com.past9.phoneaos.ui.openui.OpenUiLang.parse(filled)).root)
+        assertEquals("a  b", Card(id = "x", title = "t", html = "", openui = "a {{nope}} b", data = "null").openUiSource())
+    }
+
+    @Test fun freshDataKeepsOrReplacesTheBody() {
+        val c = Card(id = "x", title = "t", html = "", openui = "root = Stack([])", data = "{}")
+        assertEquals("root = Stack([])", c.withData("""{"price":1,"headline":"R1"}""").openui)
+        assertEquals("R1", c.withData("""{"price":1,"headline":"R1"}""").headline)
+        assertEquals("root = Stack([new])", c.withData("""{"openui":"root = Stack([new])"}""").openui)
+        assertEquals("kept", c.copy(headline = "kept").withData("""{"price":2}""").headline)
+        assertTrue(c.isOpenUi); assertFalse(Card(id = "o", title = "o", html = "<p>old</p>").isOpenUi)
+    }
+
+    @Test fun oldSavedHtmlCardsStillLoad() {
+        // A card file written by 0.11.13 has no "openui" key.
+        val old = JSONObject("""{"id":"old","title":"Old","icon":"tag","html":"<p class='card'>x</p>","data":"{}","headline":"h","pinned":true}""")
+        val c = Card.fromJson(old)
+        assertFalse(c.isOpenUi); assertEquals("<p class='card'>x</p>", c.html); assertEquals("", c.openui)
+        assertEquals("openui", Card.fromJson(c.copy(openui = "openui").toJson()).openui)
+    }
+
+    @Test fun cardBodyChecksCatchBadBodies() {
+        assertTrue(com.past9.phoneaos.cards.OpenUiCheck.warnings("hello").contains("drew nothing"))
+        assertTrue(com.past9.phoneaos.cards.OpenUiCheck.warnings("root = Stack([c])\nc = Card([TextContent(\"a \u2014 b #FF0000\")])").let { it.contains("dashes") && it.contains("hex") })
+        assertEquals("", com.past9.phoneaos.cards.OpenUiCheck.warnings("root = Stack([c])\nc = Card([TextContent(\"fine\")])"))
     }
 }

@@ -1,0 +1,5 @@
+send Lerato my invoice
+
+Facts: email drafted and ready, not sent yet.
+To: Lerato (Acme). Subject: March invoice. Body: "Hi Lerato, please find attached my invoice for this month. Thanks, Sam". Attachment: INV-0042.pdf, amount R4 500.
+I need his approval before sending: buttons "Send" (asks me to send it), "Edit" (asks me to change it) and "Not now" (asks me to hold it).

@@ -15,6 +15,7 @@ import com.past9.phoneaos.App
 import com.past9.phoneaos.data.TriggerRow
 import com.past9.phoneaos.tools.parseWhen
 import org.json.JSONObject
+import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.LocalTime
 import java.time.ZonedDateTime
@@ -63,6 +64,7 @@ object Routines {
         }
         "interval", Watchers.KIND, com.past9.phoneaos.cards.CardScripts.KIND -> t.lastRunAt?.let { (it + (t.spec.toLongOrNull() ?: 60) * 60_000 - now.toInstant().toEpochMilli()).coerceAtLeast(0) } ?: ((t.spec.toLongOrNull() ?: 60) * 60_000)
         "email" -> 15 * 60_000L
+        Wakes.KIND -> t.spec.toLongOrNull()?.let { it - now.toInstant().toEpochMilli() }?.coerceAtLeast(0)
         else -> null // "notification" fires on arrival, not on a clock
     }
 
@@ -73,7 +75,7 @@ object Routines {
     }
 
     /** Kinds that fire at a set clock time: the ones that can be missed while the app is dead. */
-    private val timed = setOf("at", "daily", "weekly")
+    val timed = setOf("at", "daily", "weekly")
 
     /** The latest moment this routine was due at or before [now] (epoch ms), or null if it has none. */
     fun lastDue(t: TriggerRow, now: ZonedDateTime = ZonedDateTime.now()): Long? = when (t.kind) {
@@ -118,10 +120,15 @@ object Routines {
         val wm = WorkManager.getInstance(context)
         val busy = runCatching { wm.getWorkInfosForUniqueWork(name(t.id)).get().any { !it.state.isFinished } }.getOrDefault(false)
         if (!busy) schedule(context, t)
+        // A queued job can outlive its alarm (a force-stop clears alarms, not WorkManager): arm it again, it replaces itself.
+        else if (t.kind != Overnight.KIND) nextSlot(t)?.let { com.past9.phoneaos.system.ExactAlarms.set(context, com.past9.phoneaos.system.ExactAlarms.ACTION_ROUTINE, t.id, it, clock = t.kind == "at") }
     }
 
     fun schedule(context: Context, t: TriggerRow) {
         val wm = WorkManager.getInstance(context)
+        // Wakes have their own clock (one alarm for all of them, merged): see Wakes.
+        if (t.kind == Wakes.KIND) { App.graph(context).scope.launch { runCatching { Wakes.rearm(context) } }; return }
+        if (!t.enabled || t.kind !in timed) com.past9.phoneaos.system.ExactAlarms.cancel(context, com.past9.phoneaos.system.ExactAlarms.ACTION_ROUTINE, t.id)
         if (!t.enabled) { wm.cancelUniqueWork(name(t.id)); return }
         val data = workDataOf("id" to t.id)
         when (t.kind) {
@@ -139,8 +146,12 @@ object Routines {
             }
             else -> {
                 val now = ZonedDateTime.now()
-                val slot = nextSlot(t, now) ?: run { wm.cancelUniqueWork(name(t.id)); return }
+                val slot = nextSlot(t, now) ?: run { wm.cancelUniqueWork(name(t.id)); com.past9.phoneaos.system.ExactAlarms.cancel(context, com.past9.phoneaos.system.ExactAlarms.ACTION_ROUTINE, t.id); return }
                 val delay = slot - now.toInstant().toEpochMilli()
+                // The exact alarm is what makes it run ON TIME (WorkManager's delay is batched into Doze windows,
+                // hours late on a sleeping Samsung); the job below stays as the backup and the ledger runs the slot once.
+                // A one-off ("at") is usually something the user wants to hear at that minute: an alarm-clock alarm.
+                com.past9.phoneaos.system.ExactAlarms.set(context, com.past9.phoneaos.system.ExactAlarms.ACTION_ROUTINE, t.id, slot, clock = t.kind == "at")
                 wm.enqueueUniqueWork(name(t.id), ExistingWorkPolicy.REPLACE,
                     OneTimeWorkRequestBuilder<RoutineWorker>().setInitialDelay(delay, TimeUnit.MILLISECONDS)
                         .setInputData(workDataOf("id" to t.id, "slot" to slot)).setConstraints(net).build())
@@ -153,7 +164,10 @@ object Routines {
             OneTimeWorkRequestBuilder<RoutineWorker>().setInputData(workDataOf("id" to id, "manual" to true, "context" to context_)).build())
     }
 
-    fun cancel(context: Context, id: Long) = WorkManager.getInstance(context).cancelUniqueWork(name(id))
+    fun cancel(context: Context, id: Long) {
+        WorkManager.getInstance(context).cancelUniqueWork(name(id))
+        com.past9.phoneaos.system.ExactAlarms.cancel(context, com.past9.phoneaos.system.ExactAlarms.ACTION_ROUTINE, id)
+    }
 
     suspend fun rescheduleAll(context: Context) = App.graph(context).db.triggers().list().forEach { schedule(context, it) }
 
@@ -170,6 +184,7 @@ class RoutineWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         val g = App.graph(applicationContext)
         val id = inputData.getLong("id", -1)
         val t = g.db.triggers().get(id) ?: return Result.success()
+        if (t.kind == Wakes.KIND && !inputData.getBoolean("manual", false)) return Result.success() // fired by Wakes, never here
         val manual = inputData.getBoolean("manual", false) && inputData.getString("context").isNullOrEmpty()
         if (!t.enabled && !inputData.getBoolean("manual", false)) return Result.success()
 
@@ -204,8 +219,14 @@ class RoutineWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         var cursor = t.cursor
         if (t.kind == "email" && !manual) {
             // Event trigger: only run when a NEW email matches the search.
-            val res = runCatching { g.runtime.composio.execute("GMAIL_FETCH_EMAILS", JSONObject().put("query", t.spec).put("max_results", 3)) }.getOrNull()
-                ?: return Result.retry()
+            val call = runCatching { g.runtime.composio.execute("GMAIL_FETCH_EMAILS", JSONObject().put("query", t.spec).put("max_results", 3)) }
+            val res = call.getOrNull() ?: run {
+                // Gmail unreachable. Retrying forever kept this periodic job in backoff for days (it never once
+                // completed on his phone): try twice, then record why and wait for the next period.
+                if (runAttemptCount < 2) return Result.retry()
+                g.db.triggers().get(id)?.let { g.db.triggers().upsert(it.copy(lastRunAt = System.currentTimeMillis(), lastResult = "Couldn't check Gmail: ${call.exceptionOrNull()?.message?.take(200)}")) }
+                return Result.success()
+            }
             val newest = Routines.newestMessageId(res.optJSONObject("data") ?: res) ?: return Result.success()
             if (cursor.isBlank()) { g.db.triggers().upsert(t.copy(cursor = newest)); return Result.success() } // first look: just remember
             if (newest == cursor) return Result.success()

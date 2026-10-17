@@ -31,14 +31,16 @@ class AndroidPhone(private val context: Context) : PhoneBridge {
     }
 
     override fun notify(title: String, body: String, questionItemId: Long?, options: List<String>) {
+        // A notification can't draw cards: show what they are about instead of their code.
+        val shown = com.past9.phoneaos.ui.openui.OpenUiLang.plainText(body)
         val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE)
         val st = App.graph(context).settings.state.value
         val agent = Identity.publishAgentShortcut(context, st.agentName, st.mascot, st.accent)
         val me = androidx.core.app.Person.Builder().setName(st.userName.ifBlank { "You" }).setKey("me").build()
-        val style = NotificationCompat.MessagingStyle(me).setConversationTitle(null).addMessage("$title\n$body", System.currentTimeMillis(), agent)
+        val style = NotificationCompat.MessagingStyle(me).setConversationTitle(null).addMessage("$title\n$shown", System.currentTimeMillis(), agent)
         val b = NotificationCompat.Builder(context, CH_MESSAGES).setSmallIcon(Identity.statIcon(context, st.mascot)).setContentTitle(title)
             .setColor(com.past9.phoneaos.ui.theme.accentOf(st.accent).lP.let { android.graphics.Color.rgb((it.red * 255).toInt(), (it.green * 255).toInt(), (it.blue * 255).toInt()) })
-            .setContentText(body).setStyle(style).setShortcutId("agent").setLargeIcon(Identity.avatar(context, st.mascot, st.accent, 192))
+            .setContentText(shown).setStyle(style).setShortcutId("agent").setLargeIcon(Identity.avatar(context, st.mascot, st.accent, 192))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE).setAutoCancel(true).setContentIntent(open)
         val nid = questionItemId?.toInt() ?: (System.currentTimeMillis() % 100000).toInt()
         if (questionItemId != null) options.take(3).forEachIndexed { i, opt ->
@@ -106,10 +108,13 @@ class WorkService : Service() {
         // intent == null: Android restarted us after killing the app. Creating the graph (in build) resumes the cut-off helpers;
         // if there turns out to be nothing to resume, don't hang around.
         if (intent == null) handler.postDelayed({ if (AndroidPhone.activeCount <= 0) stopSelf() }, 45_000)
+        // Started by an alarm to hold the process for the work it queues: let go if that work never starts.
+        if (intent?.getBooleanExtra(EXTRA_KEEPALIVE, false) == true) handler.postDelayed({ if (AndroidPhone.activeCount <= 0) stopSelf() }, 120_000)
         return START_STICKY
     }
 
     companion object {
+        const val EXTRA_KEEPALIVE = "keepalive"
         fun text(helpers: Int) = if (helpers > 0) "Working: $helpers helper${if (helpers > 1) "s" else ""}" else "Working on it"
 
         fun build(context: Context): android.app.Notification {
@@ -154,14 +159,14 @@ class WatchdogWorker(context: Context, params: androidx.work.WorkerParameters) :
 }
 
 class BootReceiver : BroadcastReceiver() {
-    /** After a restart or an app update the process is gone: bring helpers and routines back, run what was missed once. */
+    /** After a restart, an app update or a clock change: bring helpers, routines, reminders and the check-in back, run what was missed once. */
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             try {
-                runCatching { App.graph(context) } // starting the process resumes helpers that were cut off
-                runCatching { com.past9.phoneaos.triggers.Routines.rescheduleAll(context) }
-                runCatching { com.past9.phoneaos.triggers.Routines.catchUp(context) }
+                // Starting the process resumes helpers that were cut off; then every clock is armed again
+                // (alarms do not survive a reboot, an update, or a clock change).
+                Rearm.all(context)
             } finally { pending.finish() }
         }
     }

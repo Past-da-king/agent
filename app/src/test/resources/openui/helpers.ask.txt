@@ -1,0 +1,8 @@
+what are my helpers doing
+
+Facts (Sat 17 Oct 2026, 13:50):
+1. Holiday photo slideshow: rendering, about 60% done, on the home PC.
+2. Lindiwe's bursary form: waiting on Lindiwe's proof of address before submitting.
+3. Website update: done, live on the site.
+4. Car insurance quotes: done, report ready.
+Give each one a short status line and a "Details" button that asks me for that job's details.

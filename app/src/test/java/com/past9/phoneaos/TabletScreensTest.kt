@@ -85,7 +85,7 @@ class TabletScreensTest(private val size: String, private val qualifiers: String
     @Test fun homeScreen() { shot("home") { HomeScreen(home, HomeActions()); Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) { HomeBar("home", {}, {}) } } }
     @Test fun settings() {
         val s = AgentSettings(mode = PowerMode.API_KEY, provider = Provider.ANTHROPIC, model = "claude-sonnet-5-5", hasKey = true, userName = "Sam", agentName = "Nova", onboarded = true)
-        shot("settings") { SettingsScreen(s, RuntimeInfo(false, 0, false, "Runtime pack not in this build"), "0.11.13", SettingsActions()) }
+        shot("settings") { SettingsScreen(s, RuntimeInfo(false, 0, false, "Runtime pack not in this build"), "0.11.14", SettingsActions()) }
     }
     @Test fun connections() {
         val st = ConnectionsState(hasKey = true, connected = listOf(Connection("1", "gmail", "ACTIVE", "sam@example.com"), Connection("2", "notion", "ACTIVE", "notion")),
