@@ -176,6 +176,30 @@ internal fun TransferCard(n: TransferNote, onPick: (String) -> Unit) {
 }
 
 /** A memory page, full screen, like a wiki article. Links open the linked page. */
+/** Came in from a file that didn't say what it is: waiting to be looked at. Saving the page by hand clears it. */
+fun isUnsorted(m: MemoryRow) = m.topics.split(',').any { it.trim().equals(com.past9.phoneaos.data.MemoryTransfer.UNSORTED, true) }
+
+@Composable
+private fun PageRow(m: MemoryRow, all: List<MemoryRow>, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val links = remember(m.body) { linksIn(m.body).size }
+    Surface(onClick = onClick, shape = MaterialTheme.shapes.large, color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(44.dp).clip(MaterialTheme.shapes.medium).background(if (m.pinned) cs.primaryContainer else cs.secondaryContainer), contentAlignment = Alignment.Center) {
+                Icon(pageIcon(m.kind), null, tint = if (m.pinned) cs.onPrimaryContainer else cs.onSecondaryContainer)
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(m.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(summaryOf(m.body), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(listOfNotNull(m.kind.uppercase(), if (links > 0) "$links LINK${if (links > 1) "S" else ""}" else null, relativeTime(m.updatedAt).uppercase()).joinToString(" · "),
+                    style = Eyebrow, color = cs.outline, modifier = Modifier.padding(top = 4.dp))
+            }
+        }
+    }
+}
+
+/** A memory page, full screen, like a wiki article. Links open the linked page. */
 @Composable
 fun WikiPageScreen(page: MemoryRow?, all: List<MemoryRow>, onBack: () -> Unit, onOpenTitle: (String) -> Unit, onSave: (MemoryRow) -> Unit, onDelete: (MemoryRow) -> Unit, onAsk: (String) -> Unit) {
     val cs = MaterialTheme.colorScheme
