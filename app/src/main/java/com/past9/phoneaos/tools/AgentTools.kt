@@ -163,7 +163,7 @@ class ScheduleListTool(private val dao: TriggerDao) : Tool {
     override val spec = ToolSpec("routine_list", "List the routines (scheduled and triggered runs), each with its whole prompt.", schema())
     // The whole prompt: a routine is changed with routine_update from what this shows, and a cut one would lose the rest.
     override suspend fun run(input: JSONObject, ctx: ToolContext): String =
-        dao.list().joinToString("\n\n") { "#${it.id} ${it.name} [${it.kind} ${it.spec}]${if (!it.enabled) " (paused)" else ""}:\n${it.prompt}" }.ifBlank { "No routines." }
+        dao.list().filter { it.kind != "wake" }.joinToString("\n\n") { "#${it.id} ${it.name} [${it.kind} ${it.spec}]${if (!it.enabled) " (paused)" else ""}:\n${it.prompt}" }.ifBlank { "No routines." }
 }
 
 class ScheduleUpdateTool(private val dao: TriggerDao, private val onChange: suspend (TriggerRow) -> Unit) : Tool {

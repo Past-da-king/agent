@@ -108,14 +108,22 @@ class MainActivity : ComponentActivity() {
         val settings by g.settings.state.collectAsStateWithLifecycle()
         if (!settings.onboarded) { Onboarding(g); return }
 
+        // Once: if the phone would hold back reminders (battery optimisation, a sleeping Samsung app), say so with the fix.
+        var offerReliability by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            if (g.settings.extra("reliability_offered") == null && com.past9.phoneaos.system.Background.problems(com.past9.phoneaos.system.Background.check(this@MainActivity)).isNotEmpty()) {
+                g.settings.setExtra("reliability_offered", "1"); offerReliability = true
+            }
+        }
+        if (offerReliability) com.past9.phoneaos.ui.screens.ReliabilitySheet { offerReliability = false }
         val items by g.db.chat().all().collectAsStateWithLifecycle(emptyList())
         val status by g.runtime.status.collectAsStateWithLifecycle()
         val goals by g.db.tasks().goals().collectAsStateWithLifecycle(emptyList())
         val tasks by g.db.tasks().tasks().collectAsStateWithLifecycle(emptyList())
         val memories by g.db.memory().all().collectAsStateWithLifecycle(emptyList())
         val allRoutines by g.db.triggers().all().collectAsStateWithLifecycle(emptyList())
-        // A card's refresh schedule is part of the card, not a routine of its own.
-        val routines = allRoutines.filter { it.kind != com.past9.phoneaos.cards.CardScripts.KIND }
+        // A card's refresh schedule is part of the card, and a wake is a one-off follow-up (see wake_list), not a routine of its own.
+        val routines = allRoutines.filter { it.kind != com.past9.phoneaos.cards.CardScripts.KIND && it.kind != com.past9.phoneaos.triggers.Wakes.KIND }
         val browserLive by BrowserService.running.collectAsStateWithLifecycle()
         val nav = rememberNavController()
         val notifRows by g.db.notifications().recent(200).collectAsStateWithLifecycle(emptyList())

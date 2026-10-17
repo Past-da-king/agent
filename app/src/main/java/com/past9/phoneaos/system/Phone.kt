@@ -108,10 +108,13 @@ class WorkService : Service() {
         // intent == null: Android restarted us after killing the app. Creating the graph (in build) resumes the cut-off helpers;
         // if there turns out to be nothing to resume, don't hang around.
         if (intent == null) handler.postDelayed({ if (AndroidPhone.activeCount <= 0) stopSelf() }, 45_000)
+        // Started by an alarm to hold the process for the work it queues: let go if that work never starts.
+        if (intent?.getBooleanExtra(EXTRA_KEEPALIVE, false) == true) handler.postDelayed({ if (AndroidPhone.activeCount <= 0) stopSelf() }, 120_000)
         return START_STICKY
     }
 
     companion object {
+        const val EXTRA_KEEPALIVE = "keepalive"
         fun text(helpers: Int) = if (helpers > 0) "Working: $helpers helper${if (helpers > 1) "s" else ""}" else "Working on it"
 
         fun build(context: Context): android.app.Notification {
@@ -156,14 +159,14 @@ class WatchdogWorker(context: Context, params: androidx.work.WorkerParameters) :
 }
 
 class BootReceiver : BroadcastReceiver() {
-    /** After a restart or an app update the process is gone: bring helpers and routines back, run what was missed once. */
+    /** After a restart, an app update or a clock change: bring helpers, routines, reminders and the check-in back, run what was missed once. */
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             try {
-                runCatching { App.graph(context) } // starting the process resumes helpers that were cut off
-                runCatching { com.past9.phoneaos.triggers.Routines.rescheduleAll(context) }
-                runCatching { com.past9.phoneaos.triggers.Routines.catchUp(context) }
+                // Starting the process resumes helpers that were cut off; then every clock is armed again
+                // (alarms do not survive a reboot, an update, or a clock change).
+                Rearm.all(context)
             } finally { pending.finish() }
         }
     }
