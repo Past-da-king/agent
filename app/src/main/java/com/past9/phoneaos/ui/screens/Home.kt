@@ -276,19 +276,19 @@ private fun NeedsYouCard(q: ChatItem, actions: HomeActions) {
         }
         return
     }
+    if (!approval) {
+        val meta = JSONObject(q.meta)
+        val why = meta.optString("why").takeIf { it.isNotBlank() }?.let { "${meta.optString("whyBy").ifBlank { "Your agent" }}: $it" }
+        com.past9.phoneaos.ui.openui.AskCard("Needs you", why, q.text, opts, onPick = { o -> actions.onAnswer(q.id, o) })
+        return
+    }
     Surface(shape = MaterialTheme.shapes.extraLarge, color = cs.tertiaryContainer, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(18.dp)) {
-            Text(if (approval) "APPROVE?" else "QUESTION", style = Eyebrow, color = cs.onTertiaryContainer)
+            Text("APPROVE?", style = Eyebrow, color = cs.onTertiaryContainer)
             Spacer(Modifier.height(4.dp))
-            Text(if (approval) parts.getOrElse(1) { "" } else q.text, style = MaterialTheme.typography.titleMedium, color = cs.onTertiaryContainer, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            Text(parts.getOrElse(1) { "" }, style = MaterialTheme.typography.titleMedium, color = cs.onTertiaryContainer, maxLines = 3, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(12.dp))
-            if (approval) Button(onClick = actions.onChat, modifier = Modifier.fillMaxWidth().height(48.dp), shapes = ButtonDefaults.shapes()) { Text("Review and approve") }
-            else FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                opts.forEachIndexed { i, o ->
-                    if (i == 0) Button(onClick = { actions.onAnswer(q.id, o) }, shapes = ButtonDefaults.shapes(), modifier = Modifier.heightIn(min = 44.dp)) { Text(o) }
-                    else OutlinedButton(onClick = { actions.onAnswer(q.id, o) }, shapes = ButtonDefaults.shapes(), modifier = Modifier.heightIn(min = 44.dp)) { Text(o, color = cs.onTertiaryContainer) }
-                }
-            }
+            Button(onClick = actions.onChat, modifier = Modifier.fillMaxWidth().height(48.dp), shapes = ButtonDefaults.shapes()) { Text("Review and approve") }
         }
     }
 }

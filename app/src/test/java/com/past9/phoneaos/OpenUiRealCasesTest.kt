@@ -71,4 +71,5 @@ class OpenUiRealCasesTest {
     @Test fun approval() = case("approval", 1000)
     @Test fun helpers() = case("helpers", 1250)
     @Test fun money() = case("money", 1150)
+    @Test fun products() = case("products", 900)
 }

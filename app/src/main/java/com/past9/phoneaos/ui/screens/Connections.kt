@@ -1,6 +1,8 @@
 package com.past9.phoneaos.ui.screens
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.past9.phoneaos.tools.Connection
 import com.past9.phoneaos.tools.Toolkit
 import com.past9.phoneaos.ui.AppCard
+import com.past9.phoneaos.ui.AppSheet
 import com.past9.phoneaos.ui.SectionHeader
 import com.past9.phoneaos.ui.StatusPill
 import com.past9.phoneaos.ui.SubScreen
@@ -47,6 +50,8 @@ data class ConnectionsState(
     /** Per account: what the agent may do there. */
     val rules: Map<String, com.past9.phoneaos.data.AccountRules> = emptyMap(),
     val browserProfiles: List<String> = listOf("Personal"),
+    /** Web apps the agent mapped and wrote its own tools for. */
+    val learned: List<com.past9.phoneaos.connections.LearnedApp> = emptyList(),
 )
 
 data class ConnectionsActions(
@@ -67,6 +72,11 @@ data class ConnectionsActions(
     val profile: AccountProfileActions = AccountProfileActions(),
     /** The same sign-in is connected more than once: keep the first, remove the copies. */
     val onKeepOne: (keep: Connection, remove: List<Connection>) -> Unit = { _, _ -> },
+    /** Let a learned app's tools that change things run without asking. Only here, never by the agent. */
+    val onTrustLearned: (id: String, on: Boolean) -> Unit = { _, _ -> },
+    val onRemoveLearned: (id: String) -> Unit = {},
+    /** Ask the agent to learn this site or app (opens the chat so the user can watch). */
+    val onTeach: (String) -> Unit = {},
 )
 
 /** Accounts of one app that are the same sign-in (same email or name, or none shared). The first is the keeper. */
@@ -96,6 +106,7 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
     when (val sh = sheet) {
         null -> {}
         else -> if (sh.startsWith("profile:") || sh.startsWith("account:")) {} else when (sh) {
+        "learned" -> LearnedSheet(state.learned, actions, onDismiss = { sheet = null })
         "list" -> MachinesSheet(state.machines, actions.machine, onDismiss = { sheet = null }, onOpen = { sheet = it ?: "new" })
         else -> MachineSheet(state.machines.firstOrNull { it.id == sh }, state.machines, actions.machine.copy(onDelete = { actions.machine.onDelete(it); sheet = "list" }),
             onDismiss = { sheet = "list" }, onDone = { sheet = "list" })
@@ -117,6 +128,7 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                     PhoneLine(Icons.Rounded.FolderOpen, "Files on this phone", if (state.phoneFiles) "Your agent can find and upload your files" else "Let your agent find files to upload or send",
                         state.phoneFiles, if (state.phoneFiles) null else actions.onAllowPhoneFiles)
                     MachinesLine(state.machines) { sheet = "list" }
+                    LearnedLine(state.learned) { sheet = "learned" }
                 }
             }
             if (state.hasKey) item { ProfilesSection(state.profiles, logos) { id -> sheet = "profile:" + (id ?: "new") } }
@@ -306,6 +318,92 @@ private fun AppsSummary(connected: List<Connection>, logos: Map<String, String>,
             Spacer(Modifier.height(14.dp))
             FilledTonalButton(onClick = onToggle, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shapes = ButtonDefaults.shapes()) {
                 Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Connect an app")
+            }
+        }
+    }
+}
+
+
+/** One line in the Built in card: how many web apps the agent has taught itself. Tapping it slides the list up. */
+@Composable
+private fun LearnedLine(apps: List<com.past9.phoneaos.connections.LearnedApp>, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Rounded.Hub, null, tint = cs.primary)
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Learned apps", style = MaterialTheme.typography.titleSmall)
+            Text(if (apps.isEmpty()) "Sites your agent maps once, then uses without clicking" else apps.joinToString(" \u00b7 ") { it.name },
+                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (apps.isNotEmpty()) {
+            Box(Modifier.size(28.dp).clip(androidx.compose.foundation.shape.CircleShape).background(cs.primaryContainer), contentAlignment = Alignment.Center) {
+                Text("${apps.size}", style = MaterialTheme.typography.labelLarge, color = cs.onPrimaryContainer)
+            }
+            Spacer(Modifier.width(4.dp))
+        }
+        Icon(Icons.Rounded.ChevronRight, null, tint = cs.onSurfaceVariant)
+    }
+}
+
+/**
+ * Slides up from Connections: every web app the agent taught itself, one compact row each (tap to open it), and a box
+ * to teach it another. Anything that changes things asks first unless the user trusts that app here.
+ */
+@Composable
+internal fun LearnedSheet(apps: List<com.past9.phoneaos.connections.LearnedApp>, actions: ConnectionsActions, onDismiss: () -> Unit, initialOpen: String? = null) {
+    var teach by remember { mutableStateOf("") }
+    var open by remember { mutableStateOf(initialOpen) }
+    AppSheet(Icons.Rounded.Hub, "Learned apps", "Sites your agent knows", onDismiss, primary = "Teach your agent this app", primaryEnabled = teach.isNotBlank(),
+        onPrimary = { actions.onTeach(teach.trim()); onDismiss() }, shape = MaterialShapes.Cookie7Sided) {
+        if (apps.isEmpty()) Text("Name a site or app you use all the time. Your agent opens it, works out how it works, and writes itself tools for it, so next time it calls a tool instead of clicking through the app.",
+            style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            apps.forEach { a -> LearnedTile(a, open == a.id, { open = if (open == a.id) null else a.id }, actions) }
+        }
+        Spacer(Modifier.height(24.dp))
+        com.past9.phoneaos.ui.SheetField(teach, { teach = it }, "Teach a new one", "WhatsApp Web, reddit.com, my bank's portal", singleLine = true,
+            keyboard = androidx.compose.foundation.text.KeyboardOptions(capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.None, keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri))
+    }
+}
+
+@Composable
+private fun LearnedTile(a: com.past9.phoneaos.connections.LearnedApp, expanded: Boolean, onToggle: () -> Unit, actions: ConnectionsActions) {
+    val cs = MaterialTheme.colorScheme
+    var confirming by remember(a.id) { mutableStateOf(false) }
+    Surface(shape = MaterialTheme.shapes.large, color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth().animateContentSize()) {
+        Column {
+            Row(Modifier.fillMaxWidth().clickable(onClick = onToggle).heightIn(min = 64.dp).padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                AppLogo(a.name, a.logoUrl, 44.dp)
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(a.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(a.host + " \u00b7 " + a.tools.size + (if (a.tools.size == 1) " tool" else " tools"),
+                        style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                // A small mark when the app has tools that send, post or delete (it asks first unless trusted).
+                if (a.writes > 0) Icon(Icons.Rounded.EditNote, "Can change things", Modifier.padding(end = 6.dp).size(22.dp), tint = if (a.trusted) cs.tertiary else cs.onSurfaceVariant)
+                Icon(if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, if (expanded) "Hide" else "Open", tint = cs.onSurfaceVariant)
+            }
+            if (expanded) Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp)) {
+                if (a.about.isNotBlank()) Text(a.about, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 10.dp)) {
+                    a.tools.forEach { t -> Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(50), color = if (t.readOnly) cs.surfaceContainerHighest else cs.tertiaryContainer) {
+                        Text(t.name.replace('_', ' '), Modifier.padding(horizontal = 10.dp, vertical = 5.dp), style = MaterialTheme.typography.labelMedium, color = if (t.readOnly) cs.onSurfaceVariant else cs.onTertiaryContainer) } }
+                }
+                if (a.writes > 0) Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Change things without asking", style = MaterialTheme.typography.titleSmall)
+                        Text(if (a.trusted) "Sending, posting and deleting run straight away" else "It asks you each time before it sends, posts or deletes", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    }
+                    Switch(a.trusted, { actions.onTrustLearned(a.id, it) })
+                }
+                Spacer(Modifier.height(8.dp))
+                if (!confirming) TextButton(onClick = { confirming = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Remove", color = cs.error) }
+                else Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(onClick = { confirming = false }, shapes = ButtonDefaults.shapes(), modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("Keep") }
+                    Button(onClick = { actions.onRemoveLearned(a.id) }, shapes = ButtonDefaults.shapes(), colors = ButtonDefaults.buttonColors(containerColor = cs.error, contentColor = cs.onError), modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("Remove its tools") }
+                }
             }
         }
     }

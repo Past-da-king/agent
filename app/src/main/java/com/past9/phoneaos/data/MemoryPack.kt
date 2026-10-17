@@ -1,7 +1,6 @@
 package com.past9.phoneaos.data
 
 import android.content.Context
-import org.json.JSONArray
 import java.io.File
 
 /**
@@ -13,8 +12,7 @@ object MemoryPack {
     const val FILE = "memory-pack.json"
     const val SOURCE = "import"
     private const val MARK = "\n\n## From A.O.S memory bank\n\n"
-    // "skill" is reserved for helper skills, so a pack can never write one.
-    private val kinds = setOf("fact", "preference", "person", "decision", "how-to", "event")
+    // "skill" is reserved for helper skills, so a pack can never write one (MemoryTransfer.write enforces it).
 
     fun pending(context: Context): List<File> =
         listOfNotNull(context.getExternalFilesDir(null), context.filesDir).map { File(it, FILE) }.filter { it.isFile }
@@ -26,34 +24,12 @@ object MemoryPack {
         n.coerceAtLeast(0)
     }
 
+    /** Writes a JSON pack (the A.O.S one, or any JSON memory list) and returns how many pages it held. */
     suspend fun import(json: String, dao: MemoryDao): Int {
-        val arr = JSONArray(json)
-        var n = 0
-        for (i in 0 until arr.length()) {
-            val o = arr.optJSONObject(i) ?: continue
-            val title = o.optString("title").trim().take(200)
-            val body = o.optString("body").trim()
-            if (title.isEmpty() || body.isEmpty()) continue
-            val kind = o.optString("kind").lowercase().let { if (it in kinds) it else "fact" }
-            val tags = o.opt("tags").let { t -> if (t is JSONArray) (0 until t.length()).joinToString(",") { t.optString(it) } else t?.toString().orEmpty() }
-            val pinned = o.optBoolean("pinned", false)
-            val now = System.currentTimeMillis()
-            val cur = dao.byTitle(title)
-            when {
-                cur?.kind == "skill" -> dao.byTitle("$title (A.O.S)").let { mine ->
-                    if (mine == null) dao.insert(MemoryRow(title = "$title (A.O.S)", body = body, kind = kind, topics = tags, pinned = pinned, source = SOURCE))
-                    else dao.update(mine.copy(body = body, kind = kind, topics = tags, pinned = pinned, updatedAt = now))
-                }
-                cur == null -> dao.insert(MemoryRow(title = title, body = body, kind = kind, topics = tags, pinned = pinned, source = SOURCE))
-                cur.source == SOURCE -> dao.update(cur.copy(body = body, kind = kind, topics = tags, pinned = pinned, updatedAt = now))
-                else -> {
-                    val own = cur.body.substringBefore(MARK)
-                    val merged = (cur.topics.split(",") + tags.split(",")).map { it.trim() }.filter { it.isNotEmpty() }.distinct().joinToString(",")
-                    dao.update(cur.copy(body = own + MARK + body, topics = merged, pinned = cur.pinned || pinned, updatedAt = now))
-                }
-            }
-            n++
-        }
-        return n
+        // A file that isn't JSON at all is set aside as failed, not read as an empty pack.
+        json.trim().let { t -> runCatching { if (t.startsWith("[")) org.json.JSONArray(t) else org.json.JSONObject(t) }.getOrElse { throw IllegalArgumentException("not a memory pack") } }
+        val pages = MemoryTransfer.fromJson(json)
+        val r = MemoryTransfer.write(pages, dao, mark = MARK, suffix = "(A.O.S)")
+        return r.added + r.updated + r.skipped
     }
 }

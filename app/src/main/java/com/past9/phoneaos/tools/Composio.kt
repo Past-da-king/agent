@@ -112,7 +112,9 @@ class ComposioClient(
         return (0 until items.length()).map { i ->
             val c = items.getJSONObject(i)
             val alias = if (c.isNull("alias")) "" else c.optString("alias")
-            Connection(c.optString("id"), c.optJSONObject("toolkit")?.optString("slug") ?: "", c.optString("status"), alias.ifBlank { c.optJSONObject("toolkit")?.optString("slug") ?: "" })
+            val slug = c.optJSONObject("toolkit")?.optString("slug") ?: ""
+            // Slack and other workspace apps with no name on the account: a label of their own, so a second one can be added.
+            Connection(c.optString("id"), slug, c.optString("status"), alias.ifBlank { ComposioConnect.workspaceLabel(slug, c.optString("id")).ifBlank { slug } })
         }
     }
 

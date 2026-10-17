@@ -346,6 +346,7 @@ class MainActivity : ComponentActivity() {
                         onRead = { id -> if (id > (g.settings.extra("chatRead")?.toLongOrNull() ?: 0L)) g.settings.setExtra("chatRead", id.toString()) },
                         actions = ChatActions(
                             onCard = { openCard = it },
+                            onAct = { g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity); g.runtime.sendQuiet(it) },
                             onSend = { g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity)
                                 val docText = docs.entries.joinToString("") { (n, d) -> "\n\n[Attached document: $n${docPaths[n]?.let { p -> ", file saved at $p (you can upload it with browser_upload)" }.orEmpty()}]\n${d.first.take(30_000)}" }
                                 g.runtime.send(it + docText, attachments.toList() + docs.values.flatMap { d -> d.second }.take(6), docs.keys.toList())
@@ -368,7 +369,8 @@ class MainActivity : ComponentActivity() {
                 }
                 composable("report?path={path}") { e ->
                     // A button in a report's cards asks the agent, like in the chat.
-                    androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.openui.LocalOpenUiSend provides { msg -> g.runtime.send(msg); nav.navigate("chat") }) {
+                    androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.openui.LocalOpenUiSend provides { msg -> g.runtime.send(msg); nav.navigate("chat") },
+                        com.past9.phoneaos.ui.openui.LocalOpenUiAct provides { msg -> g.runtime.sendQuiet(msg); nav.navigate("chat") }) {
                         ReportScreen(e.arguments?.getString("path").orEmpty(), onBack = { nav.popBackStack() })
                     }
                 }
@@ -390,6 +392,15 @@ class MainActivity : ComponentActivity() {
                         onOpen = { m -> if (twoPane) openId = m.id else nav.navigate("page/${m.id}") },
                         onSave = { m -> scope.launch { if (m.id == 0L) g.db.memory().insert(m) else g.db.memory().update(m) } },
                         onDelete = { m -> scope.launch { g.db.memory().delete(m.id) } },
+                        onExport = { uri, done -> scope.launch {
+                            val note = runCatching { this@MainActivity.contentResolver.openOutputStream(uri)!!.use { com.past9.phoneaos.data.MemoryTransfer.export(g.db.memory(), it) } }
+                                .fold({ com.past9.phoneaos.ui.screens.TransferNote.exported(it) }, { com.past9.phoneaos.ui.screens.TransferNote.failed("Couldn't save the zip", it.message) })
+                            done(note) } },
+                        onImport = { uri, done -> scope.launch {
+                            val name = runCatching { this@MainActivity.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null } }.getOrNull() ?: uri.lastPathSegment ?: "memory.zip"
+                            val note = runCatching { this@MainActivity.contentResolver.openInputStream(uri)!!.use { com.past9.phoneaos.data.MemoryTransfer.importFrom(name, it, g.db.memory()) } }
+                                .fold({ com.past9.phoneaos.ui.screens.TransferNote.imported(it) }, { com.past9.phoneaos.ui.screens.TransferNote.failed("Couldn't read that file", it.message) })
+                            done(note) } },
                     )
                     if (!twoPane) MemoryScreen(memories, bottomPadding = barPad, actions = memoryActions)
                     else MemoryTwoPane(memories, openId, { openId = it }, memoryActions, barPad,
@@ -418,11 +429,15 @@ class MainActivity : ComponentActivity() {
                 composable("connections") {
                     LaunchedEffect(Unit) { refreshConnections() }
                     val machines by g.runtime.machines.store.machines.collectAsStateWithLifecycle()
+                    val learnedApps by g.runtime.learned.apps.collectAsStateWithLifecycle()
                     // Re-read on every return to this screen: the user may have just switched All files access on.
                     val resumed = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsStateWithLifecycle().value
                     val phoneFiles = remember(resumed) { com.past9.phoneaos.tools.phoneFilesAllowed() }
-                    ConnectionsScreen(conn.copy(machines = machines, phoneFiles = phoneFiles, profiles = profileList, rules = accountRules, browserProfiles = settings.browserProfiles), bottomPadding = barPad + 24.dp, actions = ConnectionsActions(
+                    ConnectionsScreen(conn.copy(machines = machines, phoneFiles = phoneFiles, profiles = profileList, rules = accountRules, browserProfiles = settings.browserProfiles, learned = learnedApps), bottomPadding = barPad + 24.dp, actions = ConnectionsActions(
                         profile = profileActions,
+                        onTrustLearned = { id, on -> g.runtime.learned.setTrusted(id, on) },
+                        onRemoveLearned = { id -> g.runtime.learned.remove(id) },
+                        onTeach = { what -> g.runtime.send("Teach yourself this web app so you can use it without clicking through it every time: $what. Read webapp_guide first, check webapp_list, then map it in the browser and save the tools you write with webapp_save."); nav.navigate("chat") },
                         onKeepOne = { keep, remove -> scope.launch {
                             val ck = g.settings.composioKey()?.trim()
                             remove.forEach { c ->
@@ -562,6 +577,7 @@ class MainActivity : ComponentActivity() {
                         refreshingCard = null } },
                     onPin = { card, on -> g.cards.update(card.id) { it.copy(pinned = on) } },
                     onAsk = { card, text -> openCard = null; g.runtime.send("[About the card \"${card.title}\" (id ${card.id})] $text"); nav.navigate("chat") },
+                    onAct = { card, text -> openCard = null; g.runtime.sendQuiet("[About the card \"${card.title}\" (id ${card.id})] $text"); nav.navigate("chat") },
                     onOpenLink = { url -> scope.launch { com.past9.phoneaos.system.UiBus.openInBrowser.emit(com.past9.phoneaos.system.UiBus.OpenInBrowser(url)) } },
                     onRun = { card, input -> val r = com.past9.phoneaos.cards.CardScripts.run(this@MainActivity, card, input)
                         if (r.ok) { g.cards.update(card.id) { it.withData(r.data!!) }; true to r.data!! } else false to org.json.JSONObject().put("error", r.log.takeLast(300)).toString() },

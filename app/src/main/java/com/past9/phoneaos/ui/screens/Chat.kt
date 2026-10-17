@@ -74,6 +74,8 @@ import java.io.File
 
 data class ChatActions(
     val onSend: (String) -> Unit = {},
+    /** A tap on a card's button: to the agent in the background, no message from the user in the chat. Null: sent like a typed message. */
+    val onAct: ((String) -> Unit)? = null,
     /** Swipe-up send: the agent answers with a voice note. */
     val onSendVoice: (String) -> Unit = {},
     val onStop: () -> Unit = {},
@@ -265,8 +267,8 @@ fun ChatScreen(
     val newSince = items.count { it.id > seenId && it.kind != "user" && it.kind != "activity" && !JSONObject(it.meta).has("helper") }
     val waitingOnYou = items.any { it.kind == "question" && !JSONObject(it.meta).has("answer") }
 
-    // A tap on a generated UI's button (OpenUI @ToAssistant) is sent like a message he typed.
-    androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.openui.LocalOpenUiSend provides actions.onSend) {
+    // A tap on a generated UI's button (OpenUI @ToAssistant) goes to the agent quietly; a follow-up suggestion is sent like a typed message.
+    androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.openui.LocalOpenUiSend provides actions.onSend, com.past9.phoneaos.ui.openui.LocalOpenUiAct provides actions.onAct) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = { ChatTopBar(agentName, status, browserLive, waitingOnYou, openCount, actions, modelLabel) },
@@ -693,20 +695,18 @@ val LocalStopHelper = androidx.compose.runtime.staticCompositionLocalOf<((Long) 
 fun QuestionCard(item: ChatItem, onAnswer: (Long, String) -> Unit, onBrowser: () -> Unit) {
     val meta = JSONObject(item.meta); val answer = meta.optString("answer")
     val opts = meta.optJSONArray("options")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList()
-    AppCard(container = if (answer.isEmpty()) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceContainerLow) {
-        Text(if (answer.isEmpty()) "NEEDS YOU" else "YOU ANSWERED", style = Eyebrow, color = if (answer.isEmpty()) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
+    if (answer.isEmpty()) {
+        // Waiting on you: an OpenUI card with one button per answer, and always a No.
+        val why = meta.optString("why").takeIf { it.isNotBlank() }?.let { "${meta.optString("whyBy").ifBlank { "Your agent" }}: $it" }
+        com.past9.phoneaos.ui.openui.AskCard("Needs you", why, item.text, opts, { o -> if (o == "Open browser") onBrowser() else onAnswer(item.id, o) })
+        return
+    }
+    AppCard(container = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Text("YOU ANSWERED", style = Eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(6.dp))
-        if (answer.isEmpty()) WhyLine(meta, MaterialTheme.colorScheme.onTertiaryContainer)
-        Text(item.text, style = MaterialTheme.typography.titleMedium, color = if (answer.isEmpty()) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurface)
+        Text(item.text, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
         Spacer(Modifier.height(14.dp))
-        if (answer.isNotEmpty()) StatusChip(answer)
-        else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            opts.forEachIndexed { i, o ->
-                val click = { if (o == "Open browser") onBrowser() else onAnswer(item.id, o) }
-                if (i == 0) Button(onClick = click, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shapes = ButtonDefaults.shapes()) { Text(o) }
-                else OutlinedButton(onClick = click, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shapes = ButtonDefaults.shapes()) { Text(o, color = MaterialTheme.colorScheme.onTertiaryContainer) }
-            }
-        }
+        StatusChip(answer)
     }
 }
 
@@ -723,10 +723,12 @@ private fun WhyLine(meta: JSONObject, color: androidx.compose.ui.graphics.Color)
 
 @Composable
 private fun StatusChip(text: String) {
+    val no = text == com.past9.phoneaos.agent.AskOptions.NO
+    val tint = if (no) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Rounded.Check, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+        Icon(if (no) Icons.Rounded.Close else Icons.Rounded.Check, null, Modifier.size(18.dp), tint = tint)
         Spacer(Modifier.width(6.dp))
-        Text(text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        Text(text, style = MaterialTheme.typography.labelLarge, color = tint)
     }
 }
 

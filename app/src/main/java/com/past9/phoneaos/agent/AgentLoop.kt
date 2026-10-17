@@ -85,7 +85,11 @@ class AgentLoop(
             val results = calls.map { call ->
                 onEvent(AgentEvent.ToolStarted(call))
                 val tool = byName[call.name]
-                val (out, err) = if (tool == null) "Unknown tool ${call.name}" to true else try {
+                val (out, err) = if (tool == null) "Unknown tool ${call.name}" to true else if (call.input.has(BAD_ARGUMENTS)) {
+                    val cut = completion.stopReason in setOf("length", "max_tokens")
+                    "Error: the arguments for ${call.name} were not valid JSON${if (cut) " (your reply hit the length limit and was cut off)" else ""}; ${call.input.optInt(BAD_ARGUMENTS)} characters arrived. Nothing ran. " +
+                        "Send a shorter call: put less in each one (for webapp_save, one or two tools per call and short js bodies, then save again to add more)." to true
+                } else try {
                     tool.run(call.input, ctx) to false
                 } catch (e: CancellationException) { throw e } catch (e: Exception) {
                     "Error: ${e.message ?: e::class.simpleName}" to true

@@ -12,20 +12,37 @@ import com.past9.phoneaos.data.MemoryDao
 import com.past9.phoneaos.data.MemoryRow
 import org.json.JSONObject
 
-/** On-device recall: keyword overlap with a little weight for title, topics and recency. */
+/**
+ * On-device recall: keyword overlap with weight for title, tags and recency. Tags are how a page answers to other
+ * words (a page tagged "car, vehicle, auto" is found by any of them), so a whole tag found in the question counts
+ * extra, and plurals match their singular ("cars" finds "car").
+ */
 object Recall {
     private val stop = setOf("the", "a", "an", "and", "or", "to", "of", "in", "on", "for", "is", "it", "my", "me", "i", "you", "what", "do", "with", "at", "be", "this", "that", "can", "please")
-    fun terms(q: String) = q.lowercase().split(Regex("[^\\p{L}\\p{N}@.]+")).filter { it.length > 1 && it !in stop }.toSet()
+    /** A word's plain form: no plural s, "ies" to "y", no "ing"/"ed" on longer words. */
+    fun stem(w: String): String = when {
+        w.length > 4 && w.endsWith("ies") -> w.dropLast(3) + "y"
+        w.length > 5 && w.endsWith("ing") -> w.dropLast(3)
+        w.length > 4 && w.endsWith("ed") -> w.dropLast(2)
+        w.length > 3 && w.endsWith("s") && !w.endsWith("ss") && !w.endsWith("us") -> w.dropLast(1)
+        else -> w
+    }
+    fun terms(q: String) = q.lowercase().split(Regex("[^\\p{L}\\p{N}@.]+")).filter { it.length > 1 && it !in stop }.map { stem(it.trimEnd('.')) }.filter { it.length > 1 }.toSet()
 
     fun rank(query: String, rows: List<MemoryRow>, limit: Int): List<MemoryRow> {
         val q = terms(query); if (q.isEmpty()) return rows.take(limit)
         val now = System.currentTimeMillis()
+        val words = " " + query.lowercase().replace(Regex("[^\\p{L}\\p{N}@.]+"), " ").trim() + " "
         return rows.map { m ->
             val title = terms(m.title); val body = terms(m.body); val topics = terms(m.topics)
             var s = 0.0
             q.forEach { t ->
                 if (t in title) s += 3; if (t in topics) s += 2; if (t in body) s += 1
                 if (t.length > 3 && (m.body.contains(t, true) || m.title.contains(t, true))) s += 0.5
+            }
+            // A whole tag (or alias) said in the question: "my vehicle insurance" against the tag "vehicle".
+            m.topics.split(',').map { it.trim().lowercase() }.filter { it.length > 2 }.distinct().forEach { tag ->
+                if (words.contains(" $tag ") || (tag.endsWith("s").not() && words.contains(" ${tag}s "))) s += 2.5
             }
             if (m.pinned) s += 0.5
             s += 0.3 / (1 + (now - m.updatedAt) / 86_400_000.0)

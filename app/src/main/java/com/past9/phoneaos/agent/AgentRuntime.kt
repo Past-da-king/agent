@@ -194,6 +194,9 @@ class AgentRuntime(
     /** Servers and computers the user connected; the agent hands them heavy work over SSH. */
     val machines = com.past9.phoneaos.machines.MachineService(com.past9.phoneaos.machines.MachineStore(settings))
     val composio = ComposioClient({ settings.composioKey() }, settings.installId())
+    /** Web apps the agent taught itself (WhatsApp Web, Reddit...): the tools it wrote for each, run in the signed-in browser. */
+    val learned = com.past9.phoneaos.connections.LearnedStore(settings)
+    private val pageRunner = com.past9.phoneaos.connections.EnginePageRunner(context)
     /** Profiles (parts of the user's life, each a set of connected accounts) and each account's rules. */
     val profiles = com.past9.phoneaos.data.ProfileStore(context)
     /** The profile each helper was handed (helper id -> profile id): it may only use that profile's accounts. */
@@ -375,6 +378,7 @@ class AgentRuntime(
         list += if (machines.store.machines.value.isEmpty()) listOf(com.past9.phoneaos.machines.MachineListTool(machines))
             else com.past9.phoneaos.machines.machineTools(machines, java.io.File(context.filesDir, "downloads/machines"))
         list += browserTools(context)
+        list += com.past9.phoneaos.connections.learnedTools(learned, pageRunner)
         val openSignIn: suspend (String) -> Unit = { url -> com.past9.phoneaos.system.UiBus.openInBrowser.emit(com.past9.phoneaos.system.UiBus.OpenInBrowser(url)) }
         if (settings.state.value.composioEnabled && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(settings.composioKey())) {
             list += com.past9.phoneaos.tools.ComposioConnect.asTools({ settings.composioKey()?.trim() }, openSignIn, appGuard) { ctx, acc -> accountConnected(ctx, acc) }
@@ -475,6 +479,7 @@ class AgentRuntime(
                 appendLine("- Do the work yourself with your tools instead of telling the user how. Only ask when it is a real choice (ask_user with buttons), or you are truly blocked.")
                 appendLine("- Before anything goes out in their name, costs money, or deletes something: request_approval with the exact content. Never skip this.")
                 appendLine("- Search memory (memory_search) for anything about the user you need instead of asking.")
+                appendLine("- A website or web app you will need again (WhatsApp Web, Reddit, a portal with no API): don't click through it every time. Check webapp_list for tools you already wrote; if there are none, teach yourself it once (webapp_guide, then browser_network and browser_eval to map it, then webapp_save).")
                 if (role == PromptRole.HELPER) appendLine("- Whatever you ask of the user (ask_user, request_approval, browser_handoff, connecting an app) goes to the main agent first. It answers what it knows and sends back anything you can do yourself. So before a handoff, really try: click each option, type into the focused field, use arrow keys or Enter, browser_look to see the page, another route to the same result. Hand off only for what needs the person: a captcha, a passkey or code on their phone, their phone number, a payment, something sent in their name. Never finish by asking the user to do part of the job themselves.")
             }
             appendLine("- Phone permissions are OFF until needed. Their location (delivery, 'near me'): location_get. A document from the phone: files_pick. Their latest photo or screenshot: photos_recent. A one-time code during sign-in: notifications_wait_code. Watching an app's notifications: notifications_allow, a 'notification' routine, then notifications_stop when done.")
@@ -551,11 +556,14 @@ class AgentRuntime(
      * @param fromCall the voice agent handed this over mid-call: no user bubble (the call transcript is
      *   already in the chat), just a line saying the work started.
      */
-    fun send(text: String, images: List<String> = emptyList(), files: List<String> = emptyList(), voiceReply: Boolean = false, fromCall: String? = null) {
+    /** A tap on a button the agent drew: goes to the agent in the background, with no message from the user in the chat. */
+    fun sendQuiet(text: String) = send(text, quiet = true)
+
+    fun send(text: String, images: List<String> = emptyList(), files: List<String> = emptyList(), voiceReply: Boolean = false, fromCall: String? = null, quiet: Boolean = false) {
         val clean = text.trim().ifEmpty { if (images.isNotEmpty() || files.isNotEmpty()) "What do you make of this?" else "" }; if (clean.isEmpty()) return
         // A question card is waiting and the user typed instead of tapping: the typed words ARE the answer.
         // Before, the message queued behind the open question and nothing happened.
-        if (fromCall == null && images.isEmpty() && files.isEmpty() && mainQuestions.isNotEmpty()) {
+        if (fromCall == null && !quiet && images.isEmpty() && files.isEmpty() && mainQuestions.isNotEmpty()) {
             val id = mainQuestions.maxOrNull()
             if (id != null) {
                 scope.launch { db.chat().insert(ChatItem(kind = "user", text = clean)) }
@@ -565,20 +573,23 @@ class AgentRuntime(
         }
         // Messages are admitted one at a time, in the order sent: each decides against the newest line of work, so rapid ones chain.
         var prev: Job? = null
-        val j = scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) { prev?.join(); admit(clean, images, files, voiceReply, fromCall) }
+        val j = scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) { prev?.join(); admit(clean, images, files, voiceReply, fromCall, quiet) }
         prev = admitTail.getAndSet(j)
         turnJobs += j; j.invokeOnCompletion { turnJobs.remove(j) }
         j.start()
     }
 
     /** Put the user's message in the chat, then either run it as a turn, or (work is already running) fork a branch for it. */
-    private suspend fun admit(clean: String, images: List<String>, files: List<String>, voiceReply: Boolean, fromCall: String?) {
+    private suspend fun admit(clean: String, images: List<String>, files: List<String>, voiceReply: Boolean, fromCall: String?, quiet: Boolean = false) {
         val target = if (fromCall == null) activeLines.values.maxByOrNull { it.seq } else null
         val rel = target?.let { branchPolicy.classify(clean, it.userText) }
         val origin = if (fromCall != null) { db.chat().insert(ChatItem(kind = "activity", text = "On it: $fromCall", meta = JSONObject().put("tool", "call").toString())); null }
+        else if (quiet) null // a button tap: the agent hears it, the chat shows nothing as the user's
         else db.chat().insert(ChatItem(kind = "user", text = clean, meta = JSONObject().put("images", org.json.JSONArray(images.filter { !it.contains("/pdf-") }))
             .put("files", org.json.JSONArray(files)).put("voiceReply", voiceReply).toString()))
-        val forModel = if (voiceReply) "$clean\n\n(The user is on the move: answer with a voice_note, then at most one short line of text. Don't repeat the voice note as text.)" else clean
+        val forModel = if (voiceReply) "$clean\n\n(The user is on the move: answer with a voice_note, then at most one short line of text. Don't repeat the voice note as text.)"
+            else if (quiet) "[The user tapped a button on a card you drew. They did not type this and it is not in the chat as their message, so don't quote it back as something they said; just act on it.]\n$clean"
+            else clean
         if (target == null || rel == null) {
             mainLine.userText = clean
             launchMain { turnLock.withLock { runTurn(forModel, images, replyTo = origin) } }
@@ -1521,7 +1532,8 @@ class AgentRuntime(
         }
 
         /** Put the question to the user (a card and a notification) and wait. @param why the main agent's reason, on a forwarded request. */
-        suspend fun askUser(question: String, options: List<String>, why: String?): String? {
+        suspend fun askUser(question: String, asked: List<String>, why: String?): String? {
+            val options = AskOptions.withNo(asked)
             val id = db.chat().insert(ChatItem(kind = "question", text = question, meta = JSONObject().put("options", org.json.JSONArray(options))
                 .apply { helperItem?.let { put("helper", it).put("by", display) }; why?.let { put("why", it).put("whyBy", agentName()) }; branchItem?.let { put("branch", it) } }.toString()))
             val d = CompletableDeferred<String>(); pending[id] = d
