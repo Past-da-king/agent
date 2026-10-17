@@ -1,3 +1,3 @@
 what time is my flight today
 
-Facts (Lift booking, Friday 16 Oct 2026): flight GE372, Cape Town (CPT) 07:10 to Durban (DUR) 09:15. Checked in. Seat 15E (middle). Boarding group B, boarding 06:40. Booking reference 385E655C. One checked bag. The boarding pass is saved on the phone. Add a "Show boarding pass" button that asks me to show the boarding pass.
+Facts (FlyNow booking, Friday 16 Oct 2026): flight FN204, Johannesburg (JNB) 08:20 to George (GRJ) 10:25. Checked in. Seat 21C (middle). Boarding group C, boarding 07:50. Booking reference K7Q2ZP. One checked bag. The boarding pass is saved on the phone. Add a "Show boarding pass" button that asks me to show the boarding pass.

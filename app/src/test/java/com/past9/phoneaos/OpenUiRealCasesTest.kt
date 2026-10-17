@@ -27,9 +27,9 @@ import org.robolectric.annotation.GraphicsMode
 import java.io.File
 
 /**
- * SPIKE: real answers from Sam's day, written by a real model (opencode/deepseek-v4.1-flash-free given OpenUI's own
- * generated system prompt in inline mode), saved as-is in src/test/resources/openui/<case>.md. Each is drawn in the chat
- * at phone width, dark. PNGs in app/build/screens-openui/openui-<case>.png, and what the parser reported in report.txt.
+ * Everyday answers written by a real model (opencode/deepseek-v4.1-flash-free, given the app's OpenUI prompt section),
+ * with every name, place, id and amount then swapped for made-up demo data. Each is drawn in the chat at phone width,
+ * dark. PNGs in app/build/screens-openui/openui-<case>.png, and what the parser reported in report-<case>.txt.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -39,9 +39,9 @@ class OpenUiRealCasesTest {
 
     private fun res(name: String) = javaClass.classLoader!!.getResource("openui/$name")!!.readText()
     private fun bytes(name: String) = javaClass.classLoader!!.getResource("openui/$name")!!.readBytes()
-    /** The listing photos, downloaded once, so the screenshot doesn't depend on the network. */
+    /** Made-up demo photos for the made-up listings, so the screenshot doesn't depend on the network. */
     private val photos by lazy {
-        mapOf("12122338" to "flat1.img", "12107340" to "flat2.img", "12048389" to "flat3.img").mapValues { (_, f) ->
+        mapOf("photos/1.jpg" to "demo-photo-1.png", "photos/2.jpg" to "demo-photo-2.png", "photos/3.jpg" to "demo-photo-3.png").mapValues { (_, f) ->
             bytes(f).let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size).asImageBitmap() } }
     }
 
@@ -60,7 +60,7 @@ class OpenUiRealCasesTest {
         rule.mainClock.autoAdvance = false
         rule.setContent { AppTheme(dark = true) { Surface(color = MaterialTheme.colorScheme.surface) {
             CompositionLocalProvider(LocalOpenUiImages provides { url -> photos.entries.firstOrNull { url.contains(it.key) }?.value }) {
-                ChatScreen(items, AgentStatus(), "Hina", "Ayanda", false, "", {}, ChatActions())
+                ChatScreen(items, AgentStatus(), "Nova", "Sam", false, "", {}, ChatActions())
             } } } }
         rule.mainClock.advanceTimeBy(900)
         rule.onRoot().captureRoboImage(File("build/screens-openui/openui-$name.png").path)

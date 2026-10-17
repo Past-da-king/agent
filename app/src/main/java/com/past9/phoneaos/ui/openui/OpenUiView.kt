@@ -150,7 +150,8 @@ private fun EntityRows(n: Node) {
             Text(m["left"]?.toString() ?: "", Modifier.weight(1f), style = if (strong) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodyMedium,
                 color = if (strong) cs.onSurface else cs.onSurfaceVariant)
             Spacer(Modifier.width(12.dp))
-            Text(m["right"]?.let { fmt(it) } ?: "", style = (if (strong) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodyMedium)
+            // The value gets at most 60% of the row, so a long one wraps instead of squeezing the label to a letter a line.
+            Text(m["right"]?.let { fmt(it) } ?: "", Modifier.weight(1.5f, fill = false), style = (if (strong) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodyMedium)
                 .copy(fontFeatureSettings = if (m["rightVariant"] == "number") "tnum" else null), textAlign = TextAlign.End)
         }
     }

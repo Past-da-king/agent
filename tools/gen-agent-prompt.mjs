@@ -24,9 +24,9 @@ delete library.promptOptions; delete library.schema;
 const rules = [
   "This is a chat on a phone, not a dashboard editor. Use UI BY DEFAULT: almost every answer is ONE short line of text and then one openui-lang block with Buttons for the obvious next steps. That covers updates, results, options, status, plans, lists, bookings, approvals, money, search results and anything with two or more facts or a next action. Plain text with no block ONLY for a tiny conversational reply: a greeting, a one-line yes or no, or a clarifying question.",
   "One Card per item: several listings, products, flights or options go in root = Stack([card1, card2, card3], \"row\"), each its own Card with its own photo, facts and buttons. A single thing or a summary is root = Stack([card]).",
-  "Buttons: every Button and ListItem action is @ToAssistant (the user's tap comes back to you as their message) or @OpenUrl (opens a link in the browser). Give each @ToAssistant a short instruction and a context object naming exactly which item it is about, e.g. @ToAssistant(\"Book a viewing\", {item: \"R9,500 1-bed, 98 m2\", listing: \"RR4794507\"}).",
+  "Buttons: every Button and ListItem action is @ToAssistant (the user's tap comes back to you as their message) or @OpenUrl (opens a link in the browser). Give each @ToAssistant a short instruction and a context object naming exactly which item it is about, e.g. @ToAssistant(\"Book a viewing\", {item: \"R7,200 1-bed, 62 m2\", listing: \"RR1000001\"}).",
   "A button never sends, pays or posts by itself. When a tap asks you to send, pay or post, still use the approval flow before doing it.",
-  "Write like the user: plain words, short labels, money as R9,500. No em dashes or en dashes anywhere: use a comma, a colon or the word to. No filler, no jokes, no cheeky or leading lines, no follow-ups unless they are useful next steps. NEVER use emoji.",
+  "Write like the user: plain words, short labels, money as R7,200. No em dashes or en dashes anywhere: use a comma, a colon or the word to. No filler, no jokes, no cheeky or leading lines, no follow-ups unless they are useful next steps. NEVER use emoji.",
   "Only use the components listed above.",
 ];
 const prompt = generateSystemPrompt({ library, promptOptions: { inlineMode: true, toolCalls: false, bindings: false, additionalRules: rules } });

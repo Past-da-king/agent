@@ -43,12 +43,12 @@ chart = BarChart(["Jul", "Aug", "Sep"], [spend, budget])
 spend = Series("Spent", [6900, 8120, 7640])
 budget = Series("Budget", [7500, 7500, 7500])
 split = PieChart(["Groceries", "Transport", "Data", "Eating out"], [2950, 2210, 1180, 1300], "donut")
-table = Table([Col("Merchant", ["Checkers", "Uber", "Vodacom", "Nando's"]), Col("Visits", [9, 14, 2, 4]), Col("Total (R)", [2950, 2210, 1180, 860])])
-tip = Callout("warning", "Uber is up 38% on August", "14 trips, mostly weekday mornings. A monthly MyCiTi pass would cost R 1 400.")
+table = Table([Col("Merchant", ["Checkers", "Bolt", "Vodacom", "Nando's"]), Col("Visits", [9, 14, 2, 4]), Col("Total (R)", [2950, 2210, 1180, 860])])
+tip = Callout("warning", "Bolt is up 38% on August", "14 trips, mostly weekday mornings. A monthly MyCiTi pass would cost R 1 400.")
 actions = Buttons([setBudget, details])
 setBudget = Button("Set a R 7 000 budget", @ToAssistant("Set my monthly budget to R 7 000 and warn me at 80%"))
-details = Button("Show every Uber trip", @ToAssistant("List every Uber trip in September"), "secondary")
-sources = [{ title: "Capitec statement", sourceName: "Capitec", url: "https://capitecbank.co.za" }]
+details = Button("Show every Bolt trip", @ToAssistant("List every Bolt trip in September"), "secondary")
+sources = [{ title: "MyBank statement", sourceName: "MyBank", url: "https://mybank.example" }]
 ```
         """.trimIndent()
     }

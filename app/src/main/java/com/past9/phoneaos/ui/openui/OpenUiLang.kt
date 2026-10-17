@@ -194,7 +194,7 @@ object OpenUiLang {
 
     /**
      * The message for places that can't draw cards (a notification, the Home preview): each openui-lang block becomes
-     * the titles of what it shows, e.g. "R9,500 / month, 98 m2 · R8,500 / month, 43 m2".
+     * the titles of what it shows, e.g. "R7,200 / month, 62 m2 · R6,800 / month, 38 m2".
      */
     fun plainText(md: String): String = FENCE.replace(md) { m ->
         val titles = mutableListOf<String>()
