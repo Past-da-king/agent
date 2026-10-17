@@ -42,6 +42,7 @@ fun whenLabel(t: TriggerRow): String = when (t.kind) {
     "watch" -> (t.spec.toIntOrNull() ?: 1440).let { m -> "Checks " + when { m >= 1440 && m % 1440 == 0 -> if (m == 1440) "daily" else "every ${m / 1440} days"; m % 60 == 0 -> "every ${m / 60} h"; else -> "every $m min" } + ", wakes your agent only when it fires" }
     "interval" -> (t.spec.toIntOrNull() ?: 60).let { if (it % 60 == 0) "Every ${it / 60} h" else "Every $it min" }
     "email" -> "When a new email matches: ${t.spec}"
+    "wake" -> t.spec.toLongOrNull()?.let { "Once, " + dueLabel(it) + ", only if there's something to act on" } ?: "Once"
     "notification" -> t.spec.split("|").let { "When ${it[0]} notifies" + (it.getOrNull(1)?.takeIf { w -> w.isNotBlank() }?.let { w -> " about \"$w\"" } ?: "") }
     else -> t.kind
 }

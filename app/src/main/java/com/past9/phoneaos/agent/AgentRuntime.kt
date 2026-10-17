@@ -170,7 +170,7 @@ class AgentRuntime(
     private val inbox = java.util.concurrent.ConcurrentLinkedQueue<Inbound>()
     private val resumeLock = Mutex()
     /** Helpers the database says are still working (for the safety-net check). */
-    suspend fun workingHelperRows(): Int = db.chat().all().first().count { it.kind == "helper" && JSONObject(it.meta).optString("state").let { s -> s == "working" || s == "interrupted" } }
+    suspend fun workingHelperRows(): Int = db.chat().workingHelpers()
 
     /** A helper's request for the user, waiting on the main agent's triage (one per helper: it's blocked until then). */
     private class Escalation(val helperId: Long, val label: String, val kind: EscalationGate.Kind, val question: String, val options: List<String>,
@@ -330,6 +330,7 @@ class AgentRuntime(
             GoalCreateTool(db.tasks()), GoalUpdateTool(db.tasks()), GoalDeleteTool(db.tasks()),
             NotificationsTool(db.notifications()) { settings.state.value.notifApps },
             ScheduleListTool(db.triggers()),
+            com.past9.phoneaos.tools.WakeScheduleTool(context), com.past9.phoneaos.tools.WakeListTool(context), com.past9.phoneaos.tools.WakeCancelTool(context), com.past9.phoneaos.tools.QuietHoursTool(context),
             AskUserTool(), NotifyTool(), VoiceNoteTool(context, settings, db.chat()),
             com.past9.phoneaos.tools.ReportTool(context) { item -> db.chat().insert(item.copy(meta = JSONObject(item.meta).apply { replyMeta(turn, this) }.toString())) },
             DelegateTool { task, label, model, profile, batch, pinned -> startHelper(task, label, model, profile, batch, pinned, turn) },
@@ -354,7 +355,8 @@ class AgentRuntime(
      * What a routine works with: the helpers' tools, plus adding to and clearing the user's list. A helper's findings
      * go through the main agent, which decides what lands on the list; a routine runs with no main agent, so it does it itself.
      */
-    private fun routineTools(): List<Tool> = tools(forHelper = true) + Gated(TaskAddTool(db.tasks())) + Gated(TaskDeleteTool(db.tasks()))
+    private fun routineTools(): List<Tool> = tools(forHelper = true) + Gated(TaskAddTool(db.tasks())) + Gated(TaskDeleteTool(db.tasks())) +
+        com.past9.phoneaos.tools.WakeScheduleTool(context) + com.past9.phoneaos.tools.WakeListTool(context) + com.past9.phoneaos.tools.WakeCancelTool(context)
 
     /** Everything that acts: what helpers and routines work with. */
     private fun workerTools(): List<Tool> {
@@ -480,10 +482,13 @@ class AgentRuntime(
             appendLine("- Images can be seen: photos the user sends, gallery photos (photos_recent), page screenshots (browser_look), scanned PDFs, and images code makes.")
             appendLine("- The browser_* tools drive a background browser that keeps going while the user is in other apps. If a page needs the user (sign-in, captcha), browser_handoff.")
             appendLine("- 'Sign in with Google' on other sites works best once the browser profile is signed in to Google: if it fails, open accounts.google.com first (handoff so the user signs in), then retry. Read any NOTE at the top of a page outline: it tells you about blocked sign-ins, downloads and app links.")
+            appendLine("- Be proactive, but only for a reason. Nothing wakes you on a timer: you are woken only by a WAKE you (or the calendar) scheduled, each with a reason, a job and a cheap check. Any to-do with a due time rings by itself at that minute (no wake needed). The phone's calendar adds its own wakes: a heads-up 30 minutes before each meeting, and after it ends a check for the transcript or notes that wakes you only once they arrive, to pull out the user's action items.")
+            appendLine("- After every conversation, finished helper result or wake, ask yourself: what needs following up, and when? Schedule each with wake_schedule: a reason, a time that fits (a reply to an email: next morning; an application: in 5 days; a deadline: the day before), the job, and the CHEAPEST check that tells, in code, whether it is worth waking you: notification (an app's notification mentioning words, e.g. Gmail + 'Brightwater'), task_open (only if that to-do is still not done), script (a watcher-style script for a page or an API), or none (only when you must act regardless). Look at wake_list first and merge into a wake already near that time instead of adding another. Never schedule repeating wakes 'to check in'.")
+            appendLine("- A wake's reply becomes a notification. If nothing needs the user, reply QUIET and they hear nothing. Quiet hours (quiet_hours) hold back everything not urgent.")
             appendLine("- Recurring or later work becomes a routine (routine_create); an existing one is changed in place with routine_update, never recreated. To keep an eye on something with no API (a price on Takealot or Amazon, stock, a page changing), build a WATCHER (watcher_save): find the data source, write and test a small script, save it. It only wakes the agent when it fires.")
             appendLine("- The browser shares the phone's location with sites that ask, and sites can send web notifications (they arrive from 'web:<site>').")
             appendLine("- For ANY file on the user's phone (recordings, downloads, WhatsApp statuses, screenshots) use phone_files, never run_code. If phone_files says access isn't given, ask once, then files_pick.")
-            if (!main) appendLine("- To build or change a CARD: card_guide first (the design rules), then card_save. Look at the screenshot it returns and fix anything that isn't beautiful before reporting back.")
+            if (!main) appendLine("- To build or change a CARD: card_guide first (cards are OpenUI, drawn in the user's accent and theme), then card_save with an openui body. Never write HTML for a new card.")
             appendLine("- Things the user shares to you from other apps (links, photos, voice notes, videos, files) arrive as a normal message with a note in [Shared with you]. You cannot hear audio or watch video: media_transcribe turns a voice note or a video's sound into text (Gemini from the phone, else a connected machine), and media_frames shows a few frames of a video. Photos are already attached. Voice notes are usually a request or a message to act on: transcribe, then do what it says. On mobile data, never upload a video or a file over 15 MB (machine_upload, browser_upload, transcribing on a machine) without the user's yes.")
             appendLine("- Files move between the phone, machines and websites: phone_files, machine_run (ls, find), machine_download, browser_upload, machine_upload, send_file (shows one to the user).")
             val ms = machines.store.machines.value
@@ -512,6 +517,8 @@ class AgentRuntime(
                 appendLine("STYLE: TLDR, always. Lead with the answer in one or two short lines, then at most a few short bullets if they truly help. Never an essay, never a report in the chat, no headings, no recap of what you did. Plain, warm words. No em dashes.")
                 appendLine("- Anything longer (research, a comparison, a plan, a write-up the user will read properly): put it in a REPORT with the report tool. It shows as a card that opens a full-screen reader they can share or save. In the chat say only the one-line takeaway.")
             } else appendLine("STYLE: short. Lead with the answer. Use short bullets for lists. No walls of text. Plain words. No em dashes.")
+            // Answers with structured facts show as cards, lists and buttons: the main agent and routines write them; helpers report back in text.
+            if (role != PromptRole.HELPER) com.past9.phoneaos.ui.openui.OpenUiPrompt.section(context).takeIf { it.isNotBlank() }?.let { appendLine(); appendLine(it); appendLine() }
             if (role == PromptRole.ROUTINE) appendLine("\nThis is a BACKGROUND run (a routine). Nobody is watching. Do the work, then finish with a short summary the user will read later. Use notify_user if something needs their attention.")
             settings.extra("story")?.takeIf { it.isNotBlank() }?.let { appendLine("\n" + (if (main) "WHERE THINGS STAND (your own notes, written overnight; earlier chat is folded into these)" else "BACKGROUND ON THE USER (the agent's notes)") + "\n$it") }
             if (pinned.isNotEmpty()) { appendLine("\nCORE MEMORIES (pinned)"); pinned.forEach { appendLine("- ${Recall.format(it)}") } }
@@ -730,7 +737,7 @@ class AgentRuntime(
         if (r.ok && b.adopt && b.line.session != null) settings.setExtra("claude_session", b.line.session)
     }
 
-    private suspend fun recentChat(): List<String> = db.chat().all().first().filter { it.kind == "user" || it.kind == "agent" }.takeLast(14)
+    private suspend fun recentChat(): List<String> = db.chat().recentTalk(14).reversed()
         .map { (if (it.kind == "user") "user: " else "you: ") + it.text.take(240) }
 
     private fun endBranchTurn(b: Branch) {
@@ -1397,7 +1404,15 @@ class AgentRuntime(
      * power as the chat: the user's subscription when that is how the agent is powered (the old code only looked for an
      * API key, so every routine on a subscription failed with "No AI provider configured"), otherwise the API provider.
      */
-    suspend fun runBackground(name: String, prompt: String): String {
+    /** Is there an AI to run background work with (a key, or a subscription that is signed in)? */
+    fun canRunBackground(): Boolean = if (settings.state.value.mode == PowerMode.SUBSCRIPTION) subscription != null
+        else runCatching { providerFactory(settings) != null }.getOrDefault(false)
+
+    /**
+     * @param silentIf the answer means "nothing to say" (a check-in that found nothing): it is not posted to the chat
+     *   and no notification goes out.
+     */
+    suspend fun runBackground(name: String, prompt: String, silentIf: ((String) -> Boolean)? = null): String {
         val sub = subscriptionForBackground()
         val provider = if (sub == null) providerFactory(settings) else null
         if (sub == null && provider == null) {
@@ -1415,6 +1430,7 @@ class AgentRuntime(
             val sys = systemPrompt(prompt, role = PromptRole.ROUTINE)
             val out = if (sub != null) runRoutineOnSubscription(sub, "Routine \"$name\": $prompt", sys, ctx)
                 else AgentLoop(provider!!, settings.state.value.model, routineTools()).run(sys, mutableListOf(Msg.user("Routine \"$name\": $prompt")), ctx)
+            if (silentIf?.invoke(out) == true) return out
             db.chat().insert(ChatItem(kind = "agent", text = out, meta = JSONObject().put("routine", name).toString()))
             phone.notify(name, out.lineSequence().firstOrNull { it.isNotBlank() }?.take(180) ?: "Done")
             out

@@ -1,0 +1,7 @@
+how much money do I have
+
+Facts (MyBank main account, Sat 17 Oct 2026 07:20): available balance R1,240.50. An Bolt pre-authorisation of R184.20 at 07:15 is holding money.
+Last 3 transactions:
+- 17 Oct 07:15, Bolt pre-auth, -R184.20 (pending)
+- 16 Oct 19:12, Spar Northcliff, -R312.60
+- 16 Oct 08:03, Transfer from Lerato, +R500.00

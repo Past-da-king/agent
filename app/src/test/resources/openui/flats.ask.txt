@@ -1,0 +1,7 @@
+find me 1-bed flats to rent in Northcliff under R8k
+
+Facts from the search (flats.example, checked Sat 17 Oct 2026):
+1. R7,200 a month, 1 bed, 62 m², available from 1 Nov 2026, deposit R7,200. Listing: https://flats.example/listing/RR1000001 Photo: https://flats.example/photos/1.jpg
+2. R6,800 a month, 1 bed, 38 m², Parkview, available now, deposit R6,800. Listing: https://flats.example/listing/RR1000002 Photo: https://flats.example/photos/2.jpg
+3. R6,950 a month, 1 bed, 40 m², available from 1 Nov 2026, deposit R6,950. Listing: https://flats.example/listing/RR1000003 Photo: https://flats.example/photos/3.jpg
+Each flat needs a "Book viewing" button and an "Open listing" button.

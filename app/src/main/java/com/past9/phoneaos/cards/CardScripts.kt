@@ -55,7 +55,7 @@ globalThis.apps = async (slug, args = {}, account) => {
         val store = App.graph(context).cards
         val card = store.get(t.prompt) ?: return "Card is gone."
         val r = run(context, card)
-        store.update(card.id) { c -> if (r.ok) c.copy(data = r.data!!, headline = headlineFrom(r.data) ?: c.headline, updatedAt = System.currentTimeMillis(), error = "") else c.copy(error = r.log.takeLast(400)) }
+        store.update(card.id) { c -> if (r.ok) c.withData(r.data!!) else c.copy(error = r.log.takeLast(400)) }
         return if (r.ok) "Refreshed" else "Didn't refresh: " + r.log.lineSequence().lastOrNull { it.isNotBlank() }.orEmpty().take(120)
     }
 

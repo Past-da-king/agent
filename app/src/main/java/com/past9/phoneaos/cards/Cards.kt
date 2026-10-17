@@ -32,8 +32,11 @@ data class Card(
     val title: String,
     /** A kit icon name, e.g. "mail", "tag", "calendar". */
     val icon: String = "chart",
+    /** Legacy body: HTML from before 0.11.14. Still drawn (in a WebView) when a card has no OpenUI body. */
     val html: String,
-    /** JSON the HTML renders (card.data()). */
+    /** The body in OpenUI Lang, drawn natively in the app's accent and light/dark theme. `{{key}}` placeholders are filled from [data]. */
+    val openui: String = "",
+    /** JSON the body renders (card.data()). */
     val data: String = "null",
     /** One short line for the Home tile, e.g. "R 3,299 cheapest". */
     val headline: String = "",
@@ -51,12 +54,28 @@ data class Card(
     /** Last script problem, shown in the sheet so a broken card isn't silently stale. */
     val error: String = "",
 ) {
-    fun toJson(): JSONObject = JSONObject().put("id", id).put("title", title).put("icon", icon).put("html", html).put("data", data).put("headline", headline)
+    fun toJson(): JSONObject = JSONObject().put("id", id).put("title", title).put("icon", icon).put("html", html).put("openui", openui).put("data", data).put("headline", headline)
         .put("source", source).put("script", script).put("everyMinutes", everyMinutes).put("appsAllowed", appsAllowed).put("pinned", pinned)
         .put("createdAt", createdAt).put("updatedAt", updatedAt).put("error", error)
 
+    /** True when the card is drawn natively from OpenUI (new cards); false for an old saved HTML card. */
+    val isOpenUi get() = openui.isNotBlank()
+
+    /** The OpenUI program to draw: the body with its `{{key}}` placeholders filled from the data. */
+    fun openUiSource(): String = CardBody.fill(openui, data)
+
+    /**
+     * Gives the card fresh data. A script or the agent may return {"openui": "..."} to replace the body, and
+     * {"headline": "..."} for the Home tile; everything else is data the body's placeholders read.
+     */
+    fun withData(newData: String, now: Long = System.currentTimeMillis()): Card {
+        val o = runCatching { JSONObject(newData) }.getOrNull()
+        val body = o?.optString("openui").orEmpty()
+        return copy(data = newData, openui = body.ifBlank { openui }, headline = o?.optString("headline").orEmpty().ifBlank { headline }, updatedAt = now, error = "")
+    }
+
     companion object {
-        fun fromJson(o: JSONObject) = Card(o.getString("id"), o.optString("title"), o.optString("icon", "chart"), o.optString("html"), o.optString("data", "null"),
+        fun fromJson(o: JSONObject) = Card(o.getString("id"), o.optString("title"), o.optString("icon", "chart"), o.optString("html"), o.optString("openui"), o.optString("data", "null"),
             o.optString("headline"), o.optString("source"), o.optString("script"), o.optInt("everyMinutes"), o.optBoolean("appsAllowed"), o.optBoolean("pinned"),
             o.optLong("createdAt"), o.optLong("updatedAt"), o.optString("error"))
 
@@ -87,13 +106,38 @@ class CardStore(context: Context) {
     @Synchronized fun update(id: String, edit: (Card) -> Card): Card? = get(id)?.let { put(edit(it)) }
 }
 
+/** Fills `{{key}}` placeholders in an OpenUI body from a card's JSON data (dotted paths and array indexes: `{{items.0.price}}`). */
+object CardBody {
+    private val slot = Regex("""\{\{\s*([A-Za-z0-9_.\-]+)\s*}}""")
+
+    fun fill(body: String, dataJson: String): String {
+        if (!body.contains("{{")) return body
+        val root: Any? = runCatching { JSONObject(dataJson) }.getOrNull()
+        return slot.replace(body) { m -> escape(lookup(root, m.groupValues[1])) }
+    }
+
+    private fun lookup(root: Any?, path: String): String {
+        var cur: Any? = root
+        for (k in path.split('.')) {
+            cur = when (cur) { is JSONObject -> cur.opt(k); is org.json.JSONArray -> k.toIntOrNull()?.let { cur.opt(it) }; else -> null }
+            if (cur == null || cur == JSONObject.NULL) return ""
+        }
+        return if (cur is JSONObject || cur is org.json.JSONArray) "" else cur.toString()
+    }
+
+    /** The value lands inside a double-quoted OpenUI string, so it can't close it or break the line. */
+    private fun escape(v: String) = v.replace("\\", "\\\\").replace("\"", "\\\"").replace("\r", "").replace("\n", "\\n")
+}
+
 /** Turns a card into the page the WebView shows: theme variables, the kit, then the agent's HTML. */
 object CardKit {
     private var cssCache: String? = null
     private var jsCache: String? = null
     private var guideCache: String? = null
 
-    fun guide(context: Context): String = guideCache ?: context.assets.open("cards/GUIDE.md").bufferedReader().readText().also { guideCache = it }
+    /** What the agent reads before building a card: the card rules, then the OpenUI components the app draws. */
+    fun guide(context: Context): String = guideCache ?: (context.assets.open("cards/GUIDE.md").bufferedReader().readText().trim() + "\n\n" +
+        com.past9.phoneaos.ui.openui.OpenUiPrompt.section(context)).also { guideCache = it }
     private fun css(context: Context) = cssCache ?: context.assets.open("cards/agent-ui.css").bufferedReader().readText().also { cssCache = it }
     private fun js(context: Context) = jsCache ?: context.assets.open("cards/kit.js").bufferedReader().readText().also { jsCache = it }
 

@@ -124,6 +124,10 @@ interface ChatDao {
     @Query("DELETE FROM chat_items") suspend fun clear()
     /** How many messages the user sent at or after [since] (a share waits for its message to be stored). */
     @Query("SELECT COUNT(*) FROM chat_items WHERE kind = 'user' AND createdAt >= :since") suspend fun userSince(since: Long): Int
+    /** The last few lines of the conversation, without loading the whole chat. */
+    @Query("SELECT * FROM chat_items WHERE kind IN ('user', 'agent') ORDER BY id DESC LIMIT :limit") suspend fun recentTalk(limit: Int): List<ChatItem>
+    @Query("SELECT COUNT(*) FROM chat_items WHERE kind = 'helper' AND (meta LIKE '%\"state\":\"working\"%' OR meta LIKE '%\"state\":\"interrupted\"%')") suspend fun workingHelpers(): Int
+    @Query("SELECT * FROM chat_items WHERE kind = 'question' AND createdAt >= :since ORDER BY id DESC LIMIT 30") suspend fun questionsSince(since: Long): List<ChatItem>
 
     @Query("SELECT * FROM turns WHERE thread = :thread ORDER BY id DESC LIMIT :limit") suspend fun recentTurns(thread: String, limit: Int): List<TurnRow>
     @Insert suspend fun insertTurn(t: TurnRow): Long

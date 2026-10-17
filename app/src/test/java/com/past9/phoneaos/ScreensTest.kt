@@ -231,6 +231,10 @@ class ScreensTest(private val dark: Boolean) {
     @Test fun chatTable() { shot("13-chat-table") { ChatScreen(listOf(item("user", "compare them in a table"), item("agent", "Here's how the three helpers did:\n\n| Test | Helper | What it found | Source |\n|---|---|---|---|\n| Rand rate | Helper 1 | 1 USD = R 16.52 | xe.com |\n| Weather | Helper 2 | 13°, clear night | weather.com |\n| Power bank | Helper 3 | R 399 (Romoss 20k) | takealot.com |\n\nAll three ran at the same time.")),
         AgentStatus(), "Nova", "Sam", false, "", {}, ChatActions()) } }
     @Test fun cardSheet() { sheet("87-sheet-card") { com.past9.phoneaos.ui.CardSheet(com.past9.phoneaos.cards.Card("monitor-prices", "Monitor prices", "tag", "", headline = "R 3,299 cheapest", source = "takealot.com", script = "x"), dark, "iris", com.past9.phoneaos.ui.CardSheetActions(), {}) } }
+    @Test fun cardSheetOpenUi() { sheet("87b-sheet-card-openui") { com.past9.phoneaos.ui.CardSheet(com.past9.phoneaos.cards.Card("monitor-prices", "Monitor prices", "tag", "", headline = "R3,299 cheapest", source = "example.com",
+        openui = "root = Stack([c1])\nc1 = Card([head, facts, next])\nhead = CardHeader(\"{{store}}\", \"Cheapest today\")\nfacts = EntityList([{left: \"Price\", right: \"R{{price}}\", rightVariant: \"number\"}, {left: \"Was\", right: \"R3,599\", rightVariant: \"number\"}])\nnext = Buttons([Button(\"Open the page\", @OpenUrl(\"https://example.com/p/1\")), Button(\"Keep watching\", @ToAssistant(\"Keep watching this price\"), \"secondary\")])",
+        data = """{"store":"Example Store","price":"3,299"}"""), dark, "iris", com.past9.phoneaos.ui.CardSheetActions(), {}) } }
+    @Test fun reliabilitySheet() { sheet("88-sheet-reliability") { com.past9.phoneaos.ui.screens.ReliabilitySheet {} } }
     @Test fun homeWithCards() { shot("15b-home-cards") { HomeScreen(demoHome.copy(cards = listOf(
         com.past9.phoneaos.cards.Card("m", "Monitor prices", "tag", "", headline = "R 3,299 cheapest", updatedAt = now - 2 * 3_600_000),
         com.past9.phoneaos.cards.Card("o", "Outreach today", "mail", "", headline = "14 sent, 3 replies", updatedAt = now - 20 * 60_000),
