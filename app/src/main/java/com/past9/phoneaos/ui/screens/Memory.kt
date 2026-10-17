@@ -93,7 +93,7 @@ fun MemoryScreen(memories: List<MemoryRow>, actions: MemoryActions, bottomPaddin
             busy?.let { b -> item(key = "transfer-busy") { TransferBusy(b) } }
             note?.let { n -> item(key = "transfer-note") { TransferCard(n) { pick -> if (pick == "unsorted") unsortedOnly = true; note = null } } }
             // With nothing in memory yet (a fresh install, or after a wipe) bringing it back is the first thing to offer.
-            if (memories.isEmpty() && busy == null && note == null) item(key = "transfer-first") { TransferSection(pickFile, saveFile, canExport = false) }
+            if (memories.isEmpty() && busy == null && note == null) item(key = "transfer-first") { TransferSection(pickFile, saveFile, canExport = false, modifier = Modifier.padding(top = 12.dp)) }
             if (kinds.size > 1 || unsorted > 0) item {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     item { FilterChip(kind == null && !unsortedOnly, { kind = null; unsortedOnly = false }, label = { Text("All") }, shape = RoundedCornerShape(50)) }
