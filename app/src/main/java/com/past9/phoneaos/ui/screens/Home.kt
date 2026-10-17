@@ -224,7 +224,7 @@ fun HomeScreen(s: HomeState, actions: HomeActions, bottomPadding: Dp = 120.dp) {
                             Spacer(Modifier.height(4.dp))
                             // The real message, rendered (bold, lists, links), cut to a few lines; no raw markdown.
                             Box(Modifier.heightIn(max = 112.dp)) {
-                                com.past9.phoneaos.ui.Markdown(com.past9.phoneaos.voice.Tts.stripEmoji(latest.text).replace(Regex("!\\[[^]]*]\\([^)]*\\)"), "").lines().filter { it.isNotBlank() }.take(4).joinToString("\n"),
+                                com.past9.phoneaos.ui.Markdown(com.past9.phoneaos.voice.Tts.stripEmoji(com.past9.phoneaos.ui.openui.OpenUiLang.plainText(latest.text)).replace(Regex("!\\[[^]]*]\\([^)]*\\)"), "").lines().filter { it.isNotBlank() }.take(4).joinToString("\n"),
                                     style = MaterialTheme.typography.bodyMedium)
                             }
                             Spacer(Modifier.height(8.dp))

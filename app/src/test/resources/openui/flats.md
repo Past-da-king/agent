@@ -1,39 +1,47 @@
-Here are 3 one-bed flats in Umhlanga Ridge under R10k:
+Here are three 1-bed flats under R10k in Umhlanga Ridge.
 
 ```openui-lang
-root = Card([header, intro, sep1, f1head, f1img, f1info, f1btns, sep2, f2head, f2img, f2info, f2btns, sep3, f3head, f3img, f3info, f3btns, followups], sources)
+root = Stack([flat1, flat2, flat3], "row")
 
-header = CardHeader("1-Bed Flats in Umhlanga Ridge", "3 available under R10,000 / month")
-intro = TextContent("All prices exclude or include deposits as shown. Tap to book a viewing or open the listing.", "small")
+flat1 = Card([img1, head1, facts1, btns1], src1)
+img1 = ImageBlock("https://images.pp.co.za/listing/12122338/Hyyli5R3aokEClguZNSV32/1600/1066/contain/jpegorpng", "1-bed flat in Umhlanga Ridge")
+head1 = CardHeader("R9,500 a month", "Umhlanga Ridge")
+facts1 = EntityList([rent1, beds1, size1, avail1, dep1], "small")
+rent1 = {left: "Rent", right: "R9,500", rightVariant: "number"}
+beds1 = {left: "Bedrooms", right: "1"}
+size1 = {left: "Size", right: "98 m2"}
+avail1 = {left: "Available", right: "1 Nov 2026"}
+dep1 = {left: "Deposit", right: "R9,500", rightVariant: "number"}
+btns1 = Buttons([book1, open1])
+book1 = Button("Book viewing", @ToAssistant("Book a viewing", {item: "R9,500 1-bed, 98 m2", listing: "RR4794507"}))
+open1 = Button("Open listing", @OpenUrl("https://www.privateproperty.co.za/to-rent/kwazulu-natal/durban/umhlanga/umhlanga-ridge/RR4794507"))
+src1 = [{title: "R9,500 1-bed in Umhlanga Ridge", sourceName: "privateproperty.co.za", url: "https://www.privateproperty.co.za/to-rent/kwazulu-natal/durban/umhlanga/umhlanga-ridge/RR4794507"}]
 
-f1head = InlineHeader("R9,500 / month — 98 m²", "Largest of the three")
-f1img = ImageBlock("https://images.pp.co.za/listing/12122338/Hyyli5R3aokEClguZNSV32/1600/1066/contain/jpegorpng", "Umhlanga Ridge 1-bed flat")
-f1info = EntityList([{left: "Rent", right: "R9,500 / month", rightVariant: "number"}, {left: "Size", right: "98 m²"}, {left: "Available", right: "1 Nov 2026"}, {left: "Deposit", right: "R9,500", rightVariant: "number"}])
-f1btns = Buttons([book1, open1], "row")
-book1 = Button("Book viewing", @ToAssistant("Book a viewing of the 1-bed flat in Umhlanga Ridge at R9,500/month (98 m², available 1 Nov 2026). Listing RR4794507."), "primary")
-open1 = Button("Open listing", @OpenUrl("https://www.privateproperty.co.za/to-rent/kwazulu-natal/durban/umhlanga/umhlanga-ridge/RR4794507"), "secondary")
+flat2 = Card([img2, head2, facts2, btns2], src2)
+img2 = ImageBlock("https://images.pp.co.za/listing/12107340/SYJ3Ur69TCw3DamxqVpZI4/1600/1066/contain/jpegorpng", "1-bed flat at The Gateway")
+head2 = CardHeader("R8,500 a month", "The Gateway")
+facts2 = EntityList([rent2, beds2, size2, avail2, dep2], "small")
+rent2 = {left: "Rent", right: "R8,500", rightVariant: "number"}
+beds2 = {left: "Bedrooms", right: "1"}
+size2 = {left: "Size", right: "43 m2"}
+avail2 = {left: "Available", right: "Now"}
+dep2 = {left: "Deposit", right: "R8,500", rightVariant: "number"}
+btns2 = Buttons([book2, open2])
+book2 = Button("Book viewing", @ToAssistant("Book a viewing", {item: "R8,500 1-bed, 43 m2, The Gateway", listing: "RR4787859"}))
+open2 = Button("Open listing", @OpenUrl("https://www.privateproperty.co.za/to-rent/kwazulu-natal/durban/umhlanga/umhlanga-ridge/RR4787859"))
+src2 = [{title: "R8,500 1-bed at The Gateway", sourceName: "privateproperty.co.za", url: "https://www.privateproperty.co.za/to-rent/kwazulu-natal/durban/umhlanga/umhlanga-ridge/RR4787859"}]
 
-sep2 = Separator()
-f2head = InlineHeader("R8,500 / month — 43 m²", "The Gateway · available now")
-f2img = ImageBlock("https://images.pp.co.za/listing/12107340/SYJ3Ur69TCw3DamxqVpZI4/1600/1066/contain/jpegorpng", "The Gateway 1-bed flat")
-f2info = EntityList([{left: "Rent", right: "R8,500 / month", rightVariant: "number"}, {left: "Size", right: "43 m²"}, {left: "Available", right: "Now"}, {left: "Deposit", right: "R8,500", rightVariant: "number"}])
-f2btns = Buttons([book2, open2], "row")
-book2 = Button("Book viewing", @ToAssistant("Book a viewing of the 1-bed flat at The Gateway, Umhlanga Ridge, at R8,500/month (43 m², available now). Listing RR4787859."), "primary")
-open2 = Button("Open listing", @OpenUrl("https://www.privateproperty.co.za/to-rent/kwazulu-natal/durban/umhlanga/umhlanga-ridge/RR4787859"), "secondary")
-
-sep3 = Separator()
-f3head = InlineHeader("R8,850 / month — 45 m²", "Available 1 Nov 2026")
-f3img = ImageBlock("https://images.pp.co.za/listing/12048389/uzoYTZR76U2IcL0q12eVU0/600/450/contain/jpegorpng", "Umhlanga Ridge 1-bed flat")
-f3info = EntityList([{left: "Rent", right: "R8,850 / month", rightVariant: "number"}, {left: "Size", right: "45 m²"}, {left: "Available", right: "1 Nov 2026"}, {left: "Deposit", right: "R8,850", rightVariant: "number"}])
-f3btns = Buttons([book3, open3], "row")
-book3 = Button("Book viewing", @ToAssistant("Book a viewing of the 1-bed flat in Umhlanga Ridge at R8,850/month (45 m², available 1 Nov 2026). Listing RR4762518."), "primary")
-open3 = Button("Open listing", @OpenUrl("https://www.privateproperty.co.za/to-rent/kwazulu-natal/durban/umhlanga/umhlanga-ridge/RR4762518"), "secondary")
-
-followups = FollowUpBlock([fu1, fu2])
-fu1 = FollowUpItem("Which one has the lowest total move-in cost?")
-fu2 = FollowUpItem("Show only flats available now")
-
-sources = [{title: "R9,500 · 98 m² · Umhlanga Ridge", sourceName: "privateproperty.co.za", url: "https://www.privateproperty.co.za/to-rent/kwazulu-natal/durban/umhlanga/umhlanga-ridge/RR4794507"}, {title: "R8,500 · 43 m² · The Gateway", sourceName: "privateproperty.co.za", url: "https://www.privateproperty.co.za/to-rent/kwazulu-natal/durban/umhlanga/umhlanga-ridge/RR4787859"}, {title: "R8,850 · 45 m² · Umhlanga Ridge", sourceName: "privateproperty.co.za", url: "https://www.privateproperty.co.za/to-rent/kwazulu-natal/durban/umhlanga/umhlanga-ridge/RR4762518"}]
+flat3 = Card([img3, head3, facts3, btns3], src3)
+img3 = ImageBlock("https://images.pp.co.za/listing/12048389/uzoYTZR76U2IcL0q12eVU0/600/450/contain/jpegorpng", "1-bed flat in Umhlanga Ridge")
+head3 = CardHeader("R8,850 a month", "Umhlanga Ridge")
+facts3 = EntityList([rent3, beds3, size3, avail3, dep3], "small")
+rent3 = {left: "Rent", right: "R8,850", rightVariant: "number"}
+beds3 = {left: "Bedrooms", right: "1"}
+size3 = {left: "Size", right: "45 m2"}
+avail3 = {left: "Available", right: "1 Nov 2026"}
+dep3 = {left: "Deposit", right: "R8,850", rightVariant: "number"}
+btns3 = Buttons([book3, open3])
+book3 = Button("Book viewing", @ToAssistant("Book a viewing", {item: "R8,850 1-bed, 45 m2", listing: "RR4762518"}))
+open3 = Button("Open listing", @OpenUrl("https://www.privateproperty.co.za/to-rent/kwazulu-natal/durban/umhlanga/umhlanga-ridge/RR4762518"))
+src3 = [{title: "R8,850 1-bed in Umhlanga Ridge", sourceName: "privateproperty.co.za", url: "https://www.privateproperty.co.za/to-rent/kwazulu-natal/durban/umhlanga/umhlanga-ridge/RR4762518"}]
 ```
-
-Each card has a **Book viewing** (sends me a request) and **Open listing** button.

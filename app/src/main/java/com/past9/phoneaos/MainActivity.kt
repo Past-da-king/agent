@@ -359,7 +359,10 @@ class MainActivity : ComponentActivity() {
                         } ?: com.past9.phoneaos.ui.screens.MorningUi(preparing = preparingBrief, onBackToChat = { com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity) })))
                 }
                 composable("report?path={path}") { e ->
-                    ReportScreen(e.arguments?.getString("path").orEmpty(), onBack = { nav.popBackStack() })
+                    // A button in a report's cards asks the agent, like in the chat.
+                    androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.openui.LocalOpenUiSend provides { msg -> g.runtime.send(msg); nav.navigate("chat") }) {
+                        ReportScreen(e.arguments?.getString("path").orEmpty(), onBack = { nav.popBackStack() })
+                    }
                 }
                 composable("tasks") {
                     TasksScreen(goals, tasks, bottomPadding = barPad, actions = TaskActions(

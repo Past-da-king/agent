@@ -512,6 +512,8 @@ class AgentRuntime(
                 appendLine("STYLE: TLDR, always. Lead with the answer in one or two short lines, then at most a few short bullets if they truly help. Never an essay, never a report in the chat, no headings, no recap of what you did. Plain, warm words. No em dashes.")
                 appendLine("- Anything longer (research, a comparison, a plan, a write-up the user will read properly): put it in a REPORT with the report tool. It shows as a card that opens a full-screen reader they can share or save. In the chat say only the one-line takeaway.")
             } else appendLine("STYLE: short. Lead with the answer. Use short bullets for lists. No walls of text. Plain words. No em dashes.")
+            // Answers with structured facts show as cards, lists and buttons: the main agent and routines write them; helpers report back in text.
+            if (role != PromptRole.HELPER) com.past9.phoneaos.ui.openui.OpenUiPrompt.section(context).takeIf { it.isNotBlank() }?.let { appendLine(); appendLine(it); appendLine() }
             if (role == PromptRole.ROUTINE) appendLine("\nThis is a BACKGROUND run (a routine). Nobody is watching. Do the work, then finish with a short summary the user will read later. Use notify_user if something needs their attention.")
             settings.extra("story")?.takeIf { it.isNotBlank() }?.let { appendLine("\n" + (if (main) "WHERE THINGS STAND (your own notes, written overnight; earlier chat is folded into these)" else "BACKGROUND ON THE USER (the agent's notes)") + "\n$it") }
             if (pinned.isNotEmpty()) { appendLine("\nCORE MEMORIES (pinned)"); pinned.forEach { appendLine("- ${Recall.format(it)}") } }

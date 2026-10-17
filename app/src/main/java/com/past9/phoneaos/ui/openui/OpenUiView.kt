@@ -32,6 +32,9 @@ import com.past9.phoneaos.ui.openui.OpenUiLang.Node
 /** What a tap on a generated button sends back to the agent (the chat sets it; elsewhere taps only open links). */
 val LocalOpenUiSend = compositionLocalOf<(String) -> Unit> { {} }
 
+/** Which card and item the composable being drawn sits in, so a tap can say what it is about. */
+private val LocalOpenUiScope = compositionLocalOf { OpenUiLang.Scope() }
+
 /** Tests hand in already-loaded pictures by URL; the app loads them with Coil. */
 val LocalOpenUiImages = compositionLocalOf<(String) -> androidx.compose.ui.graphics.ImageBitmap?> { { null } }
 
@@ -54,9 +57,17 @@ private fun Node.nodes(k: String) = list(k).filterIsInstance<Node>()
 private fun Comp(n: Node) {
     val cs = MaterialTheme.colorScheme
     when (n.type) {
+        "Stack" -> StackComp(n)
         "Card" -> Surface(shape = RoundedCornerShape(24.dp), color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                n.nodes("children").forEach { Comp(it) }
+                // The card's name is its header; inside a card with sections, each section heading names the item below it.
+                val kids = n.nodes("children")
+                val title = kids.firstOrNull { it.type == "CardHeader" }?.str("title") ?: kids.firstOrNull { it.type == "InlineHeader" }?.str("heading")
+                var section: String? = null
+                kids.forEach { k ->
+                    if (k.type == "InlineHeader" && kids.firstOrNull { it.type == "CardHeader" } != null) section = k.str("heading")
+                    androidx.compose.runtime.CompositionLocalProvider(LocalOpenUiScope provides OpenUiLang.Scope(card = title, item = section)) { Comp(k) }
+                }
                 val sources = n.list("sources").filterIsInstance<Map<*, *>>()
                 if (sources.isNotEmpty()) Sources(sources)
             }
@@ -151,15 +162,32 @@ private fun EntityRows(n: Node) {
 }
 
 @Composable
-private fun runner(action: Any?): () -> Unit {
+private fun runner(action: Any?, item: String? = null): () -> Unit {
     val send = LocalOpenUiSend.current; val uri = LocalUriHandler.current
+    val scope = LocalOpenUiScope.current.let { if (item != null) it.copy(item = item) else it }
     val list = when (action) { is Action -> listOf(action); is List<*> -> action.filterIsInstance<Action>(); else -> emptyList() }
-    return { list.forEach { a -> when (a) { is Action.ToAssistant -> send(a.text); is Action.OpenUrl -> runCatching { uri.openUri(a.url) } } } }
+    return { list.forEach { a -> when (a) { is Action.ToAssistant -> send(OpenUiLang.messageFor(a, scope)); is Action.OpenUrl -> runCatching { uri.openUri(a.url) } } } }
+}
+
+/** Several cards, one per item: side by side to swipe through ("row"), or one under another. */
+@Composable
+private fun StackComp(n: Node) {
+    val kids = n.nodes("children")
+    if (kids.isEmpty()) return
+    if (n.str("direction") != "row" || kids.size == 1) Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { kids.forEach { Comp(it) } }
+    else BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val w = (maxWidth * 0.86f).coerceAtMost(380.dp)
+        val state = androidx.compose.foundation.lazy.rememberLazyListState()
+        androidx.compose.foundation.lazy.LazyRow(state = state, horizontalArrangement = Arrangement.spacedBy(10.dp),
+            flingBehavior = androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior(state)) {
+            items(kids.size) { i -> Box(Modifier.width(w)) { Comp(kids[i]) } }
+        }
+    }
 }
 
 @Composable
 private fun ListRow(i: Int, it: Node, numbered: Boolean) {
-    val cs = MaterialTheme.colorScheme; val run = runner(it.props["action"])
+    val cs = MaterialTheme.colorScheme; val run = runner(it.props["action"], item = it.str("title"))
     val clickable = it.props["action"] != null
     Surface(onClick = run, enabled = clickable, color = Color.Transparent, shape = RoundedCornerShape(14.dp)) {
         Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.Top) {
