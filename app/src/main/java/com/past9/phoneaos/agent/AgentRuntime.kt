@@ -194,6 +194,9 @@ class AgentRuntime(
     /** Servers and computers the user connected; the agent hands them heavy work over SSH. */
     val machines = com.past9.phoneaos.machines.MachineService(com.past9.phoneaos.machines.MachineStore(settings))
     val composio = ComposioClient({ settings.composioKey() }, settings.installId())
+    /** Web apps the agent taught itself (WhatsApp Web, Reddit...): the tools it wrote for each, run in the signed-in browser. */
+    val learned = com.past9.phoneaos.connections.LearnedStore(settings)
+    private val pageRunner = com.past9.phoneaos.connections.EnginePageRunner(context)
     /** Profiles (parts of the user's life, each a set of connected accounts) and each account's rules. */
     val profiles = com.past9.phoneaos.data.ProfileStore(context)
     /** The profile each helper was handed (helper id -> profile id): it may only use that profile's accounts. */
@@ -375,6 +378,7 @@ class AgentRuntime(
         list += if (machines.store.machines.value.isEmpty()) listOf(com.past9.phoneaos.machines.MachineListTool(machines))
             else com.past9.phoneaos.machines.machineTools(machines, java.io.File(context.filesDir, "downloads/machines"))
         list += browserTools(context)
+        list += com.past9.phoneaos.connections.learnedTools(learned, pageRunner)
         val openSignIn: suspend (String) -> Unit = { url -> com.past9.phoneaos.system.UiBus.openInBrowser.emit(com.past9.phoneaos.system.UiBus.OpenInBrowser(url)) }
         if (settings.state.value.composioEnabled && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(settings.composioKey())) {
             list += com.past9.phoneaos.tools.ComposioConnect.asTools({ settings.composioKey()?.trim() }, openSignIn, appGuard) { ctx, acc -> accountConnected(ctx, acc) }
@@ -475,6 +479,7 @@ class AgentRuntime(
                 appendLine("- Do the work yourself with your tools instead of telling the user how. Only ask when it is a real choice (ask_user with buttons), or you are truly blocked.")
                 appendLine("- Before anything goes out in their name, costs money, or deletes something: request_approval with the exact content. Never skip this.")
                 appendLine("- Search memory (memory_search) for anything about the user you need instead of asking.")
+                appendLine("- A website or web app you will need again (WhatsApp Web, Reddit, a portal with no API): don't click through it every time. Check webapp_list for tools you already wrote; if there are none, teach yourself it once (webapp_guide, then browser_network and browser_eval to map it, then webapp_save).")
                 if (role == PromptRole.HELPER) appendLine("- Whatever you ask of the user (ask_user, request_approval, browser_handoff, connecting an app) goes to the main agent first. It answers what it knows and sends back anything you can do yourself. So before a handoff, really try: click each option, type into the focused field, use arrow keys or Enter, browser_look to see the page, another route to the same result. Hand off only for what needs the person: a captcha, a passkey or code on their phone, their phone number, a payment, something sent in their name. Never finish by asking the user to do part of the job themselves.")
             }
             appendLine("- Phone permissions are OFF until needed. Their location (delivery, 'near me'): location_get. A document from the phone: files_pick. Their latest photo or screenshot: photos_recent. A one-time code during sign-in: notifications_wait_code. Watching an app's notifications: notifications_allow, a 'notification' routine, then notifications_stop when done.")

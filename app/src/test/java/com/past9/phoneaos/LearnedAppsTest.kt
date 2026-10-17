@@ -1,0 +1,152 @@
+package com.past9.phoneaos
+
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import com.past9.phoneaos.agent.ToolContext
+import com.past9.phoneaos.connections.*
+import com.past9.phoneaos.data.SettingsStore
+import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
+import org.junit.Assert.*
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import java.io.File
+
+/** Web apps the agent teaches itself: saving needs the user's yes, tools that change things ask first, results come back trimmed. */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
+class LearnedAppsTest {
+    private val ctx: Context = ApplicationProvider.getApplicationContext()
+
+    private class Ctx(var answer: String? = "Approve") : ToolContext {
+        override val agentLabel = "main"
+        val asked = mutableListOf<String>(); val lines = mutableListOf<String>()
+        override suspend fun activity(text: String, meta: JSONObject): Long { lines += text; return lines.size.toLong() }
+        override suspend fun updateActivity(id: Long, text: String, meta: JSONObject) { lines += text }
+        override suspend fun ask(question: String, options: List<String>): String? { asked += question; return answer }
+        override suspend fun notify(title: String, body: String) {}
+    }
+    private class Runner(var reply: String = """{"ok":true,"v":{"chats":["Mom","Sam"]}}""", var syntax: String = "") : PageRunner {
+        val ran = mutableListOf<Pair<String, JSONObject>>(); var ensured = 0
+        override suspend fun ensure(app: LearnedApp, ctx: ToolContext) { ensured++ }
+        override suspend fun run(body: String, args: JSONObject): String { ran += body to args; return reply }
+        override suspend fun syntaxError(body: String) = syntax
+    }
+    private fun store() = LearnedStore(SettingsStore(ctx).also { it.setExtra("learned_apps", null) })
+
+    private fun toolsJson(vararg t: JSONObject) = org.json.JSONArray().apply { t.forEach { put(it) } }
+    private fun tool(name: String, ro: Boolean, js: String = "return 1", params: JSONObject = JSONObject()) =
+        JSONObject().put("name", name).put("description", "Does $name").put("js", js).put("read_only", ro).put("params", params)
+    private fun save(input: JSONObject, st: LearnedStore, c: Ctx, r: Runner) = runBlocking { WebAppSaveTool(st, r).run(input, c) }
+    private fun input(vararg t: JSONObject) = JSONObject().put("name", "WhatsApp Web").put("start_url", "https://web.whatsapp.com").put("desktop", true).put("tools", toolsJson(*t))
+
+    @Test fun savingAsksTheUserListsReadsAndChangesThenStoresTheApp() {
+        val st = store(); val c = Ctx(); val r = Runner()
+        val out = save(input(tool("list_chats", true), tool("send_message", false, params = JSONObject().put("chat", JSONObject().put("type", "string")))), st, c, r)
+        assertTrue(out, out.startsWith("Saved WhatsApp Web with 2 tools"))
+        assertTrue(out, out.contains("web_whatsapp_web_list_chats") && out.contains("web_whatsapp_web_send_message"))
+        assertEquals(1, c.asked.size)
+        assertTrue(c.asked[0], c.asked[0].startsWith("APPROVAL|Save the WhatsApp Web tools (2)|"))
+        assertTrue(c.asked[0].contains("Reads: list_chats") && c.asked[0].contains("CHANGES things: send_message") && c.asked[0].contains("desktop browser"))
+        val app = st.find("whatsapp web")!!
+        assertTrue(app.desktop); assertFalse(app.trusted); assertEquals("web.whatsapp.com", app.host); assertEquals(1, app.writes)
+        // It survives a restart.
+        assertEquals(2, LearnedStore(SettingsStore(ctx)).apps.value.single().tools.size)
+    }
+
+    @Test fun aDeclinedOrUnansweredSaveStoresNothing() {
+        val st = store(); val r = Runner()
+        assertTrue(save(input(tool("a_tool", true)), st, Ctx("Decline"), r).startsWith("DECLINED"))
+        assertTrue(save(input(tool("a_tool", true)), st, Ctx(null), r).startsWith("No answer"))
+        assertTrue(st.apps.value.isEmpty())
+    }
+
+    @Test fun badDefinitionsAreRefusedBeforeTheUserIsAsked() {
+        val st = store(); val c = Ctx(); val r = Runner()
+        fun refused(i: JSONObject, why: String, rr: Runner = r) { val o = save(i, st, c, rr); assertTrue("$why: $o", o.startsWith("Not saved")); }
+        refused(input(tool("Bad Name", true)), "tool name")
+        refused(input(tool("ok_one", true, js = "  ")), "empty js")
+        refused(input(tool("ok_one", true), tool("ok_one", false)), "duplicate")
+        refused(input(tool("ok_one", true, params = JSONObject().put("x", JSONObject().put("type", "object")))), "param type")
+        refused(JSONObject().put("name", "X").put("start_url", "http://insecure.example").put("tools", toolsJson(tool("ok_one", true))), "http")
+        refused(input(tool("ok_one", true)), "syntax", Runner(syntax = "Unexpected token '}'"))
+        refused(input(), "no tools")
+        assertTrue("never asked", c.asked.isEmpty()); assertTrue(st.apps.value.isEmpty())
+    }
+
+    private fun app(st: LearnedStore, trusted: Boolean = false): LearnedApp {
+        val a = LearnedApp("wa", "WhatsApp Web", "https://web.whatsapp.com", tools = listOf(
+            LearnedTool("list_chats", "List chats", js = "return ['Mom']"),
+            LearnedTool("send_message", "Send a message", JSONObject().put("chat", JSONObject().put("type", "string")).put("text", JSONObject().put("type", "string")), listOf("chat", "text"), "return 1", readOnly = false)))
+        st.save(a); if (trusted) st.setTrusted("wa", true); return st.find("wa")!!
+    }
+
+    @Test fun readingRunsStraightAwayAndReturnsTheValue() = runBlocking {
+        val st = store(); app(st); val c = Ctx(); val r = Runner()
+        val out = LearnedCallTool("wa", st.find("wa")!!.tools[0], st, r).run(JSONObject(), c)
+        assertEquals("""{"chats":["Mom","Sam"]}""", out)
+        assertTrue(c.asked.isEmpty()); assertEquals(1, r.ensured); assertEquals("return ['Mom']", r.ran.single().first)
+    }
+
+    @Test fun changingThingsAsksFirstAndDeclineMeansItNeverRuns() = runBlocking {
+        val st = store(); app(st); val r = Runner(); val t = st.find("wa")!!.tools[1]
+        val args = JSONObject().put("chat", "Mom").put("text", "On my way")
+        val no = Ctx("Decline"); assertTrue(LearnedCallTool("wa", t, st, r).run(args, no).startsWith("DECLINED")); assertTrue(r.ran.isEmpty())
+        assertTrue(no.asked.single().contains("chat: Mom") && no.asked.single().contains("text: On my way"))
+        val yes = Ctx("Approve"); LearnedCallTool("wa", t, st, r).run(args, yes); assertEquals(1, r.ran.size)
+        val bg = Ctx(null); assertTrue(LearnedCallTool("wa", t, st, r).run(args, bg).startsWith("No answer")); assertEquals(1, r.ran.size)
+    }
+
+    @Test fun aTrustedAppChangesThingsWithoutAskingButOnlyTheUserCanTrust() = runBlocking {
+        val st = store(); app(st, trusted = true); val r = Runner(); val c = Ctx()
+        LearnedCallTool("wa", st.find("wa")!!.tools[1], st, r).run(JSONObject().put("chat", "Mom").put("text", "Hi"), c)
+        assertTrue(c.asked.isEmpty()); assertEquals(1, r.ran.size)
+        // The agent saving the app again does not switch trust on or off.
+        assertTrue(WebAppSaveTool(st, r).run(input(tool("read_only_one", true)), Ctx(), ).startsWith("Saved"))
+        assertTrue(st.find("whatsapp web")!!.tools.size == 1)
+        st.setTrusted(st.find("whatsapp web")!!.id, false); assertFalse(st.find("whatsapp web")!!.trusted)
+    }
+
+    @Test fun missingInputIsSaidNotRun() = runBlocking {
+        val st = store(); app(st); val r = Runner()
+        val out = LearnedCallTool("wa", st.find("wa")!!.tools[1], st, r).run(JSONObject().put("chat", "Mom"), Ctx())
+        assertEquals("Missing input: text.", out); assertTrue(r.ran.isEmpty())
+    }
+
+    @Test fun resultsAreTrimmedAndErrorsAreReadable() {
+        assertEquals("hello", WebApps.result("""{"ok":true,"v":"hello"}"""))
+        assertEquals("Error: Not signed in", WebApps.result("""{"ok":false,"e":"Not signed in"}"""))
+        assertEquals("null", WebApps.result("""{"ok":true,"v":null}"""))
+        val big = WebApps.result("""{"ok":true,"v":"${"x".repeat(25_000)}"}""")
+        assertTrue(big.length < 20_300 && big.contains("more characters"))
+    }
+
+    @Test fun toolsAreNamedAfterTheAppAndKeepTheirInputs() {
+        val st = store(); app(st); val tools = learnedTools(st, Runner()).map { it.spec.name }
+        for (n in listOf("webapp_guide", "webapp_list", "webapp_save", "webapp_test", "webapp_remove", "web_wa_list_chats", "web_wa_send_message")) assertTrue("$n in $tools", n in tools)
+        assertTrue(tools.all { it.length <= 64 })
+        val schema = learnedTools(st, Runner()).first { it.spec.name == "web_wa_send_message" }.spec.schema
+        assertEquals("""["chat","text"]""", schema.getJSONArray("required").toString())
+        assertTrue(learnedTools(st, Runner()).first { it.spec.name == "web_wa_send_message" }.spec.description.contains("CHANGES things"))
+    }
+
+    @Test fun removingNeedsAYesAndTestRunsOneTool() = runBlocking {
+        val st = store(); app(st); val r = Runner()
+        assertTrue(WebAppRemoveTool(st).run(JSONObject().put("app", "WhatsApp Web"), Ctx("Decline")).startsWith("DECLINED")); assertNotNull(st.find("wa"))
+        assertTrue(WebAppTestTool(st, r).run(JSONObject().put("app", "whatsapp web").put("tool", "list_chats"), Ctx()).contains("Mom"))
+        assertTrue(WebAppRemoveTool(st).run(JSONObject().put("app", "WhatsApp Web"), Ctx("Approve")).startsWith("Removed")); assertNull(st.find("wa"))
+    }
+
+    @Test fun thePageScriptsAreWrittenOut() {
+        File("build/pagejs").mkdirs()
+        File("build/pagejs/start.js").writeText(PageJs.start("__aosR1", "const r = args.n * 2; return {r, s: 'it\\'s \"quoted\"'}", JSONObject().put("n", 21)))
+        File("build/pagejs/poll.js").writeText(PageJs.poll("__aosR1"))
+        File("build/pagejs/syntax_ok.js").writeText(PageJs.syntax("return 1"))
+        File("build/pagejs/syntax_bad.js").writeText(PageJs.syntax("return }"))
+        File("build/pagejs/net.js").writeText(PageJs.NET_SHIM)
+        File("build/pagejs/netlog.js").writeText(PageJs.netLog("api", 5))
+        assertTrue(PageJs.start("s", "return 1", JSONObject()).contains("window[k]"))
+    }
+}

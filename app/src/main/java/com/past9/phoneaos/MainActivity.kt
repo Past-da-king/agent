@@ -429,11 +429,15 @@ class MainActivity : ComponentActivity() {
                 composable("connections") {
                     LaunchedEffect(Unit) { refreshConnections() }
                     val machines by g.runtime.machines.store.machines.collectAsStateWithLifecycle()
+                    val learnedApps by g.runtime.learned.apps.collectAsStateWithLifecycle()
                     // Re-read on every return to this screen: the user may have just switched All files access on.
                     val resumed = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsStateWithLifecycle().value
                     val phoneFiles = remember(resumed) { com.past9.phoneaos.tools.phoneFilesAllowed() }
-                    ConnectionsScreen(conn.copy(machines = machines, phoneFiles = phoneFiles, profiles = profileList, rules = accountRules, browserProfiles = settings.browserProfiles), bottomPadding = barPad + 24.dp, actions = ConnectionsActions(
+                    ConnectionsScreen(conn.copy(machines = machines, phoneFiles = phoneFiles, profiles = profileList, rules = accountRules, browserProfiles = settings.browserProfiles, learned = learnedApps), bottomPadding = barPad + 24.dp, actions = ConnectionsActions(
                         profile = profileActions,
+                        onTrustLearned = { id, on -> g.runtime.learned.setTrusted(id, on) },
+                        onRemoveLearned = { id -> g.runtime.learned.remove(id) },
+                        onTeach = { what -> g.runtime.send("Teach yourself this web app so you can use it without clicking through it every time: $what. Read webapp_guide first, check webapp_list, then map it in the browser and save the tools you write with webapp_save."); nav.navigate("chat") },
                         onKeepOne = { keep, remove -> scope.launch {
                             val ck = g.settings.composioKey()?.trim()
                             remove.forEach { c ->
