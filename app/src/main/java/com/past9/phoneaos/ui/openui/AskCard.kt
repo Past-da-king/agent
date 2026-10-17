@@ -13,7 +13,7 @@ import com.past9.phoneaos.agent.AskOptions
  */
 object AskProgram {
     /** A string literal in OpenUI Lang. */
-    private fun q(s: String) = "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\r", "").replace("\n", "\\n") + "\""
+    internal fun q(s: String) = "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\r", "").replace("\n", "\\n") + "\""
 
     fun build(title: String, subtitle: String?, question: String, options: List<String>): String {
         val all = AskOptions.withNo(options)

@@ -34,11 +34,23 @@ data class MemoryActions(
     val onOpen: (MemoryRow) -> Unit = {},
     val onSave: (MemoryRow) -> Unit = {},
     val onDelete: (MemoryRow) -> Unit = {},
-    /** Write every page into this zip (the file the user just named). Calls back with a line to show when done. */
-    val onExport: (android.net.Uri, (String) -> Unit) -> Unit = { _, _ -> },
-    /** Read pages from the zip, JSON or markdown file the user picked. Calls back with a line to show when done. */
-    val onImport: (android.net.Uri, (String) -> Unit) -> Unit = { _, _ -> },
+    /** Write every page into this zip (the file the user just named). Calls back with what happened. */
+    val onExport: (android.net.Uri, (TransferNote) -> Unit) -> Unit = { _, _ -> },
+    /** Read pages from the zip, JSON or markdown file the user picked. Calls back with what happened. */
+    val onImport: (android.net.Uri, (TransferNote) -> Unit) -> Unit = { _, _ -> },
 )
+
+/** What an import or export did, shown as a card in the Memory list (never a pop-up). */
+data class TransferNote(val headline: String, val sub: String, val rows: List<Pair<String, Int>> = emptyList(), val unsorted: Int = 0) { companion object }
+
+fun TransferNote.Companion.imported(s: com.past9.phoneaos.data.MemoryTransfer.Summary): TransferNote {
+    val r = s.result
+    if (s.pages == 0) return TransferNote("Nothing to import", "No memory pages were found in that file." + if (s.ignored > 0) " ${s.ignored} file${if (s.ignored == 1) "" else "s"} couldn't be read." else "")
+    return TransferNote("${s.pages} page${if (s.pages == 1) "" else "s"} ${if (r.added == s.pages) "added" else "imported"}", "Your agent can search them now.",
+        listOf("New" to r.added, "Updated" to r.updated, "Already there" to r.skipped, "Unsorted, to classify" to r.unsorted, "Not pinned (the limit is ${com.past9.phoneaos.data.MemoryTransfer.MAX_PINNED})" to r.pinnedDropped).filter { (l, n) -> n > 0 || l == "New" }, r.unsorted)
+}
+fun TransferNote.Companion.exported(n: Int) = TransferNote("$n page${if (n == 1) "" else "s"} saved", "One zip file. Import memories brings every page back.")
+fun TransferNote.Companion.failed(what: String, why: String?) = TransferNote("That didn't work", "$what${why?.takeIf { it.isNotBlank() }?.let { ": $it" } ?: ""}")
 
 fun pageIcon(kind: String): ImageVector = when (kind) {
     "person" -> Icons.Rounded.Person; "company" -> Icons.Rounded.Business; "place" -> Icons.Rounded.Place; "project" -> Icons.Rounded.Flag
@@ -50,13 +62,13 @@ fun summaryOf(body: String) = body.lineSequence().map { it.trim() }.firstOrNull 
     .replace(Regex("""\[\[([^\]|]+)(?:\|([^\]]*))?]]""")) { it.groupValues[2].ifBlank { it.groupValues[1] } }.replace(Regex("[*_`]"), "").removePrefix("- ")
 
 @Composable
-fun MemoryScreen(memories: List<MemoryRow>, actions: MemoryActions, bottomPadding: androidx.compose.ui.unit.Dp = 120.dp) {
+fun MemoryScreen(memories: List<MemoryRow>, actions: MemoryActions, bottomPadding: androidx.compose.ui.unit.Dp = 120.dp, initialNote: TransferNote? = null) {
     var query by remember { mutableStateOf("") }
     var kind by remember { mutableStateOf<String?>(null) }
     var adding by remember { mutableStateOf(false) }
     var unsortedOnly by remember { mutableStateOf(false) }
-    var menu by remember { mutableStateOf(false) }
-    var note by remember { mutableStateOf<String?>(null) }
+    var note by remember { mutableStateOf(initialNote) }
+    var busy by remember { mutableStateOf<String?>(null) }
     val kinds = remember(memories) { memories.map { it.kind }.distinct().sorted() }
     val unsorted = remember(memories) { memories.count { isUnsorted(it) } }
     val shown = remember(memories, query, kind, unsortedOnly) {
@@ -64,23 +76,22 @@ fun MemoryScreen(memories: List<MemoryRow>, actions: MemoryActions, bottomPaddin
         if (query.isBlank()) k else Recall.rank(query, k, 200)
     }
     // Back up or bring back memory as one zip: the system file picker chooses where it goes and what comes in.
-    val exportTo = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/zip")) { uri -> if (uri != null) actions.onExport(uri) { note = it } }
-    val importFrom = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) actions.onImport(uri) { note = it } }
-    SubScreen("Memory", "${memories.size} pages your agent keeps about your world", actions.onBack, actions = {
-        Box {
-            IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "Import or export memories") }
-            DropdownMenu(menu, { menu = false }) {
-                DropdownMenuItem(text = { Text("Import memories") }, leadingIcon = { Icon(Icons.Rounded.FileUpload, null) }, onClick = { menu = false; importFrom.launch(arrayOf("application/zip", "application/json", "text/*", "application/octet-stream", "application/x-zip-compressed")) })
-                DropdownMenuItem(text = { Text("Export memories") }, leadingIcon = { Icon(Icons.Rounded.FileDownload, null) }, onClick = { menu = false; exportTo.launch("agent-memories-${java.time.LocalDate.now()}.zip") })
-            }
-        }
-    },
+    val exportTo = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/zip")) { uri -> if (uri != null) { busy = "Saving your memories"; note = null; actions.onExport(uri) { busy = null; note = it } } }
+    val importFrom = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) { busy = "Bringing your memories in"; note = null; actions.onImport(uri) { busy = null; note = it } } }
+    val pickFile = { importFrom.launch(arrayOf("application/zip", "application/json", "text/*", "application/octet-stream", "application/x-zip-compressed")) }
+    val saveFile = { exportTo.launch("agent-memories-${java.time.LocalDate.now()}.zip") }
+    SubScreen("Memory", "${memories.size} pages your agent keeps about your world", actions.onBack,
         fab = { ExtendedFloatingActionButton(onClick = { adding = true }, icon = { Icon(Icons.Rounded.Add, null) }, text = { Text("New page") }, modifier = Modifier.padding(bottom = (bottomPadding - 40.dp).coerceAtLeast(0.dp))) }) { pad ->
         LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = com.past9.phoneaos.ui.sidePad(16.dp), end = com.past9.phoneaos.ui.sidePad(16.dp), bottom = bottomPadding + 60.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
                 OutlinedTextField(query, { query = it }, placeholder = { Text("Search people, places, anything") }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true,
                     modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge)
             }
+            // What an import or export just did, or that it is working: a card in the list, never a pop-up.
+            busy?.let { b -> item(key = "transfer-busy") { TransferBusy(b) } }
+            note?.let { n -> item(key = "transfer-note") { TransferCard(n) { pick -> if (pick == "unsorted") unsortedOnly = true; note = null } } }
+            // With nothing in memory yet (a fresh install, or after a wipe) bringing it back is the first thing to offer.
+            if (memories.isEmpty() && busy == null && note == null) item(key = "transfer-first") { TransferSection(pickFile, saveFile, canExport = false) }
             if (kinds.size > 1 || unsorted > 0) item {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     item { FilterChip(kind == null && !unsortedOnly, { kind = null; unsortedOnly = false }, label = { Text("All") }, shape = RoundedCornerShape(50)) }
@@ -97,10 +108,54 @@ fun MemoryScreen(memories: List<MemoryRow>, actions: MemoryActions, bottomPaddin
                 item { SectionHeader("Everything else", "Newest first", Modifier.padding(start = 4.dp, top = 10.dp)) }
                 items(rest, key = { it.id }) { m -> PageRow(m, memories) { actions.onOpen(m) } }
             } else items(shown, key = { it.id }) { m -> PageRow(m, memories) { actions.onOpen(m) } }
+            if (memories.isNotEmpty() && busy == null) item(key = "transfer-last") { TransferSection(pickFile, saveFile, canExport = true, modifier = Modifier.padding(top = 18.dp)) }
         }
     }
     if (adding) PageEditor(MemoryRow(id = 0, title = "", body = "", source = "user"), { adding = false }, onSave = { actions.onSave(it); adding = false })
-    note?.let { AlertDialog(onDismissRequest = { note = null }, confirmButton = { TextButton({ note = null }) { Text("OK") } }, title = { Text("Memory") }, text = { Text(it) }) }
+}
+
+/** Back up or bring back memory: one zip out, one zip (or JSON or markdown from another tool) in. */
+@Composable
+private fun TransferSection(onImport: () -> Unit, onExport: () -> Unit, canExport: Boolean, modifier: Modifier = Modifier) {
+    Column(modifier.fillMaxWidth()) {
+        SectionHeader("Back up and restore", if (canExport) "Save everything as one zip, or bring pages in from a zip or another tool" else "Bring your memory back from a zip, or from another tool", Modifier.padding(start = 4.dp, bottom = 10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            FilledTonalButton(onClick = onImport, shapes = ButtonDefaults.shapes(), modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Icon(Icons.Rounded.FileUpload, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Import") }
+            if (canExport) FilledTonalButton(onClick = onExport, shapes = ButtonDefaults.shapes(), modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Icon(Icons.Rounded.FileDownload, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Export") }
+        }
+    }
+}
+
+@Composable
+private fun TransferBusy(what: String) {
+    val cs = MaterialTheme.colorScheme
+    Surface(shape = RoundedCornerShape(28.dp), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+            CircularWavyProgressIndicator(modifier = Modifier.size(40.dp))
+            Spacer(Modifier.width(16.dp))
+            Column { Text(what, style = MaterialTheme.typography.titleMedium); Text("This takes a few seconds. You can keep using the app.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant) }
+        }
+    }
+}
+
+/** The result, drawn as one of the app's OpenUI cards: what happened, the numbers, and the next step. */
+@Composable
+internal fun TransferCard(n: TransferNote, onPick: (String) -> Unit) {
+    val source = remember(n) {
+        val q = com.past9.phoneaos.ui.openui.AskProgram::q
+        buildString {
+            appendLine("root = Card([head" + (if (n.rows.isNotEmpty()) ", facts" else "") + ", actions])")
+            appendLine("head = CardHeader(${q(n.headline)}, ${q(n.sub)})")
+            if (n.rows.isNotEmpty()) {
+                appendLine("facts = EntityList([${n.rows.indices.joinToString(", ") { "r$it" }}], \"small\")")
+                n.rows.forEachIndexed { i, (l, c) -> appendLine("r$i = {left: ${q(l)}, right: ${q(c.toString())}, rightVariant: \"number\"}") }
+            }
+            val buttons = (if (n.unsorted > 0) listOf("Show unsorted" to "unsorted") else emptyList()) + ("Done" to "done")
+            appendLine("actions = Buttons([${buttons.indices.joinToString(", ") { "b$it" }}], \"column\")")
+            buttons.forEachIndexed { i, (label, id) -> appendLine("b$i = Button(${q(label)}, Action([@ToAssistant(${q(id)})]), ${q(if (i == 0) "primary" else "secondary")})") }
+        }
+    }
+    androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.openui.LocalOpenUiPick provides onPick) { com.past9.phoneaos.ui.openui.OpenUiBlock(source) }
 }
 
 /** Came in from a file that didn't say what it is: waiting to be looked at. Saving the page by hand clears it. */
