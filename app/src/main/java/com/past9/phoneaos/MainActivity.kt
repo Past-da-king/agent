@@ -392,6 +392,15 @@ class MainActivity : ComponentActivity() {
                         onOpen = { m -> if (twoPane) openId = m.id else nav.navigate("page/${m.id}") },
                         onSave = { m -> scope.launch { if (m.id == 0L) g.db.memory().insert(m) else g.db.memory().update(m) } },
                         onDelete = { m -> scope.launch { g.db.memory().delete(m.id) } },
+                        onExport = { uri, done -> scope.launch {
+                            val msg = runCatching { this@MainActivity.contentResolver.openOutputStream(uri)!!.use { com.past9.phoneaos.data.MemoryTransfer.export(g.db.memory(), it) } }
+                                .fold({ "Saved $it memory pages as a zip. Keep it somewhere safe; Import memories brings them all back." }, { "Couldn't save the zip: ${it.message}" })
+                            done(msg) } },
+                        onImport = { uri, done -> scope.launch {
+                            val name = runCatching { this@MainActivity.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null } }.getOrNull() ?: uri.lastPathSegment ?: "memory.zip"
+                            val msg = runCatching { this@MainActivity.contentResolver.openInputStream(uri)!!.use { com.past9.phoneaos.data.MemoryTransfer.importFrom(name, it, g.db.memory()) } }
+                                .fold({ it.message() }, { "Couldn't read that file: ${it.message}" })
+                            done(msg) } },
                     )
                     if (!twoPane) MemoryScreen(memories, bottomPadding = barPad, actions = memoryActions)
                     else MemoryTwoPane(memories, openId, { openId = it }, memoryActions, barPad,

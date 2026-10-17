@@ -34,6 +34,10 @@ data class MemoryActions(
     val onOpen: (MemoryRow) -> Unit = {},
     val onSave: (MemoryRow) -> Unit = {},
     val onDelete: (MemoryRow) -> Unit = {},
+    /** Write every page into this zip (the file the user just named). Calls back with a line to show when done. */
+    val onExport: (android.net.Uri, (String) -> Unit) -> Unit = { _, _ -> },
+    /** Read pages from the zip, JSON or markdown file the user picked. Calls back with a line to show when done. */
+    val onImport: (android.net.Uri, (String) -> Unit) -> Unit = { _, _ -> },
 )
 
 fun pageIcon(kind: String): ImageVector = when (kind) {
@@ -50,21 +54,37 @@ fun MemoryScreen(memories: List<MemoryRow>, actions: MemoryActions, bottomPaddin
     var query by remember { mutableStateOf("") }
     var kind by remember { mutableStateOf<String?>(null) }
     var adding by remember { mutableStateOf(false) }
+    var unsortedOnly by remember { mutableStateOf(false) }
+    var menu by remember { mutableStateOf(false) }
+    var note by remember { mutableStateOf<String?>(null) }
     val kinds = remember(memories) { memories.map { it.kind }.distinct().sorted() }
-    val shown = remember(memories, query, kind) {
-        val k = memories.filter { kind == null || it.kind == kind }
+    val unsorted = remember(memories) { memories.count { isUnsorted(it) } }
+    val shown = remember(memories, query, kind, unsortedOnly) {
+        val k = memories.filter { (kind == null || it.kind == kind) && (!unsortedOnly || isUnsorted(it)) }
         if (query.isBlank()) k else Recall.rank(query, k, 200)
     }
-    SubScreen("Memory", "${memories.size} pages your agent keeps about your world", actions.onBack,
+    // Back up or bring back memory as one zip: the system file picker chooses where it goes and what comes in.
+    val exportTo = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/zip")) { uri -> if (uri != null) actions.onExport(uri) { note = it } }
+    val importFrom = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) actions.onImport(uri) { note = it } }
+    SubScreen("Memory", "${memories.size} pages your agent keeps about your world", actions.onBack, actions = {
+        Box {
+            IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "Import or export memories") }
+            DropdownMenu(menu, { menu = false }) {
+                DropdownMenuItem(text = { Text("Import memories") }, leadingIcon = { Icon(Icons.Rounded.FileUpload, null) }, onClick = { menu = false; importFrom.launch(arrayOf("application/zip", "application/json", "text/*", "application/octet-stream", "application/x-zip-compressed")) })
+                DropdownMenuItem(text = { Text("Export memories") }, leadingIcon = { Icon(Icons.Rounded.FileDownload, null) }, onClick = { menu = false; exportTo.launch("agent-memories-${java.time.LocalDate.now()}.zip") })
+            }
+        }
+    },
         fab = { ExtendedFloatingActionButton(onClick = { adding = true }, icon = { Icon(Icons.Rounded.Add, null) }, text = { Text("New page") }, modifier = Modifier.padding(bottom = (bottomPadding - 40.dp).coerceAtLeast(0.dp))) }) { pad ->
         LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = com.past9.phoneaos.ui.sidePad(16.dp), end = com.past9.phoneaos.ui.sidePad(16.dp), bottom = bottomPadding + 60.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
                 OutlinedTextField(query, { query = it }, placeholder = { Text("Search people, places, anything") }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true,
                     modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge)
             }
-            if (kinds.size > 1) item {
+            if (kinds.size > 1 || unsorted > 0) item {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item { FilterChip(kind == null, { kind = null }, label = { Text("All") }, shape = RoundedCornerShape(50)) }
+                    item { FilterChip(kind == null && !unsortedOnly, { kind = null; unsortedOnly = false }, label = { Text("All") }, shape = RoundedCornerShape(50)) }
+                    if (unsorted > 0) item { FilterChip(unsortedOnly, { unsortedOnly = !unsortedOnly }, label = { Text("Unsorted $unsorted") }, leadingIcon = { Icon(Icons.Rounded.Inbox, null, Modifier.size(16.dp)) }, shape = RoundedCornerShape(50)) }
                     items(kinds) { k -> FilterChip(kind == k, { kind = if (kind == k) null else k }, label = { Text(k.replaceFirstChar { it.uppercase() }) }, leadingIcon = { Icon(pageIcon(k), null, Modifier.size(16.dp)) }, shape = RoundedCornerShape(50)) }
                 }
             }
@@ -80,7 +100,11 @@ fun MemoryScreen(memories: List<MemoryRow>, actions: MemoryActions, bottomPaddin
         }
     }
     if (adding) PageEditor(MemoryRow(id = 0, title = "", body = "", source = "user"), { adding = false }, onSave = { actions.onSave(it); adding = false })
+    note?.let { AlertDialog(onDismissRequest = { note = null }, confirmButton = { TextButton({ note = null }) { Text("OK") } }, title = { Text("Memory") }, text = { Text(it) }) }
 }
+
+/** Came in from a file that didn't say what it is: waiting to be looked at. Saving the page by hand clears it. */
+fun isUnsorted(m: MemoryRow) = m.topics.split(',').any { it.trim().equals(com.past9.phoneaos.data.MemoryTransfer.UNSORTED, true) }
 
 @Composable
 private fun PageRow(m: MemoryRow, all: List<MemoryRow>, onClick: () -> Unit) {
@@ -153,7 +177,7 @@ internal fun PageEditor(m: MemoryRow, onDismiss: () -> Unit, onSave: (MemoryRow)
     var kind by remember { mutableStateOf(m.kind) }
     com.past9.phoneaos.ui.AppSheet(pageIcon(kind), if (m.id == 0L) "Your agent's memory" else "Editing a page", if (m.id == 0L) "New page" else m.title.ifBlank { "Page" }, onDismiss,
         primary = if (m.id == 0L) "Save to memory" else "Save changes", primaryEnabled = title.isNotBlank() && body.isNotBlank(),
-        onPrimary = { onSave(m.copy(title = title.trim(), body = body.trim(), topics = tags.trim(), kind = kind, updatedAt = System.currentTimeMillis())) },
+        onPrimary = { onSave(m.copy(title = title.trim(), body = body.trim(), topics = tags.split(",").map { it.trim() }.filter { it.isNotEmpty() && !it.equals(com.past9.phoneaos.data.MemoryTransfer.UNSORTED, true) }.joinToString(","), kind = kind, updatedAt = System.currentTimeMillis())) },
         shape = MaterialShapes.Flower,
         secondary = onDelete?.let { del -> { TextButton(onClick = del, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("Forget this page", color = MaterialTheme.colorScheme.error) } } }) {
         com.past9.phoneaos.ui.ChoiceChips(listOf("person" to "Person", "place" to "Place", "company" to "Company", "project" to "Project", "preference" to "Preference", "event" to "Event", "how-to" to "How-to", "fact" to "Fact")
