@@ -28,11 +28,11 @@ class LearnedAppsTest {
         override suspend fun ask(question: String, options: List<String>): String? { asked += question; return answer }
         override suspend fun notify(title: String, body: String) {}
     }
-    private class Runner(var reply: String = """{"ok":true,"v":{"chats":["Mom","Sam"]}}""", var syntax: String = "") : PageRunner {
-        val ran = mutableListOf<Pair<String, JSONObject>>(); var ensured = 0
-        override suspend fun ensure(app: LearnedApp, ctx: ToolContext) { ensured++ }
-        override suspend fun run(body: String, args: JSONObject): String { ran += body to args; return reply }
-        override suspend fun syntaxError(body: String) = syntax
+    private class Runner(var reply: String = """{"ok":true,"v":{"chats":["Mom","Sam"]}}""", var syntax: String = "", var failEnsure: Throwable? = null, var failSyntax: Throwable? = null) : PageRunner {
+        val ran = mutableListOf<Pair<String, JSONObject>>(); var ensured = 0; val ranFor = mutableListOf<String>()
+        override suspend fun ensure(app: LearnedApp, ctx: ToolContext) { failEnsure?.let { throw it }; ensured++ }
+        override suspend fun run(body: String, args: JSONObject, ctx: ToolContext): String { ran += body to args; ranFor += ctx.agentLabel; return reply }
+        override suspend fun syntaxError(body: String, ctx: ToolContext): String { failSyntax?.let { throw it }; return syntax }
     }
     private fun store() = LearnedStore(SettingsStore(ctx).also { it.setExtra("learned_apps", null) })
 
@@ -111,6 +111,25 @@ class LearnedAppsTest {
         assertTrue(WebAppSaveTool(st, r).run(input(tool("list_chats", true), tool("send_message", false)), Ctx()).startsWith("Saved"))
         assertTrue(st.find(id)!!.trusted)
         st.setTrusted(id, false); assertFalse(st.find(id)!!.trusted)
+    }
+
+    @Test fun aBrowserThatCannotStartIsAReadableErrorNotAThrownOne() = runBlocking {
+        val st = store(); app(st)
+        val out = LearnedCallTool("wa", st.find("wa")!!.tools[0], st, Runner(failEnsure = IllegalStateException("Too many browsers open at once (4). Finish one first."))).run(JSONObject(), Ctx())
+        assertTrue(out, out.startsWith("Error: couldn't run list_chats") && out.contains("Too many browsers"))
+    }
+
+    @Test fun aSyntaxCheckThatCannotRunDoesNotBlockTheSave() {
+        val st = store(); val c = Ctx()
+        val out = save(input(tool("list_chats", true)), st, c, Runner(failSyntax = IllegalStateException("Too many browsers open at once (4). Finish one first.")))
+        assertTrue(out, out.startsWith("Saved")); assertNotNull(st.find("whatsapp web"))
+    }
+
+    @Test fun eachAgentRunsInItsOwnBrowser() = runBlocking {
+        val st = store(); app(st); val r = Runner(); val t = st.find("wa")!!.tools[0]
+        val helperCtx = object : ToolContext by Ctx() { override val agentLabel = "WhatsApp helper" }
+        LearnedCallTool("wa", t, st, r).run(JSONObject(), Ctx()); LearnedCallTool("wa", t, st, r).run(JSONObject(), helperCtx)
+        assertEquals(listOf("main", "WhatsApp helper"), r.ranFor)
     }
 
     @Test fun missingInputIsSaidNotRun() = runBlocking {

@@ -15,19 +15,18 @@ import org.json.JSONObject
 interface PageRunner {
     /** Get the browser onto the app's site, as a desktop or phone browser, in the right profile. Signing in is the user's / the agent's job. */
     suspend fun ensure(app: LearnedApp, ctx: ToolContext)
-    /** Run an async function body that sees `args`; returns JSON {"ok":true,"v":...} or {"ok":false,"e":"..."}. */
-    suspend fun run(body: String, args: JSONObject): String
-    /** "" when [body] parses, else the error. */
-    suspend fun syntaxError(body: String): String
+    /** Run an async function body that sees `args` in THIS agent's browser; returns JSON {"ok":true,"v":...} or {"ok":false,"e":"..."}. */
+    suspend fun run(body: String, args: JSONObject, ctx: ToolContext): String
+    /** "" when [body] parses (or can't be checked right now), else the error. */
+    suspend fun syntaxError(body: String, ctx: ToolContext): String
 }
 
-class EnginePageRunner(private val context: Context, private val owner: () -> String = { "main" }) : PageRunner {
-    private var engineOf: com.past9.phoneaos.browser.BrowserEngine? = null
-
-    private suspend fun engine(app: LearnedApp?, ctx: ToolContext?): com.past9.phoneaos.browser.BrowserEngine {
+/** Every agent works in its own browser (helpers in parallel must not share one), so the browser always comes from the caller. */
+class EnginePageRunner(private val context: Context) : PageRunner {
+    private suspend fun engine(app: LearnedApp?, ctx: ToolContext): com.past9.phoneaos.browser.BrowserEngine {
         val profiles = BrowserTool.profiles()
-        val profile = profiles.firstOrNull { it.equals(app?.profile, true) } ?: profiles.firstOrNull { it.equals(BrowserTool.lastProfile[ctx?.agentLabel ?: owner()], true) } ?: profiles.first()
-        return BrowserService.await(context, ctx?.agentLabel ?: owner(), profile).also { engineOf = it }
+        val profile = profiles.firstOrNull { it.equals(app?.profile, true) } ?: profiles.firstOrNull { it.equals(BrowserTool.lastProfile[ctx.agentLabel], true) } ?: profiles.first()
+        return BrowserService.await(context, ctx.agentLabel, profile)
     }
 
     override suspend fun ensure(app: LearnedApp, ctx: ToolContext) {
@@ -40,8 +39,9 @@ class EnginePageRunner(private val context: Context, private val owner: () -> St
         }
     }
 
-    override suspend fun run(body: String, args: JSONObject): String = (engineOf ?: engine(null, null)).runAsync(body, args)
-    override suspend fun syntaxError(body: String): String = (engineOf ?: engine(null, null)).syntaxError(body)
+    override suspend fun run(body: String, args: JSONObject, ctx: ToolContext): String = engine(null, ctx).runAsync(body, args)
+    /** Checks in the browser the agent already has open; if it has none, the check is skipped (the first run finds a mistake just as well). */
+    override suspend fun syntaxError(body: String, ctx: ToolContext): String = BrowserService.existing(ctx.agentLabel)?.syntaxError(body) ?: ""
 }
 
 object WebApps {
@@ -136,8 +136,13 @@ object WebAppRun {
             }
         }
         val id = ctx.activity("${app.name}: ${t.name.replace('_', ' ')}", JSONObject().put("tool", "browser"))
-        runner.ensure(app, ctx)
-        val out = WebApps.result(runner.run(t.js, input))
+        val out = try {
+            runner.ensure(app, ctx)
+            WebApps.result(runner.run(t.js, input, ctx))
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Throwable) {
+            android.util.Log.w("AgentWebApp", "${app.name}.${t.name} failed", e)
+            "Error: couldn't run ${t.name} (${e.message ?: e::class.java.simpleName}). If it says too many browsers, finish a helper or close one and try again."
+        }
         ctx.updateActivity(id, "${app.name}: ${t.name.replace('_', ' ')}${if (out.startsWith("Error:")) " (failed)" else ""}", JSONObject().put("tool", "browser"))
         return out
     }
@@ -168,7 +173,8 @@ class WebAppSaveTool(private val store: LearnedStore, private val runner: PageRu
         tools.groupBy { it.name }.filter { it.value.size > 1 }.keys.firstOrNull()?.let { return "Not saved: the tool name $it is used twice." }
         tools.firstNotNullOfOrNull { WebApps.problem(it) }?.let { return "Not saved: $it" }
         if (store.find(id) == null && store.apps.value.size >= LearnedStore.MAX_APPS) return "Not saved: too many apps (${LearnedStore.MAX_APPS}). Remove one first."
-        for (t in tools) runner.syntaxError(t.js).takeIf { it.isNotBlank() }?.let { return "Not saved: the js of ${t.name} doesn't parse: $it" }
+        // A syntax check that can't run (no browser open right now) never blocks the save.
+        for (t in tools) runCatching { runner.syntaxError(t.js, ctx) }.getOrDefault("").takeIf { it.isNotBlank() }?.let { return "Not saved: the js of ${t.name} doesn't parse: $it" }
         val app = LearnedApp(id, name, url, input.optString("about").trim(), input.optString("profile").trim(), input.optBoolean("desktop", false), tools)
         val replacing = store.find(id) != null
         val details = buildString {
