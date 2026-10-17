@@ -100,13 +100,17 @@ class LearnedAppsTest {
     }
 
     @Test fun aTrustedAppChangesThingsWithoutAskingButOnlyTheUserCanTrust() = runBlocking {
-        val st = store(); app(st, trusted = true); val r = Runner(); val c = Ctx()
-        LearnedCallTool("wa", st.find("wa")!!.tools[1], st, r).run(JSONObject().put("chat", "Mom").put("text", "Hi"), c)
-        assertTrue(c.asked.isEmpty()); assertEquals(1, r.ran.size)
-        // The agent saving the app again does not switch trust on or off.
-        assertTrue(WebAppSaveTool(st, r).run(input(tool("read_only_one", true)), Ctx(), ).startsWith("Saved"))
-        assertTrue(st.find("whatsapp web")!!.tools.size == 1)
-        st.setTrusted(st.find("whatsapp web")!!.id, false); assertFalse(st.find("whatsapp web")!!.trusted)
+        val st = store(); val r = Runner(); val c = Ctx()
+        // Saved the way the agent saves it: the id comes from the name.
+        assertTrue(WebAppSaveTool(st, r).run(input(tool("list_chats", true), tool("send_message", false, params = JSONObject().put("chat", JSONObject().put("type", "string")))), Ctx()).startsWith("Saved"))
+        val id = st.find("WhatsApp Web")!!.id; assertEquals("whatsapp_web", id); assertFalse(st.find(id)!!.trusted)
+        st.setTrusted(id, true)
+        LearnedCallTool(id, st.find(id)!!.tools[1], st, r).run(JSONObject().put("chat", "Mom"), c)
+        assertTrue("trusted: no question", c.asked.isEmpty()); assertEquals(1, r.ran.size)
+        // The agent saving the app again (a fixed tool) leaves the user's trust choice as it was.
+        assertTrue(WebAppSaveTool(st, r).run(input(tool("list_chats", true), tool("send_message", false)), Ctx()).startsWith("Saved"))
+        assertTrue(st.find(id)!!.trusted)
+        st.setTrusted(id, false); assertFalse(st.find(id)!!.trusted)
     }
 
     @Test fun missingInputIsSaidNotRun() = runBlocking {
