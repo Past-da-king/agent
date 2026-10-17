@@ -378,9 +378,11 @@ private fun LearnedTile(a: com.past9.phoneaos.connections.LearnedApp, expanded: 
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(a.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(a.host + " \u00b7 " + a.tools.size + (if (a.tools.size == 1) " tool" else " tools") + (if (a.writes > 0) " \u00b7 can change things" else " \u00b7 read only"),
+                    Text(a.host + " \u00b7 " + a.tools.size + (if (a.tools.size == 1) " tool" else " tools"),
                         style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+                // A small mark when the app has tools that send, post or delete (it asks first unless trusted).
+                if (a.writes > 0) Icon(Icons.Rounded.EditNote, "Can change things", Modifier.padding(end = 6.dp).size(22.dp), tint = if (a.trusted) cs.tertiary else cs.onSurfaceVariant)
                 Icon(if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, if (expanded) "Hide" else "Open", tint = cs.onSurfaceVariant)
             }
             if (expanded) Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp)) {

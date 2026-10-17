@@ -79,9 +79,10 @@ class LearnedSheetScreenTest {
     @Test fun trustAndRemoveWorkFromTheSheet() {
         val trusted = mutableListOf<Pair<String, Boolean>>(); val removed = mutableListOf<String>(); val taught = mutableListOf<String>()
         show(true) { LearnedSheet(twelve.take(3), ConnectionsActions(onTrustLearned = { id, on -> trusted += id to on }, onRemoveLearned = { removed += it }, onTeach = { taught += it }), {}, initialOpen = "app1") }
-        rule.onNodeWithText("Remove").performClick(); rule.mainClock.advanceTimeBy(600)
+        rule.mainClock.autoAdvance = true   // taps and the recompositions after them run on their own
+        rule.onNodeWithText("Remove").performClick(); rule.waitForIdle()
         assertTrue("two steps: nothing removed yet", removed.isEmpty())
-        rule.onNodeWithText("Remove its tools").performClick(); rule.mainClock.advanceTimeBy(100)
+        rule.onNodeWithText("Remove its tools").performClick(); rule.waitForIdle()
         assertEquals(listOf("app1"), removed)
     }
 
