@@ -13,8 +13,8 @@ class SlackWorkspacesTest {
     @Test fun aWorkspaceNameIsFoundWhereSlackKeepsIt() {
         assertEquals("Guavas HQ", ComposioConnect.identity(JSONObject("""{"data":{"team":{"name":"Guavas HQ","id":"T01"}}}""")))
         assertEquals("strat-edge", ComposioConnect.identity(JSONObject("""{"user_info":{"team":{"domain":"strat-edge"}}}""")))
-        assertEquals("Creek", ComposioConnect.identity(JSONObject("""{"data":{"team_name":"Creek"}}""")))
-        assertEquals("ayanda@guavas.co.uk", ComposioConnect.identity(JSONObject("""{"user_info":{"email":"ayanda@guavas.co.uk"}}""")))
+        assertEquals("Harbor", ComposioConnect.identity(JSONObject("""{"data":{"team_name":"Harbor"}}""")))
+        assertEquals("sam@example.com", ComposioConnect.identity(JSONObject("""{"user_info":{"email":"sam@example.com"}}""")))
         assertEquals("", ComposioConnect.identity(JSONObject("""{"id":"ca_x"}""")))
     }
 

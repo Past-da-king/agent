@@ -107,14 +107,14 @@ class GateAndPinsTest {
     }
 
     @Test fun theMainAgentAnswersWhatItKnowsAndTheUserNeverSeesIt() = runBlocking {
-        val p = ScriptedProvider(delegate("Sign up to the newsletter"), say("On it."), triage("answer", "you@example.com"), say("HOLD"), say("Signed up."))
+        val p = ScriptedProvider(delegate("Sign up to the newsletter"), say("On it."), triage("answer", "sam@example.com"), say("HOLD"), say("Signed up."))
         p.helperQueue += ask("Which email should I use?", "Work", "Personal")
-        p.helperQueue += say("Signed up with you@example.com.")
+        p.helperQueue += say("Signed up with sam@example.com.")
         val rt = runtime(p)
         rt.send("newsletter please"); waitIdle(rt)
         assertTrue(questions().isEmpty())
         val r = p.helperResults().first()
-        assertTrue(r, r.startsWith("The user answered: you@example.com") && r.contains("not from the user"))
+        assertTrue(r, r.startsWith("The user answered: sam@example.com") && r.contains("not from the user"))
         assertEquals("self_answered", rt.escalationLog.recent().single().getString("decision"))
     }
 
