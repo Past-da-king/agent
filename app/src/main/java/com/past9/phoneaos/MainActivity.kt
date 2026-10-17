@@ -346,6 +346,7 @@ class MainActivity : ComponentActivity() {
                         onRead = { id -> if (id > (g.settings.extra("chatRead")?.toLongOrNull() ?: 0L)) g.settings.setExtra("chatRead", id.toString()) },
                         actions = ChatActions(
                             onCard = { openCard = it },
+                            onAct = { g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity); g.runtime.sendQuiet(it) },
                             onSend = { g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity)
                                 val docText = docs.entries.joinToString("") { (n, d) -> "\n\n[Attached document: $n${docPaths[n]?.let { p -> ", file saved at $p (you can upload it with browser_upload)" }.orEmpty()}]\n${d.first.take(30_000)}" }
                                 g.runtime.send(it + docText, attachments.toList() + docs.values.flatMap { d -> d.second }.take(6), docs.keys.toList())
@@ -368,7 +369,8 @@ class MainActivity : ComponentActivity() {
                 }
                 composable("report?path={path}") { e ->
                     // A button in a report's cards asks the agent, like in the chat.
-                    androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.openui.LocalOpenUiSend provides { msg -> g.runtime.send(msg); nav.navigate("chat") }) {
+                    androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.openui.LocalOpenUiSend provides { msg -> g.runtime.send(msg); nav.navigate("chat") },
+                        com.past9.phoneaos.ui.openui.LocalOpenUiAct provides { msg -> g.runtime.sendQuiet(msg); nav.navigate("chat") }) {
                         ReportScreen(e.arguments?.getString("path").orEmpty(), onBack = { nav.popBackStack() })
                     }
                 }
@@ -562,6 +564,7 @@ class MainActivity : ComponentActivity() {
                         refreshingCard = null } },
                     onPin = { card, on -> g.cards.update(card.id) { it.copy(pinned = on) } },
                     onAsk = { card, text -> openCard = null; g.runtime.send("[About the card \"${card.title}\" (id ${card.id})] $text"); nav.navigate("chat") },
+                    onAct = { card, text -> openCard = null; g.runtime.sendQuiet("[About the card \"${card.title}\" (id ${card.id})] $text"); nav.navigate("chat") },
                     onOpenLink = { url -> scope.launch { com.past9.phoneaos.system.UiBus.openInBrowser.emit(com.past9.phoneaos.system.UiBus.OpenInBrowser(url)) } },
                     onRun = { card, input -> val r = com.past9.phoneaos.cards.CardScripts.run(this@MainActivity, card, input)
                         if (r.ok) { g.cards.update(card.id) { it.withData(r.data!!) }; true to r.data!! } else false to org.json.JSONObject().put("error", r.log.takeLast(300)).toString() },

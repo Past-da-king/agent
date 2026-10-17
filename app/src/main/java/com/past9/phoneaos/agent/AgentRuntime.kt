@@ -551,11 +551,14 @@ class AgentRuntime(
      * @param fromCall the voice agent handed this over mid-call: no user bubble (the call transcript is
      *   already in the chat), just a line saying the work started.
      */
-    fun send(text: String, images: List<String> = emptyList(), files: List<String> = emptyList(), voiceReply: Boolean = false, fromCall: String? = null) {
+    /** A tap on a button the agent drew: goes to the agent in the background, with no message from the user in the chat. */
+    fun sendQuiet(text: String) = send(text, quiet = true)
+
+    fun send(text: String, images: List<String> = emptyList(), files: List<String> = emptyList(), voiceReply: Boolean = false, fromCall: String? = null, quiet: Boolean = false) {
         val clean = text.trim().ifEmpty { if (images.isNotEmpty() || files.isNotEmpty()) "What do you make of this?" else "" }; if (clean.isEmpty()) return
         // A question card is waiting and the user typed instead of tapping: the typed words ARE the answer.
         // Before, the message queued behind the open question and nothing happened.
-        if (fromCall == null && images.isEmpty() && files.isEmpty() && mainQuestions.isNotEmpty()) {
+        if (fromCall == null && !quiet && images.isEmpty() && files.isEmpty() && mainQuestions.isNotEmpty()) {
             val id = mainQuestions.maxOrNull()
             if (id != null) {
                 scope.launch { db.chat().insert(ChatItem(kind = "user", text = clean)) }
@@ -565,20 +568,23 @@ class AgentRuntime(
         }
         // Messages are admitted one at a time, in the order sent: each decides against the newest line of work, so rapid ones chain.
         var prev: Job? = null
-        val j = scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) { prev?.join(); admit(clean, images, files, voiceReply, fromCall) }
+        val j = scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) { prev?.join(); admit(clean, images, files, voiceReply, fromCall, quiet) }
         prev = admitTail.getAndSet(j)
         turnJobs += j; j.invokeOnCompletion { turnJobs.remove(j) }
         j.start()
     }
 
     /** Put the user's message in the chat, then either run it as a turn, or (work is already running) fork a branch for it. */
-    private suspend fun admit(clean: String, images: List<String>, files: List<String>, voiceReply: Boolean, fromCall: String?) {
+    private suspend fun admit(clean: String, images: List<String>, files: List<String>, voiceReply: Boolean, fromCall: String?, quiet: Boolean = false) {
         val target = if (fromCall == null) activeLines.values.maxByOrNull { it.seq } else null
         val rel = target?.let { branchPolicy.classify(clean, it.userText) }
         val origin = if (fromCall != null) { db.chat().insert(ChatItem(kind = "activity", text = "On it: $fromCall", meta = JSONObject().put("tool", "call").toString())); null }
+        else if (quiet) null // a button tap: the agent hears it, the chat shows nothing as the user's
         else db.chat().insert(ChatItem(kind = "user", text = clean, meta = JSONObject().put("images", org.json.JSONArray(images.filter { !it.contains("/pdf-") }))
             .put("files", org.json.JSONArray(files)).put("voiceReply", voiceReply).toString()))
-        val forModel = if (voiceReply) "$clean\n\n(The user is on the move: answer with a voice_note, then at most one short line of text. Don't repeat the voice note as text.)" else clean
+        val forModel = if (voiceReply) "$clean\n\n(The user is on the move: answer with a voice_note, then at most one short line of text. Don't repeat the voice note as text.)"
+            else if (quiet) "[The user tapped a button on a card you drew. They did not type this and it is not in the chat as their message, so don't quote it back as something they said; just act on it.]\n$clean"
+            else clean
         if (target == null || rel == null) {
             mainLine.userText = clean
             launchMain { turnLock.withLock { runTurn(forModel, images, replyTo = origin) } }

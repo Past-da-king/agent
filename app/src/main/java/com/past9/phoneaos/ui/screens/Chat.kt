@@ -74,6 +74,8 @@ import java.io.File
 
 data class ChatActions(
     val onSend: (String) -> Unit = {},
+    /** A tap on a card's button: to the agent in the background, no message from the user in the chat. Null: sent like a typed message. */
+    val onAct: ((String) -> Unit)? = null,
     /** Swipe-up send: the agent answers with a voice note. */
     val onSendVoice: (String) -> Unit = {},
     val onStop: () -> Unit = {},
@@ -265,8 +267,8 @@ fun ChatScreen(
     val newSince = items.count { it.id > seenId && it.kind != "user" && it.kind != "activity" && !JSONObject(it.meta).has("helper") }
     val waitingOnYou = items.any { it.kind == "question" && !JSONObject(it.meta).has("answer") }
 
-    // A tap on a generated UI's button (OpenUI @ToAssistant) is sent like a message he typed.
-    androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.openui.LocalOpenUiSend provides actions.onSend) {
+    // A tap on a generated UI's button (OpenUI @ToAssistant) goes to the agent quietly; a follow-up suggestion is sent like a typed message.
+    androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.openui.LocalOpenUiSend provides actions.onSend, com.past9.phoneaos.ui.openui.LocalOpenUiAct provides actions.onAct) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = { ChatTopBar(agentName, status, browserLive, waitingOnYou, openCount, actions, modelLabel) },
