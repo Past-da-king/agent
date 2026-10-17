@@ -9,15 +9,15 @@ object PageJs {
     /**
      * Runs `body` (the text of an async function that sees `args` and may `return` anything JSON-able) in the page and
      * leaves the outcome in window[slot] for the app to poll: {p:true} while it runs, then {ok:true,v:...} or {ok:false,e:"..."}.
-     * Returns "started", "syntax" (the body doesn't parse; the slot already says so) or "blocked": the site's own security
-     * policy forbids building a function from text (GitHub, Reddit and others), so [direct] must be used instead.
+     * Returns "started", "syntax" (the body really doesn't parse; the slot already says so) or "blocked": the page won't let
+     * anything build a function from text (a security policy, or Trusted Types, as on GitHub, Reddit, Google and others),
+     * whatever it throws, so [direct] must be used instead.
      */
     fun start(slot: String, body: String, args: JSONObject): String =
         "(function(){var k=${q(slot)};window[k]={p:true};" +
         "try{var f=new (Object.getPrototypeOf(async function(){}).constructor)('args',${q(body)});" +
         "f(${args}).then(function(v){window[k]={ok:true,v:v===undefined?null:v}},function(e){window[k]={ok:false,e:String(e&&e.message||e)}});return 'started'}" +
-        "catch(e){if(e&&(e.name==='EvalError'||/unsafe-eval|Content Security Policy|code generation/i.test(String(e.message))))return 'blocked';" +
-        "window[k]={ok:false,e:'Syntax: '+String(e&&e.message||e)};return 'syntax'}})()"
+        "catch(e){if(e&&e.name==='SyntaxError'){window[k]={ok:false,e:'Syntax: '+String(e.message||e)};return 'syntax'}return 'blocked'}})()"
 
     /** Marks the slot as waiting, with "not started" (s:0), before [direct] runs. */
     fun pending(slot: String): String = "(function(){window[${q(slot)}]={p:true,s:0};return 1})()"
@@ -37,9 +37,9 @@ object PageJs {
 
     fun clear(slot: String): String = "(function(){delete window[${q(slot)}];return 1})()"
 
-    /** Only checks that the body parses as an async function, without running it. "" when it parses, or when the site's policy stops the check. */
+    /** Only checks that the body parses as an async function, without running it. "" when it parses, or when the page won't allow the check (only a real SyntaxError is reported). */
     fun syntax(body: String): String =
-        "(function(){try{new (Object.getPrototypeOf(async function(){}).constructor)('args',${q(body)});return ''}catch(e){if(e&&(e.name==='EvalError'||/unsafe-eval|Content Security Policy|code generation/i.test(String(e.message))))return '';return String(e&&e.message||e)}})()"
+        "(function(){try{new (Object.getPrototypeOf(async function(){}).constructor)('args',${q(body)});return ''}catch(e){return e&&e.name==='SyntaxError'?String(e.message||e):''}})()"
 
     /**
      * Put in every page at document start. It does nothing until sessionStorage.__aosNet is "1" (browser_network start),

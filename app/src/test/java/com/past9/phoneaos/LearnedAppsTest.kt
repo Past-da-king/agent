@@ -220,6 +220,8 @@ class LearnedAppsTest {
         File("build/pagejs/pending2.js").writeText(PageJs.pending("__aosD2"))
         File("build/pagejs/direct_syntax.js").writeText(PageJs.direct("__aosD2", "return }", JSONObject()))
         File("build/pagejs/state_d2.js").writeText(PageJs.startedState("__aosD2"))
+        File("build/pagejs/start_trivial.js").writeText(PageJs.start("__aosT1", "const x=1;", JSONObject()))
+        File("build/pagejs/syntax_trivial.js").writeText(PageJs.syntax("const x=1;"))
         File("build/pagejs/start_throw.js").writeText(PageJs.start("__aosE1", "throw new Error('not signed in')", JSONObject()))
         File("build/pagejs/start_syntax.js").writeText(PageJs.start("__aosE2", "return }", JSONObject()))
         File("build/pagejs/start_await.js").writeText(PageJs.start("__aosE3", "const v = await new Promise(r => setTimeout(() => r(args.x + 1), 5)); return [v, undefined]", JSONObject().put("x", 1)))
@@ -228,5 +230,7 @@ class LearnedAppsTest {
         File("build/pagejs/net.js").writeText(PageJs.NET_SHIM)
         File("build/pagejs/netlog.js").writeText(PageJs.netLog("api", 5))
         assertTrue(PageJs.start("s", "return 1", JSONObject()).contains("window[k]"))
+        // Only a real SyntaxError counts as a syntax error: a page that forbids (or traps) building functions throws something else.
+        assertTrue(PageJs.syntax("x").contains("e.name==='SyntaxError'") && PageJs.start("s", "x", JSONObject()).contains("e.name==='SyntaxError'"))
     }
 }
