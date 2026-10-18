@@ -3,12 +3,79 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Agent: an autonomous agent that lives on your phone</title>
-<meta name="description" content="Agent is a free, open-source Android app: one AI agent that lives on your phone, browses for you, remembers what matters and runs on the model you already pay for.">
-<meta property="og:title" content="Agent">
-<meta property="og:description" content="An autonomous agent that's always on, right on your phone. Free and open source.">
-<meta property="og:image" content="https://past-da-king.github.io/agent/hero.png">
+<title>Agent: a free, open-source AI agent for your Android phone</title>
+<meta name="description" content="Free, open-source Android app: an AI agent on your phone with its own browser. It can teach itself a website you use, and it keeps a memory you can read.">
+<link rel="canonical" href="https://past-da-king.github.io/agent/">
+<!-- Search Console: add <meta name="google-site-verification" content="TOKEN"> here -->
+<meta name="robots" content="index, follow, max-image-preview:large">
 <meta name="theme-color" content="#E3E0FD">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-48.png" type="image/png" sizes="48x48">
+<link rel="shortcut icon" href="favicon.ico">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Agent">
+<meta property="og:locale" content="en_US">
+<meta property="og:url" content="https://past-da-king.github.io/agent/">
+<meta property="og:title" content="Agent: a free, open-source AI agent for your Android phone">
+<meta property="og:description" content="An agent that lives on your phone, browses with its own browser and can teach itself a website you use. Free and open source.">
+<meta property="og:image" content="https://past-da-king.github.io/agent/social-preview.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="The word Agent in large letters beside the app's home screen on a phone">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Agent: a free, open-source AI agent for your Android phone">
+<meta name="twitter:description" content="An agent that lives on your phone, browses with its own browser and can teach itself a website you use. Free and open source.">
+<meta name="twitter:image" content="https://past-da-king.github.io/agent/social-preview.png">
+<meta name="twitter:image:alt" content="The word Agent in large letters beside the app's home screen on a phone">
+<link rel="preload" as="image" href="hero.webp" type="image/webp" fetchpriority="high">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://past-da-king.github.io/agent/#website",
+      "url": "https://past-da-king.github.io/agent/",
+      "name": "Agent",
+      "inLanguage": "en"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://past-da-king.github.io/agent/#app",
+      "name": "Agent",
+      "description": "A free, open-source Android app: an AI agent that lives on your phone, browses with its own browser, can teach itself a website you use, and keeps a memory you can read.",
+      "url": "https://past-da-king.github.io/agent/",
+      "applicationCategory": "UtilitiesApplication",
+      "operatingSystem": "Android",
+      "requirements": "Android 10 or newer, 64-bit only, about 2 GB of free space to install",
+      "softwareVersion": "0.11.22",
+      "downloadUrl": "https://github.com/Past-da-king/agent/releases/download/v0.11.22/Agent-0.11.22.apk",
+      "installUrl": "https://github.com/Past-da-king/agent/releases/tag/v0.11.22",
+      "releaseNotes": "https://github.com/Past-da-king/agent/releases/tag/v0.11.22",
+      "license": "https://opensource.org/licenses/MIT",
+      "isAccessibleForFree": true,
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD",
+        "availability": "https://schema.org/InStock"
+      },
+      "image": "https://past-da-king.github.io/agent/social-preview.png",
+      "screenshot": [
+        "https://past-da-king.github.io/agent/img/home.webp",
+        "https://past-da-king.github.io/agent/img/chat.webp",
+        "https://past-da-king.github.io/agent/img/memory.webp",
+        "https://past-da-king.github.io/agent/img/routines.webp",
+        "https://past-da-king.github.io/agent/img/learned-sheet.webp"
+      ],
+      "sameAs": ["https://github.com/Past-da-king/agent"],
+      "isPartOf": {"@id": "https://past-da-king.github.io/agent/#website"}
+    }
+  ]
+}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@6..144,400..900&display=swap" rel="stylesheet">
 <style>
@@ -93,7 +160,7 @@ nav .wrap{display:flex;align-items:center;justify-content:space-between;height:8
 .mgrid svg:hover{transform:translateY(-10px) rotate(-6deg) scale(1.06)}
 
 /* get it */
-.get{background:var(--iris);color:#FBFAFF;padding:130px 0 70px;position:relative;overflow:hidden}
+.get{background:var(--iris);color:#FBFAFF;padding:130px 0 90px;position:relative;overflow:hidden}
 .get h2{color:#fff;max-width:11em}
 .get .lead{color:var(--lav);margin-top:22px}
 .get .pill.solid{background:#FBFAFF;color:var(--iris)}
@@ -101,13 +168,14 @@ nav .wrap{display:flex;align-items:center;justify-content:space-between;height:8
 .get .pill.ghost{color:#FBFAFF;box-shadow:inset 0 0 0 2px rgba(251,250,255,.4)}
 .get .pill.ghost:hover{box-shadow:inset 0 0 0 2px #FBFAFF}
 .get .peek{position:absolute;width:420px;right:-40px;bottom:-60px;animation:bob 6s ease-in-out infinite}
+.get .wrap{position:relative;z-index:1}
+@media (max-width:1279px){.get .peek{display:none}}
 .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:70px;max-width:900px}
 .step{background:rgba(251,250,255,.1);border-radius:24px;padding:24px}
 .step b{display:block;font-size:20px;margin-bottom:6px}
 .step span{color:var(--lav);line-height:1.45;font-size:16px}
-footer{margin-top:90px;padding-top:28px;border-top:1px solid rgba(251,250,255,.2);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;color:var(--lav);font-size:15px;line-height:1.5}
-footer a{color:#fff}
 .get .ver{margin-top:18px;color:var(--lav);font-size:15px}
+.get .ver a{color:#fff}
 
 /* phone crops from the cards: the phone is drawn in the image, so no frame */
 .vid img{width:100%;height:auto}
@@ -119,6 +187,59 @@ footer a{color:#fff}
 .shot.card img{width:175.4%;margin:-86.6% 0 0 -66.3%}
 .shot.wide{aspect-ratio:100/184.5}
 .shot.wide img{width:352.7%;margin:-13.9% 0 0 -236.8%}
+
+/* learned apps */
+.learned{background:#E4E0FF;color:#1C1466;position:relative;overflow:hidden;padding:120px 0}
+.learned .top{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center}
+.learned .eyebrow{color:#3A2FB0;margin-bottom:22px}
+.learned h2{color:#1C1466}
+.learned .lead{color:#3A2FB0;margin-top:24px}
+.learned .lead+.lead{margin-top:16px}
+.ask{display:inline-block;margin-top:28px;background:#fff;color:var(--deep);border-radius:22px;padding:14px 18px;font-weight:600;font-size:17px;line-height:1.3;box-shadow:0 20px 40px -24px rgba(20,14,60,.45)}
+.ask small{display:block;font-weight:500;opacity:.6;font-size:13px;margin-bottom:2px}
+.fine{font-size:15px;line-height:1.5;color:#3A2FB0;max-width:46ch;margin-top:22px}
+.learned .stage{min-height:700px}
+.learned .phone{width:min(270px,50%);box-shadow:0 50px 80px -40px rgba(20,14,60,.55)}
+.learned .phone.a{left:2%;bottom:0;z-index:1}
+.learned .phone.b{right:2%;bottom:70px;z-index:2}
+.learned .peek{position:absolute;width:min(170px,34%);left:6%;top:0;z-index:3;animation:bob 6.5s ease-in-out infinite;filter:drop-shadow(0 30px 30px rgba(10,6,40,.22))}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:90px}
+.tile{background:rgba(74,63,209,.1);border-radius:24px;padding:28px}
+.tile h3{font-size:clamp(22px,2vw,26px);font-weight:700;letter-spacing:-.02em;line-height:1.15;color:var(--deep)}
+.tile p{margin-top:10px;font-size:17px;line-height:1.5;color:#3A2FB0}
+.tile code{font-family:inherit;font-weight:650}
+.limits{margin-top:26px;font-size:16px;line-height:1.5;color:#3A2FB0;max-width:70ch}
+.limits b{color:var(--deep)}
+
+/* also in this release */
+.also{background:var(--paper);padding:120px 0}
+.also .eyebrow{margin-bottom:22px}
+.also h2{font-size:clamp(34px,4.6vw,60px)}
+.also .row{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center;margin-top:56px}
+.also .row h3,.mini h3{font-size:clamp(22px,2.4vw,32px);font-weight:700;letter-spacing:-.02em;line-height:1.1;color:var(--ink)}
+.also .row p{margin-top:14px;font-size:18px;line-height:1.5;color:#4A4852;max-width:42ch}
+.also figure img{width:100%;height:auto;border-radius:28px}
+.also figcaption{margin-top:12px;font-size:14px;color:#6A6773}
+.minis{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:64px}
+.mini{background:var(--lav);border-radius:24px;padding:26px}
+.mini h3{font-size:22px;color:var(--deep)}
+.mini p{margin-top:8px;font-size:16px;line-height:1.5;color:#3A2FB0}
+
+/* download details */
+.get .note{margin-top:24px;max-width:860px;color:var(--lav);font-size:16px;line-height:1.5}
+.get .note b{color:#fff;font-weight:650}
+.verify{margin-top:18px;max-width:860px;background:rgba(251,250,255,.1);border-radius:24px;padding:18px 24px}
+.verify summary{cursor:pointer;font-weight:650;font-size:17px}
+.verify summary:focus-visible{outline:3px solid #FBFAFF;outline-offset:4px;border-radius:8px}
+.verify dl{margin-top:14px;display:grid;gap:14px}
+.verify dt{font-size:14px;color:var(--lav);font-weight:600}
+.verify dd{margin-top:4px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:14px;line-height:1.45;word-break:break-all;color:#fff}
+.verify p{margin-top:14px;font-size:15px;color:var(--lav);line-height:1.5}
+.verify a,.verify code{color:#fff}
+.verify code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:14px;overflow-wrap:anywhere}
+.pagefoot{background:var(--iris);color:var(--lav);padding:0 0 70px}
+.pagefoot .foot{padding-top:28px;border-top:1px solid rgba(251,250,255,.2);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-size:15px;line-height:1.5}
+.pagefoot a{color:#fff}
 
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}html{scroll-behavior:auto}}
 @media (max-width: 900px){
@@ -142,20 +263,32 @@ footer a{color:#fff}
   .mgrid{grid-template-columns:repeat(3,1fr);gap:20px;max-width:420px;margin-inline:auto}
   .steps{grid-template-columns:1fr}
   .get .peek{display:none}
+  .learned{padding:90px 0 80px}
+  .learned .top{grid-template-columns:1fr}
+  .learned .stage{min-height:540px}
+  .learned .phone{width:min(188px,48%)}
+  .learned .phone.b{bottom:50px}
+  .learned .peek{width:110px}
+  .tiles{grid-template-columns:1fr;margin-top:64px}
+  .tile{padding:24px}
+  .also{padding:90px 0}
+  .also .row{grid-template-columns:1fr;gap:28px}
+  .minis{grid-template-columns:1fr;margin-top:40px}
 }
 </style>
 </head>
 <body>
 
-<nav><div class="wrap">
+<header class="topbar"><nav aria-label="Main"><div class="wrap">
   <a class="brand" href="#top"><svg class="" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M42.75,0.00 L40.41,0.68 L38.44,2.42 L36.93,4.68 L35.73,7.18 L34.52,9.59 L32.93,11.63 L30.97,12.99 L28.63,13.52 L26.13,13.37 L23.64,12.92 L21.15,12.46 L18.66,12.31 L16.31,12.69 L14.50,13.82 L13.37,15.63 L13.07,17.98 L13.22,20.47 L13.67,22.96 L14.12,25.45 L14.05,27.95 L13.29,30.36 L11.71,32.40 L9.52,34.06 L7.02,35.35 L4.53,36.40 L2.27,37.92 L0.68,39.80 L0.00,42.07 L0.68,44.56 L2.27,47.05 L4.53,49.55 L6.80,52.04 L8.31,54.53 L8.84,57.02 L8.31,59.52 L7.10,62.01 L5.74,64.50 L4.61,66.99 L4.00,69.49 L4.38,71.90 L5.74,73.87 L7.85,75.23 L10.35,75.91 L12.84,76.21 L15.33,76.51 L17.82,77.42 L20.02,79.00 L21.60,81.12 L22.51,83.61 L22.81,86.10 L22.96,88.60 L23.49,91.09 L24.62,93.35 L26.44,94.86 L28.63,95.47 L31.12,94.94 L33.61,93.88 L36.10,92.52 L38.60,91.39 L41.09,90.71 L43.58,91.01 L46.07,92.37 L48.41,94.41 L50.68,96.83 L52.95,98.87 L55.21,100.00 L57.70,100.00 L59.89,98.79 L61.63,96.83 L63.07,94.41 L64.20,91.92 L65.56,89.58 L67.30,87.76 L69.41,86.63 L71.83,86.33 L74.32,86.56 L76.81,87.01 L79.31,87.46 L81.80,87.54 L84.14,86.93 L85.95,85.57 L86.93,83.53 L87.08,81.12 L86.71,78.63 L86.10,76.13 L85.73,73.64 L85.88,71.15 L86.78,68.73 L88.60,66.77 L90.94,65.11 L93.43,63.90 L95.92,62.69 L98.11,61.18 L99.47,59.29 L99.85,57.02 L99.02,54.53 L97.28,52.19 L95.09,49.92 L92.82,47.66 L91.24,45.39 L90.63,42.90 L91.09,40.41 L92.15,37.92 L93.58,35.42 L94.79,32.93 L95.47,30.44 L95.39,28.02 L94.26,25.98 L92.45,24.62 L90.11,23.87 L87.61,23.49 L85.12,23.26 L82.63,22.66 L80.29,21.68 L78.47,20.09 L77.34,17.90 L76.66,15.48 L76.36,12.99 L75.98,10.50 L75.38,8.01 L74.24,5.97 L72.43,4.68 L70.17,4.31 L67.67,4.98 L65.18,6.12 L62.69,7.48 L60.20,8.61 L57.70,9.21 L55.21,8.84 L52.95,7.48 L50.68,5.44 L48.41,3.10 L46.07,1.13 L43.58,0.08 Z" fill="#4A3FD1"/><rect x="44.92447129909366" y="43" width="6.5" height="14" rx="3.25" fill="#15112E"/><rect x="58.42447129909366" y="43" width="6.5" height="14" rx="3.25" fill="#15112E"/></svg>Agent</a>
   <div class="navlinks">
     <a class="pill ghost small" href="https://github.com/Past-da-king/agent">GitHub</a>
-    <a class="pill solid small" href="https://github.com/Past-da-king/agent/releases/download/v0.11.14/Agent-0.11.14.apk">Download</a>
+    <a class="pill solid small" href="https://github.com/Past-da-king/agent/releases/download/v0.11.22/Agent-0.11.22.apk">Download</a>
   </div>
-</div></nav>
+</div></nav></header>
 
-<header class="hero" id="top">
+<main id="main">
+<section class="hero" id="top">
   <div class="wrap">
     <div class="copy">
       <div class="eyebrow">Free and open source, for Android</div>
@@ -163,17 +296,17 @@ footer a{color:#fff}
       <p class="line">An autonomous agent that's always on, right on your phone.</p>
       <p class="since">The best thing since Hermes.</p>
       <div class="ctas">
-        <a class="pill solid" href="https://github.com/Past-da-king/agent/releases/download/v0.11.14/Agent-0.11.14.apk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12m0 0-5-5m5 5 5-5M5 20h14"/></svg>Get the APK</a>
+        <a class="pill solid" href="https://github.com/Past-da-king/agent/releases/download/v0.11.22/Agent-0.11.22.apk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12m0 0-5-5m5 5 5-5M5 20h14"/></svg>Get the APK</a>
         <a class="pill ghost" href="#watch">Watch it work</a>
       </div>
     </div>
     <div class="stage">
       <svg class="peek" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M42.75,0.00 L40.41,0.68 L38.44,2.42 L36.93,4.68 L35.73,7.18 L34.52,9.59 L32.93,11.63 L30.97,12.99 L28.63,13.52 L26.13,13.37 L23.64,12.92 L21.15,12.46 L18.66,12.31 L16.31,12.69 L14.50,13.82 L13.37,15.63 L13.07,17.98 L13.22,20.47 L13.67,22.96 L14.12,25.45 L14.05,27.95 L13.29,30.36 L11.71,32.40 L9.52,34.06 L7.02,35.35 L4.53,36.40 L2.27,37.92 L0.68,39.80 L0.00,42.07 L0.68,44.56 L2.27,47.05 L4.53,49.55 L6.80,52.04 L8.31,54.53 L8.84,57.02 L8.31,59.52 L7.10,62.01 L5.74,64.50 L4.61,66.99 L4.00,69.49 L4.38,71.90 L5.74,73.87 L7.85,75.23 L10.35,75.91 L12.84,76.21 L15.33,76.51 L17.82,77.42 L20.02,79.00 L21.60,81.12 L22.51,83.61 L22.81,86.10 L22.96,88.60 L23.49,91.09 L24.62,93.35 L26.44,94.86 L28.63,95.47 L31.12,94.94 L33.61,93.88 L36.10,92.52 L38.60,91.39 L41.09,90.71 L43.58,91.01 L46.07,92.37 L48.41,94.41 L50.68,96.83 L52.95,98.87 L55.21,100.00 L57.70,100.00 L59.89,98.79 L61.63,96.83 L63.07,94.41 L64.20,91.92 L65.56,89.58 L67.30,87.76 L69.41,86.63 L71.83,86.33 L74.32,86.56 L76.81,87.01 L79.31,87.46 L81.80,87.54 L84.14,86.93 L85.95,85.57 L86.93,83.53 L87.08,81.12 L86.71,78.63 L86.10,76.13 L85.73,73.64 L85.88,71.15 L86.78,68.73 L88.60,66.77 L90.94,65.11 L93.43,63.90 L95.92,62.69 L98.11,61.18 L99.47,59.29 L99.85,57.02 L99.02,54.53 L97.28,52.19 L95.09,49.92 L92.82,47.66 L91.24,45.39 L90.63,42.90 L91.09,40.41 L92.15,37.92 L93.58,35.42 L94.79,32.93 L95.47,30.44 L95.39,28.02 L94.26,25.98 L92.45,24.62 L90.11,23.87 L87.61,23.49 L85.12,23.26 L82.63,22.66 L80.29,21.68 L78.47,20.09 L77.34,17.90 L76.66,15.48 L76.36,12.99 L75.98,10.50 L75.38,8.01 L74.24,5.97 L72.43,4.68 L70.17,4.31 L67.67,4.98 L65.18,6.12 L62.69,7.48 L60.20,8.61 L57.70,9.21 L55.21,8.84 L52.95,7.48 L50.68,5.44 L48.41,3.10 L46.07,1.13 L43.58,0.08 Z" fill="#4A3FD1"/><rect x="44.92447129909366" y="43" width="6.5" height="14" rx="3.25" fill="#15112E"/><rect x="58.42447129909366" y="43" width="6.5" height="14" rx="3.25" fill="#15112E"/></svg>
       <div class="chip"><small>Juno · just now</small>Found it. Walmart has the 5 lb bag for $3.98.</div>
-      <div class="phone shot wide"><img src="hero.png" alt="Agent's home screen: what it's working on, what needs you, and your to-dos" width="3840" height="2160"></div>
+      <div class="phone shot wide"><img src="hero.webp" alt="Agent's home screen: what it's working on, what needs you, and your to-dos" width="3840" height="2160" fetchpriority="high" decoding="async"></div>
     </div>
   </div>
-</header>
+</section>
 
 <section class="watch" id="watch">
   <svg class="peek" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M44.35,0.40 L41.74,0.79 L39.13,1.34 L36.52,1.90 L33.91,2.77 L31.30,3.72 L28.70,4.90 L26.09,6.25 L23.48,7.75 L20.87,9.57 L18.26,11.62 L15.65,13.99 L13.20,16.52 L10.99,19.13 L9.01,21.74 L7.43,24.35 L5.93,26.96 L4.66,29.57 L3.56,32.17 L2.61,34.78 L1.82,37.39 L1.19,40.00 L0.63,42.61 L0.32,45.22 L0.08,47.83 L0.00,50.43 L0.00,53.04 L0.00,55.65 L0.00,58.26 L0.00,60.87 L0.00,63.48 L0.00,66.09 L0.00,68.70 L0.00,71.30 L0.00,73.91 L0.00,76.52 L0.00,79.13 L0.24,81.74 L0.63,84.35 L1.42,86.96 L2.61,89.57 L4.27,92.02 L6.32,94.31 L8.70,96.21 L11.30,97.63 L13.91,98.81 L16.52,99.45 L19.13,99.84 L21.74,99.84 L24.35,99.45 L26.96,98.66 L29.57,97.55 L32.17,96.28 L34.78,95.02 L37.39,93.75 L40.00,92.65 L42.61,91.86 L45.22,91.23 L47.83,90.83 L50.43,90.75 L53.04,90.83 L55.65,91.23 L58.26,91.94 L60.87,92.73 L63.48,93.91 L66.09,95.18 L68.70,96.52 L71.30,97.87 L73.91,98.89 L76.52,99.53 L79.13,99.92 L81.74,99.84 L84.35,99.45 L86.96,98.66 L89.57,97.39 L92.02,95.73 L94.31,93.68 L96.21,91.30 L97.63,88.70 L98.74,86.09 L99.37,83.48 L99.76,80.87 L100.00,78.26 L100.00,75.65 L100.00,73.04 L100.00,70.43 L100.00,67.83 L100.00,65.22 L100.00,62.61 L100.00,60.00 L100.00,57.39 L100.00,54.78 L100.00,52.17 L100.00,49.57 L99.92,46.96 L99.68,44.35 L99.29,41.74 L98.74,39.13 L98.10,36.52 L97.31,33.91 L96.44,31.30 L95.26,28.70 L93.91,26.09 L92.25,23.48 L90.43,20.87 L88.38,18.26 L86.01,15.65 L83.48,13.20 L80.87,10.99 L78.26,9.01 L75.65,7.43 L73.04,5.93 L70.43,4.66 L67.83,3.56 L65.22,2.69 L62.61,1.90 L60.00,1.34 L57.39,0.79 L54.78,0.40 L52.17,0.16 L49.57,0.00 L46.96,0.16 Z" fill="#C3BBFF"/><rect x="35" y="42.9604743083004" width="6.5" height="14" rx="3.25" fill="#1C1466"/><rect x="48.5" y="42.9604743083004" width="6.5" height="14" rx="3.25" fill="#1C1466"/></svg>
@@ -181,11 +314,11 @@ footer a{color:#fff}
     <div class="eyebrow" style="color:var(--light)">Real recording, sped up</div>
     <h2>I asked for the cheapest bag of bread flour. It went and found it.</h2>
     <p class="lead">Straight off a phone. It searched Walmart and Target by itself, compared the 5 lb bags and came back with prices and links to buy.</p>
-    <div class="vid"><img src="demo-flour.gif" alt="Agent searching Walmart and Target for the cheapest 5 lb bag of bread flour, sped up" loading="lazy"></div>
+    <div class="vid"><img src="demo-flour.gif" alt="Agent searching Walmart and Target for the cheapest 5 lb bag of bread flour, sped up" width="1000" height="563" loading="lazy" decoding="async"></div>
     <div class="vidcap"><span><b>Walmart $3.98</b>, Target $3.99, both with links</span><span>Sped up 12x, running on DeepSeek V4.1 Flash</span></div>
     <div class="grid2">
       <div><h3>Everything on one screen.</h3><p>What it's working on, what needs you, and your to-dos. Open the app and you see where things stand.</p></div>
-      <div class="vid"><img src="hero.png" alt="Agent's home screen next to the app's name and tagline" width="3840" height="2160" loading="lazy"></div>
+      <div class="vid"><img src="hero.webp" alt="Agent's home screen next to the app's name and tagline" width="3840" height="2160" loading="lazy" decoding="async"></div>
     </div>
   </div>
 </section>
@@ -200,7 +333,7 @@ footer a{color:#fff}
     </div>
     <div class="stage">
       <svg class="peek" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M42.75,0.00 L40.41,0.68 L38.44,2.42 L36.93,4.68 L35.73,7.18 L34.52,9.59 L32.93,11.63 L30.97,12.99 L28.63,13.52 L26.13,13.37 L23.64,12.92 L21.15,12.46 L18.66,12.31 L16.31,12.69 L14.50,13.82 L13.37,15.63 L13.07,17.98 L13.22,20.47 L13.67,22.96 L14.12,25.45 L14.05,27.95 L13.29,30.36 L11.71,32.40 L9.52,34.06 L7.02,35.35 L4.53,36.40 L2.27,37.92 L0.68,39.80 L0.00,42.07 L0.68,44.56 L2.27,47.05 L4.53,49.55 L6.80,52.04 L8.31,54.53 L8.84,57.02 L8.31,59.52 L7.10,62.01 L5.74,64.50 L4.61,66.99 L4.00,69.49 L4.38,71.90 L5.74,73.87 L7.85,75.23 L10.35,75.91 L12.84,76.21 L15.33,76.51 L17.82,77.42 L20.02,79.00 L21.60,81.12 L22.51,83.61 L22.81,86.10 L22.96,88.60 L23.49,91.09 L24.62,93.35 L26.44,94.86 L28.63,95.47 L31.12,94.94 L33.61,93.88 L36.10,92.52 L38.60,91.39 L41.09,90.71 L43.58,91.01 L46.07,92.37 L48.41,94.41 L50.68,96.83 L52.95,98.87 L55.21,100.00 L57.70,100.00 L59.89,98.79 L61.63,96.83 L63.07,94.41 L64.20,91.92 L65.56,89.58 L67.30,87.76 L69.41,86.63 L71.83,86.33 L74.32,86.56 L76.81,87.01 L79.31,87.46 L81.80,87.54 L84.14,86.93 L85.95,85.57 L86.93,83.53 L87.08,81.12 L86.71,78.63 L86.10,76.13 L85.73,73.64 L85.88,71.15 L86.78,68.73 L88.60,66.77 L90.94,65.11 L93.43,63.90 L95.92,62.69 L98.11,61.18 L99.47,59.29 L99.85,57.02 L99.02,54.53 L97.28,52.19 L95.09,49.92 L92.82,47.66 L91.24,45.39 L90.63,42.90 L91.09,40.41 L92.15,37.92 L93.58,35.42 L94.79,32.93 L95.47,30.44 L95.39,28.02 L94.26,25.98 L92.45,24.62 L90.11,23.87 L87.61,23.49 L85.12,23.26 L82.63,22.66 L80.29,21.68 L78.47,20.09 L77.34,17.90 L76.66,15.48 L76.36,12.99 L75.98,10.50 L75.38,8.01 L74.24,5.97 L72.43,4.68 L70.17,4.31 L67.67,4.98 L65.18,6.12 L62.69,7.48 L60.20,8.61 L57.70,9.21 L55.21,8.84 L52.95,7.48 L50.68,5.44 L48.41,3.10 L46.07,1.13 L43.58,0.08 Z" fill="#E4E0FF"/><rect x="44.92447129909366" y="43" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/><rect x="58.42447129909366" y="43" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/></svg>
-      <div class="phone shot card"><img src="card-1-power.png" alt="" width="2160" height="2700" loading="lazy"></div>
+      <div class="phone shot card"><img src="card-1-power.webp" alt="Agent's power screen: sign in with a Claude or ChatGPT plan you already pay for, or paste an API key" width="2160" height="2700" loading="lazy" decoding="async"></div>
     </div>
   </div>
 </section>
@@ -213,10 +346,63 @@ footer a{color:#fff}
     </div>
     <div class="stage">
       <svg class="peek" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M44.35,0.40 L41.74,0.79 L39.13,1.34 L36.52,1.90 L33.91,2.77 L31.30,3.72 L28.70,4.90 L26.09,6.25 L23.48,7.75 L20.87,9.57 L18.26,11.62 L15.65,13.99 L13.20,16.52 L10.99,19.13 L9.01,21.74 L7.43,24.35 L5.93,26.96 L4.66,29.57 L3.56,32.17 L2.61,34.78 L1.82,37.39 L1.19,40.00 L0.63,42.61 L0.32,45.22 L0.08,47.83 L0.00,50.43 L0.00,53.04 L0.00,55.65 L0.00,58.26 L0.00,60.87 L0.00,63.48 L0.00,66.09 L0.00,68.70 L0.00,71.30 L0.00,73.91 L0.00,76.52 L0.00,79.13 L0.24,81.74 L0.63,84.35 L1.42,86.96 L2.61,89.57 L4.27,92.02 L6.32,94.31 L8.70,96.21 L11.30,97.63 L13.91,98.81 L16.52,99.45 L19.13,99.84 L21.74,99.84 L24.35,99.45 L26.96,98.66 L29.57,97.55 L32.17,96.28 L34.78,95.02 L37.39,93.75 L40.00,92.65 L42.61,91.86 L45.22,91.23 L47.83,90.83 L50.43,90.75 L53.04,90.83 L55.65,91.23 L58.26,91.94 L60.87,92.73 L63.48,93.91 L66.09,95.18 L68.70,96.52 L71.30,97.87 L73.91,98.89 L76.52,99.53 L79.13,99.92 L81.74,99.84 L84.35,99.45 L86.96,98.66 L89.57,97.39 L92.02,95.73 L94.31,93.68 L96.21,91.30 L97.63,88.70 L98.74,86.09 L99.37,83.48 L99.76,80.87 L100.00,78.26 L100.00,75.65 L100.00,73.04 L100.00,70.43 L100.00,67.83 L100.00,65.22 L100.00,62.61 L100.00,60.00 L100.00,57.39 L100.00,54.78 L100.00,52.17 L100.00,49.57 L99.92,46.96 L99.68,44.35 L99.29,41.74 L98.74,39.13 L98.10,36.52 L97.31,33.91 L96.44,31.30 L95.26,28.70 L93.91,26.09 L92.25,23.48 L90.43,20.87 L88.38,18.26 L86.01,15.65 L83.48,13.20 L80.87,10.99 L78.26,9.01 L75.65,7.43 L73.04,5.93 L70.43,4.66 L67.83,3.56 L65.22,2.69 L62.61,1.90 L60.00,1.34 L57.39,0.79 L54.78,0.40 L52.17,0.16 L49.57,0.00 L46.96,0.16 Z" fill="#4A3FD1"/><rect x="35" y="42.9604743083004" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/><rect x="48.5" y="42.9604743083004" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/></svg>
-      <div class="phone shot card"><img src="card-2-browse.png" alt="" width="2160" height="2700" loading="lazy"></div>
+      <div class="phone shot card"><img src="card-2-browse.webp" alt="A chat with an agent named Nova: it sends three helpers to look up restaurants and reports back with prices and opening days" width="2160" height="2700" loading="lazy" decoding="async"></div>
     </div>
   </div>
 </section>
+<section class="learned" id="learned">
+  <div class="wrap">
+    <div class="top">
+      <div class="text">
+        <div class="eyebrow">Learned apps</div>
+        <h2>It can teach itself a website you use.</h2>
+        <p class="lead">Take a school portal that shows your timetable and marks and has no API, say. You tell the agent the address. It opens the site in its own browser, works out how the pages get their data, and saves a few small tools for it.</p>
+        <p class="lead">Afterwards you ask "what homework is due this week" and it calls a tool. It doesn't click through the portal every time.</p>
+        <p class="ask"><small>You</small>What homework is due this week?</p>
+        <p class="fine">The portal is only an example. The site I have actually mapped is amazon.co.za, its search and product pages, and the tools return prices, ratings and stock. The list on the phones is demo data, there to show the layout.</p>
+      </div>
+      <div class="stage">
+        <svg class="peek" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M42.75,0.00 L40.41,0.68 L38.44,2.42 L36.93,4.68 L35.73,7.18 L34.52,9.59 L32.93,11.63 L30.97,12.99 L28.63,13.52 L26.13,13.37 L23.64,12.92 L21.15,12.46 L18.66,12.31 L16.31,12.69 L14.50,13.82 L13.37,15.63 L13.07,17.98 L13.22,20.47 L13.67,22.96 L14.12,25.45 L14.05,27.95 L13.29,30.36 L11.71,32.40 L9.52,34.06 L7.02,35.35 L4.53,36.40 L2.27,37.92 L0.68,39.80 L0.00,42.07 L0.68,44.56 L2.27,47.05 L4.53,49.55 L6.80,52.04 L8.31,54.53 L8.84,57.02 L8.31,59.52 L7.10,62.01 L5.74,64.50 L4.61,66.99 L4.00,69.49 L4.38,71.90 L5.74,73.87 L7.85,75.23 L10.35,75.91 L12.84,76.21 L15.33,76.51 L17.82,77.42 L20.02,79.00 L21.60,81.12 L22.51,83.61 L22.81,86.10 L22.96,88.60 L23.49,91.09 L24.62,93.35 L26.44,94.86 L28.63,95.47 L31.12,94.94 L33.61,93.88 L36.10,92.52 L38.60,91.39 L41.09,90.71 L43.58,91.01 L46.07,92.37 L48.41,94.41 L50.68,96.83 L52.95,98.87 L55.21,100.00 L57.70,100.00 L59.89,98.79 L61.63,96.83 L63.07,94.41 L64.20,91.92 L65.56,89.58 L67.30,87.76 L69.41,86.63 L71.83,86.33 L74.32,86.56 L76.81,87.01 L79.31,87.46 L81.80,87.54 L84.14,86.93 L85.95,85.57 L86.93,83.53 L87.08,81.12 L86.71,78.63 L86.10,76.13 L85.73,73.64 L85.88,71.15 L86.78,68.73 L88.60,66.77 L90.94,65.11 L93.43,63.90 L95.92,62.69 L98.11,61.18 L99.47,59.29 L99.85,57.02 L99.02,54.53 L97.28,52.19 L95.09,49.92 L92.82,47.66 L91.24,45.39 L90.63,42.90 L91.09,40.41 L92.15,37.92 L93.58,35.42 L94.79,32.93 L95.47,30.44 L95.39,28.02 L94.26,25.98 L92.45,24.62 L90.11,23.87 L87.61,23.49 L85.12,23.26 L82.63,22.66 L80.29,21.68 L78.47,20.09 L77.34,17.90 L76.66,15.48 L76.36,12.99 L75.98,10.50 L75.38,8.01 L74.24,5.97 L72.43,4.68 L70.17,4.31 L67.67,4.98 L65.18,6.12 L62.69,7.48 L60.20,8.61 L57.70,9.21 L55.21,8.84 L52.95,7.48 L50.68,5.44 L48.41,3.10 L46.07,1.13 L43.58,0.08 Z" fill="#4A3FD1"/><rect x="44.92447129909366" y="43" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/><rect x="58.42447129909366" y="43" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/></svg>
+        <div class="phone a"><img src="img/learned-connections.webp" alt="The Connections screen in dark mode. The last line in the built-in list is Learned apps, with a count and the names of a few apps (demo data)." width="720" height="1662" loading="lazy" decoding="async"></div>
+        <div class="phone b"><img src="img/learned-sheet.webp" alt="The Learned apps sheet in light mode: a list of sites with a logo, an address and a tool count each. One is open and shows its tools and a switch for changing things without asking (demo data)." width="720" height="1662" loading="lazy" decoding="async"></div>
+      </div>
+    </div>
+    <div class="tiles">
+      <div class="tile"><h3>Mapping is a one-off cost.</h3><p>To learn a site the agent can see what the site sends, read the page, and run a script inside the page while you are signed in. That takes a while, once. After that a call is quick and steady.</p></div>
+      <div class="tile"><h3>When the site changes, it fixes the tool.</h3><p>If a tool breaks, the agent reads why and repairs that one tool. It doesn't start the whole site again.</p></div>
+      <div class="tile"><h3>You approve what it saves.</h3><p>When it finishes mapping, you see the set of tools and say yes or no. Anything that sends, posts or deletes asks you first, unless you have chosen to trust that app. The agent can't trust itself.</p></div>
+      <div class="tile"><h3>No password or cookie is stored.</h3><p>The tools run inside your own signed-in browser session. You manage them in Connections, under Learned apps. It is one line there, and it opens a sheet with a logo for each app.</p></div>
+    </div>
+    <p class="limits"><b>Where it stops.</b> Mapping needs a capable model: a small fast one can struggle to write the tools, and a stronger one does it reliably. A site that shows a CAPTCHA every time won't work. Check a site's own terms before you point the agent at it.</p>
+    <!-- Demo video slot. When docs/demo-learned-apps.mp4 and docs/img/poster-learned-apps.jpg exist, paste this block here, below the closing </p> above:
+    <div class="vid" style="margin-top:56px"><video controls preload="none" playsinline poster="img/poster-learned-apps.jpg" width="1920" height="1080"><source src="demo-learned-apps.mp4" type="video/mp4"></video></div>
+    <p class="fine">Real recording of the agent mapping a site.</p>
+    -->
+  </div>
+</section>
+
+<section class="also" id="also">
+  <div class="wrap">
+    <div class="eyebrow" style="color:var(--iris)">In this release</div>
+    <h2>Also new in 0.11.22.</h2>
+    <div class="row">
+      <div>
+        <h3>Memory goes in and out as one zip.</h3>
+        <p>Export gives you a zip of plain markdown pages that any text editor can open. Import takes a zip like that back, and it also takes notes from other tools. When it is done the app tells you how many pages came in and how many are still unsorted.</p>
+      </div>
+      <figure>
+        <img src="img/memory-import.webp" alt="The result card after an import: 992 pages added, 41 of them unsorted, and a note that 2 came in unpinned because only 8 pages can be pinned (demo data)." width="840" height="833" loading="lazy" decoding="async">
+        <figcaption>The card you see after an import. Demo data.</figcaption>
+      </figure>
+    </div>
+    <div class="minis">
+      <div class="mini"><h3>A No button on every request.</h3><p>When the agent asks to do something, you can refuse with one tap.</p></div>
+      <div class="mini"><h3>Shopping answers as cards.</h3><p>A shopping answer can come back as a row of product cards that you swipe through.</p></div>
+      <div class="mini"><h3>A second workspace.</h3><p>You can now connect a second Slack, Notion or Teams workspace next to the first.</p></div>
+    </div>
+  </div>
+</section>
+
 <section class="feature" style="background:#1C1466;color:#E4E0FF">
   <div class="wrap">
     <div class="text">
@@ -226,7 +412,7 @@ footer a{color:#fff}
     </div>
     <div class="stage">
       <svg class="peek" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M18.66,0.31 L16.08,0.86 L13.51,1.80 L10.93,2.97 L8.35,4.68 L6.01,6.87 L3.98,9.29 L2.34,11.87 L1.17,14.44 L0.39,17.02 L0.00,19.59 L0.00,22.17 L0.39,24.75 L1.01,27.32 L1.95,29.90 L3.20,32.47 L4.84,35.05 L6.71,37.63 L8.82,40.20 L11.01,42.78 L13.11,45.36 L15.38,47.93 L17.49,50.51 L19.75,53.08 L21.86,55.66 L24.04,58.24 L26.15,60.81 L28.34,63.39 L30.44,65.96 L32.71,68.54 L34.82,71.12 L37.08,73.69 L39.19,76.27 L41.37,78.84 L43.48,81.42 L45.67,84.00 L47.70,86.26 L49.65,87.20 L51.68,86.73 L53.63,84.86 L55.89,82.28 L58.00,79.70 L60.27,77.13 L62.37,74.55 L64.56,71.98 L66.67,69.40 L68.85,66.82 L70.96,64.25 L73.15,61.67 L75.33,59.09 L77.52,56.52 L79.70,53.94 L81.81,51.37 L84.00,48.79 L86.10,46.21 L88.29,43.64 L90.40,41.06 L92.58,38.49 L94.61,35.91 L96.41,33.33 L97.81,30.76 L98.91,28.18 L99.61,25.60 L100.00,23.03 L100.00,20.45 L99.61,17.88 L98.91,15.30 L97.89,12.72 L96.49,10.15 L94.69,7.57 L92.43,5.31 L89.93,3.36 L87.35,1.95 L84.78,0.94 L82.20,0.31 L79.63,0.00 L77.05,0.08 L74.47,0.55 L71.90,1.33 L69.32,2.50 L66.74,4.06 L64.17,6.09 L61.75,8.43 L59.41,11.01 L57.06,13.58 L54.96,16.16 L52.62,18.42 L50.27,19.36 L48.09,18.89 L45.75,17.02 L43.48,14.44 L41.30,11.87 L38.95,9.29 L36.61,6.79 L34.11,4.61 L31.54,2.81 L28.96,1.48 L26.39,0.62 L23.81,0.08 L21.23,0.00 Z" fill="#C3BBFF"/><rect x="45" y="36.59875097580015" width="6.5" height="14" rx="3.25" fill="#1C1466"/><rect x="58.5" y="36.59875097580015" width="6.5" height="14" rx="3.25" fill="#1C1466"/></svg>
-      <div class="phone shot card"><img src="card-3-memory.png" alt="" width="2160" height="2700" loading="lazy"></div>
+      <div class="phone shot card"><img src="card-3-memory.webp" alt="A memory page for one person, with tags, a short summary and links to the pages that mention them" width="2160" height="2700" loading="lazy" decoding="async"></div>
     </div>
   </div>
 </section>
@@ -239,7 +425,7 @@ footer a{color:#fff}
     </div>
     <div class="stage">
       <svg class="peek" viewBox="-2 -2 104 104" aria-hidden="true"><path d="M23.01,0.56 L20.35,1.21 L17.70,2.25 L15.04,3.62 L12.39,5.31 L9.81,7.40 L7.48,9.81 L5.47,12.39 L3.86,15.04 L2.49,17.70 L1.45,20.35 L0.64,23.01 L0.24,25.66 L0.00,28.32 L0.00,30.97 L0.16,33.63 L0.48,36.28 L1.13,38.94 L2.17,41.59 L3.46,44.25 L4.91,46.90 L5.47,49.56 L5.23,52.21 L4.18,54.87 L2.82,57.52 L1.69,60.18 L0.88,62.83 L0.32,65.49 L0.08,68.14 L0.00,70.80 L0.08,73.45 L0.40,76.11 L0.97,78.76 L1.85,81.42 L3.14,84.07 L4.67,86.73 L6.68,89.38 L9.01,91.79 L11.50,93.89 L14.16,95.66 L16.81,97.10 L19.47,98.23 L22.12,99.12 L24.78,99.68 L27.43,99.92 L30.09,100.00 L32.74,99.92 L35.40,99.68 L38.05,99.12 L40.71,98.23 L43.36,97.02 L46.02,95.49 L48.67,94.61 L51.33,94.53 L53.98,95.33 L56.64,96.78 L59.29,97.91 L61.95,98.87 L64.60,99.52 L67.26,99.84 L69.91,100.00 L72.57,100.00 L75.22,99.76 L77.88,99.28 L80.53,98.47 L83.19,97.35 L85.84,95.90 L88.50,94.05 L90.99,91.79 L93.24,89.38 L95.09,86.73 L96.62,84.07 L97.83,81.42 L98.87,78.76 L99.52,76.11 L99.84,73.45 L100.00,70.80 L100.00,68.14 L99.76,65.49 L99.36,62.83 L98.55,60.18 L97.43,57.52 L95.98,54.87 L94.85,52.21 L94.45,49.56 L95.01,46.90 L96.30,44.25 L97.59,41.59 L98.63,38.94 L99.36,36.28 L99.76,33.63 L100.00,30.97 L100.00,28.32 L99.84,25.66 L99.44,23.01 L98.79,20.35 L97.75,17.70 L96.38,15.04 L94.69,12.39 L92.60,9.81 L90.19,7.48 L87.61,5.47 L84.96,3.86 L82.30,2.49 L79.65,1.45 L76.99,0.64 L74.34,0.24 L71.68,0.00 L69.03,0.00 L66.37,0.16 L63.72,0.48 L61.06,1.13 L58.41,2.17 L55.75,3.46 L53.10,4.91 L50.44,5.47 L47.79,5.23 L45.13,4.18 L42.48,2.82 L39.82,1.69 L37.17,0.88 L34.51,0.32 L31.86,0.08 L29.20,0.00 L26.55,0.08 L23.89,0.40 Z" fill="#4A3FD1"/><rect x="35" y="43" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/><rect x="48.5" y="43" width="6.5" height="14" rx="3.25" fill="#1B1A1F"/></svg>
-      <div class="phone shot card"><img src="card-4-routines.png" alt="" width="2160" height="2700" loading="lazy"></div>
+      <div class="phone shot card"><img src="card-4-routines.webp" alt="The Routines screen: a morning brief at 06:30 and a weekly planning routine, with a switch for each" width="2160" height="2700" loading="lazy" decoding="async"></div>
     </div>
   </div>
 </section>
@@ -260,21 +446,34 @@ footer a{color:#fff}
     <h2>Put it on your phone.</h2>
     <p class="lead">No account and no server of ours. Nothing leaves the phone except calls to the model you choose.</p>
     <div class="ctas">
-      <a class="pill solid" href="https://github.com/Past-da-king/agent/releases/download/v0.11.14/Agent-0.11.14.apk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12m0 0-5-5m5 5 5-5M5 20h14"/></svg>Download the APK</a>
+      <a class="pill solid" href="https://github.com/Past-da-king/agent/releases/download/v0.11.22/Agent-0.11.22.apk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12m0 0-5-5m5 5 5-5M5 20h14"/></svg>Download the APK</a>
       <a class="pill ghost" href="https://github.com/Past-da-king/agent">Read the code</a>
     </div>
-    <p class="ver">This build is version 0.11.14 (about 360 MB).</p>
+    <p class="ver">This build is version 0.11.22, <a href="https://github.com/Past-da-king/agent/releases/tag/v0.11.22">release notes on GitHub</a>. The file is Agent-0.11.22.apk, 360,664,243 bytes, about 360 MB.</p>
     <div class="steps">
-      <div class="step"><b>Install</b><span>Android 10 or newer. Allow the install from your browser when it asks.</span></div>
+      <div class="step"><b>Install</b><span>Android 10 or newer, 64-bit only. Allow the install from your browser when it asks.</span></div>
       <div class="step"><b>Name it</b><span>Give your agent a name and pick how it looks.</span></div>
       <div class="step"><b>Power it</b><span>Sign in with ChatGPT or Claude, or paste an API key.</span></div>
     </div>
-    <footer>
-      <span>Use it at your own risk. It's an agent with a browser and it will get things wrong sometimes.</span>
-      <span><a href="https://github.com/Past-da-king/agent">github.com/Past-da-king/agent</a></span>
-    </footer>
+    <p class="note"><b>Space.</b> It needs about 2 GB of free space to install. If Android says "App not installed", free some space or uninstall an older Agent first. Uninstalling removes the old one's data, so back up anything you need first.</p>
+    <details class="verify">
+      <summary>Check the file you downloaded</summary>
+      <dl>
+        <dt>APK SHA-256</dt>
+        <dd>21918f6c126c6c9070da90724dba159f78f6d83527d18795d8c8c962e5e0ab8b</dd>
+        <dt>Signing certificate SHA-256</dt>
+        <dd>2564b86434c75ba4f5dd6862bebc2d736c0375f658583bfa5fc5baa5df91ff6d</dd>
+      </dl>
+      <p>On a computer, <code>sha256sum Agent-0.11.22.apk</code> should print the first value. The second is the app's signing certificate; <code>apksigner verify --print-certs Agent-0.11.22.apk</code> prints it.</p>
+    </details>
   </div>
 </section>
+</main>
+
+<footer class="pagefoot"><div class="wrap"><div class="foot">
+  <span>Use it at your own risk. It's an agent with a browser and it will get things wrong sometimes.</span>
+  <span><a href="https://github.com/Past-da-king/agent">github.com/Past-da-king/agent</a></span>
+</div></div></footer>
 
 </body>
 </html>
