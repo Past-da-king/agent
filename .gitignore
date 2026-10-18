@@ -17,3 +17,7 @@ CREDENTIALS*
 *.jks
 *.keystore
 signing.properties
+
+# Live sandbox run logs (order and invoice ids, pay links)
+docs/*-proof.txt
+*-sandbox-proof.txt
