@@ -84,7 +84,7 @@ object CommandSafety {
 private fun quote(s: String) = "'" + s.replace("'", "'\\''") + "'"
 private fun dir(cwd: String?) = cwd?.trim()?.takeIf { it.isNotEmpty() }?.let { if (it == "~") "\"\$HOME\"" else if (it.startsWith("~/")) "\"\$HOME\"/" + quote(it.removePrefix("~/")) else quote(it) }
 
-private suspend fun approve(ctx: ToolContext, m: Machine, what: String, details: String, readOnly: Boolean): String? {
+internal suspend fun approve(ctx: ToolContext, m: Machine, what: String, details: String, readOnly: Boolean): String? {
     if (m.trusted || readOnly) return null
     val a = ctx.ask("APPROVAL|$what on ${m.name}|$details", listOf("Approve", "Decline"))
     return when (a) { "Approve" -> null; null -> "Needs the user's approval and nobody is around. Not done."; else -> "The user declined. Not done." }

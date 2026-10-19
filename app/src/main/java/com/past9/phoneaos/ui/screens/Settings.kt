@@ -94,6 +94,9 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
                 val problems = remember(reliability) { com.past9.phoneaos.system.Background.problems(com.past9.phoneaos.system.Background.check(ctx)) }
                 Line(Icons.Rounded.NotificationsActive, "Reminders on time", if (problems.isEmpty()) "All set: it can speak up by itself" else problems.first().replaceFirstChar { it.uppercase() }) { reliability = true }
                 if (reliability) ReliabilitySheet { reliability = false }
+                var handoffs by remember { mutableStateOf(false) }
+                Line(Icons.Rounded.Sync, "Hand-offs", com.past9.phoneaos.handoff.HandoffStore.peek(ctx)?.let { "Signed in as $it" } ?: "Let your computers do jobs and report back") { handoffs = true }
+                if (handoffs) com.past9.phoneaos.handoff.HandoffSheet { handoffs = false }
                 Line(Icons.Rounded.BatteryChargingFull, "Battery: unrestricted", "Samsung and others stop background apps. Allow this one to keep working.") { actions.onBattery() }
             }
             SectionHeader("Your data", "It all lives on this phone", Modifier.padding(start = 4.dp, top = 12.dp))

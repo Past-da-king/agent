@@ -437,13 +437,13 @@ private fun ActionButton(n: Node, modifier: Modifier) {
     }
 }
 
-/** A photo from a URL, cropped to fill; a soft block while it loads or if it can't. */
+/** A photo from a URL or a file on this phone (a path starting with /), cropped to fill; a soft block while it loads or if it can't. */
 @Composable
 private fun Picture(url: String, alt: String?, modifier: Modifier) {
     val cs = MaterialTheme.colorScheme
     val local = LocalOpenUiImages.current(url)
     if (local != null) androidx.compose.foundation.Image(local, alt, modifier, contentScale = androidx.compose.ui.layout.ContentScale.Crop)
-    else coil.compose.SubcomposeAsyncImage(model = url, contentDescription = alt, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = modifier,
+    else coil.compose.SubcomposeAsyncImage(model = if (url.startsWith("/")) java.io.File(url) else url, contentDescription = alt, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = modifier,
         loading = { Box(Modifier.fillMaxSize().background(cs.surfaceContainerHighest)) }, error = { Box(Modifier.fillMaxSize().background(cs.surfaceContainerHighest)) })
 }
 

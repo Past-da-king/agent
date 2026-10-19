@@ -233,4 +233,14 @@ class LearnedAppsTest {
         // Only a real SyntaxError counts as a syntax error: a page that forbids (or traps) building functions throws something else.
         assertTrue(PageJs.syntax("x").contains("e.name==='SyntaxError'") && PageJs.start("s", "x", JSONObject()).contains("e.name==='SyntaxError'"))
     }
+
+    /** The engine's js() leaves JSON quotes on a plain string result: a body that parses came back as two quote marks and every save was refused. */
+    @Test fun aStringResultLosesItsJsonQuotes() {
+        assertEquals("", PageJs.text("\"\""))
+        assertEquals("blocked", PageJs.text("\"blocked\""))
+        assertEquals("Unexpected token '}'", PageJs.text("\"Unexpected token '}'\""))
+        assertEquals("timeout", PageJs.text("timeout"))
+        assertEquals("{\"ok\":true}", PageJs.text("{\"ok\":true}"))
+        assertEquals("0", PageJs.text("0"))
+    }
 }

@@ -146,8 +146,10 @@ fun withMarker(rows: List<Row_>, firstId: Long?, count: Int): List<Row_> {
 
 fun group(items: List<ChatItem>): List<Row_> {
     val out = mutableListOf<Row_>(); val buf = mutableListOf<ChatItem>(); val call = mutableListOf<ChatItem>()
+    /** Whether the running step buffer is a background routine's work, so a routine's steps never inflate the main agent's count. */
+    var bufRoutine: Boolean? = null
     fun flushCall() { if (call.isNotEmpty()) { out += Row_.Call(call.toList()); call.clear() } }
-    fun flush() { if (buf.isNotEmpty()) { out += Row_.Steps(buf.toList()); buf.clear() } }
+    fun flush() { if (buf.isNotEmpty()) { out += Row_.Steps(buf.toList()); buf.clear() }; bufRoutine = null }
     // A finished helper leaves the chat once the main agent has replied after it (its result lives in that reply).
     // If that reply never came (the turn failed), the helper stays so its result isn't lost.
     val lastAgentAt = items.filter { it.kind == "agent" }.maxOfOrNull { it.createdAt } ?: 0L
@@ -160,7 +162,12 @@ fun group(items: List<ChatItem>): List<Row_> {
             it.kind == "activity" && m.has("branch") -> {} // shown inside its branch's sheet
             // A helper only shows while it works: once it's done or stopped it leaves the chat; its result lives in the agent's reply.
             it.kind == "helper" && m.optString("state", "working").let { st -> st == "stopped" || (st != "working" && lastAgentAt > m.optLong("endedAt", Long.MAX_VALUE)) } -> {}
-            it.kind == "activity" && m.optString("image").isEmpty() && m.optString("file").isEmpty() -> buf += it
+            it.kind == "activity" && m.optString("image").isEmpty() && m.optString("file").isEmpty() -> {
+                val routine = m.optString("by") == "routine"
+                if (buf.isNotEmpty() && bufRoutine != routine) flush()
+                bufRoutine = routine
+                buf += it
+            }
             else -> { flush(); out += Row_.Single(it) }
         }
     }
@@ -596,7 +603,10 @@ private fun StepsRow(items: List<ChatItem>) {
             Spacer(Modifier.width(10.dp))
             Text(last.text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = if (open) 3 else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            if (items.size > 1) Text("${items.size} steps", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 8.dp))
+            if (items.size > 1) {
+                val routine = items.all { JSONObject(it.meta).optString("by") == "routine" }
+                Text(if (routine) "Routine · ${items.size} steps" else "${items.size} steps", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 8.dp))
+            }
             if (items.size > 1) Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, if (open) "Hide steps" else "Show steps", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         AnimatedVisibility(open && (items.size > 1 || JSONObject(last.meta).has("result")), enter = expandVertically(spring(0.8f, 380f)) + fadeIn(), exit = shrinkVertically() + fadeOut()) {

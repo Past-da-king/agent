@@ -4,6 +4,7 @@
 //
 //   node agent-host.mjs serve [--port 8787] [--bind 127.0.0.1|tailscale|0.0.0.0] [--trusted]
 //   node agent-host.mjs pair       print the address and token to pair the phone
+//   node agent-host.mjs link       sign in to the sync service so finished jobs reach the phone (--sync --email --password)
 //   node agent-host.mjs engines    list the agents found on this machine
 //   node agent-host.mjs install    run as a service that starts at login (systemd user unit / launchd agent)
 //
@@ -112,12 +113,59 @@ export function scanEngines() {
   })
 }
 
+// ---- telling the phone ------------------------------------------------------------------------------------------
+// When a job ends the Host writes a 'handoff' row into the user's sync log (so every device sees what was done) and asks
+// the sync service to push a wake-up to their phones. Both go through one outbox on disk, so a result is never lost if the
+// sync service or the network is down: it is retried until it lands.
+export class Notifier {
+  constructor(home, { fetchImpl = fetch } = {}) {
+    this.file = path.join(home, 'sync.json'); this.box = path.join(home, 'outbox.json'); this.fetch = fetchImpl
+    this.cfg = null; this.busy = false; this.list = []
+    try { this.cfg = JSON.parse(fs.readFileSync(this.file, 'utf8')) } catch {}
+    try { this.list = JSON.parse(fs.readFileSync(this.box, 'utf8')) } catch {}
+  }
+  get linked() { return !!this.cfg?.token }
+  link(cfg) { this.cfg = cfg; fs.writeFileSync(this.file, j(cfg), { mode: 0o600 }) }
+  pending() { return this.list }
+  #store() { fs.writeFileSync(this.box, j(this.list), { mode: 0o600 }) }
+  /** Queue a finished job for the phone and try to deliver straight away. */
+  async jobEnded(meta) {
+    if (!this.linked || meta.notify === false) return
+    this.list.push({ id: meta.id, queuedAt: Date.now(), payload: {
+      jobId: meta.id, ref: meta.ref ?? null, title: meta.title || clip(meta.task, 80), engine: meta.engine, host: os.hostname(),
+      state: meta.state, result: meta.result, endedAt: meta.endedAt ?? Date.now() } })
+    this.#store(); await this.flush()
+  }
+  async flush() {
+    if (!this.linked || this.busy) return 0
+    this.busy = true; let sent = 0
+    try {
+      for (const item of [...this.list]) {
+        try { await this.#deliver(item); sent++; this.list = this.list.filter((x) => x !== item) }
+        catch (e) { item.tries = (item.tries ?? 0) + 1; item.lastError = String(e.message ?? e) }
+        this.#store()
+      }
+    } finally { this.busy = false }
+    return sent
+  }
+  async #deliver({ id, payload }) {
+    const { url, token, device } = this.cfg; const h = { authorization: `Bearer ${token}`, 'content-type': 'application/json' }
+    const stamp = `${Date.now()}-0-${device}`
+    let r = await this.fetch(`${url}/v1/sync/push`, { method: 'POST', headers: h, body: j({ device, changes: [{ entity: 'handoff', id, deleted: false, stamp, payload }] }) })
+    if (!r.ok) throw new Error(`sync push ${r.status}`)
+    // The push carries no content: Google's network only learns "something finished". The result stays in the user's own log.
+    r = await this.fetch(`${url}/v1/notify`, { method: 'POST', headers: h, body: j({ exceptDevice: device, data: { kind: 'handoff' } }) })
+    if (!r.ok) throw new Error(`notify ${r.status}`)
+  }
+}
+
 // ---- the host --------------------------------------------------------------------------------------------------
 export class Host {
-  constructor({ home = process.env.AGENT_HOST_HOME || path.join(os.homedir(), '.agent-host'), trusted = false } = {}) {
+  constructor({ home = process.env.AGENT_HOST_HOME || path.join(os.homedir(), '.agent-host'), trusted = false, notifier = null } = {}) {
     this.home = home; this.trusted = trusted
     fs.mkdirSync(path.join(home, 'jobs'), { recursive: true, mode: 0o700 })
     this.token = this.#loadToken()
+    this.notifier = notifier ?? new Notifier(home)
     this.jobs = new Map()      // id -> { meta, events[], proc, subs:Set, stderr }
     this.#load()
   }
@@ -156,14 +204,14 @@ export class Host {
       this.#run(job, job.meta.session ? note : job.meta.task + '\n\n' + note)
     }
   }
-  create({ task, system = '', engine, model = '', cwd, env = {}, id }) {
+  create({ task, system = '', engine, model = '', cwd, env = {}, id, title = '', ref = null, notify = true }) {
     if (!task?.trim()) throw httpError(400, 'task is required')
     engine ||= scanEngines().find((e) => e.found)?.id
     if (!ENGINES[engine]) throw httpError(400, `unknown engine "${engine}"`)
     id = (id && /^[\w-]{1,64}$/.test(id)) ? id : crypto.randomBytes(6).toString('hex')
     if (this.jobs.has(id)) throw httpError(409, 'a job with that id exists')
     fs.mkdirSync(this.jobDir(id), { recursive: true, mode: 0o700 })
-    const meta = { id, task, system, engine, model, cwd: cwd || path.join(this.jobDir(id), 'work'), env, state: 'running', session: null, resumes: 0, createdAt: Date.now(), result: '' }
+    const meta = { id, task, system, engine, model, cwd: cwd || path.join(this.jobDir(id), 'work'), env, state: 'running', session: null, resumes: 0, createdAt: Date.now(), result: '', title, ref, notify }
     fs.mkdirSync(meta.cwd, { recursive: true })
     const job = { meta, events: [], proc: null, subs: new Set(), stderr: '' }
     this.jobs.set(id, job); this.#save(job)
@@ -202,6 +250,7 @@ export class Host {
     if (job.meta.state !== 'running') return
     job.meta.state = state; job.meta.result = clip(result ?? '', 6000); job.meta.endedAt = Date.now(); this.#save(job)
     this.#emit(job, { type: 'state', state, result: job.meta.result })
+    if (state !== 'stopped') this.notifier.jobEnded(job.meta).catch(() => {})
     if (job.proc) { try { job.proc.kill() } catch {} }
   }
   stop(id) {
@@ -222,7 +271,7 @@ export class Host {
     this.#run(job, job.meta.session ? text : job.meta.task + '\n\n[The user added:] ' + text)
   }
   #get(id) { const job = this.jobs.get(id); if (!job) throw httpError(404, 'no such job'); return job }
-  view(job) { const m = job.meta; return { id: m.id, task: clip(m.task, 300), engine: m.engine, model: m.model, state: m.state, result: m.result, session: m.session, resumes: m.resumes, createdAt: m.createdAt, endedAt: m.endedAt ?? null, lastSeq: job.events.length } }
+  view(job) { const m = job.meta; return { id: m.id, task: clip(m.task, 300), engine: m.engine, model: m.model, state: m.state, result: m.result, session: m.session, resumes: m.resumes, title: m.title, ref: m.ref, createdAt: m.createdAt, endedAt: m.endedAt ?? null, lastSeq: job.events.length } }
   list() { return [...this.jobs.values()].map((x) => this.view(x)) }
   get(id) { return this.view(this.#get(id)) }
   eventsAfter(id, after = 0) { return this.#get(id).events.filter((e) => e.seq > after) }
@@ -244,7 +293,7 @@ export function createServer(host) {
     try {
       const url = new URL(req.url, 'http://x'); const p = url.pathname.replace(/\/+$/, '')
       if (!authed(req)) return send(res, 401, { error: 'unauthorised' })
-      if (req.method === 'GET' && p === '/v1/health') return send(res, 200, { ok: true, version: VERSION, host: os.hostname(), platform: process.platform, jobs: host.jobs.size, time: Date.now() })
+      if (req.method === 'GET' && p === '/v1/health') return send(res, 200, { ok: true, version: VERSION, host: os.hostname(), platform: process.platform, jobs: host.jobs.size, linked: host.notifier.linked, outbox: host.notifier.pending().length, time: Date.now() })
       if (req.method === 'GET' && p === '/v1/engines') return send(res, 200, { engines: scanEngines() })
       if (req.method === 'GET' && p === '/v1/jobs') return send(res, 200, { jobs: host.list() })
       if (req.method === 'POST' && p === '/v1/jobs') return send(res, 201, { id: host.create(await body(req)) })
@@ -304,10 +353,25 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   const port = Number(flag('port', 8787))
   if (cmd === 'serve') {
     const addr = await bindAddress(flag('bind', '127.0.0.1')); host.recover()
+    setInterval(() => host.notifier.flush().catch(() => {}), 60000).unref()
+    host.notifier.flush().catch(() => {})
     createServer(host).listen(port, addr, () => console.log(`Agent Host ${VERSION} listening on http://${addr}:${port}`))
   } else if (cmd === 'pair') {
     const addr = await bindAddress(flag('bind', '127.0.0.1')); console.log(j({ url: `http://${addr}:${port}`, token: host.token }))
+  } else if (cmd === 'link') {
+    // agent-host link --sync https://sync.example --email me@x.com --password '...' [--device name]
+    // or, with a token the phone already holds:  agent-host link --sync <url> --token <token>
+    const url = (flag('sync') || '').replace(/\/+$/, ''), email = flag('email'), password = flag('password'), given = flag('token')
+    if (!url || (!given && (!email || !password))) { console.error('usage: agent-host link --sync <url> (--email <email> --password <password> | --token <token>) [--device <name>]'); process.exit(1) }
+    let token = given
+    if (!token) {
+      const r = await fetch(`${url}/v1/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: j({ email, password }) })
+      const b = await r.json().catch(() => ({})); if (!r.ok) { console.error(b.error?.message || `login failed (${r.status})`); process.exit(1) }
+      token = b.token
+    } else if (!(await fetch(`${url}/v1/sync/pull?since=0&entity=none`, { headers: { authorization: `Bearer ${token}` } })).ok) { console.error('That token was not accepted by the sync service.'); process.exit(1) }
+    host.notifier.link({ url, token, device: flag('device') || `host-${os.hostname()}`, email: email || null })
+    console.log(`Linked to ${url}${email ? ' as ' + email : ''}. Finished jobs now reach your phone.`)
   } else if (cmd === 'engines') console.table(scanEngines())
   else if (cmd === 'install') installService(process.argv.slice(2))
-  else { console.error('usage: agent-host serve|pair|engines|install'); process.exit(1) }
+  else { console.error('usage: agent-host serve|pair|link|engines|install'); process.exit(1) }
 }

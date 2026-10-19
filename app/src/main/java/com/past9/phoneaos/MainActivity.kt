@@ -68,6 +68,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        // Results of jobs handed to the user's machines: caught up and awaited only while the app is on screen.
+        com.past9.phoneaos.handoff.Handoffs.onScreen(this)
+    }
+
     override fun onResume() {
         super.onResume()
         com.past9.phoneaos.triggers.Overnight.onAppOpen(this)
@@ -81,6 +87,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        com.past9.phoneaos.handoff.Handoffs.offScreen()
         // Swap the home-screen icon to the user's character only once they've left the app.
         val st = App.graph(this).settings.state.value
         if (st.onboarded) runCatching { com.past9.phoneaos.system.Identity.applyLauncherIcon(this, st.mascot, st.accent) }
@@ -94,6 +101,25 @@ class MainActivity : ComponentActivity() {
         // adb hook for checking sites in the agent's browser: am start -n <pkg>/.MainActivity --es open browser --es url https://...
         i.getStringExtra("url")?.takeIf { i.getStringExtra("open") == "browser" }?.let { u ->
             App.graph(this).scope.launch { runCatching { BrowserService.await(this@MainActivity, "main", App.graph(this@MainActivity).settings.state.value.browserProfiles.first()).goto(u) } }
+        }
+        // adb hook for checking how a site behaves in the browser (what it does by itself when a site refuses it):
+        //   am start -n <pkg>/.MainActivity --es open probe --es url https://...   then read: logcat -s SiteProbe
+        // It opens the site twice in its own throwaway browser (the second visit shows what was learned), logs both, and forgets the site again.
+        i.getStringExtra("url")?.takeIf { i.getStringExtra("open") == "probe" }?.let { u ->
+            val g = App.graph(this)
+            g.scope.launch {
+                runCatching {
+                    val e = BrowserService.await(this@MainActivity, "probe", g.settings.state.value.browserProfiles.first())
+                    val c = com.past9.phoneaos.browser.SiteCatalog(g.settings)
+                    c.forget(u)
+                    for (visit in 1..2) {
+                        val o = com.past9.phoneaos.browser.SiteAdapt.open(e.port, c, u, null)
+                        android.util.Log.i("SiteProbe", "visit $visit $u -> ok=${o.verdict.ok} refusal=${o.verdict.refusal} desktop=${o.desktop} triedBoth=${o.triedBoth} status=${e.lastStatus} final=${e.page.value.url.take(60)} title=${e.page.value.title.take(40)} evidence=${o.verdict.evidence.take(80)} | textNow=[${e.visibleText().let { t -> "${t.length}:" + t.replace(Regex("\\s+"), " ").take(110) }}] navSeq=${e.navSeq} | catalog=${c.get(u)?.line()} | notes=${o.notes.lines().firstOrNull().orEmpty().take(160)}")
+                    }
+                    c.forget(u)
+                }.onFailure { android.util.Log.e("SiteProbe", "failed", it) }
+            }
+            return
         }
         if (i.getStringExtra("open") == "testnotify") {
             App.graph(this).phone.notify("Checking in", "This is how my messages look on your phone.")
@@ -195,7 +221,8 @@ class MainActivity : ComponentActivity() {
         LaunchedEffect(incomingNow) {
             val (text, open) = incomingNow
             if (text != null) { draft = text; nav.navigate("chat") { launchSingleTop = true } }
-            if (open != null) nav.navigate(open)
+            // An unknown screen name (from a shortcut, an adb call or another app) is ignored; it must never take the app down.
+            if (open != null) runCatching { nav.navigate(open) }
             if (text != null || open != null) incoming.value = null to null
         }
         // Read new replies aloud when the user asked for that.
