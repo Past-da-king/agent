@@ -4,7 +4,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { Host, createServer, MAX_RESUMES } from '../agent-host.mjs'
+import http from 'node:http'
+import { Host, Notifier, createServer, MAX_RESUMES } from '../agent-host.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 process.env.AGENT_HOST_BIN_CLAUDE = path.join(here, 'fake-claude.mjs')
@@ -121,4 +122,34 @@ test('scans for installed agents', async () => {
   assert.deepEqual(engines.map((e) => e.id).sort(), ['claude', 'codex', 'opencode', 'pi'])
   assert.equal(engines.find((e) => e.id === 'claude').found, true)   // the fake answers --version at once
   await h.close()
+})
+
+test('a finished job reaches the sync service (row + push) and survives the service being down', async () => {
+  const seen = []; let down = true
+  const sync = http.createServer((req, res) => {
+    let b = ''; req.on('data', (d) => (b += d)); req.on('end', () => {
+      if (down) { res.writeHead(503); return res.end('{}') }
+      seen.push({ url: req.url, auth: req.headers.authorization, body: JSON.parse(b) }); res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}')
+    })
+  })
+  await new Promise((r) => sync.listen(0, '127.0.0.1', r))
+  const home = tmp(); const notifier = new Notifier(home)
+  notifier.link({ url: `http://127.0.0.1:${sync.address().port}`, token: 'tok', device: 'host-test' })
+  const host = new Host({ home, notifier }); const srv = createServer(host)
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r))
+  const call = (m, p, body) => fetch(`http://127.0.0.1:${srv.address().port}${p}`, { method: m, headers: { authorization: `Bearer ${host.token}`, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined })
+  const { id } = await (await call('POST', '/v1/jobs', { task: 'weekly stock check', engine: 'claude', title: 'Stock check', ref: 'routine-7' })).json()
+  await until(async () => (await (await call('GET', `/v1/jobs/${id}`)).json()).state === 'done')
+  await until(() => notifier.pending().some((x) => x.tries >= 1))            // service down: kept, not lost
+  assert.equal(seen.length, 0); assert.equal((await (await call('GET', '/v1/health')).json()).outbox, 1)
+  down = false; assert.equal(await notifier.flush(), 1)
+  assert.deepEqual(seen.map((s) => s.url), ['/v1/sync/push', '/v1/notify'])
+  assert.equal(seen[0].auth, 'Bearer tok')
+  const row = seen[0].body.changes[0]
+  assert.equal(row.entity, 'handoff'); assert.equal(row.id, id); assert.equal(row.payload.ref, 'routine-7'); assert.equal(row.payload.title, 'Stock check'); assert.equal(row.payload.state, 'done')
+  assert.equal(seen[1].body.exceptDevice, 'host-test'); assert.deepEqual(seen[1].body.data, { kind: 'handoff' })
+  assert.ok(!JSON.stringify(seen[1].body).includes('weekly stock') && !JSON.stringify(seen[1].body).includes('Stock check'), 'the push carries no job content')
+  assert.equal(notifier.pending().length, 0)
+  assert.equal(await notifier.flush(), 0, 'nothing is sent twice')
+  await new Promise((r) => srv.close(r)); sync.close()
 })

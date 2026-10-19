@@ -140,6 +140,16 @@ class AgentRuntime(
             return inner.run(input, ctx)
         }
     }
+    /** The main agent's hard ceiling for one turn: every tool call counts, memory searches included. */
+    private class Capped(private val inner: Tool, private val calls: StepBudget) : Tool {
+        override val spec = inner.spec
+        override suspend fun run(input: JSONObject, ctx: ToolContext): String {
+            val escape = inner.spec.name in setOf("delegate", "ask_user", "report", "notify_user")
+            if (calls.used >= calls.max && !escape) return "Step limit: ${calls.max} tool calls for this turn. Stop and answer, or hand the rest to a helper with delegate."
+            if (calls.used < calls.max) calls.used++
+            return inner.run(input, ctx)
+        }
+    }
     /**
      * A worker tool in a helper's hands: when the main agent answered or sent back a request the tool made
      * of the user, the helper hears it from the tool (pushed back: in place of the tool's own "declined").
@@ -351,13 +361,19 @@ class AgentRuntime(
         // Small jobs (a page, a quick lookup) it may do itself, within the step budget. Routines and watchers stay with helpers.
         val mine = own.map { it.spec.name }.toSet() + setOf("report", "routine_create", "routine_update", "routine_delete", "watcher_save", "skill_save", "skill_find",
             "card_guide", "card_save", "card_update", "card_delete")
-        return own + workerTools().filter { it.spec.name !in mine }.map { Budgeted(it, turn.line.budget) }
+        return (own + workerTools().filter { it.spec.name !in mine }.map { Budgeted(it, turn.line.budget) })
+            .map { Capped(it, turn.line.calls) }
     }
 
     /**
      * What a routine works with: the helpers' tools, plus adding to and clearing the user's list. A helper's findings
      * go through the main agent, which decides what lands on the list; a routine runs with no main agent, so it does it itself.
      */
+    /** Jobs handed to a machine, and the Host that runs them. The sync sign-in is only ever read here, never shown to the model. */
+    private fun handoffTools(): List<Tool> = com.past9.phoneaos.handoff.handoffTools(machines, {
+        java.io.File(context.cacheDir, "agent-host.mjs").also { f -> context.assets.open("agent-host.mjs").use { i -> f.outputStream().use { o -> i.copyTo(o) } } }
+    }) { com.past9.phoneaos.handoff.HandoffStore(settings).let { st -> if (st.signedIn) st.url!! to st.token!! else null } }
+
     private fun routineTools(): List<Tool> = tools(forHelper = true) + Gated(TaskAddTool(db.tasks())) + Gated(TaskDeleteTool(db.tasks())) +
         com.past9.phoneaos.tools.WakeScheduleTool(context) + com.past9.phoneaos.tools.WakeListTool(context) + com.past9.phoneaos.tools.WakeCancelTool(context)
 
@@ -376,7 +392,7 @@ class AgentRuntime(
             com.past9.phoneaos.tools.MediaFramesTool(context), com.past9.phoneaos.tools.MediaTranscribeTool(context, settings, machines),
         )
         list += if (machines.store.machines.value.isEmpty()) listOf(com.past9.phoneaos.machines.MachineListTool(machines))
-            else com.past9.phoneaos.machines.machineTools(machines, java.io.File(context.filesDir, "downloads/machines"))
+            else com.past9.phoneaos.machines.machineTools(machines, java.io.File(context.filesDir, "downloads/machines")) + handoffTools()
         list += browserTools(context)
         list += com.past9.phoneaos.connections.learnedTools(learned, pageRunner)
         val openSignIn: suspend (String) -> Unit = { url -> com.past9.phoneaos.system.UiBus.openInBrowser.emit(com.past9.phoneaos.system.UiBus.OpenInBrowser(url)) }
@@ -654,6 +670,9 @@ class AgentRuntime(
         }
     }
 
+    /** A result from a job handed to one of the user's machines reaches the main agent like a helper's. */
+    fun hearFromMachine(note: String) = deliver(note)
+
     /** A helper's result goes back to the main agent as a new message (batched if several land together). */
     private fun deliver(note: String, origin: Long? = null, escalation: Long? = null) {
         inbox += Inbound(note, origin, escalation)
@@ -925,7 +944,7 @@ class AgentRuntime(
 
     /** @param fromUser a message the user sent: it starts a fresh 5-step budget. A helper's result coming back doesn't. */
     private suspend fun runTurn(userText: String, images: List<String> = emptyList(), fromUser: Boolean = true, replyTo: Long? = null) {
-        if (fromUser) mainBudget.used = 0
+        if (fromUser) { mainBudget.used = 0; mainLine.calls.used = 0 }
         mainTurn.origin = replyTo; mainTurn.late = !fromUser
         if (settings.state.value.mode == PowerMode.SUBSCRIPTION && subscription?.ready == true) return runSubscriptionTurn(userText, subscription!!, images)
         val provider = providerFactory(settings)

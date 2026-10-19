@@ -90,14 +90,21 @@ class AlarmReceiver : BroadcastReceiver() {
                         .setInputData(workDataOf("id" to id, "slot" to at)).build())
             }
             ExactAlarms.ACTION_REMINDER, ExactAlarms.ACTION_WAKE -> {
-                val pending = goAsync()
+                // A wake can run the agent for minutes. Holding the broadcast open until it finishes makes Android
+                // time the broadcast out and show "Agent isn't responding" (four ANRs on 19 Oct 2026, all on
+                // com.past9.phoneaos.alarm.WAKE). Start the keep-alive service, hand the work to the process, and
+                // return from onReceive at once: the foreground service is what keeps it alive, not the broadcast.
+                // workStarted() starts the foreground service and counts this job, so the process is kept for the
+                // whole run (a wake's probes and model turn can take minutes) and the service stops itself after.
+                val phone = App.graph(context).phone
+                phone.workStarted()
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
                         if (intent.action == ExactAlarms.ACTION_REMINDER) Reminders.fire(context, id, at)
                         else Wakes.fire(context)
                     } catch (t: Throwable) {
                         com.past9.phoneaos.agent.Crashes.record(context, "alarm ${intent.action}: ${t::class.java.simpleName} ${t.message}", t)
-                    } finally { pending.finish() }
+                    } finally { phone.workFinished() }
                 }
             }
         }

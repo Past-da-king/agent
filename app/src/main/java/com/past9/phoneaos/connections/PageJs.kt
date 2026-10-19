@@ -37,6 +37,10 @@ object PageJs {
 
     fun clear(slot: String): String = "(function(){delete window[${q(slot)}];return 1})()"
 
+    /** What [js] hands back for a script that returns a plain string still wears its JSON quotes (an empty result arrives as two quote marks): take them off. */
+    fun text(raw: String): String =
+        if (raw.length >= 2 && raw.first() == '"' && raw.last() == '"') runCatching { org.json.JSONTokener(raw).nextValue().toString() }.getOrDefault(raw) else raw
+
     /** Only checks that the body parses as an async function, without running it. "" when it parses, or when the page won't allow the check (only a real SyntaxError is reported). */
     fun syntax(body: String): String =
         "(function(){try{new (Object.getPrototypeOf(async function(){}).constructor)('args',${q(body)});return ''}catch(e){return e&&e.name==='SyntaxError'?String(e.message||e):''}})()"

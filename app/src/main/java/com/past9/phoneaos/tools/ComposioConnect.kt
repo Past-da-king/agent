@@ -201,7 +201,9 @@ object ComposioConnect {
         fun pick(o: JSONObject?): String? = o?.let { obj -> keys.firstNotNullOfOrNull { k -> obj.optString(k).takeIf { v -> v.isNotBlank() && v != "null" } } }
         // Slack keeps the workspace under a "team" object, next to the user; look in each place a workspace name can sit.
         val info = a.optJSONObject("user_info"); val data = a.optJSONObject("data")
-        return pick(info) ?: pick(info?.optJSONObject("user")) ?: pick(info?.optJSONObject("team")) ?: pick(data) ?: pick(data?.optJSONObject("team"))
+        // Slack puts the workspace NAME in a plain "team" string next to team_id; checking team_id first showed T05Q8NEMWCU.
+        val teamName = (info?.opt("team") as? String)?.takeIf { it.isNotBlank() && it != "null" }
+        return teamName ?: pick(info) ?: pick(info?.optJSONObject("user")) ?: pick(info?.optJSONObject("team")) ?: pick(data) ?: pick(data?.optJSONObject("team"))
             ?: pick(data?.optJSONObject("authed_user")) ?: pick(a.optJSONObject("profile")) ?: pick(a.optJSONObject("team")) ?: ""
     }
 
