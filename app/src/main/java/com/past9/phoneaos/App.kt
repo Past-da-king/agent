@@ -109,6 +109,19 @@ class Graph(context: Context) {
                 subRuntime().turn(prompt, system, parent, model ?: settings.state.value.subModel.ifBlank { null }, mcpUrl, mcpToken, images, role, fork = true)
         }
         // After a start or an update, and whenever the AI in use changes: one trivial tool call, so a provider that can't run tools is found now.
+        // After an update that moved the runtimes out of the APK (or brought a newer pack): fetch them in the background,
+        // but only on an unmetered connection. On mobile data they wait for first use, which asks for the same download.
+        scope.launch {
+            kotlinx.coroutines.delay(15_000)
+            runCatching {
+                val sub = subRuntime()
+                val cm = app.getSystemService(android.net.ConnectivityManager::class.java)
+                if (settings.state.value.mode == com.past9.phoneaos.data.PowerMode.SUBSCRIPTION && sub.available && !sub.installed && !cm.isActiveNetworkMetered) {
+                    phone.workStarted()
+                    try { sub.install {} } finally { phone.workFinished() }
+                }
+            }
+        }
         scope.launch {
             kotlinx.coroutines.delay(20_000)
             runCatching { runtime.selfCheck(com.past9.phoneaos.BuildConfig.VERSION_CODE.toString()) }

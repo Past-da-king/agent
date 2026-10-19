@@ -525,7 +525,7 @@ class MainActivity : ComponentActivity() {
                             }.onFailure { conn = conn.copy(searching = false, searched = q, error = "Search failed: ${it.message}") }
                         } },
                         onRefresh = { refreshConnections() }, onOpenUrl = ::open,
-                        onAllowNotifications = { if (Build.VERSION.SDK_INT >= 33) notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS) },
+                        onAllowNotifications = { if (com.past9.phoneaos.system.Background.canAskNotifications(this@MainActivity)) notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS) else com.past9.phoneaos.system.Background.openNotificationSettings(this@MainActivity) },
                     ))
                 }
                 composable("settings") {
@@ -674,7 +674,7 @@ class MainActivity : ComponentActivity() {
         val st = g.settings.state.value
         OnboardingScreen(onboardingActions(g).copy(
             subSetup = { kind, back, next -> SubSetupFlow(g, kind, onBack = back, onDone = next, onUseKey = back) },
-            requestNotifications = { if (Build.VERSION.SDK_INT >= 33) notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS) },
+            requestNotifications = { if (com.past9.phoneaos.system.Background.canAskNotifications(this@MainActivity)) notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS) },
             finish = { g.settings.setOnboarded(true) },
         ), initialAccent = st.accent, initialMascot = st.mascot, initialUser = st.userName, initialAgent = if (st.agentName == "Your agent") "" else st.agentName)
     }
@@ -738,7 +738,7 @@ class MainActivity : ComponentActivity() {
         return err?.also { g.settings.setComposioKey(null) }
     }
 
-    private fun notificationsAllowed() = Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    private fun notificationsAllowed() = androidx.core.app.NotificationManagerCompat.from(this).areNotificationsEnabled()
 
     /** Copy a picked photo into app storage, scaled to at most 1568px (what vision models use) as JPEG. */
     private suspend fun importImage(uri: Uri): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {

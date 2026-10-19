@@ -15,6 +15,7 @@ enum class SubKind(val label: String, val plan: String, val line: String) {
     CLAUDE("Claude", "Pro or Max", "Claude Code runs inside the app on your Claude plan."),
     CODEX("ChatGPT", "Plus or Pro", "OpenAI's Codex runs inside the app on your ChatGPT plan."),
     OPENCODE("OpenCode", "Zen or Go", "Paste your OpenCode key and your agent runs on your OpenCode plan."),
+    ANTIGRAVITY("Antigravity", "Free or Google AI", "Antigravity CLI runs inside the app on your Google account."),
 }
 
 enum class Provider(val label: String, val defaultModel: String, val helperModel: String, val baseUrl: String, val keyHint: String) {

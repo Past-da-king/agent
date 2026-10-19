@@ -60,6 +60,11 @@ object Background {
     fun requestBatteryExemption(context: Context) = start(context, Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}")))
         || openAppDetails(context)
 
+    /** Only an app that targets 33+ may ask for POST_NOTIFICATIONS itself; below that Android prompts on its own and we send people to the settings page. */
+    fun canAskNotifications(context: Context) = Build.VERSION.SDK_INT >= 33 && context.applicationInfo.targetSdkVersion >= 33
+
+    fun openNotificationSettings(context: Context) = start(context, Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
+
     fun openAppDetails(context: Context) = start(context, Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
 
     fun openExactAlarms(context: Context) = Build.VERSION.SDK_INT >= 31 &&

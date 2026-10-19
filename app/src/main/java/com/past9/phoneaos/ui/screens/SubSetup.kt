@@ -86,11 +86,11 @@ fun SubSetupScreen(kind: SubKind, signInHelp: String, info: RuntimeInfo, install
                 needsCode -> AppCard {
                     var code by remember { mutableStateOf("") }
                     Text("ALMOST THERE", style = Eyebrow, color = cs.primary)
-                    Text("Paste the code from Claude", style = MaterialTheme.typography.titleLarge)
+                    Text("Paste the code from ${kind.label}", style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.height(10.dp))
-                    Text("In the browser: tap Authorize. Claude then shows a code. Copy it, come back here, and paste it below.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    Text("In the browser: tap Authorize. ${kind.label} then shows a code. Copy it, come back here, and paste it below.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                     Spacer(Modifier.height(14.dp))
-                    OutlinedTextField(code, { code = it.trim() }, label = { Text("Code from Claude") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
+                    OutlinedTextField(code, { code = it.trim() }, label = { Text("Code from ${kind.label}") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
                     Spacer(Modifier.height(12.dp))
                     Button(onClick = { onCode(code) }, enabled = code.length > 10, modifier = Modifier.fillMaxWidth().height(56.dp), shapes = ButtonDefaults.shapes()) { Text("Finish sign-in") }
                 }
@@ -120,7 +120,7 @@ fun SubSetupScreen(kind: SubKind, signInHelp: String, info: RuntimeInfo, install
                     Text("That didn't work. $signInError", color = cs.onErrorContainer, style = MaterialTheme.typography.bodyMedium)
                 }
             }
-            if (installed && !info.signedIn && !signingIn && !needsCode && !verifying) {
+            if (installed && !info.signedIn && !signingIn && !needsCode && !verifying && kind != SubKind.ANTIGRAVITY) {
                 TextButton(onClick = { showToken = !showToken }) { Text(if (showToken) "Hide" else "Have a token instead?") }
                 AnimatedVisibility(showToken) {
                     var token by remember { mutableStateOf("") }

@@ -37,7 +37,7 @@ fun ReliabilitySheet(onDismiss: () -> Unit) {
 
     val batteryOk = h.batteryUnrestricted && !h.restricted
     val firstFix: (() -> Unit)? = when {
-        !h.notifications -> { { if (Build.VERSION.SDK_INT >= 33) askNotify.launch(Manifest.permission.POST_NOTIFICATIONS) else Background.openAppDetails(context) } }
+        !h.notifications -> { { if (Background.canAskNotifications(context)) askNotify.launch(Manifest.permission.POST_NOTIFICATIONS) else Background.openNotificationSettings(context) } }
         !batteryOk -> { { if (h.restricted) Background.openAppDetails(context) else Background.requestBatteryExemption(context) } }
         !h.exactAlarms -> { { Background.openExactAlarms(context) } }
         else -> null
@@ -50,7 +50,7 @@ fun ReliabilitySheet(onDismiss: () -> Unit) {
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(16.dp))
         Row(Icons.Rounded.Notifications, "Notifications", h.notifications, if (h.notifications) "On" else "Off: nothing can reach you") {
-            if (Build.VERSION.SDK_INT >= 33) askNotify.launch(Manifest.permission.POST_NOTIFICATIONS) else Background.openAppDetails(context)
+            if (Background.canAskNotifications(context)) askNotify.launch(Manifest.permission.POST_NOTIFICATIONS) else Background.openNotificationSettings(context)
         }
         Row(Icons.Rounded.BatteryChargingFull, "Battery: unrestricted", batteryOk,
             when { h.restricted -> "Set to Restricted. Tap, then Battery > Unrestricted"; !h.batteryUnrestricted -> "Optimised. Tap and choose Allow"; else -> "On" }) {

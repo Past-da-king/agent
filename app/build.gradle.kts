@@ -14,10 +14,10 @@ android {
 
   defaultConfig {
     applicationId = "com.past9.phoneaos"
-    minSdk = 29
-    targetSdk = 36
-    versionCode = 88
-    versionName = "0.12.12"
+    minSdk = 28
+    targetSdk = 28
+    versionCode = 89
+    versionName = "0.13.0"
     // Android never lets an installed app rename itself or change the icon Samsung shows on
     // notifications, so a personal build bakes the owner's agent in: -PagentName=Hina -PagentIcon=ic_app_heart_red
     resValue("string", "app_name", (project.findProperty("agentName") as String?) ?: "Agent")
@@ -25,9 +25,8 @@ android {
     // The runtime pack (node, codex, ripgrep) is arm64 only, like every phone we target.
     ndk { abiFilters += listOf("arm64-v8a") }
   }
-  // Native executables must be extracted to nativeLibraryDir to be runnable.
+  // The runtimes (node, Claude Code, Codex, Antigravity) are not in the APK: they download on first use (runtime/RuntimePacks.kt).
   packaging {
-    jniLibs { useLegacyPackaging = true }
     resources { excludes += setOf("META-INF/versions/9/OSGI-INF/MANIFEST.MF", "META-INF/DEPENDENCIES", "META-INF/INDEX.LIST") }
   }
 
@@ -37,6 +36,11 @@ android {
       keyAlias = releaseSigning["keyAlias"]; keyPassword = releaseSigning["keyPassword"]
     }
   }
+  lint {
+    // Sideloaded from GitHub, not Play: targetSdk 28 is deliberate (Termux route for downloaded runtimes).
+    disable += "ExpiredTargetSdkVersion"
+  }
+
   buildTypes {
     release {
       isMinifyEnabled = false

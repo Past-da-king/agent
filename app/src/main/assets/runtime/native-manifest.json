@@ -1,0 +1,34 @@
+{
+  "version": "runtime-v1",
+  "arch": "arm64-v8a",
+  "packs": {
+    "node": {
+      "url": "https://github.com/Past-da-king/agent-runtimes/releases/download/v1/node-v1.zip",
+      "sha256": "7ddf9e0011edbaf694bdfc3693dc3996d90dfd9435b50005f30c9e36667ca7ce",
+      "bytes": 47436634,
+      "unpackedBytes": 152422032,
+      "check": "bin/node"
+    },
+    "claude": {
+      "url": "https://github.com/Past-da-king/agent-runtimes/releases/download/v1/claude-v1.zip",
+      "sha256": "3473fa6e36ee8e695670d23a3de8f9ae442e2a6fd4f37b59b7f75c9a266eb374",
+      "bytes": 108622739,
+      "unpackedBytes": 244594496,
+      "check": "bin/claude"
+    },
+    "codex": {
+      "url": "https://github.com/Past-da-king/agent-runtimes/releases/download/v1/codex-v1.zip",
+      "sha256": "f235a292b42c1c932c817d7c23b71fedd56f2602ea0466d0e02974275eee3e4e",
+      "bytes": 127259792,
+      "unpackedBytes": 315888120,
+      "check": "bin/codex"
+    },
+    "antigravity": {
+      "url": "https://github.com/Past-da-king/agent-runtimes/releases/download/v1/antigravity-v1.zip",
+      "sha256": "d35f1eb173c961622b361fad14d0d2a01a3f5ec5f9f6e5431fcd6a1999163fe5",
+      "bytes": 57987517,
+      "unpackedBytes": 190112680,
+      "check": "bin/antigravity"
+    }
+  }
+}

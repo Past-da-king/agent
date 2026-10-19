@@ -338,6 +338,7 @@ private fun subMark(k: SubKind): Pair<Color, RoundedPolygon> = when (k) {
     SubKind.CLAUDE -> Color(0xFFD97757) to MaterialShapes.Burst
     SubKind.CODEX -> Color(0xFF10A37F) to MaterialShapes.Cookie6Sided
     SubKind.OPENCODE -> Color(0xFF8E8C99) to MaterialShapes.Square
+    SubKind.ANTIGRAVITY -> Color(0xFF4285F4) to MaterialShapes.Circle
 }
 
 @Composable

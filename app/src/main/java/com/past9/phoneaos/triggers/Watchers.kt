@@ -36,7 +36,10 @@ object Watchers {
 
     suspend fun execute(context: Context, script: String, state: String, extraEnv: Map<String, String> = emptyMap()): Outcome = withContext(Dispatchers.IO) {
         val rt = SubscriptionRuntime(context, SubKind.CLAUDE)
-        if (!rt.nodeAvailable) return@withContext Outcome(false, false, "", state, "Node isn't available in this build.")
+        if (!rt.nodeAvailable) {
+            runCatching { rt.ensureNode() }
+            if (!rt.nodeAvailable) return@withContext Outcome(false, false, "", state, "The code runtime isn't downloaded yet (needs a connection).")
+        }
         val work = File(context.filesDir, "workspace").apply { mkdirs() }
         val f = File(work, ".watch-${System.nanoTime()}.mjs").apply { writeText(script) }
         rt.linkBins()
