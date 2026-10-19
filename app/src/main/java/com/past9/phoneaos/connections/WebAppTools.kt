@@ -33,10 +33,10 @@ class EnginePageRunner(private val context: Context) : PageRunner {
         val e = engine(app, ctx)
         val now = runCatching { java.net.URI(e.page.value.url).host.orEmpty().lowercase().removePrefix("www.") }.getOrDefault("")
         val onSite = app.host.isNotBlank() && (now == app.host.lowercase() || now.endsWith("." + app.host.lowercase()))
-        if (e.desktop != app.desktop || !onSite) {
-            if (e.desktop != app.desktop) e.setDesktop(app.desktop)
-            e.goto(app.startUrl)
-        }
+        // How to present is learned per site (the catalog), unless the app was saved with desktop on. A refusal is retried the other way by itself.
+        val catalog = com.past9.phoneaos.browser.SiteCatalog(com.past9.phoneaos.App.graph(context).settings)
+        val want = app.desktop || catalog.get(app.startUrl)?.takeIf { it.outcome == "works" }?.desktop == true
+        if (e.desktop != want || !onSite) com.past9.phoneaos.browser.SiteAdapt.open(e.port, catalog, app.startUrl, if (app.desktop) true else null)
     }
 
     override suspend fun run(body: String, args: JSONObject, ctx: ToolContext): String = engine(null, ctx).runAsync(body, args)
@@ -49,7 +49,7 @@ object WebApps {
 
 The idea: map the app once, then write tools so next time you call a tool instead of clicking. Tools run as JavaScript inside the page of the signed-in browser, so the user's login is used and no password is stored.
 
-1. OPEN IT. browser_open the site. For apps that refuse a phone (WhatsApp Web, most desktop-first apps) pass desktop=true. If it needs a sign-in, QR code or code, use browser_handoff and let the user do it; the session stays signed in for next time. The user is on the SAME phone as the browser, so they cannot scan a QR code with it: choose the code or phone-number sign-in when the site offers one (WhatsApp Web: "Log in with phone number", then they type the code it shows into the WhatsApp app under Linked devices).
+1. OPEN IT. browser_open the site. browser_open works out by itself whether the site wants a phone or a desktop browser (it retries the other way when refused, and remembers); site_probe checks a new site first and site_catalog shows what is known. Only pass desktop=true or false to force it. If it needs a sign-in, QR code or code, use browser_handoff and let the user do it; the session stays signed in for next time. The user is on the SAME phone as the browser, so they cannot scan a QR code with it: choose the code or phone-number sign-in when the site offers one (WhatsApp Web: "Log in with phone number", then they type the code it shows into the WhatsApp app under Linked devices).
 2. WATCH WHAT IT SENDS. browser_network start, then do the real action in the UI (open a chat, search, post, load the next page), then browser_network log (filter by a word in the URL). You see each call's method, URL, status, a slice of the request and the reply, plus the browser's own requests with header names. Look for JSON endpoints: those are the best thing to build on. browser_console shows the page's own errors.
 3. LOOK INSIDE. browser_eval runs JavaScript in the page and returns what you return: read the DOM (document.querySelector...), find stable selectors and aria-labels, list localStorage / sessionStorage keys (never print tokens back to the user), read cookie names, call the site's own endpoints with fetch(url, {credentials:'include'}). Prefer in this order: (a) the site's internal JSON endpoints with fetch, (b) data the page already holds, (c) reading and driving the DOM (find the element, dispatch real events: for typing use the native setter then an 'input' event; for clicks element.click()). Avoid coordinates and visible-text guesses that break when the page changes.
 4. WRITE SMALL TOOLS. One tool per thing: list_chats, read_chat, send_message, search_posts, get_post... Each tool is the BODY of an async function that sees `args` and returns something JSON-able (keep it short: trim lists to what matters, at most a few hundred lines). Throw an Error with a plain message when it can't work (not signed in, element missing) so you can tell the user what to do. Mark read_only=true only if it changes nothing; sending, posting, deleting, buying are read_only=false and the user is asked before they run (unless the user trusts the app).
@@ -160,7 +160,7 @@ class WebAppSaveTool(private val store: LearnedStore, private val runner: PageRu
         .put("read_only", JSONObject().put("type", "boolean").put("description", "true only if it changes nothing. Sending, posting, deleting, buying: false."))).put("required", JSONArray(listOf("name", "description", "js", "read_only")))
     override val spec = ToolSpec("webapp_save", "Save the tools you wrote for a web app, so next time you call them instead of clicking through the app. Read webapp_guide first, and test each body with browser_eval. The user is shown the tool list and approves it. Saving an app that exists replaces its tools.",
         schema(listOf("name", "start_url", "tools"), "name" to str("The app's name, e.g. WhatsApp Web"), "start_url" to str("Where it lives: https://web.whatsapp.com"),
-            "about" to str("One or two lines: what it is and anything to know (sign-in, quirks)"), "desktop" to JSONObject().put("type", "boolean").put("description", "Load it as a desktop browser (WhatsApp Web needs this)"),
+            "about" to str("One or two lines: what it is and anything to know (how sign-in works, quirks). Never write a password, key or cookie here or in a tool: say that the user signs in, not with what"), "desktop" to JSONObject().put("type", "boolean").put("description", "Load it as a desktop browser (WhatsApp Web needs this)"),
             "profile" to str("Browser profile that is signed in to it; default is the one you used"),
             "logo" to str("Optional https URL of the app's icon, shown in the app's list; default is the site's favicon"), "tools" to JSONObject().put("type", "array").put("items", toolSchema)))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {

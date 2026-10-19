@@ -11,6 +11,10 @@ import com.past9.phoneaos.agent.schema
 import com.past9.phoneaos.agent.str
 import com.past9.phoneaos.browser.BrowserEngine
 import com.past9.phoneaos.browser.BrowserService
+import com.past9.phoneaos.browser.SiteAdapt
+import com.past9.phoneaos.browser.SiteCatalog
+import com.past9.phoneaos.browser.SiteHealth
+import com.past9.phoneaos.App
 import org.json.JSONObject
 
 /** The browser tools share one engine; they start the background service on first use. */
@@ -27,18 +31,56 @@ abstract class BrowserTool(protected val context: Context) : Tool {
 }
 
 class BrowserOpenTool(c: Context) : BrowserTool(c) {
-    override val spec = ToolSpec("browser_open", "Open a URL in your own background browser (a real phone browser that keeps working while the user is in other apps). Returns the page outline with numbered elements. Pick a profile (the user's browser accounts, e.g. Personal or Work) when it matters which account is signed in.",
+    override val spec = ToolSpec("browser_open", "Open a URL in your own background browser (a real phone browser that keeps working while the user is in other apps). Returns the page outline with numbered elements. It works out by itself how the site wants to be opened: if the site turns the browser away it retries as the other kind of browser (phone or desktop), remembers what worked for that site, and tells you what it saw. If it still can't get in, you get a diagnosis with the next steps. Pick a profile (the user's browser accounts, e.g. Personal or Work) when it matters which account is signed in.",
         schema(listOf("url"), "url" to str("URL or domain"), "profile" to str("Browser profile name; default is the first one"),
-            "desktop" to bool("Load the site as a desktop browser (WhatsApp Web and other desktop-first apps refuse a phone). Stays on for later pages until you pass false.")))
+            "desktop" to bool("Force a desktop (true) or phone (false) browser for this site. Leave it out and the app decides from what it has learned about the site; it stays on for later pages until you pass false.")))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val url = input.optString("url")
         input.optString("profile").takeIf { it.isNotBlank() }?.let { want -> profiles().firstOrNull { it.equals(want, true) }?.let { lastProfile[ctx.agentLabel] = it } }
         val id = ctx.activity("Browsing $url", JSONObject().put("tool", "browser"))
         val e = engine(ctx)
-        if (input.has("desktop")) e.setDesktop(input.optBoolean("desktop"))
-        val p = e.goto(url)
-        ctx.updateActivity(id, "Opened ${p.title.ifBlank { p.url }}", JSONObject().put("tool", "browser").put("url", p.url))
-        return e.snapshot()
+        val opened = SiteAdapt.open(e.port, SiteCatalog(App.graph(context).settings), url, if (input.has("desktop")) input.optBoolean("desktop") else null)
+        val p = e.page.value
+        ctx.updateActivity(id, (if (opened.verdict.ok) "Opened " else "Refused: ") + p.title.ifBlank { p.url }, JSONObject().put("tool", "browser").put("url", p.url))
+        return opened.notes + e.snapshot()
+    }
+}
+
+/** Find out how a site behaves in this browser before anyone builds on it, and remember it. */
+class SiteProbeTool(c: Context) : BrowserTool(c) {
+    override val spec = ToolSpec("site_probe", "Find out how a site behaves in this browser before you build anything on it, or when it misbehaves. Loads it as a phone browser and as a desktop browser, reads each result for signs of a refusal (HTTP block, 'unsupported browser', captcha wall, empty page, refused sign-in), remembers which way works, and reports both. The result is kept in the site catalog, so browser_open starts the right way from then on. Does not sign in or change anything on the site.",
+        schema(listOf("url"), "url" to str("URL or domain")))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String {
+        val url = input.optString("url").trim().ifEmpty { return "No URL." }
+        val id = ctx.activity("Checking how $url behaves", JSONObject().put("tool", "browser"))
+        val e = engine(ctx); val catalog = SiteCatalog(App.graph(context).settings)
+        val before = e.desktop
+        val results = listOf(false, true).map { desktop ->
+            e.setDesktop(desktop)
+            val l = e.port.load(url); desktop to SiteHealth.assess(l.status, l.error, l.title, l.text)
+        }
+        val best = results.firstOrNull { it.second.ok }
+        e.setDesktop(best?.first ?: before)
+        if (best != null) catalog.record(url, best.first, "works", results.firstOrNull { !it.second.ok }?.let { "as a ${if (it.first) "desktop" else "phone"} browser: ${it.second.refusal.label}" }.orEmpty())
+        else catalog.record(url, before, "refused", results.first().second.refusal.label)
+        ctx.updateActivity(id, if (best != null) "$url works as a ${if (best.first) "desktop" else "phone"} browser" else "$url refuses this browser", JSONObject().put("tool", "browser"))
+        return buildString {
+            results.forEach { (d, v) -> appendLine("As a ${if (d) "desktop" else "phone"} browser: ${v.refusal.label}${if (v.evidence.isNotBlank()) " (\"${v.evidence}\")" else ""}") }
+            if (best != null) append("Result: use a ${if (best.first) "desktop" else "phone"} browser for this site. Remembered; browser_open will do it by itself. The browser is on the page now.")
+            else append(SiteAdapt.diagnosis(results.first().second, listOf("phone", "desktop"), url))
+        }
+    }
+}
+
+/** What the app has learned about how sites behave in its browser, so an agent is told instead of finding out the hard way. */
+class SiteCatalogTool(c: Context) : BrowserTool(c) {
+    override val spec = ToolSpec("site_catalog", "What the app has already learned about how sites behave in its browser (which sites need a desktop browser, which refused it and why). Give a url for one site, or nothing for everything known. It fills in by itself as the browser opens sites.",
+        schema(emptyList(), "url" to str("Optional: one site")))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String {
+        val catalog = SiteCatalog(App.graph(context).settings)
+        val url = input.optString("url").trim()
+        if (url.isNotEmpty()) return catalog.get(url)?.line() ?: "Nothing learned about ${SiteCatalog.siteOf(url) ?: url} yet. site_probe it, or just browser_open it and it will be learned."
+        return catalog.list().joinToString("\n") { it.line() }.ifBlank { "Nothing learned yet. It fills in as sites are opened." }
     }
 }
 
@@ -142,7 +184,7 @@ class BrowserUploadTool(c: Context) : BrowserTool(c) {
     }
 }
 
-fun browserTools(c: Context): List<Tool> = listOf(BrowserUploadTool(c), BrowserOpenTool(c), BrowserReadTool(c), BrowserClickTool(c), BrowserTypeTool(c), BrowserKeyTool(c), BrowserWaitTool(c), BrowserScrollTool(c), BrowserBackTool(c), BrowserScreenshotTool(c), BrowserLookTool(c), BrowserHandoffTool(c), BrowserEvalTool(c), BrowserNetworkTool(c), BrowserConsoleTool(c))
+fun browserTools(c: Context): List<Tool> = listOf(BrowserUploadTool(c), BrowserOpenTool(c), SiteProbeTool(c), SiteCatalogTool(c), BrowserReadTool(c), BrowserClickTool(c), BrowserTypeTool(c), BrowserKeyTool(c), BrowserWaitTool(c), BrowserScrollTool(c), BrowserBackTool(c), BrowserScreenshotTool(c), BrowserLookTool(c), BrowserHandoffTool(c), BrowserEvalTool(c), BrowserNetworkTool(c), BrowserConsoleTool(c))
 
 
 /** Run JavaScript in the page the agent is looking at: read its structure and storage, call the site's own endpoints, test a tool body. */

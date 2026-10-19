@@ -29,7 +29,7 @@ MarkDownRenderer(textMarkdown: string, variant?: "clear" | "card" | "sunk"): Ren
 Callout(variant: "info" | "warning" | "error" | "success" | "neutral", title: string, description: string, visible?: $binding<boolean>): Callout banner. Optional visible is a reactive $boolean: auto-dismisses after 3s by setting $visible to false.
 TextCallout(variant?: "neutral" | "info" | "warning" | "success" | "danger", title?: string, description?: string): Text callout with variant, title, and description
 Image(alt: string, src?: string): Image with alt text and optional URL
-ImageBlock(src: string, alt?: string): Image block with loading state
+ImageBlock(src: string, alt?: string): Image block with loading state. src is an https URL or a file path on the phone (starting with /). For a picture you saved or generated on the phone, pass the saved file path: signed web links often cannot be opened here and would show an empty grey block.
 Separator(orientation?: "horizontal" | "vertical", decorative?: boolean): Visual divider between content sections
 InlineHeader(heading: string, description?: string): Compact section heading with an optional one-line description, for use inside cards.
 - InlineHeader is a compact heading + description pair for labelling a block inside the response (lighter than CardHeader).

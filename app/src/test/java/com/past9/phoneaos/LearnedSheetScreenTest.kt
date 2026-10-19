@@ -40,7 +40,7 @@ class LearnedSheetScreenTest {
 
     private fun app(i: Int, name: String, host: String, writes: Boolean = false) = LearnedApp("app$i", name, "https://$host", "About $name: reads what the page shows, no sign-in needed.",
         tools = listOf(LearnedTool("get_price", "Price", js = "return 1")) + if (writes) listOf(LearnedTool("send_message", "Send", js = "return 1", readOnly = false)) else emptyList())
-    private val names = listOf("Amazon.co.za" to "amazon.co.za", "WhatsApp Web" to "web.whatsapp.com", "Reddit" to "reddit.com", "Takealot" to "takealot.com", "Checkers" to "checkers.co.za", "Uber Eats" to "ubereats.com",
+    private val names = listOf("Amazon.co.za" to "amazon.co.za", "WhatsApp Web" to "web.whatsapp.com", "City Library" to "library.example.org", "Takealot" to "takealot.com", "Checkers" to "checkers.co.za", "Meal Planner" to "mealplanner.example.org",
         "Discovery Bank" to "discovery.co.za", "Gumtree" to "gumtree.co.za", "Booking.com" to "booking.com", "FNB Online" to "fnb.co.za", "Fathom" to "fathom.video", "ClickUp" to "clickup.com")
     private val twelve = names.mapIndexed { i, (n, h) -> app(i, n, h, writes = i % 2 == 1) }
 
@@ -65,7 +65,7 @@ class LearnedSheetScreenTest {
     @Test fun theLineOpensTheSheetWithEveryAppAndTheTeachBox() {
         show(true) { ConnectionsScreen(ConnectionsState(learned = twelve), ConnectionsActions(), initialSheet = "learned") }
         rule.onNodeWithText("Sites your agent knows").assertExists()
-        for (n in listOf("Amazon.co.za", "WhatsApp Web", "Reddit")) rule.onAllNodesWithText(n)[0].assertExists()
+        for (n in listOf("Amazon.co.za", "WhatsApp Web", "City Library")) rule.onAllNodesWithText(n)[0].assertExists()
         rule.onNodeWithText("Teach your agent this app").assertExists()
         shot("sheet-twelve-dark")
     }

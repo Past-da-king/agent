@@ -20,7 +20,10 @@ writeFileSync(`${home}/.codex/config.toml`, "");
 
 try {
   const codex = new Codex({ codexPathOverride: process.env.CODEX_BIN,
-    config: { mcp_servers: { phone: { url: process.env.PHONE_MCP_URL, bearer_token_env_var: "PHONE_MCP_TOKEN" } } } });
+    // approvalPolicy is "never" (nobody can answer a Codex prompt on a phone), and under "never" Codex REJECTS any MCP tool
+    // that is not marked read-only ("requires approval, but approval policy is never"). The app's own AppGuard and the
+    // per-account rules already ask the user, so Codex's second gate is set to approve for the phone's tools.
+    config: { mcp_servers: { phone: { url: process.env.PHONE_MCP_URL, bearer_token_env_var: "PHONE_MCP_TOKEN", default_tools_approval_mode: "approve" } } } });
   // Android's app sandbox is the boundary here; Codex's own Linux sandbox (landlock/seccomp) isn't available.
   // The main agent only orchestrates through the phone's tools: no shell writes, no network, no web search.
   const opts = isMain

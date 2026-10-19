@@ -51,6 +51,8 @@ object HeuristicPolicy : BranchPolicy {
 /** One line of work in the chat: the main agent, or a branch forked from it. */
 class Line(val id: String, val seq: Long) {
     val budget = AgentRuntime.StepBudget()
+    /** Every tool call in a turn on this line counts here: the main agent's hard ceiling, including memory and task calls. */
+    val calls = AgentRuntime.StepBudget(max = 10)
     /** API mode: the line's transcript so far, replaced after every step so a fork can read it without racing the loop. */
     @Volatile var snapshot: List<Msg> = emptyList()
     /** Subscription mode: the harness session this line is running in. */

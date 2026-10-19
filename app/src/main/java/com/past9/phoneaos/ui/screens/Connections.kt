@@ -362,7 +362,7 @@ internal fun LearnedSheet(apps: List<com.past9.phoneaos.connections.LearnedApp>,
             apps.forEach { a -> LearnedTile(a, open == a.id, { open = if (open == a.id) null else a.id }, actions) }
         }
         Spacer(Modifier.height(24.dp))
-        com.past9.phoneaos.ui.SheetField(teach, { teach = it }, "Teach a new one", "WhatsApp Web, reddit.com, my bank's portal", singleLine = true,
+        com.past9.phoneaos.ui.SheetField(teach, { teach = it }, "Teach a new one", "WhatsApp Web, your school portal, your bank", singleLine = true,
             keyboard = androidx.compose.foundation.text.KeyboardOptions(capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.None, keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri))
     }
 }
