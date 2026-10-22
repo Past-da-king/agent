@@ -47,7 +47,45 @@ object RemoteRows {
         val id = ids.local(o.getString("id"), created)
         val meta = o.optString("meta").ifBlank { "{}" }
         if (o.optString("kind") == "voice_note") return ChatItem(id, "voice", o.optString("text"), voiceMeta(meta, notes).toString(), created)
+        if (o.optString("kind") == "question" || o.optString("kind") == "approval") return card(o, id, meta, created)
         return ChatItem(id, o.optString("kind", "notice"), o.optString("text"), meta, created)
+    }
+
+    /**
+     * A question or approval on the computer that nobody has answered (desktop runtime/runner.ts isOpenCardRow), from
+     * any of its chats: the computer counts it as waiting for you, so the phone shows it too.
+     */
+    fun isOpenCard(o: JSONObject): Boolean {
+        val kind = o.optString("kind")
+        if (kind != "question" && kind != "approval") return false
+        val m = runCatching { JSONObject(o.optString("meta").ifBlank { "{}" }) }.getOrDefault(JSONObject())
+        return if (kind == "question") m.optString("answer").isEmpty() else m.optString("decision").let { it != "approve" && it != "decline" }
+    }
+
+    /**
+     * The computer's card in the phone's own shape, so Home's Needs you, the chat and calls all see it: the phone's
+     * rule is "no answer key = still waiting" (the computer writes answer "" instead), and an approval is a question
+     * whose text is "APPROVAL|<what>|<details>" with Approve and Decline. remoteKind keeps what the computer calls it,
+     * so the answer goes back as chat.decide or chat.answer. A helper's card says which helper asks (22 Oct 2026).
+     */
+    private fun card(o: JSONObject, id: Long, rawMeta: String, created: Long): ChatItem {
+        val m = runCatching { JSONObject(rawMeta) }.getOrDefault(JSONObject())
+        val kind = o.optString("kind")
+        m.put("remoteKind", kind)
+        val by = m.optString("by")
+        if (by.isNotBlank() && m.optString("why").isBlank()) m.put("whyBy", by).put("why", "a helper is waiting on this")
+        if (kind == "question") {
+            if (m.optString("answer").isEmpty()) m.remove("answer")
+            return ChatItem(id, "question", o.optString("text"), m.toString(), created)
+        }
+        val summary = m.optString("summary").ifBlank { o.optString("text") }.replace('|', '/')
+        when (m.optString("decision")) {
+            "approve" -> m.put("answer", "Approve")
+            "decline" -> m.put("answer", "Decline")
+            else -> m.remove("answer")
+        }
+        m.put("options", org.json.JSONArray(listOf("Approve", "Decline")))
+        return ChatItem(id, "question", "APPROVAL|$summary|${m.optString("details")}", m.toString(), created)
     }
 
     /** Where the phone keeps the computer's voice notes, and how fetching each one went. */
