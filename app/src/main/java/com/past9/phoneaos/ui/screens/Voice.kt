@@ -145,7 +145,7 @@ fun CallScreen(name: String, st: CallState, onMute: () -> Unit, onEnd: () -> Uni
             if (question != null) {
                 Spacer(Modifier.height(12.dp))
                 when {
-                    question.text.startsWith("APPROVAL|") -> ApprovalCard(question, onAnswer)
+                    question.text.startsWith("APPROVAL|") -> CallApprovalCard(question, onAnswer)
                     question.text.startsWith(com.past9.phoneaos.tools.ConnectRequest.PREFIX) -> ConnectCard(question, onAnswer)
                     else -> QuestionCard(question, onAnswer, onBrowser)
                 }
@@ -183,6 +183,37 @@ fun CallScreen(name: String, st: CallState, onMute: () -> Unit, onEnd: () -> Uni
                 } else FilledIconButton(onClick = onStart, modifier = Modifier.size(80.dp)) { Icon(Icons.Rounded.Call, "Call again", Modifier.size(34.dp)) }
             }
             Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+/**
+ * An approval on the call screen: what it wants to do, the start of the details, and Decline beside Hold to approve,
+ * so both answers fit on screen with the call's own buttons (the chat's card, with its full details, is taller).
+ */
+@Composable
+private fun CallApprovalCard(item: com.past9.phoneaos.data.ChatItem, onAnswer: (Long, String) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val parts = item.text.split("|", limit = 3)
+    val action = parts.getOrElse(1) { "" }.trim().replaceFirstChar { it.uppercase() }
+    val details = parts.getOrElse(2) { "" }.trim()
+    val by = runCatching { org.json.JSONObject(item.meta).optString("whyBy") }.getOrDefault("")
+    com.past9.phoneaos.ui.AppCard(container = cs.tertiaryContainer) {
+        Text(if (by.isNotBlank()) "$by NEEDS YOUR OK".uppercase() else "NEEDS YOUR OK", style = Eyebrow, color = cs.onTertiaryContainer)
+        Spacer(Modifier.height(6.dp))
+        Text(action, style = MaterialTheme.typography.titleMedium, color = cs.onTertiaryContainer)
+        if (details.isNotBlank()) {
+            Spacer(Modifier.height(8.dp))
+            Surface(shape = MaterialTheme.shapes.medium, color = cs.surface.copy(alpha = 0.9f), modifier = Modifier.fillMaxWidth()) {
+                Text(details, style = MaterialTheme.typography.bodySmall, color = cs.onSurface, maxLines = 4, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = { onAnswer(item.id, "Decline") }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Decline", color = cs.onTertiaryContainer) }
+            Spacer(Modifier.width(8.dp))
+            Box(Modifier.weight(1f)) { HoldToApprove { onAnswer(item.id, "Approve") } }
         }
     }
 }
