@@ -617,7 +617,8 @@ class MainActivity : ComponentActivity() {
                     val cst by g.call.state.collectAsStateWithLifecycle()
                     CallScreen(settings.agentName, cst, onMute = { g.call.toggleMute() }, onEnd = { g.call.end(); nav.popBackStack() }, onStart = { g.call.start() },
                         actions = items.filter { it.kind == "activity" && it.createdAt >= g.call.callStart && g.call.callStart > 0 }.map { it.text },
-                        question = items.lastOrNull { it.kind == "question" && !org.json.JSONObject(it.meta).has("answer") },
+                        // Any card waiting on him (a question or an approval, from the agent or a helper), linked or not.
+                        question = com.past9.phoneaos.voice.CallController.openQuestion(items),
                         onAnswer = { id, o -> g.runtime.answer(id, o) }, onBrowser = { nav.navigate("browser") { launchSingleTop = true } })
                 }
                 composable("style") {

@@ -22,6 +22,8 @@ data class CallState(
     val theirs: Float = 0f,
     val lines: List<Pair<String, String>> = emptyList(),
     val delegated: String = "",
+    /** The agent's latest reply since the call started, shown under "Working on". */
+    val reply: String = "",
     val muted: Boolean = false,
     val error: String = "",
 )
@@ -69,7 +71,91 @@ class CallController(
         fun openQuestion(items: List<com.past9.phoneaos.data.ChatItem>): com.past9.phoneaos.data.ChatItem? =
             items.lastOrNull { (it.kind == "question" || it.kind == "approval") && !JSONObject(it.meta).has("answer") }
 
-        fun isApproval(i: com.past9.phoneaos.data.ChatItem) = i.kind == "approval" || i.text.startsWith("APPROVAL|")
+        fun isApproval(i: com.past9.phoneaos.data.ChatItem) = i.kind == "approval" || i.text.startsWith("APPROVAL|") ||
+            runCatching { JSONObject(i.meta).optString("remoteKind") }.getOrNull() == "approval"
+
+        /** What an approval card asks, in a few words ("send the invoice to Shey"). */
+        fun approvalWhat(i: com.past9.phoneaos.data.ChatItem): String =
+            if (i.text.startsWith("APPROVAL|")) i.text.split("|").getOrElse(1) { "" }.trim() else i.text.trim()
+
+        /** The user really said yes to it, in their own words on the call: the only way an approval goes through by voice. */
+        fun saidYes(words: String): Boolean {
+            val w = words.trim().lowercase()
+            if (w.isEmpty() || Regex("\\b(no|nope|don't|do not|not|cancel|stop|decline|wait|hold on)\\b").containsMatchIn(w)) return false
+            return Regex("\\b(yes|yeah|yep|yup|sure|ok|okay|approve|approved|go ahead|do it|send it|go for it|confirm|please do|correct|fine)\\b").containsMatchIn(w)
+        }
+
+        fun isNo(answer: String) = Regex("^(no|nope|decline|don't|do not|cancel|stop)", RegexOption.IGNORE_CASE).containsMatchIn(answer.trim())
+
+        /**
+         * The voice's instructions. The voice talks; the agent does. Linked, the agent is the computer's full agent (the
+         * same one he types to), so the voice must never say it can't: on 22 Oct 2026 it refused "delegate, talk to
+         * someone, send it over" because it believed it had no way to act.
+         */
+        fun systemPrompt(name: String, userName: String, linked: Boolean): String {
+            val agent = if (linked) "your agent on their computer (the same agent they type to, with everything it has)" else "the main agent on this phone"
+            return """
+                You are $name, ${userName.ifBlank { "the user" }}'s personal agent, talking on a voice call. Be warm, quick and natural; short sentences; this is speech.
+                You are the voice of $agent. That agent can do ANYTHING the user asks: send emails and messages, reply to people, talk to or message someone for them, hand work to its helpers and other agents, use their connected apps (mail, calendar, Slack, WhatsApp and the rest), browse the web, run things on the computer, read and write files, remember things, manage tasks, routines and reminders, and look anything up.
+                So NEVER say you can't do something, that you have no access, or that the user should do it themselves. For anything that needs doing, finding, checking, sending or remembering, call delegate_to_agent with the full request and every detail the user gave (names, who to, what to say), say a quick 'on it' or 'I've handed that to your agent', and keep talking. If it's unclear, ask one short question first, then hand it over.
+                When an update from the agent arrives, tell the user the part that matters in a sentence or two. Never invent results; if you don't know yet, say it's still working (agent_status tells you).
+                When the agent asks the user something, it waits for the answer while the call carries on. Put it to the user out loud at a good moment. For a question or a choice, take their answer (or decide if they tell you to) and call answer_agent_question with it plus anything from the call that matters.
+                When the agent needs the user's OK, say plainly what it wants to do and ask, for example 'It needs your OK to send the invoice to Shey. Approve?'. If they clearly say yes, call answer_agent_question with answer 'Approve' and their exact words in user_said. If they say no, answer 'Decline'. Never approve on your own. They can also tap the card on the call screen. If it needs them to DO something (sign in, type a code), tell them exactly what to tap.
+            """.trimIndent() + if (!linked) "" else "\n" + """
+                Choosing who gets it (delegate_to_agent target): when the user names a project ("tell the Agent Desktop App project to..."), a chat in one, or a helper ("ask the dictation helper..."), put that name in target as they said it; "start something new in project X" also sets new_chat. Anything not aimed at anyone in particular goes to target "main": the main agent routes it itself. But when they DO name someone and the name fits more than one in the list below (say "Strat Edge" while there are Strat Edge Website and Strat Edge Solutions), don't guess and don't send it to main: ask out loud which one ("The Website or Solutions?"), then send it with that exact name. The same when a result says two names are close. After it is sent, say who it went to in a few words ("Sent to the Strat Edge Website project").
+            """.trimIndent()
+        }
+
+        /** Who is on the computer, for the voice: the main agent, projects with their chats, helpers at work (voice.callTargets). */
+        fun roster(targets: JSONArray?): String {
+            if (targets == null || targets.length() == 0) return ""
+            val lines = (0 until targets.length()).mapNotNull { targets.optJSONObject(it) }.map { t ->
+                val doing = t.optString("doing").let { if (it.isBlank()) "" else ": $it" }
+                val state = if (t.optBoolean("running")) "working$doing" else if (t.optString("kind") == "helper") "finished$doing" else "idle"
+                when (t.optString("kind")) {
+                    "main" -> "- The main agent (${t.optString("name")}), $state"
+                    "project" -> {
+                        val chats = t.optJSONArray("chats")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } }.orEmpty()
+                        val chatText = if (chats.isEmpty()) "no chats yet" else chats.takeLast(4).joinToString("; ") { c -> "\"" + c.optString("title").take(60) + "\"" + if (c.optBoolean("running")) " (working)" else "" }
+                        "- Project ${t.optString("name")}, $state. Chats: $chatText"
+                    }
+                    else -> "- Helper \"${t.optString("name")}\", $state"
+                }
+            }
+            return "Who is on their computer right now (targets for delegate_to_agent):\n" + lines.joinToString("\n")
+        }
+
+        fun callTools(linked: Boolean): JSONArray = JSONArray().put(JSONObject().put("functionDeclarations", JSONArray()
+            .put(JSONObject().put("name", "delegate_to_agent")
+                .put("description", (if (linked) "Hand ANY request to the user's agent on their computer, as a message in its chat. " else "Hand ANY request to the user's main agent. ") +
+                    "It can send emails and messages, contact people, delegate to helpers, use every connected app, browse, run things, read and write files, memory, tasks and routines. Use it for anything that needs doing or looking up; never tell the user you can't. Say a short 'on it' and keep chatting; results come back to you.")
+                .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject()
+                    .put("task", JSONObject().put("type", "STRING").put("description", "The request, clearly, with every detail the user gave (who, what, where, wording)"))
+                    .apply { if (linked) {
+                        put("target", JSONObject().put("type", "STRING").put("description", "Who gets it: \"main\" (the default; the main agent routes it), or a project, a project chat or a helper by the name the user used"))
+                        put("new_chat", JSONObject().put("type", "BOOLEAN").put("description", "For a project: start a new chat there (\"start something new in X\")"))
+                    } })
+                    .put("required", JSONArray().put("task"))))
+            .put(JSONObject().put("name", "answer_agent_question")
+                .put("description", "Answer what the agent is waiting on: a question (the user's answer, or your choice if they told you to decide) or an approval ('Approve' only after the user clearly said yes to it out loud, with their words in user_said; 'Decline' if they said no).")
+                .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject()
+                    .put("answer", JSONObject().put("type", "STRING").put("description", "One of the options if there are options (Approve or Decline for an approval), otherwise the user's words"))
+                    .put("user_said", JSONObject().put("type", "STRING").put("description", "For an approval: the user's own words agreeing, exactly as said"))
+                    .put("context", JSONObject().put("type", "STRING").put("description", "Anything else from the call the agent needs to act on it")))
+                    .put("required", JSONArray().put("answer"))))
+            .put(JSONObject().put("name", "agent_status")
+                .put("description", "What the agent is doing right now, the last thing it said, and anything it is waiting on the user for.")
+                .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject())))))
+
+        /** What the voice is told when the agent needs the user, so it says it out loud. */
+        fun cardPrompt(i: com.past9.phoneaos.data.ChatItem): String {
+            val opts = runCatching { JSONObject(i.meta).optJSONArray("options") }.getOrNull()?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
+            val by = runCatching { JSONObject(i.meta).optString("whyBy") }.getOrDefault("")
+            val who = if (by.isNotBlank()) "$by (one of the agent's helpers)" else "The agent"
+            return if (isApproval(i)) "[$who needs the user's OK to: ${approvalWhat(i).take(400)}. Ask them now, out loud, in one short line, e.g. 'It needs your OK to ${approvalWhat(i).take(80)}. Approve?'. Yes: call answer_agent_question with Approve and their words in user_said. No: Decline. The card is also on the call screen.]"
+            else { val q = com.past9.phoneaos.tools.ConnectRequest.parse(i.text)?.summary ?: i.text
+                "[$who is waiting on the user for this. Ask them, then call answer_agent_question] ${q.take(600)}" + if (opts.isNotEmpty()) " Options: ${opts.joinToString(", ")}." else "" }
+        }
     }
 
     private suspend fun pendingQuestion(): com.past9.phoneaos.data.ChatItem? =
@@ -77,19 +163,7 @@ class CallController(
 
     private fun statusNow() = remote?.status?.value ?: runtime.status.value
 
-    private val tools = JSONArray().put(JSONObject().put("functionDeclarations", JSONArray()
-        .put(JSONObject().put("name", "delegate_to_agent")
-            .put("description", "Hand a task to the user's main agent, which can browse, use their apps, memory, tasks and routines. Use for ANYTHING that needs doing or looking up. Say a short 'on it' and keep chatting; results come back to you.")
-            .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject().put("task", JSONObject().put("type", "STRING").put("description", "The task, clearly, with every detail the user gave"))).put("required", JSONArray().put("task"))))
-        .put(JSONObject().put("name", "answer_agent_question")
-            .put("description", "Answer the question the main agent is waiting on, with what the user said (or decided, if they told you to choose). Not for approvals of payments or sends: those need the user's tap on the screen.")
-            .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject()
-                .put("answer", JSONObject().put("type", "STRING").put("description", "The answer: one of the options if there are options, otherwise the user's words"))
-                .put("context", JSONObject().put("type", "STRING").put("description", "Anything else from the call the main agent needs to act on it")))
-                .put("required", JSONArray().put("answer"))))
-        .put(JSONObject().put("name", "agent_status")
-            .put("description", "What the main agent is doing right now and the last thing it said.")
-            .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject())))))
+    private val tools get() = callTools(remote != null)
 
     fun start() {
         if (_state.value.active) return
@@ -99,12 +173,7 @@ class CallController(
         if (r == null && key == null) { _state.value = CallState(phase = "failed", error = unavailableReason(false).orEmpty()); return }
         val s = settings.state.value
         val name = s.agentName.takeIf { it != "Your agent" } ?: "your agent"
-        val system = """
-            You are $name, ${s.userName.ifBlank { "the user" }}'s personal agent, talking on a voice call. Be warm, quick and natural; short sentences; this is speech.
-            You are the voice. The real work is done by the main agent: for anything that needs doing, finding, checking or remembering, call delegate_to_agent with the full task, say a quick 'on it', and keep the conversation going.
-            When you get an update from the main agent, tell the user the part that matters in a sentence or two. Never invent results.
-            When the main agent asks the user something, it waits until it gets an answer, and your conversation carries on meanwhile. Put the question to the user naturally, at a good moment. If it's a choice or a question, take their answer (or decide yourself if they tell you to) and call answer_agent_question with it plus anything from the call that matters. If it needs them to DO something (hold Approve on a payment or send, sign in, type a code), tell them exactly what to tap: the card is on the call screen.
-        """.trimIndent()
+        val system = systemPrompt(name, s.userName, r != null)
         _state.value = CallState(active = true, phase = "connecting")
         // Pre-flight first (the key, or the computer's one-use token); the call service starts only once the call really
         // can, in begin(). A refusal is a message on the call screen, never a started-then-stopped service (that crashed
@@ -127,8 +196,14 @@ class CallController(
         val recent = db.chat().all().first().filter { it.kind == "user" || it.kind == "agent" }.takeLast(10)
             .joinToString("\n") { (if (it.kind == "user") "User: " else "You: ") + it.text.take(400) }
         val pinned = db.memory().pinned().joinToString("\n") { "- ${it.title}: ${it.body.take(200)}" }
+        // Something already waiting on him when the call starts: the voice brings it up.
+        val waiting = pendingQuestion()
+        // Linked: who is on the computer (main agent, projects and their chats, helpers), so a hand-off goes to the one he names.
+        val who = remote?.let { roster(fetchTargets(it)) }.orEmpty()
         val system = base + (if (pinned.isNotBlank()) "\n\nWhat you know about them:\n$pinned" else "") +
-            (if (recent.isNotBlank()) "\n\nThe chat so far (this call continues it):\n$recent" else "")
+            (if (who.isNotBlank()) "\n\n$who" else "") +
+            (if (recent.isNotBlank()) "\n\nThe chat so far (this call continues it):\n$recent" else "") +
+            (if (waiting != null) "\n\nWaiting on the user right now (bring it up early): ${cardPrompt(waiting)}" else "")
         callStart = System.currentTimeMillis(); callLines.clear(); callTimes.clear()
         // Ended while the token was on its way: nothing to start.
         if (!_state.value.active) { remote = null; return }
@@ -138,24 +213,95 @@ class CallController(
         live = LiveSession(url, model?.ifBlank { null } ?: "gemini-3.1-flash-live-preview", phoneVoice ?: voice?.ifBlank { null } ?: "Kore", system,
             tools = tools, renew = renew) { e -> onEvent(e) }.also { it.start() }
         // Read the main agent's new messages and questions into the call.
+        // By id seen, not "newer than the last id": a linked computer's rows are numbered by ITS clock, and a helper's
+        // card can land with an older number than the newest row.
         watcher = scope.launch {
-            var last = db.chat().all().first().lastOrNull()?.id ?: 0L
+            val seen = HashSet<Long>(); db.chat().all().first().forEach { seen += it.id }
+            val open = HashMap<Long, Boolean>() // card id -> is approval, while it waits
+            waiting?.let { open[it.id] = isApproval(it) }
             db.chat().all().collect { items ->
-                items.filter { it.id > last && !JSONObject(it.meta).optBoolean("call") }.forEach { i ->
+                items.filter { it.id !in seen }.forEach { i ->
+                    seen += i.id
+                    if (JSONObject(i.meta).optBoolean("call")) return@forEach
                     when (i.kind) {
-                        "agent" -> live?.announce("[Update from the main agent, tell the user briefly] ${i.text.take(1200)}")
-                        "question", "approval" -> {
-                            val opts = JSONObject(i.meta).optJSONArray("options")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
-                            val approval = isApproval(i)
-                            val q = com.past9.phoneaos.tools.ConnectRequest.parse(i.text)?.summary ?: if (i.text.startsWith("APPROVAL|")) "Approve: " + i.text.split("|").getOrElse(1) { "" } else if (approval) "Approve: " + i.text else i.text
-                            live?.announce(if (approval) "[The main agent needs the user's approval, which they must give by holding Approve on the card on screen. Tell them briefly what it is] ${q.take(600)}"
-                                else "[The main agent is waiting on the user for this. Ask them, then call answer_agent_question] ${q.take(600)}" + if (opts.isNotEmpty()) " Options: ${opts.joinToString(", ")}." else "")
+                        "agent" -> if (i.text.isNotBlank()) {
+                            _state.value = _state.value.copy(reply = i.text.take(400))
+                            tell("[Update from your agent, tell the user the part that matters, briefly] ${i.text.take(1200)}")
                         }
+                        "question", "approval" -> if (!JSONObject(i.meta).has("answer")) { open[i.id] = isApproval(i); tell(cardPrompt(i)) }
                     }
                 }
-                last = items.lastOrNull()?.id ?: last
+                // A card answered anywhere (a tap here, the chat, the computer): the voice stops asking about it.
+                open.keys.toList().forEach { id ->
+                    val now = items.firstOrNull { it.id == id }
+                    val ans = now?.let { JSONObject(it.meta).optString("answer") }.orEmpty()
+                    if (now == null || ans.isNotEmpty()) {
+                        val approval = open.remove(id) == true
+                        if (ans.isNotEmpty()) tell(if (approval) "[The user ${if (ans == "Approve") "approved" else "declined"} it (${approvalWhat(now!!).take(120)}). It is already answered: acknowledge in a few words, don't ask again and don't call answer_agent_question for it.]"
+                            else "[That question was answered: $ans. Don't ask it again or answer it.]")
+                    }
+                }
             }
         }
+        // A project chat or helper the call handed work to: its outcome comes back from the computer's live cards.
+        remote?.let { r -> cardWatcher = scope.launch {
+            r.cards.collect { list ->
+                list ?: return@collect
+                sentTo.toList().forEach { (key, name) ->
+                    val c = list.firstOrNull { if (key.startsWith("h:")) it.id == key.removePrefix("h:") else it.projectChat == key.removePrefix("p:") } ?: return@forEach
+                    if (c.working) { workingSeen += key; return@forEach }
+                    if (key !in workingSeen && c.endedAt in 1 until (sentAt[key] ?: 0L)) return@forEach
+                    sentTo.remove(key); workingSeen.remove(key)
+                    val what = c.result.ifBlank { c.done }.ifBlank { c.line }
+                    _state.value = _state.value.copy(reply = "$name: ${what.take(360)}")
+                    tell("[$name finished. Tell the user the part that matters, briefly] ${what.take(1200)}")
+                }
+            }
+        } }
+    }
+
+    /** Project chats and helpers the call sent work to ("p:<chat>" or "h:<id>") and their names, until they finish. */
+    private val sentTo = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val sentAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private val workingSeen: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+    private var cardWatcher: Job? = null
+
+    /** voice.callTargets from the computer, or null on one too old to have it. */
+    private suspend fun fetchTargets(r: com.past9.phoneaos.remote.RemoteSession): JSONArray? =
+        runCatching { r.call("voice.callTargets", emptyList(), 15_000) as? JSONArray }.getOrNull()
+
+    /**
+     * Linked: puts the call's request in front of the agent it names (voice.callHandoff on the computer): the main
+     * agent, a project's chat (or a new one), or a helper. Returns the tool result for the voice.
+     */
+    private suspend fun handOff(r: com.past9.phoneaos.remote.RemoteSession, task: String, target: String, newChat: Boolean, message: String): JSONObject {
+        val res = try {
+            r.call("voice.callHandoff", listOf(JSONObject().put("target", target).put("message", message).put("newChat", newChat)), 30_000) as? JSONObject
+        } catch (e: Exception) {
+            // A computer older than voice.callHandoff: the main agent gets it (it can reach projects and helpers itself).
+            if (LiveAuth.isOldComputer(e.message)) {
+                val routed = if (target.isBlank() || target.equals("main", true)) message else "For $target: $message"
+                runtime.send(routed, fromCall = task)
+                _state.value = _state.value.copy(delegated = task)
+                return JSONObject().put("status", "sent").put("sent_to", "the main agent").put("note", "Sent to the main agent, which passes it on" + if (target.isNotBlank() && !target.equals("main", true)) " to $target." else ".")
+            }
+            return JSONObject().put("status", "failed").put("error", "Couldn't reach the computer: ${e.message}. Tell the user and offer to try again.")
+        } ?: return JSONObject().put("status", "failed").put("error", "The computer didn't answer.")
+        if (!res.optBoolean("ok")) {
+            val close = res.optJSONArray("ambiguous")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it)?.optString("name") } }.orEmpty()
+            return if (close.size > 1) JSONObject().put("status", "which_one").put("options", JSONArray(close))
+                .put("note", "Not sent: ask the user out loud which one they mean (${close.joinToString(" or ")}), then call delegate_to_agent again with that exact name as target.")
+            else JSONObject().put("status", "not_sent").put("error", res.optString("error"))
+        }
+        val kind = res.optString("kind"); val name = res.optString("name")
+        val label = when (kind) { "main" -> "Main agent"; "helper" -> "Helper $name"; else -> name }
+        _state.value = _state.value.copy(delegated = if (kind == "main") task else "$label: $task")
+        when (kind) {
+            "helper" -> { sentTo["h:" + res.optString("id")] = label; sentAt["h:" + res.optString("id")] = System.currentTimeMillis() }
+            "project", "chat" -> res.optString("chat").takeIf { it.isNotBlank() }?.let { sentTo["p:$it"] = "The $name project"; sentAt["p:$it"] = System.currentTimeMillis() }
+        }
+        return JSONObject().put("status", "sent").put("sent_to", label).put("said", res.optString("said"))
+            .put("note", "Tell the user in a few words: ${res.optString("said")} Its reply comes to you as an update.")
     }
 
     var callStart = 0L
@@ -195,33 +341,45 @@ class CallController(
                 bufWho = e.who; buf.append(e.text)
                 _state.value = st.copy(lines = (st.lines + (e.who to e.text)).takeLast(6))
             }
-            is LiveSession.Event.ToolCall -> when (e.name) {
+            is LiveSession.Event.ToolCall -> { android.util.Log.i("CallAgent", "tool call ${e.name}: ${e.args.toString().take(400)}"); when (e.name) {
                 "delegate_to_agent" -> {
                     val task = e.args.optString("task")
                     flush()
-                    // The main agent gets the user's own words from the call, not just the voice's summary.
-                    runtime.send("Task from our voice call: $task\n\nWhat was said on the call so far:\n${transcript()}", fromCall = task)
+                    // The agent gets the user's own words from the call, not just the voice's summary.
+                    val message = "Task from our voice call: $task\n\n(Reply in a line or two: it is read out on the call.)\n\nWhat was said on the call so far:\n${transcript()}"
+                    val r = remote
+                    // Linked: a real turn on the computer, in the chat of the agent he named (voice.callHandoff: the main
+                    // chat, a project chat, or a helper), so it is done with everything the computer's agent has; its
+                    // replies, questions and approvals come back here.
+                    if (r != null) {
+                        val target = e.args.optString("target").trim()
+                        scope.launch { toolResult(e.id, e.name, handOff(r, task, target, e.args.optBoolean("new_chat"), message)) }
+                        return
+                    }
+                    runtime.send(message, fromCall = task)
                     _state.value = st.copy(delegated = task)
                     // One thing at a time: if the main agent is blocked on a question, this waits in line behind it, so say so.
                     scope.launch {
                         val waiting = pendingQuestion()
-                        live?.sendToolResult(e.id, e.name, if (waiting == null) JSONObject().put("status", "started").put("note", "The main agent is working on it. You'll get an update.")
-                            else JSONObject().put("status", "queued").put("note", "Queued: the main agent first needs the user's answer to the question it asked. Get that answered (answer_agent_question), then this runs."))
+                        toolResult(e.id, e.name, if (waiting == null) JSONObject().put("status", "started").put("note", (if (remote != null) "Handed to the user's agent on their computer. " else "") + "It is working on it; its reply comes to you as an update. Tell the user it's in hand.")
+                            else JSONObject().put("status", "queued").put("note", "Queued: the agent first needs the user's answer to what it asked (${approvalWhat(waiting).take(120)}). Get that answered (answer_agent_question), then this runs."))
                     }
                 }
                 "answer_agent_question" -> scope.launch {
                     val item = pendingQuestion()
                     val answer = e.args.optString("answer").trim(); val extra = e.args.optString("context").trim()
+                    // What the user actually said lately (the call's own transcript, not the model's say-so).
+                    val heard = (callLines.takeLast(6).filter { it.first == "in" }.takeLast(2).map { it.second } + (if (bufWho == "in") listOf(buf.toString()) else emptyList())).joinToString(" ")
                     val res = when {
-                        item == null -> JSONObject().put("error", "The main agent isn't waiting on anything right now.")
-                        isApproval(item) && !Regex("^(no|decline|don't|do not|cancel|stop)", RegexOption.IGNORE_CASE).containsMatchIn(answer) ->
-                            JSONObject().put("error", "This needs the user to hold Approve on the card on the call screen. Declining by voice is fine.")
+                        item == null -> JSONObject().put("error", "The agent isn't waiting on anything right now.")
+                        isApproval(item) && !isNo(answer) && !saidYes(heard) ->
+                            JSONObject().put("error", "Not approved: the user hasn't clearly said yes to this on the call. Ask them ('${approvalWhat(item).take(80)}. Approve?') and wait for a clear yes, or they can tap Approve on the card.")
                         else -> {
                             val opts = JSONObject(item.meta).optJSONArray("options")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
                             // Match a spoken answer to an option where it clearly is one; otherwise pass the words on.
                             val picked = opts.firstOrNull { it.equals(answer, true) } ?: opts.firstOrNull { answer.contains(it, true) || it.contains(answer, true) }
                             val final = when {
-                                isApproval(item) -> "Decline"
+                                isApproval(item) -> if (isNo(answer)) "Decline" else "Approve"
                                 picked != null && extra.isBlank() -> picked
                                 else -> (picked ?: answer) + if (extra.isNotBlank()) " (from our voice call: $extra)" else ""
                             }
@@ -229,20 +387,42 @@ class CallController(
                             JSONObject().put("status", "answered").put("answer", final)
                         }
                     }
-                    live?.sendToolResult(e.id, e.name, res)
+                    toolResult(e.id, e.name, res)
                 }
                 "agent_status" -> scope.launch {
                     val lastAgent = db.chat().all().first().lastOrNull { it.kind == "agent" }?.text.orEmpty()
                     val stNow = statusNow()
-                    live?.sendToolResult(e.id, e.name, JSONObject().put("working", stNow.working).put("doing", stNow.label).put("last_message", lastAgent.take(800)))
+                    val waiting = pendingQuestion()
+                    val who = remote?.let { roster(fetchTargets(it)) }.orEmpty()
+                    toolResult(e.id, e.name, JSONObject().put("working", stNow.working).put("doing", stNow.label).put("last_message", lastAgent.take(800))
+                        .put("waiting_on_user", waiting?.let { if (isApproval(it)) "Approval: ${approvalWhat(it).take(300)}" else it.text.take(300) } ?: "")
+                        .apply { if (who.isNotBlank()) put("everyone", who) })
                 }
-                else -> live?.sendToolResult(e.id, e.name, JSONObject().put("error", "unknown tool"))
-            }
+                else -> toolResult(e.id, e.name, JSONObject().put("error", "unknown tool"))
+            } }
             is LiveSession.Event.Failed -> { _state.value = st.copy(active = false, phase = "failed", error = e.error); cleanup() }
             is LiveSession.Event.Closed -> { _state.value = st.copy(active = false, phase = "ended"); cleanup() }
             else -> {}
         }
     }
+
+    /** Something for the voice to say or know (an update, a card, an answer), logged under CallAgent. */
+    private fun tell(text: String) {
+        android.util.Log.i("CallAgent", "tell voice: ${text.take(400)}")
+        live?.announce(text)
+    }
+
+    /** Every tool result goes back to the voice through here, and into logcat (tag CallAgent) for proof and support. */
+    private fun toolResult(id: String, name: String, result: JSONObject) {
+        android.util.Log.i("CallAgent", "tool result $name: ${result.toString().take(600)}")
+        live?.sendToolResult(id, name, result)
+    }
+
+    /** Debug probe (src/debug CallProbe): the words go to the Live model as if the user said them. */
+    fun probeSay(text: String) { live?.announce(text) }
+
+    /** Debug probe: as if the model called [name] (for a run without a Live session). */
+    fun probeTool(name: String, args: JSONObject) { onEvent(LiveSession.Event.ToolCall("probe-" + System.currentTimeMillis(), name, args)) }
 
     fun toggleMute() { val m = !_state.value.muted; live?.setMuted(m); _state.value = _state.value.copy(muted = m) }
 
@@ -260,6 +440,8 @@ class CallController(
             scope.launch { runCatching { r.call("voice.callSave", listOf(record), 30_000) } }
         }
         callLines.clear(); callTimes.clear()
-        watcher?.cancel(); watcher = null; live = null; remote = null
+        watcher?.cancel(); watcher = null; cardWatcher?.cancel(); cardWatcher = null
+        sentTo.clear(); sentAt.clear(); workingSeen.clear()
+        live = null; remote = null
     }
 }

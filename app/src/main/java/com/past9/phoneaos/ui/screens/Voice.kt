@@ -117,33 +117,48 @@ fun CallScreen(name: String, st: CallState, onMute: () -> Unit, onEnd: () -> Uni
             Text(name, style = MaterialTheme.typography.headlineMedium, color = cs.onPrimaryContainer)
             Text(when (st.phase) { "connecting" -> "Connecting…"; "listening" -> if (st.muted) "Muted" else "Listening"; "speaking" -> "Talking"; "failed" -> "Couldn't connect"; "ended" -> "Call ended"; else -> "" },
                 style = MaterialTheme.typography.titleMedium, color = cs.onPrimaryContainer.copy(alpha = 0.8f))
-            Spacer(Modifier.weight(1f))
-            AgentAvatar(working = st.phase == "speaking" || st.phase == "connecting", size = 200.dp, modifier = Modifier.graphicsLayer { val sc = 1f + 0.18f * level; scaleX = sc; scaleY = sc })
-            Spacer(Modifier.height(28.dp))
+            // A card waiting on him makes the call compact: a small avatar, the card scrolling in the middle, and the
+            // mute and end buttons always on screen (22 Oct 2026: a big approval card pushed Decline and End call off it).
+            val compact = question != null
+            Column(Modifier.weight(1f).fillMaxWidth().then(if (compact) Modifier.verticalScroll(rememberScrollState()) else Modifier),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = if (compact) Arrangement.Top else Arrangement.Center) {
+            Spacer(Modifier.height(if (compact) 8.dp else 0.dp))
+            AgentAvatar(working = st.phase == "speaking" || st.phase == "connecting", size = if (compact) 88.dp else if (st.reply.isNotBlank() || actions.isNotEmpty()) 150.dp else 200.dp, modifier = Modifier.graphicsLayer { val sc = 1f + 0.18f * level; scaleX = sc; scaleY = sc })
+            Spacer(Modifier.height(if (compact) 16.dp else 20.dp))
             if (st.delegated.isNotBlank()) Surface(shape = RoundedCornerShape(50), color = cs.surface.copy(alpha = 0.85f)) {
                 Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.Bolt, null, Modifier.size(16.dp), tint = cs.primary); Spacer(Modifier.width(6.dp))
-                    Text("Working on: ${st.delegated.take(60)}", style = MaterialTheme.typography.labelLarge, color = cs.onSurface, maxLines = 1)
+                    Text("Working on: ${st.delegated.take(60)}", style = MaterialTheme.typography.labelLarge, color = cs.onSurface, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 }
             }
-            // The main agent needs the user: the same card as in the chat, on top of the call.
-            if (question != null) {
-                Spacer(Modifier.height(12.dp))
-                androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                    when {
-                        question.text.startsWith("APPROVAL|") -> ApprovalCard(question, onAnswer)
-                        question.text.startsWith(com.past9.phoneaos.tools.ConnectRequest.PREFIX) -> ConnectCard(question, onAnswer)
-                        else -> QuestionCard(question, onAnswer, onBrowser)
+            // The agent's latest reply to what the call handed it, so the outcome is on screen as well as said.
+            if (st.reply.isNotBlank() && !compact) {
+                Spacer(Modifier.height(10.dp))
+                Surface(shape = MaterialTheme.shapes.extraLarge, color = cs.surface.copy(alpha = 0.85f), modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                        Text("YOUR AGENT", style = Eyebrow, color = cs.primary)
+                        Text(st.reply, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface, maxLines = 4, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
                     }
                 }
+            }
+            // The agent needs him: the same card as in the chat, on top of the call. Answer by tapping, or out loud.
+            if (question != null) {
+                Spacer(Modifier.height(12.dp))
+                when {
+                    question.text.startsWith("APPROVAL|") -> ApprovalCard(question, onAnswer)
+                    question.text.startsWith(com.past9.phoneaos.tools.ConnectRequest.PREFIX) -> ConnectCard(question, onAnswer)
+                    else -> QuestionCard(question, onAnswer, onBrowser)
+                }
+                Spacer(Modifier.height(8.dp))
+                Text("Or just say it", style = MaterialTheme.typography.labelMedium, color = cs.onPrimaryContainer.copy(alpha = 0.7f))
             } else
-            // What the main agent is doing while you talk.
+            // What the agent is doing while you talk.
             if (actions.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
                 Surface(shape = MaterialTheme.shapes.extraLarge, color = cs.surface.copy(alpha = 0.85f), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
                         Text("WHAT IT'S DOING", style = Eyebrow, color = cs.primary)
-                        actions.takeLast(4).forEach { a ->
+                        actions.takeLast(2).forEach { a ->
                             Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Rounded.CheckCircle, null, Modifier.size(14.dp), tint = cs.primary); Spacer(Modifier.width(8.dp))
                                 Text(a, style = MaterialTheme.typography.bodySmall, color = cs.onSurface, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
@@ -152,12 +167,15 @@ fun CallScreen(name: String, st: CallState, onMute: () -> Unit, onEnd: () -> Uni
                     }
                 }
             }
-            Spacer(Modifier.height(12.dp))
-            st.lines.takeLast(3).forEach { (who, t) ->
-                Text(t, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, color = if (who == "user") cs.onPrimaryContainer.copy(alpha = 0.7f) else cs.onPrimaryContainer, maxLines = 3)
+            if (!compact) {
+                Spacer(Modifier.height(12.dp))
+                st.lines.takeLast(2).forEach { (who, t) ->
+                    Text(t, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, color = if (who == "user") cs.onPrimaryContainer.copy(alpha = 0.7f) else cs.onPrimaryContainer, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                }
             }
             if (st.error.isNotBlank()) Text(st.error, color = cs.error, textAlign = TextAlign.Center)
-            Spacer(Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
                 FilledTonalIconButton(onClick = onMute, modifier = Modifier.size(64.dp)) { Icon(if (st.muted) Icons.Rounded.MicOff else Icons.Rounded.Mic, if (st.muted) "Unmute" else "Mute") }
                 if (st.active || st.phase == "connecting") FilledIconButton(onClick = onEnd, modifier = Modifier.size(80.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xFFD7141E), contentColor = Color.White)) {
