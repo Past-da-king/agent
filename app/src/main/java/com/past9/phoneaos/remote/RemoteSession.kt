@@ -391,6 +391,32 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         }
     }
 
+    /**
+     * The computer asks something (a question or an approval, from its agent, a helper or a project): a notification
+     * with the answers as buttons, so he can answer from the shade (system/AnswerReceiver -> runtime.answer -> this
+     * session -> chat.answer or chat.decide). Answered anywhere (here, the chat, the computer): the notification goes.
+     */
+    private fun cardNotice(row: JSONObject, isNew: Boolean) {
+        val lid = ids.localOrNull(row.optString("id")) ?: return
+        if (!RemoteRows.isOpenCard(row)) {
+            runCatching { androidx.core.app.NotificationManagerCompat.from(app).cancel(lid.toInt()) }
+            return
+        }
+        if (!isNew) return
+        val item = RemoteRows.chat(row, ids, notes)
+        val meta = runCatching { JSONObject(item.meta) }.getOrDefault(JSONObject())
+        val approval = meta.optString("remoteKind") == "approval"
+        val by = meta.optString("whyBy")
+        val title = when {
+            approval -> "Approve?"
+            by.isNotBlank() -> "$by asks"
+            else -> "Your agent asks"
+        }
+        val body = if (approval) item.text.split("|").getOrElse(1) { item.text } else item.text
+        val opts = meta.optJSONArray("options")?.let { a -> (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() } }.orEmpty()
+        runCatching { App.graph(app).phone.notify(title, body, lid, if (approval) listOf("Approve", "Decline") else opts) }
+    }
+
     private fun isYes(o: String): Boolean = o.trim().lowercase().let { s -> listOf("approve", "yes", "allow", "ok", "go", "send", "do it", "confirm").any { s.startsWith(it) } }
 
     override fun stop() { scope.launch { runCatching { call("chat.stop", listOf()) } } }
@@ -501,6 +527,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         when (entity) {
             "chat_item" -> {
                 val c = RemoteRows.chatOf(row)
+                val isCard = row.optString("kind") in setOf("question", "approval")
+                val newCard = RemoteRows.isOpenCard(row) && ids.localOrNull(row.optString("id")) == null
                 // A card from another chat: shown while it waits, and updated (answered) once the phone has it.
                 if (c != "main" && (RemoteRows.isOpenCard(row) || (row.optString("kind") in setOf("question", "approval") && ids.localOrNull(row.optString("id")) != null))) {
                     putChat(RemoteRows.chat(row, ids, notes))
@@ -511,6 +539,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
                     list.removeAll { it.optString("id") == row.optString("id") }; list += row
                     projectRow(c)?.let { putChat(it) }
                 }
+                if (isCard) cardNotice(row, newCard)
             }
             "project" -> reloadSoon()
             "memory" -> if (RemoteRows.isGeneralMemory(row)) putMemory(RemoteRows.memory(row, ids)) else ids.localOrNull(row.optString("id"))?.let { db.memory().delete(it) }
