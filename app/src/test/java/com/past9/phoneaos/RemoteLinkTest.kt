@@ -259,6 +259,8 @@ class RemoteLinkTest {
         val frames = LinkedBlockingQueue<JSONObject>()
         httpsServer(tls).use { srv ->
             srv.enqueue(MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
+                // Answer the phone's close, so the server can shut down at once.
+                override fun onClosing(webSocket: WebSocket, code: Int, reason: String) { webSocket.close(1000, null) }
                 override fun onMessage(webSocket: WebSocket, text: String) {
                     val f = JSONObject(text); frames.add(f)
                     if (f.getString("type") == "hello")
@@ -316,5 +318,45 @@ class RemoteLinkTest {
         assertEquals(text, QrDecode.decodeLuminance(qrLuminance(text, 400, 448), 400, 400, 448)) // padded rows, as cameras send them
         assertNull(QrDecode.decodeLuminance(ByteArray(100 * 100) { 120 }, 100, 100, 100))
         assertNotNull(Pairing.parseQr(text))
+    }
+
+    // ---- project work shown like a helper, pictures, images in lent-tool results ----
+
+    private fun row(id: String, at: Long, kind: String, text: String, chat: String) =
+        JSONObject().put("id", id).put("createdAt", at).put("kind", kind).put("text", text).put("meta", JSONObject().put("chat", chat).toString())
+
+    @Test fun aProjectChatShowsAsAHelperWithTheProjectsIcon() {
+        val ids = RemoteIds()
+        val project = JSONObject().put("name", "Kitchen site").put("icon", JSONObject().put("glyph", "K").put("color", "ember")).put("chats", org.json.JSONArray().put("pc_k"))
+        val now = 1_800_000_000_000L
+        val rows = listOf(row("a", now - 5000, "user", "Fix the gallery", "pc_k"), row("b", now - 3000, "activity", "Opened the repo", "pc_k"))
+        val working = com.past9.phoneaos.remote.RemoteRows.projectHelper(project, "pc_k", rows, running = true, ids = ids, now = now)!!
+        val m = JSONObject(working.meta)
+        assertEquals("helper", working.kind); assertEquals("Fix the gallery", working.text)
+        assertEquals("Kitchen site", m.getString("label")); assertEquals("working", m.getString("state")); assertEquals("Opened the repo", m.getString("now"))
+        assertEquals("ember", m.getString("projectColor")); assertEquals("pc_k", m.getString("projectChat"))
+        val done = com.past9.phoneaos.remote.RemoteRows.projectHelper(project, "pc_k", rows + row("c", now - 1000, "agent", "Gallery fixed.", "pc_k"), running = false, ids = ids, now = now)!!
+        assertEquals(working.id, done.id) // the same row, updated in place
+        assertEquals("done", JSONObject(done.meta).getString("state")); assertEquals("Gallery fixed.", JSONObject(done.meta).getString("result"))
+        assertNull(com.past9.phoneaos.remote.RemoteRows.projectHelper(project, "pc_k", rows, running = false, ids = ids, now = now + 4 * 86_400_000L)) // long finished
+        assertNull(com.past9.phoneaos.remote.RemoteRows.projectHelper(project, "pc_k", emptyList(), running = true, ids = ids, now = now))
+    }
+
+    @Test fun picturesInChatRowsPointAtTheirCopiesOnThePhone() {
+        val meta = JSONObject().put("image", "/c/shot.png").put("images", org.json.JSONArray().put("/c/a.jpg"))
+            .put("attachments", org.json.JSONArray().put(JSONObject().put("path", "/c/b.png").put("mime", "image/png")).put(JSONObject().put("path", "/c/doc.pdf").put("mime", "application/pdf")))
+        assertEquals(listOf("/c/shot.png", "/c/a.jpg", "/c/b.png"), com.past9.phoneaos.remote.RemoteRows.mediaPaths(meta))
+        val out = com.past9.phoneaos.remote.RemoteRows.withLocalMedia(meta, mapOf("/c/shot.png" to "/p/1.png", "/c/a.jpg" to "/p/2.jpg", "/c/b.png" to "/p/3.png"))
+        assertEquals("/p/1.png", out.getString("image"))
+        assertEquals(listOf("/p/2.jpg", "/p/3.png"), (0 until out.getJSONArray("images").length()).map { out.getJSONArray("images").getString(it) })
+    }
+
+    @Test fun imagesFromALentToolTravelAsBase64Parts() {
+        val f = java.io.File.createTempFile("shot", ".png").apply { writeBytes(byteArrayOf(1, 2, 3)); deleteOnExit() }
+        assertEquals("plain text", com.past9.phoneaos.remote.DeviceTools.withImages("plain text"))
+        val parts = com.past9.phoneaos.remote.DeviceTools.withImages("Here is the page:" + "\n" + "[[image:" + f.absolutePath + "]]") as org.json.JSONArray
+        assertEquals("Here is the page:", parts.getJSONObject(0).getString("text"))
+        val img = parts.getJSONObject(1)
+        assertEquals("image", img.getString("type")); assertEquals("image/png", img.getString("mime")); assertEquals("AQID", img.getString("data"))
     }
 }

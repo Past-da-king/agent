@@ -65,6 +65,7 @@ const rows = {
     { id: rid('t'), createdAt: now - 80_000_000, updatedAt: now, goalId: 'goal_1', title: 'Measure the kitchen', notes: '', status: 'done', dueAt: null, owner: 'user', blocker: '' },
     { id: rid('t'), createdAt: now - 70_000_000, updatedAt: now, goalId: 'goal_1', title: 'Send the quote', notes: '', status: 'todo', dueAt: now + 86_400_000, owner: 'user', blocker: '' },
   ],
+  project: [{ id: 'proj_kitchen', createdAt: now - 86_400_000, name: 'Kitchen site', description: 'The client site', aliases: [], icon: { glyph: String.fromCodePoint(0x1f3e0), color: 'ember' }, path: '', profile: '', hidden: false, chats: ['pc_kitchen'] }],
   trigger: [{ id: rid('tr'), createdAt: now - 90_000_000, name: 'Morning brief', kind: 'daily', spec: '07:30', prompt: 'Brief me', enabled: true, lastRunAt: null, lastResult: '' }],
 }
 let running = false
@@ -113,6 +114,7 @@ async function rpc(node, sock, method, args) {
     }
     case 'data.remove': { const [entity, id] = args; rows[entity] = rows[entity].filter((r) => r.id !== id); broadcast('agent:evt:data.changed', { entity, id, deleted: true }); log(`data.remove ${entity} ${id}`); return null }
     case 'chat.state': return { running, waiting: [] }
+    case 'chat.states': return [{ chat: 'main', running, waiting: [], alongside: 0 }]
     case 'chat.stop': running = false; broadcast('agent:evt:chat.event', { type: 'run_finished' }); return null
     case 'chat.answer': log(`chat.answer ${args[0]} -> ${args[1]}`); return null
     case 'chat.decide': log(`chat.decide ${args[0]} -> ${args[1]}`); return null
@@ -131,6 +133,9 @@ async function rpc(node, sock, method, args) {
         if (t.includes('file')) command(sock.deviceId, { id: rid('cmd'), kind: 'send_file', path: '/tmp/fake-node-hello.txt', name: 'hello-from-desk.txt' })
         if (t.includes('link')) command(sock.deviceId, { id: rid('cmd'), kind: 'open_url', url: 'https://example.com/' })
         if (t.includes('notify')) command(sock.deviceId, { id: rid('cmd'), kind: 'notify', title: 'From your computer', body: 'A notification sent by the agent on ' + node.name })
+        if (t.includes('picture')) addRow('chat_item', { id: rid('ci'), createdAt: Date.now(), kind: 'activity', text: 'Took a screenshot', meta: JSON.stringify({ tool: 'browser', image: '/tmp/fake-node-pic.png' }) })
+        if (t.includes('project')) projectRun()
+        if (t.includes('ask')) command(sock.deviceId, { id: rid('cmd'), kind: 'tool', tool: 'ask_user', args: { question: 'Shall I book the 15:00 slot?', options: ['Yes', 'No'] }, chatId: 'main', deadlineMs: 120000 })
         if (t.includes('tool')) command(sock.deviceId, { id: rid('cmd'), kind: 'tool', tool: 'notifications_read', args: {}, chatId: 'main', deadlineMs: 30000 })
         addRow('chat_item', { id: rid('ci'), createdAt: Date.now(), kind: 'agent', text: `This is ${node.name}. You said: ${text}`, meta: '{}' })
         running = false
@@ -140,6 +145,18 @@ async function rpc(node, sock, method, args) {
     }
     default: throw new Error('not available on this device')
   }
+}
+
+// Work handed to a project: it runs in the project's own chat, step by step.
+function projectRun() {
+  const chat = 'pc_kitchen'
+  const tag = JSON.stringify({ chat })
+  broadcast('agent:evt:chat.event', { type: 'run_started', chat })
+  addRow('chat_item', { id: rid('ci'), createdAt: Date.now(), kind: 'user', text: 'Fix the gallery on the kitchen site', meta: tag })
+  const steps = ['Opened the repo', 'Found the broken image path', 'Pushed the fix to dev']
+  steps.forEach((s, i) => setTimeout(() => addRow('chat_item', { id: rid('ci'), createdAt: Date.now(), kind: 'activity', text: s, meta: tag }), 2000 * (i + 1)))
+  setTimeout(() => { addRow('chat_item', { id: rid('ci'), createdAt: Date.now(), kind: 'agent', text: 'Gallery fixed and on the dev site.', meta: tag }); broadcast('agent:evt:chat.event', { type: 'run_finished', chat }); log('project run finished') }, 9000)
+  log('project run started in pc_kitchen')
 }
 
 function serve(node) {
@@ -161,7 +178,7 @@ function serve(node) {
     const dev = passOf(req)
     if (!dev) return json(res, 401, { error: 'This device is not paired with this computer.' })
     if (url.pathname === '/v1/devices') return json(res, 200, { devices: [...brains().map((b) => ({ ...b, roles: ['brain'], revoked: false })), ...devices.values()], answering: node.id })
-    if (url.pathname === '/v1/file') { const p = url.searchParams.get('path'); log(`/v1/file ${p} by ${dev}`); if (p !== '/tmp/fake-node-hello.txt') return json(res, 403, { error: 'not a file from a chat' }); res.writeHead(200, { 'content-type': 'text/plain' }); return res.end(fs.readFileSync(p)) }
+    if (url.pathname === '/v1/file') { const p = url.searchParams.get('path'); log(`/v1/file ${p} by ${dev}`); if (p !== '/tmp/fake-node-hello.txt' && p !== '/tmp/fake-node-pic.png') return json(res, 403, { error: 'not a file from a chat' }); res.writeHead(200, { 'content-type': p.endsWith('.png') ? 'image/png' : 'text/plain' }); return res.end(fs.readFileSync(p)) }
     if (url.pathname === '/app/' || url.pathname === '/app') { res.writeHead(200, { 'content-type': 'text/html' }); return res.end(`<h1>${node.name}</h1>`) }
     json(res, 404, { error: 'not found' })
   })
@@ -202,6 +219,16 @@ function down(node) {
 }
 function up(node) { if (node.up) return; node.up = true; serve(node); log(`${node.name} UP`) }
 
+// A 64x40 picture for the chat, drawn as a PNG here so the source holds no binary blob.
+{
+  const zlib = await import('node:zlib')
+  const w = 64, h = 40, raw = Buffer.alloc((w * 3 + 1) * h)
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const o = y * (w * 3 + 1) + 1 + x * 3; raw[o] = 230; raw[o + 1] = 90 + y * 3; raw[o + 2] = 40 + x * 2 }
+  const crc = (b) => { let c = ~0; for (const v of b) { c ^= v; for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1)) } return ~c >>> 0 }
+  const chunk = (type, data) => { const t = Buffer.from(type); const len = Buffer.alloc(4); len.writeUInt32BE(data.length); const c = Buffer.alloc(4); c.writeUInt32BE(crc(Buffer.concat([t, data]))); return Buffer.concat([len, t, data, c]) }
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2
+  fs.writeFileSync('/tmp/fake-node-pic.png', Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]))
+}
 fs.writeFileSync('/tmp/fake-node-hello.txt', 'Hello from the fake node. This file was sent to the phone with send_file.\n')
 nodes.forEach(serve)
 http.createServer((req, res) => {

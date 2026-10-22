@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -42,6 +43,11 @@ data class HelperView(val item: ChatItem, val steps: List<ChatItem>) {
     /** The profile it works in, and that profile's colour (an accent id). */
     val profile: String get() = meta.optString("profile")
     val profileColor: String get() = meta.optString("profileColor").ifBlank { "iris" }
+    /** Set when this row is work the agent handed to a project (a linked computer's project chat): its name and icon. */
+    val project: String get() = meta.optString("projectName")
+    val projectGlyph: String get() = meta.optString("projectGlyph")
+    val projectColor: String get() = meta.optString("projectColor").ifBlank { "iris" }
+    val projectImage: String get() = meta.optString("projectImage")
 
     companion object {
         /** Every helper in the chat, each with its own steps. */
@@ -91,6 +97,32 @@ fun HelperOrb(state: String, size: Dp = 40.dp, profileColor: String? = null) {
     }
 }
 
+/**
+ * A project's icon, like an app icon: its own picture, else its emoji, else its first letter, on a rounded tile in
+ * the project's colour. A working project gets a small spinner in the corner, as helpers do.
+ */
+@Composable
+fun ProjectTile(h: HelperView, size: Dp = 40.dp) {
+    val accent = com.past9.phoneaos.ui.theme.accentOf(h.projectColor)
+    val bitmap = remember(h.projectImage) {
+        runCatching {
+            val b64 = h.projectImage.substringAfter("base64,", "")
+            if (b64.isEmpty()) null else android.util.Base64.decode(b64, android.util.Base64.DEFAULT).let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) }?.asImageBitmap()
+        }.getOrNull()
+    }
+    val emoji = h.projectGlyph.takeIf { g -> g.isNotEmpty() && g.none { it.isLetterOrDigit() || it == '-' } }
+    Box(Modifier.size(size)) {
+        Box(Modifier.fillMaxSize().clip(androidx.compose.foundation.shape.RoundedCornerShape(size * 0.28f)).background(accent.lP), contentAlignment = Alignment.Center) {
+            when {
+                bitmap != null -> androidx.compose.foundation.Image(bitmap, h.project, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+                emoji != null -> Text(emoji, style = MaterialTheme.typography.titleLarge)
+                else -> Text(h.project.take(1).uppercase(), style = MaterialTheme.typography.titleMedium, color = Color.White)
+            }
+        }
+        if (h.working) LoadingIndicator(Modifier.size(size * 0.45f).align(Alignment.BottomEnd).clip(CircleShape).background(MaterialTheme.colorScheme.surface), color = accent.lP)
+    }
+}
+
 /** One helper as a calm, tappable row: who it is, what it's doing (or what it found), how long. */
 @Composable
 fun HelperCard(h: HelperView, onClick: () -> Unit, modifier: Modifier = Modifier, now: Long = System.currentTimeMillis()) {
@@ -98,7 +130,7 @@ fun HelperCard(h: HelperView, onClick: () -> Unit, modifier: Modifier = Modifier
     val look = lookOf(h.state)
     Surface(onClick = onClick, shape = MaterialTheme.shapes.extraLarge, color = cs.surfaceContainerLow, modifier = modifier.fillMaxWidth()) {
         Row(Modifier.padding(start = 14.dp, end = 10.dp, top = 14.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            HelperOrb(h.state, profileColor = h.profileColor.takeIf { h.profile.isNotBlank() })
+            if (h.project.isNotBlank()) ProjectTile(h) else HelperOrb(h.state, profileColor = h.profileColor.takeIf { h.profile.isNotBlank() })
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -131,10 +163,10 @@ fun HelperSheet(h: HelperView, onStop: ((Long) -> Unit)?, onDismiss: () -> Unit,
     val body: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 40.dp).navigationBarsPadding()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                HelperOrb(h.state, 52.dp, profileColor = h.profileColor.takeIf { h.profile.isNotBlank() })
+                if (h.project.isNotBlank()) ProjectTile(h, 52.dp) else HelperOrb(h.state, 52.dp, profileColor = h.profileColor.takeIf { h.profile.isNotBlank() })
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("HELPER", style = Eyebrow, color = cs.primary)
+                    Text(if (h.project.isNotBlank()) "PROJECT" else "HELPER", style = Eyebrow, color = cs.primary)
                     Text(h.label, style = MaterialTheme.typography.headlineSmall)
                     val took = if (h.working) "for ${spanLabel(now - h.startedAt)}" else if (h.endedAt > 0) "in ${spanLabel(h.endedAt - h.startedAt)}" else ""
                     Text(listOf(look.word + if (took.isNotBlank()) " $took" else "", h.model.takeIf { it.isNotBlank() },

@@ -118,14 +118,15 @@ private suspend fun pair(context: Context, offer: PairOffer?, typedUrl: String?,
 fun LinkScreen(onBack: () -> Unit, onLinked: () -> Unit, offerText: String? = null) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var step by remember { mutableStateOf<LinkStep>(LinkStep.Ready) }
+    // A link code that came with the screen goes straight to linking: the camera is never started for it.
+    var step by remember { mutableStateOf<LinkStep>(if (offerText != null) LinkStep.Busy("your computer") else LinkStep.Ready) }
     var typing by remember { mutableStateOf(false) }
     var address by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
     var camOk by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }
     val askCam = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { camOk = it }
     fun scanned(text: String) {
-        if (step is LinkStep.Busy || step is LinkStep.Done) return
+        if (step is LinkStep.Done || (step is LinkStep.Busy && text != offerText)) return
         val offer = Pairing.parseQr(text) ?: run { step = LinkStep.Failed("That QR code isn't an Agent link code."); return }
         step = LinkStep.Busy(offer.name)
         scope.launch { step = pair(context, offer, null, offer.code) }
@@ -212,14 +213,18 @@ fun QrScanner(modifier: Modifier, onText: (String) -> Unit) {
             val text = try { QrDecode.decode(img) } catch (_: Exception) { null } finally { img.close() }
             if (text != null) view.post { latest(text) }
         }
+        var gone = false
+        val main = ContextCompat.getMainExecutor(context)
         future.addListener({
-            runCatching {
+            if (!gone) runCatching {
                 preview.setSurfaceProvider(view.surfaceProvider)
                 future.get().bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
             }
-        }, ContextCompat.getMainExecutor(context))
+        }, main)
         onDispose {
-            runCatching { future.get().unbind(preview, analysis) }
+            gone = true
+            // Never wait for the camera here: it may still be starting (seconds on some phones). Unbind once it is ready.
+            future.addListener({ runCatching { future.get().unbind(preview, analysis) } }, main)
             exec.shutdown()
         }
     }

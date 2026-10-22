@@ -68,35 +68,72 @@ object DeviceTools {
             .put("readOnly", group == "notifications" || READS.any { t.spec.name.contains(it) })
     })
 
-    /** Run one lent tool. Returns (ok, value or error). */
-    suspend fun run(context: Context, name: String, args: JSONObject, deadlineMs: Long): Pair<Boolean, String> {
+    /** Run one lent tool. Returns (ok, value or error); a value with pictures is a list of text and image parts. */
+    suspend fun run(context: Context, name: String, args: JSONObject, deadlineMs: Long, session: RemoteSession? = null): Pair<Boolean, Any> {
         val (tool, _) = tools(context).firstOrNull { it.first.spec.name == name }
             ?: return false to "This phone doesn't lend $name (it's off in its settings, or it has no such tool)."
-        val out = withTimeoutOrNull(deadlineMs.coerceIn(1_000, 600_000)) { runCatching { tool.run(args, LentContext(context)) } }
+        val out = withTimeoutOrNull(deadlineMs.coerceIn(1_000, 600_000)) { runCatching { tool.run(args, LentContext(context, session)) } }
             ?: return false to "The phone didn't finish $name in time."
-        return out.fold({ true to it }, { false to (it.message ?: it::class.java.simpleName) })
+        return out.fold({ true to withImages(it) }, { false to (it.message ?: it::class.java.simpleName) })
+    }
+
+    private val IMAGE = Regex("""\[\[image:([^\]]+)]]""")
+
+    /**
+     * The phone's tools hand pictures over as [[image:/path]] lines. Over the wire they travel as parts
+     * (protocol s11): { type: "text", text } and { type: "image", mime, data (base64) }.
+     */
+    fun withImages(text: String): Any {
+        val paths = IMAGE.findAll(text).map { it.groupValues[1] }.toList()
+        if (paths.isEmpty()) return text
+        val parts = JSONArray().put(JSONObject().put("type", "text").put("text", IMAGE.replace(text, "").trim()))
+        for (p in paths) {
+            val f = File(p)
+            if (!f.isFile) continue
+            val mime = if (p.endsWith(".png", true)) "image/png" else if (p.endsWith(".webp", true)) "image/webp" else "image/jpeg"
+            parts.put(JSONObject().put("type", "image").put("mime", mime).put("data", java.util.Base64.getEncoder().encodeToString(f.readBytes())))
+        }
+        return parts
     }
 
     /** A tool running for the agent on another device: questions come up as a notification with buttons. */
-    private class LentContext(private val context: Context) : ToolContext {
+    private class LentContext(private val context: Context, private val session: RemoteSession?) : ToolContext {
         override val agentLabel = "linked computer"
         override suspend fun activity(text: String, meta: JSONObject): Long = 0
         override suspend fun updateActivity(id: Long, text: String, meta: JSONObject) {}
-        override suspend fun ask(question: String, options: List<String>): String? = RemoteAsk.ask(context, question, options)
+        override suspend fun ask(question: String, options: List<String>): String? = RemoteAsk.ask(context, question, options, session = session)
         override suspend fun notify(title: String, body: String) = App.graph(context).phone.notify(title, body)
     }
 }
 
-/** A question from the agent on another device, answered from a notification's buttons. */
+/** A question from the agent on another device: a notification with buttons, and the app's own question card in the chat. */
 object RemoteAsk {
     private val waiting = ConcurrentHashMap<Int, CompletableDeferred<String>>()
+    /** Chat row id -> notification id, for questions shown in the chat. */
+    private val rows = ConcurrentHashMap<Long, Int>()
     private val next = AtomicInteger(7_100)
 
-    suspend fun ask(context: Context, question: String, options: List<String>, timeoutMs: Long = 600_000): String? {
+    fun itemIds(): Set<Long> = rows.keys.toSet()
+
+    /** Answered by tapping the card in the chat. False when the row isn't one of these questions. */
+    fun answerItem(itemId: Long, option: String): Boolean {
+        val id = rows[itemId] ?: return false
+        answer(id, option); return true
+    }
+
+    suspend fun ask(context: Context, question: String, options: List<String>, timeoutMs: Long = 600_000, session: RemoteSession? = null): String? {
         val id = next.incrementAndGet()
         val d = CompletableDeferred<String>()
         waiting[id] = d
         val opts = options.ifEmpty { listOf("Yes", "No") }.take(3)
+        // The same question as a card in the chat (the question and approval cards the app already draws).
+        var row: Long? = null
+        if (session != null) runCatching {
+            val now = System.currentTimeMillis()
+            val item = com.past9.phoneaos.data.ChatItem(session.ids.local("lent-ask-$id-$now", now), "question", question,
+                JSONObject().put("options", JSONArray(opts)).put("whyBy", "Your agent").toString(), now)
+            session.db.chat().insert(item); row = item.id; rows[item.id] = id
+        }
         // request_approval asks "APPROVAL|<action>|<details>".
         val parts = question.split('|', limit = 3)
         val approval = parts.size == 3 && parts[0] == "APPROVAL"
@@ -111,7 +148,13 @@ object RemoteAsk {
             b.addAction(0, o, pi)
         }
         runCatching { NotificationManagerCompat.from(context).notify(id, b.build()) }
-        return try { withTimeoutOrNull(timeoutMs) { d.await() } } finally { waiting.remove(id) }
+        val answer = try { withTimeoutOrNull(timeoutMs) { d.await() } } finally { waiting.remove(id) }
+        row?.let { r ->
+            rows.remove(r)
+            runCatching { session!!.db.chat().get(r)?.let { session.db.chat().update(it.copy(meta = JSONObject(it.meta).put("answer", answer ?: "No answer").toString())) } }
+        }
+        runCatching { NotificationManagerCompat.from(context).cancel(id) }
+        return answer
     }
 
     fun answer(id: Int, option: String) { waiting.remove(id)?.complete(option) }
@@ -132,7 +175,7 @@ class DeviceCommands(private val context: Context, private val session: RemoteSe
         if (id.isBlank()) return
         when (c.optString("kind")) {
             "tool" -> {
-                val (ok, value) = DeviceTools.run(context, c.optString("tool"), c.optJSONObject("args") ?: JSONObject(), c.optLong("deadlineMs", 120_000))
+                val (ok, value) = DeviceTools.run(context, c.optString("tool"), c.optJSONObject("args") ?: JSONObject(), c.optLong("deadlineMs", 120_000), session)
                 runCatching { session.call("device.result", listOf(id, ok, value)) }
                 return
             }

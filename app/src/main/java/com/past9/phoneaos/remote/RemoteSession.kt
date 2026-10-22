@@ -258,6 +258,11 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     }
 
     override fun answer(itemId: Long, option: String) {
+        // A question from a lent tool (ask_user on this phone for the computer's agent), answered in the chat.
+        if (RemoteAsk.answerItem(itemId, option)) {
+            scope.launch { db.chat().get(itemId)?.let { db.chat().update(it.copy(meta = JSONObject(it.meta).put("answer", option).toString())) } }
+            return
+        }
         val rid = ids.remote(itemId) ?: return
         scope.launch {
             val item = db.chat().get(itemId)
@@ -276,8 +281,10 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     override fun stopHelper(id: Long): Boolean {
         val rid = ids.remote(id) ?: return false
         scope.launch {
-            val helper = runCatching { JSONObject(db.chat().get(id)?.meta ?: "{}").optString("helper") }.getOrDefault("")
-            runCatching { call("helpers.stop", listOf(helper.ifBlank { rid })) }
+            val meta = runCatching { JSONObject(db.chat().get(id)?.meta ?: "{}") }.getOrDefault(JSONObject())
+            val projectChat = meta.optString("projectChat")
+            if (projectChat.isNotBlank()) runCatching { call("chat.stop", listOf(projectChat)) }
+            else runCatching { call("helpers.stop", listOf(meta.optString("helper").ifBlank { rid })) }
         }
         return true
     }
@@ -307,18 +314,27 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         val tasks = list("task")
         val memory = list("memory").filter(RemoteRows::isGeneralMemory)
         val triggers = list("trigger")
+        val projects = list("project")
+        val allChat = list("chat_item")
         // The phone keeps the recent part of the main chat; the full history stays on the computer.
-        val chat = list("chat_item").filter(RemoteRows::inMainChat).sortedBy { it.optLong("createdAt") }.takeLast(CHAT_ROWS)
+        val chat = allChat.filter(RemoteRows::inMainChat).sortedBy { it.optLong("createdAt") }.takeLast(CHAT_ROWS)
+        // Project chats show as helper rows with the project's icon.
+        runCatching { (call("chat.states", listOf()) as? JSONArray)?.let { a -> running.clear(); for (i in 0 until a.length()) a.optJSONObject(i)?.takeIf { it.optBoolean("running") }?.let { running += it.optString("chat") } } }
+        projectOf.clear(); projects.forEach { p -> p.optJSONArray("chats").strings().forEach { c -> projectOf[c] = p } }
+        projectRows.clear()
+        allChat.forEach { r -> val c = RemoteRows.chatOf(r); if (projectOf.containsKey(c)) projectRows.getOrPut(c) { ArrayList() } += r }
         db.withTransaction {
             replace("goals", goals.map { RemoteRows.goal(it, ids) }.also { rows -> rows.forEach { putGoal(it) } }.map { it.id })
             replace("tasks", tasks.map { RemoteRows.task(it, ids) }.also { rows -> rows.forEach { putTask(it) } }.map { it.id })
             replace("memories", memory.map { RemoteRows.memory(it, ids) }.also { rows -> rows.forEach { putMemory(it) } }.map { it.id })
             replace("triggers", triggers.map { RemoteRows.trigger(it, ids) }.also { rows -> rows.forEach { db.triggers().upsert(it) } }.map { it.id })
-            val keep = chat.map { RemoteRows.chat(it, ids) }.onEach { putChat(it) }.map { it.id }.toSet()
-            // Notices the phone wrote itself stay until the next full read.
-            replace("chat_items", keep.toList())
+            val keep = chat.map { RemoteRows.chat(it, ids) }.onEach { putChat(it) }.map { it.id }.toMutableSet()
+            projectRows.keys.forEach { c -> projectRow(c)?.let { putChat(it); keep += it.id } }
+            // Questions from lent tools stay; notices the phone wrote itself go at the next full read.
+            replace("chat_items", (keep + RemoteAsk.itemIds()).toList())
         }
         publishStatus()
+        chat.forEach { fetchMedia(it) }
     }
 
     /** Delete rows of [table] that the computer no longer has. */
@@ -359,7 +375,16 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         }
         if (row.optString("id").isBlank()) return
         when (entity) {
-            "chat_item" -> if (RemoteRows.inMainChat(row)) putChat(RemoteRows.chat(row, ids))
+            "chat_item" -> {
+                val c = RemoteRows.chatOf(row)
+                if (c == "main") { putChat(RemoteRows.chat(row, ids)); fetchMedia(row) }
+                else if (projectOf.containsKey(c)) {
+                    val list = projectRows.getOrPut(c) { ArrayList() }
+                    list.removeAll { it.optString("id") == row.optString("id") }; list += row
+                    projectRow(c)?.let { putChat(it) }
+                }
+            }
+            "project" -> reloadSoon()
             "memory" -> if (RemoteRows.isGeneralMemory(row)) putMemory(RemoteRows.memory(row, ids)) else ids.localOrNull(row.optString("id"))?.let { db.memory().delete(it) }
             "task" -> putTask(RemoteRows.task(row, ids))
             "goal" -> putGoal(RemoteRows.goal(row, ids))
@@ -376,7 +401,12 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
             EVT_DATA -> (payload as? JSONObject)?.let { p -> scope.launch { runCatching { applyChange(p) } } }
             EVT_CHAT -> (payload as? JSONObject)?.let { e ->
                 val chat = e.optString("chat")
-                if (chat.isNotEmpty() && chat != "main") return
+                if (chat.isNotEmpty() && chat != "main") {
+                    // A project chat started or finished: its helper row follows.
+                    when (e.optString("type")) { "run_started" -> running += chat; "run_finished" -> running -= chat; else -> return }
+                    if (projectOf.containsKey(chat)) scope.launch { runCatching { projectRow(chat)?.let { putChat(it) } } }
+                    return
+                }
                 when (e.optString("type")) {
                     "run_started", "thinking" -> { turnRunning = true; publishStatus() }
                     "run_finished" -> {
@@ -390,6 +420,38 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
             }
             EVT_DEVICES -> current?.let { p -> scope.launch { runCatching { refreshBrains(p) } } }
             EVT_COMMAND -> (payload as? JSONObject)?.let { c -> scope.launch { commands.handle(c) } }
+        }
+    }
+
+    // ---- project chats as helper rows, and pictures from the computer ----------------------------------
+
+    private val projectOf = ConcurrentHashMap<String, JSONObject>()
+    private val projectRows = ConcurrentHashMap<String, MutableList<JSONObject>>()
+    private val running: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    private fun projectRow(chat: String): ChatItem? {
+        val p = projectOf[chat] ?: return null
+        return RemoteRows.projectHelper(p, chat, projectRows[chat].orEmpty().toList(), chat in running, ids)
+    }
+
+    /** Pictures in a chat row are paths on the computer: fetch each once through /v1/file and point the row at the copy. */
+    private fun fetchMedia(row: JSONObject) {
+        val meta = runCatching { JSONObject(row.optString("meta").ifBlank { "{}" }) }.getOrNull() ?: return
+        val paths = RemoteRows.mediaPaths(meta).filter { !File(it).exists() }
+        if (paths.isEmpty()) return
+        scope.launch {
+            val (api, url) = downloader() ?: return@launch
+            val dir = File(app.cacheDir, "linked-media").apply { mkdirs() }
+            val local = HashMap<String, String>()
+            for (p in paths) runCatching {
+                val ext = p.substringAfterLast('.', "jpg").take(5).lowercase()
+                val f = File(dir, Integer.toHexString(p.hashCode()) + "-" + p.length + "." + ext)
+                if (!f.exists() || f.length() == 0L) api.download(url, p, pass) { input, _ -> f.outputStream().use { input.copyTo(it) } }
+                local[p] = f.absolutePath
+            }
+            if (local.isEmpty()) return@launch
+            val lid = ids.localOrNull(row.optString("id")) ?: return@launch
+            db.chat().get(lid)?.let { db.chat().update(it.copy(meta = RemoteRows.withLocalMedia(meta, local).toString())) }
         }
     }
 
