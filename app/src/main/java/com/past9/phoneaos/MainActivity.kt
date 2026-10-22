@@ -30,6 +30,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
 import com.past9.phoneaos.agent.AnthropicProvider
@@ -59,6 +63,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         handle(intent)
         val g = App.graph(this)
+        // A phone linked to a computer picks its link up again (remote/RemoteSession.kt).
+        com.past9.phoneaos.remote.RemoteHub.init(this)
         setContent {
             val st by g.settings.state.collectAsStateWithLifecycle()
             AppTheme(accent = st.accent, mascot = st.mascot) {
@@ -72,6 +78,7 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         // Results of jobs handed to the user's machines: caught up and awaited only while the app is on screen.
         com.past9.phoneaos.handoff.Handoffs.onScreen(this)
+        com.past9.phoneaos.remote.RemoteHub.onForeground()
     }
 
     override fun onResume() {
@@ -88,6 +95,7 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         com.past9.phoneaos.handoff.Handoffs.offScreen()
+        com.past9.phoneaos.remote.RemoteHub.onBackground()
         // Swap the home-screen icon to the user's character only once they've left the app.
         val st = App.graph(this).settings.state.value
         if (st.onboarded) runCatching { com.past9.phoneaos.system.Identity.applyLauncherIcon(this, st.mascot, st.accent) }
@@ -133,6 +141,9 @@ class MainActivity : ComponentActivity() {
     private fun Root(g: Graph) {
         val settings by g.settings.state.collectAsStateWithLifecycle()
         if (!settings.onboarded) { Onboarding(g); return }
+        // Linked to a computer: the same screens show the computer's data, and edits and messages go there.
+        val remote by com.past9.phoneaos.remote.RemoteHub.session.collectAsStateWithLifecycle()
+        val dataDb = remote?.db ?: g.db
 
         // Once: if the phone would hold back reminders (battery optimisation, a sleeping Samsung app), say so with the fix.
         var offerReliability by remember { mutableStateOf(false) }
@@ -142,12 +153,12 @@ class MainActivity : ComponentActivity() {
             }
         }
         if (offerReliability) com.past9.phoneaos.ui.screens.ReliabilitySheet { offerReliability = false }
-        val items by g.db.chat().all().collectAsStateWithLifecycle(emptyList())
-        val status by g.runtime.status.collectAsStateWithLifecycle()
-        val goals by g.db.tasks().goals().collectAsStateWithLifecycle(emptyList())
-        val tasks by g.db.tasks().tasks().collectAsStateWithLifecycle(emptyList())
-        val memories by g.db.memory().all().collectAsStateWithLifecycle(emptyList())
-        val allRoutines by g.db.triggers().all().collectAsStateWithLifecycle(emptyList())
+        val items by remember(dataDb) { dataDb.chat().all() }.collectAsStateWithLifecycle(emptyList())
+        val status by (remote?.status ?: g.runtime.status).collectAsStateWithLifecycle()
+        val goals by remember(dataDb) { dataDb.tasks().goals() }.collectAsStateWithLifecycle(emptyList())
+        val tasks by remember(dataDb) { dataDb.tasks().tasks() }.collectAsStateWithLifecycle(emptyList())
+        val memories by remember(dataDb) { dataDb.memory().all() }.collectAsStateWithLifecycle(emptyList())
+        val allRoutines by remember(dataDb) { dataDb.triggers().all() }.collectAsStateWithLifecycle(emptyList())
         // A card's refresh schedule is part of the card, and a wake is a one-off follow-up (see wake_list), not a routine of its own.
         val routines = allRoutines.filter { it.kind != com.past9.phoneaos.cards.CardScripts.KIND && it.kind != com.past9.phoneaos.triggers.Wakes.KIND }
         val browserLive by BrowserService.running.collectAsStateWithLifecycle()
@@ -156,6 +167,7 @@ class MainActivity : ComponentActivity() {
         val backEntry by nav.currentBackStackEntryAsState()
         val route = backEntry?.destination?.route ?: "home"
         val scope = rememberCoroutineScope()
+        val ops = remember(remote) { com.past9.phoneaos.remote.DataOps(applicationContext, remote, g.scope) }
         var draft by rememberSaveable { mutableStateOf("") }
         val attachments = remember { mutableStateListOf<String>() }
         /** Where the camera button is, while the in-place camera card is open (it grows out of there). */
@@ -229,7 +241,7 @@ class MainActivity : ComponentActivity() {
         // Only replies that arrive from now on are read out; the history never is.
         var primed by remember { mutableStateOf(false) }
         LaunchedEffect(items.lastOrNull()?.id) {
-            if (!primed) { g.markHeard(g.db.chat().all().first().map { it.id }); primed = true; return@LaunchedEffect }
+            if (!primed) { g.markHeard(dataDb.chat().all().first().map { it.id }); primed = true; return@LaunchedEffect }
             val last = items.lastOrNull() ?: return@LaunchedEffect
             if (org.json.JSONObject(last.meta).optBoolean("call")) return@LaunchedEffect // already heard it on the call
             val ears = settings.autoPlayEarphones && g.earphonesIn()
@@ -328,14 +340,17 @@ class MainActivity : ComponentActivity() {
         val barRoutes = setOf("home", "tasks", "memory", "routines", "connections")
         val barPad = 112.dp
 
-        androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
+        androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxSize()) {
+        remote?.let { com.past9.phoneaos.remote.RemoteStrip(it) }
+        androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxWidth().weight(1f)
+            .then(if (remote != null) androidx.compose.ui.Modifier.consumeWindowInsets(WindowInsets.statusBars) else androidx.compose.ui.Modifier)) {
             NavHost(nav, startDestination = "home") {
                 composable("home") {
                     androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.surface) {
                         HomeScreen(home, HomeActions(
                             onProfile = { nav.navigate("profile") }, onChat = { nav.navigate("chat") },
                             onAnswer = { id, o -> g.runtime.answer(id, o) },
-                            onToggleTask = { t -> scope.launch { g.db.tasks().updateTask(t.copy(status = if (t.status == "done") "todo" else "done", updatedAt = System.currentTimeMillis())) } },
+                            onToggleTask = { t -> ops.updateTask(t.copy(status = if (t.status == "done") "todo" else "done", updatedAt = System.currentTimeMillis())) },
                             onTasks = { go("tasks") }, onGoal = { nav.navigate("profile") }, onRoutines = { go("routines") },
                             onSettings = { nav.navigate("settings") }, onCall = if (settings.liveEnabled) ({ startCall() }) else null, onBrowser = { nav.navigate("browser") }, onNotifications = { nav.navigate("notifications") },
                             onCard = { openCard = it.id },
@@ -404,9 +419,9 @@ class MainActivity : ComponentActivity() {
                 composable("tasks") {
                     TasksScreen(goals, tasks, bottomPadding = barPad, actions = TaskActions(
                         onBack = { nav.popBackStack() },
-                        onToggle = { t -> scope.launch { g.db.tasks().updateTask(t.copy(status = if (t.status == "done") "todo" else "done", updatedAt = System.currentTimeMillis())) } },
-                        onAdd = { text, due -> scope.launch { g.db.tasks().insertTask(TaskRow(title = text.trim(), owner = "user", dueAt = due)) } },
-                        onDelete = { t -> scope.launch { g.db.tasks().deleteTask(t.id) } },
+                        onToggle = { t -> ops.updateTask(t.copy(status = if (t.status == "done") "todo" else "done", updatedAt = System.currentTimeMillis())) },
+                        onAdd = { text, due -> ops.insertTask(TaskRow(title = text.trim(), owner = "user", dueAt = due)) },
+                        onDelete = { t -> ops.deleteTask(t.id) },
                         onAsk = { prompt -> g.runtime.send(prompt); nav.navigate("chat") },
                     ))
                 }
@@ -417,8 +432,8 @@ class MainActivity : ComponentActivity() {
                     val memoryActions = MemoryActions(
                         onBack = { nav.popBackStack() },
                         onOpen = { m -> if (twoPane) openId = m.id else nav.navigate("page/${m.id}") },
-                        onSave = { m -> scope.launch { if (m.id == 0L) g.db.memory().insert(m) else g.db.memory().update(m) } },
-                        onDelete = { m -> scope.launch { g.db.memory().delete(m.id) } },
+                        onSave = { m -> ops.saveMemory(m) },
+                        onDelete = { m -> ops.deleteMemory(m.id) },
                         onExport = { uri, done -> scope.launch {
                             val note = runCatching { this@MainActivity.contentResolver.openOutputStream(uri)!!.use { com.past9.phoneaos.data.MemoryTransfer.export(g.db.memory(), it) } }
                                 .fold({ com.past9.phoneaos.ui.screens.TransferNote.exported(it) }, { com.past9.phoneaos.ui.screens.TransferNote.failed("Couldn't save the zip", it.message) })
@@ -440,17 +455,17 @@ class MainActivity : ComponentActivity() {
                     WikiPageScreen(memories.firstOrNull { it.id == id }, memories, onBack = { nav.popBackStack() },
                         onOpenTitle = { t -> val target = memories.firstOrNull { it.title.equals(t, true) }
                             if (target != null) nav.navigate("page/${target.id}") else { g.runtime.send("Start a memory page about $t with what you know."); nav.navigate("chat") } },
-                        onSave = { m -> scope.launch { g.db.memory().update(m) } },
-                        onDelete = { m -> scope.launch { g.db.memory().delete(m.id) }; nav.popBackStack() },
+                        onSave = { m -> ops.saveMemory(m) },
+                        onDelete = { m -> ops.deleteMemory(m.id); nav.popBackStack() },
                         onAsk = { p -> g.runtime.send(p); nav.navigate("chat") })
                 }
                 composable("routines") {
                     RoutinesScreen(routines, bottomPadding = barPad, actions = RoutineActions(
                         onBack = { nav.popBackStack() },
-                        onToggle = { r -> scope.launch { val n = r.copy(enabled = !r.enabled); g.db.triggers().upsert(n); Routines.schedule(this@MainActivity, n) } },
-                        onRunNow = { r -> Routines.runNow(this@MainActivity, r.id) },
-                        onDelete = { r -> scope.launch { g.db.triggers().delete(r.id); Routines.cancel(this@MainActivity, r.id) } },
-                        onSave = { r -> scope.launch { val id = g.db.triggers().upsert(r); Routines.schedule(this@MainActivity, r.copy(id = id)) } },
+                        onToggle = { r -> ops.saveRoutine(r.copy(enabled = !r.enabled)) },
+                        onRunNow = { r -> ops.runRoutine(r.id) },
+                        onDelete = { r -> ops.deleteRoutine(r.id) },
+                        onSave = { r -> ops.saveRoutine(r) },
                     ))
                 }
                 composable("connections") {
@@ -548,8 +563,12 @@ class MainActivity : ComponentActivity() {
                         onClearChat = { g.runtime.clearConversation() },
                         onResetAll = { scope.launch { g.runtime.stop(); g.db.clearAllTables(); g.settings.resetAll() } },
                         onBattery = { runCatching { startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))) } },
+                        onLinked = { nav.navigate("linked") },
+                        linkedLine = com.past9.phoneaos.remote.RemoteHub.link.collectAsStateWithLifecycle().value.let { l ->
+                            when { l == null -> "Use the agent on your computer from this phone"; l.on -> "Using ${l.nodeName.ifBlank { "your computer" }}"; else -> "Linked to ${l.nodeName.ifBlank { "a computer" }}, using this phone's own agent" } },
                     ))
                 }
+                composable("linked") { com.past9.phoneaos.remote.LinkedDevicesScreen(onBack = { nav.popBackStack() }) }
                 composable("key") {
                     var p by remember { mutableStateOf(settings.provider) }
                     androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.surface) {
@@ -637,6 +656,7 @@ class MainActivity : ComponentActivity() {
                 HomeBar(route, ::go, onTalk = { nav.navigate("chat") })
             }
         }
+        }
     }
 
     /** The whole subscription setup (install, sign in, done), shared by Settings and onboarding. */
@@ -672,7 +692,10 @@ class MainActivity : ComponentActivity() {
     private fun Onboarding(g: Graph) {
         val notifPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
         val st = g.settings.state.value
+        var linking by remember { mutableStateOf(false) }
+        if (linking) { com.past9.phoneaos.remote.LinkScreen(onBack = { linking = false }, onLinked = { g.settings.setOnboarded(true) }); return }
         OnboardingScreen(onboardingActions(g).copy(
+            linkDevice = { linking = true },
             subSetup = { kind, back, next -> SubSetupFlow(g, kind, onBack = back, onDone = next, onUseKey = back) },
             requestNotifications = { if (com.past9.phoneaos.system.Background.canAskNotifications(this@MainActivity)) notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS) },
             finish = { g.settings.setOnboarded(true) },

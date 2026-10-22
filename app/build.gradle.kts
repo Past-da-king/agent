@@ -16,14 +16,16 @@ android {
     applicationId = "com.past9.phoneaos"
     minSdk = 28
     targetSdk = 28
-    versionCode = 89
-    versionName = "0.13.0"
+    versionCode = 90
+    versionName = "0.14.0"
     // Android never lets an installed app rename itself or change the icon Samsung shows on
     // notifications, so a personal build bakes the owner's agent in: -PagentName=Hina -PagentIcon=ic_app_heart_red
     resValue("string", "app_name", (project.findProperty("agentName") as String?) ?: "Agent")
     manifestPlaceholders["appIcon"] = "@mipmap/" + ((project.findProperty("agentIcon") as String?) ?: "ic_launcher")
     // The runtime pack (node, codex, ripgrep) is arm64 only, like every phone we target.
     ndk { abiFilters += listOf("arm64-v8a") }
+    // A test install beside the real app (an emulator that already has it): -PappIdSuffix=.linktest
+    (project.findProperty("appIdSuffix") as String?)?.let { applicationIdSuffix = it }
   }
   // The runtimes (node, Claude Code, Codex, Antigravity) are not in the APK: they download on first use (runtime/RuntimePacks.kt).
   packaging {
@@ -125,6 +127,9 @@ dependencies {
   implementation(libs.androidx.camera.camera2)
   implementation(libs.androidx.camera.lifecycle)
   implementation(libs.androidx.camera.view)
+  // Reading the link QR code from CameraX frames: zxing core only (pure Java, about 0.5 MB, no Play Services, works offline,
+  // and its encoder lets unit tests make real QR codes). ML Kit barcode scanning would add a model and Play Services.
+  implementation("com.google.zxing:core:3.5.3")
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.androidx.credentials)
   implementation(libs.androidx.credentials.play.services)

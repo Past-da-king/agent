@@ -76,6 +76,8 @@ data class OnboardingActions(
     /** The real install + sign-in flow for Claude / ChatGPT, shown full screen inside onboarding. */
     val subSetup: (@Composable (SubKind, back: () -> Unit, next: () -> Unit) -> Unit)? = null,
     val finish: () -> Unit = {},
+    /** "Use the agent on my computer": link to a computer or server instead of powering an agent here. */
+    val linkDevice: (() -> Unit)? = null,
 )
 
 enum class OnbStep { HELLO, NAME, STYLE, POWER, KEY, SUB, APPS, READY }
@@ -121,7 +123,7 @@ fun OnboardingScreen(actions: OnboardingActions, start: OnbStep = OnbStep.HELLO,
                         OnbStep.HELLO -> Hello { step = OnbStep.NAME }
                         OnbStep.NAME -> NameStep(user, agent, { user = it }, { agent = it }) { actions.saveNames(user, agent); step = OnbStep.STYLE }
                         OnbStep.STYLE -> StyleStep(user, agent, accent, mascot, { accent = it }, { mascot = it }) { actions.chooseStyle(accent, mascot); step = OnbStep.POWER }
-                        OnbStep.POWER -> PowerStep(actions.subAvailable,
+                        OnbStep.POWER -> PowerStep(actions.subAvailable, actions.linkDevice,
                             onKey = { actions.choosePower(PowerMode.API_KEY); step = OnbStep.KEY },
                             onSub = { k ->
                                 if (k == SubKind.OPENCODE) { provider = Provider.OPENCODE_GO; actions.choosePower(PowerMode.API_KEY); step = OnbStep.KEY }
@@ -342,7 +344,7 @@ private fun subMark(k: SubKind): Pair<Color, RoundedPolygon> = when (k) {
 }
 
 @Composable
-private fun PowerStep(available: (SubKind) -> Boolean, onKey: () -> Unit, onSub: (SubKind) -> Unit) {
+private fun PowerStep(available: (SubKind) -> Boolean, onLink: (() -> Unit)?, onKey: () -> Unit, onSub: (SubKind) -> Unit) {
     val cs = MaterialTheme.colorScheme
     StepPage("Power", "How do you want to power your agent?", "Your agent thinks with an AI you already pay for. You can switch any time.", bottom = {}) {
         Text("USE A SUBSCRIPTION YOU ALREADY HAVE", style = Eyebrow, color = cs.onSurfaceVariant)
@@ -381,6 +383,22 @@ private fun PowerStep(available: (SubKind) -> Boolean, onKey: () -> Unit, onSub:
                     listOf("Anthropic", "OpenAI", "Gemini", "DeepSeek", "OpenRouter", "Any OpenAI-compatible").forEach {
                         Surface(shape = RoundedCornerShape(50), color = cs.surface.copy(alpha = 0.7f)) { Text(it, Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.labelMedium) }
                     }
+                }
+            }
+        }
+        if (onLink != null) {
+            Spacer(Modifier.height(24.dp))
+            Text("OR USE THE AGENT ON YOUR COMPUTER", style = Eyebrow, color = cs.onSurfaceVariant)
+            Spacer(Modifier.height(10.dp))
+            Surface(onClick = onLink, shape = MaterialTheme.shapes.extraLarge, color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.QrCodeScanner, null, tint = cs.primary)
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Use the agent on my computer", style = MaterialTheme.typography.titleMedium)
+                        Text("Scan the code in the Agent app on your computer or server. No keys on this phone.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    }
+                    Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = cs.onSurfaceVariant)
                 }
             }
         }

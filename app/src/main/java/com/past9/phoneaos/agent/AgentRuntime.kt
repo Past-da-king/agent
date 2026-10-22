@@ -91,6 +91,8 @@ class AgentRuntime(
     }
     private val _status = MutableStateFlow(AgentStatus())
     val status: StateFlow<AgentStatus> = _status
+    /** Set while the phone is linked to a computer: the computer runs the turns (remote/RemoteSession.kt). */
+    @Volatile var remote: com.past9.phoneaos.remote.RemoteSink? = null
     private val pending = ConcurrentHashMap<Long, CompletableDeferred<String>>()
     /** Questions the MAIN agent is waiting on: typing in the chat answers these (helpers' questions are answered by tapping). */
     private val mainQuestions = ConcurrentHashMap.newKeySet<Long>()
@@ -576,6 +578,7 @@ class AgentRuntime(
     fun sendQuiet(text: String) = send(text, quiet = true)
 
     fun send(text: String, images: List<String> = emptyList(), files: List<String> = emptyList(), voiceReply: Boolean = false, fromCall: String? = null, quiet: Boolean = false) {
+        remote?.let { it.send(text, images, quiet); return }
         val clean = text.trim().ifEmpty { if (images.isNotEmpty() || files.isNotEmpty()) "What do you make of this?" else "" }; if (clean.isEmpty()) return
         // A question card is waiting and the user typed instead of tapping: the typed words ARE the answer.
         // Before, the message queued behind the open question and nothing happened.
@@ -853,6 +856,7 @@ class AgentRuntime(
 
     /** Stop everything: the main agent's turn and every helper. */
     fun stop() {
+        remote?.let { it.stop(); return }
         turnJobs.forEach { it.cancel() }
         helpers.values.forEach { it.job.cancel() }
         inbox.clear()
@@ -863,6 +867,7 @@ class AgentRuntime(
 
     /** Stop one helper. False when it isn't running. */
     fun stopHelper(id: Long): Boolean {
+        remote?.let { return it.stopHelper(id) }
         val h = helpers[id] ?: return false
         h.job.cancel(); return true
     }
@@ -872,6 +877,7 @@ class AgentRuntime(
 
     /** The user tapped an option on a question card (in the app or on a notification). */
     fun answer(itemId: Long, option: String) {
+        remote?.let { it.answer(itemId, option); return }
         scope.launch {
             db.chat().get(itemId)?.let { db.chat().update(it.copy(meta = JSONObject(it.meta).put("answer", option).toString())) }
             pending.remove(itemId)?.complete(option); mainQuestions.remove(itemId)

@@ -41,6 +41,9 @@ data class SettingsActions(
     val onClearChat: () -> Unit = {},
     val onResetAll: () -> Unit = {},
     val onBattery: () -> Unit = {},
+    /** Settings > Linked devices: use the agent on a computer or server. */
+    val onLinked: () -> Unit = {},
+    val linkedLine: String = "Use the agent on your computer from this phone",
 )
 
 data class RuntimeInfo(val available: Boolean, val installedBytes: Long, val signedIn: Boolean, val note: String)
@@ -98,6 +101,10 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
                 Line(Icons.Rounded.Sync, "Hand-offs", com.past9.phoneaos.handoff.HandoffStore.peek(ctx)?.let { "Signed in as $it" } ?: "Let your computers do jobs and report back") { handoffs = true }
                 if (handoffs) com.past9.phoneaos.handoff.HandoffSheet { handoffs = false }
                 Line(Icons.Rounded.BatteryChargingFull, "Battery: unrestricted", "Samsung and others stop background apps. Allow this one to keep working.") { actions.onBattery() }
+            }
+            SectionHeader("Linked devices", "Your computers and servers", Modifier.padding(start = 4.dp, top = 12.dp))
+            AppCard(padding = PaddingValues(vertical = 4.dp)) {
+                Line(Icons.Rounded.Devices, "Linked devices", actions.linkedLine) { actions.onLinked() }
             }
             SectionHeader("Your data", "It all lives on this phone", Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {

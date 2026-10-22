@@ -520,6 +520,7 @@
             <intent-filter><action android:name="android.service.notification.NotificationListenerService" /></intent-filter>
         </service>
         <receiver android:name=".system.AnswerReceiver" android:exported="false" />
+        <receiver android:name=".remote.RemoteAnswerReceiver" android:exported="false" />
         <receiver android:name=".system.AlarmReceiver" android:exported="false" />
         <receiver android:name=".triggers.ReminderActionReceiver" android:exported="false" />
         <receiver android:name=".system.BootReceiver" android:exported="false">
