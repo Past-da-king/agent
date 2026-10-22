@@ -88,6 +88,14 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     private val _health = MutableStateFlow<Map<String, Health?>>(emptyMap())
     val health: StateFlow<Map<String, Health?>> = _health
 
+    /**
+     * The computer's helper and project agent cards (RPC helpers.cards, event helpers.cards): the brain is the one
+     * source; the phone keeps only its newest list. Null while the computer does not publish them (an older build).
+     */
+    private val _cards = MutableStateFlow<List<LiveCard>?>(null)
+    val cards: StateFlow<List<LiveCard>?> = _cards
+    @Volatile private var cardsSeq = -1L
+
     @Volatile private var rpc: RpcClient? = null
     @Volatile private var current: Pick? = null
     @Volatile private var turnRunning = false
@@ -185,13 +193,15 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     private fun connectTo(pick: Pick) {
         detach()
         current = pick
+        // A new connection (maybe another brain) numbers its lists afresh.
+        cardsSeq = -1L
         if (_state.value !is LinkState.Retrying && _state.value !is LinkState.NoAgents) _state.value = LinkState.Connecting
         connectStartedAt = System.currentTimeMillis()
         val c = RpcClient(clientFor(pick.brain.fp), pick.url, link.pass, ::hello, object : RpcClient.Listener {
             override fun onOpen(rpc: RpcClient) {
                 if (this@RemoteSession.rpc !== rpc) return
                 _state.value = LinkState.Connected(pick.brain, pick.url)
-                scope.launch { runCatching { refreshBrains(pick) }; runCatching { reloadAll() }; runCatching { readRunState() } }
+                scope.launch { runCatching { refreshBrains(pick) }; runCatching { loadCards() }; runCatching { reloadAll() }; runCatching { readRunState() } }
             }
             override fun onEvent(rpc: RpcClient, name: String, payload: Any?) { if (this@RemoteSession.rpc === rpc) onEvent(name, payload) }
             override fun onClosed(rpc: RpcClient, why: String, opened: Boolean, problem: LinkProblem) {
@@ -232,6 +242,34 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     private suspend fun readRunState() {
         val v = call("chat.state", listOf()) as? JSONObject ?: return
         turnRunning = v.optBoolean("running"); publishStatus()
+    }
+
+    /** The cards as they are now on the computer (on connect, after a failover, after the app reopens). */
+    suspend fun loadCards() {
+        val v = try { call("helpers.cards", listOf(), 20_000) } catch (e: RpcException) {
+            // An older computer has no cards to give: the chat keeps showing its helper rows as before.
+            if (e.message.orEmpty().contains("not available")) _cards.value = null
+            return
+        }
+        val (seq, list) = LiveCards.parse(v as? JSONObject) ?: return
+        cardsSeq = seq; _cards.value = list
+    }
+
+    private fun onCards(payload: Any?) {
+        val (seq, list) = LiveCards.parse(payload as? JSONObject) ?: return
+        if (seq <= cardsSeq) return
+        cardsSeq = seq; _cards.value = list
+    }
+
+    /** The card as the phone's helper card draws it. */
+    fun cardView(c: LiveCard) = LiveCards.view(c, ids)
+
+    /** Stop from a card: a project agent's card stops its project chat; a helper's stops that helper. */
+    fun stopCard(c: LiveCard) {
+        scope.launch {
+            runCatching { if (c.isProject) call("chat.stop", listOf(c.projectChat)) else call("helpers.stop", listOf(c.id)) }
+                .onFailure { notice("Couldn't stop ${c.label} on ${brainName()}: ${it.message}") }
+        }
     }
 
     // ---- what the phone says about itself ---------------------------------------------------
@@ -498,6 +536,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
                     "chat_changed" -> reloadSoon()
                 }
             }
+            EVT_CARDS -> onCards(payload)
             EVT_DEVICES -> current?.let { p -> scope.launch { runCatching { refreshBrains(p) } } }
             EVT_COMMAND -> (payload as? JSONObject)?.let { c -> scope.launch { commands.handle(c) } }
         }
@@ -519,7 +558,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     }
 
     private fun projectRow(chat: String): ChatItem? {
-        if (chat in brainShown) return null
+        if (chat in brainShown || _cards.value != null) return null
         val p = projectOf[chat] ?: return null
         return RemoteRows.projectHelper(p, chat, projectRows[chat].orEmpty().toList(), chat in running, ids)
     }
@@ -614,6 +653,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         const val EVT_DATA = "agent:evt:data.changed"
         const val EVT_CHAT = "agent:evt:chat.event"
         const val EVT_DEVICES = "agent:evt:devices.changed"
+        const val EVT_CARDS = "agent:evt:helpers.cards"
         const val EVT_COMMAND = "device.command"
     }
 }

@@ -144,7 +144,8 @@ fun withMarker(rows: List<Row_>, firstId: Long?, count: Int): List<Row_> {
     return if (at < 0) rows else rows.toMutableList().apply { add(at, Row_.NewMarker(count)) }
 }
 
-fun group(items: List<ChatItem>): List<Row_> {
+/** [hideHelpers]: a linked computer publishes its own helper cards (remote/LiveCards.kt), so its helper rows stay out of the thread. */
+fun group(items: List<ChatItem>, hideHelpers: Boolean = false): List<Row_> {
     val out = mutableListOf<Row_>(); val buf = mutableListOf<ChatItem>(); val call = mutableListOf<ChatItem>()
     /** Whether the running step buffer is a background routine's work, so a routine's steps never inflate the main agent's count. */
     var bufRoutine: Boolean? = null
@@ -160,6 +161,7 @@ fun group(items: List<ChatItem>): List<Row_> {
         when {
             it.kind == "activity" && m.has("helper") -> {} // shown inside its helper's card
             it.kind == "activity" && m.has("branch") -> {} // shown inside its branch's sheet
+            hideHelpers && it.kind == "helper" -> {} // shown as a live card at the foot of the chat
             // A helper only shows while it works: once it's done or stopped it leaves the chat; its result lives in the agent's reply.
             it.kind == "helper" && m.optString("state", "working").let { st -> st == "stopped" || (st != "working" && lastAgentAt > m.optLong("endedAt", Long.MAX_VALUE)) } -> {}
             it.kind == "activity" && m.optString("image").isEmpty() && m.optString("file").isEmpty() -> {
@@ -193,6 +195,8 @@ fun ChatScreen(
     readMark: () -> Long = { Long.MAX_VALUE },
     onRead: (Long) -> Unit = {},
     listening: Boolean = false,
+    /** A linked computer's helper and project agent cards; null when the phone runs its own agent or the computer has none to give. */
+    live: com.past9.phoneaos.remote.LiveCardsUi? = null,
 ) {
     val byId = remember(items) { items.associateBy { it.id } }
     val list = rememberLazyListState()
@@ -212,8 +216,9 @@ fun ChatScreen(
         val byUnread = markerId?.let { u -> items.indexOfFirst { it.id == u }.let { i -> if (i < 0) byWindow else (i - 8).coerceAtLeast(0) } } ?: byWindow
         minOf(byWindow, byUnread)
     }
-    val rows = remember(items, firstShown, markerId, markerCount) {
-        val g = withMarker(group(items.drop(firstShown)), markerId, markerCount)
+    val hideHelpers = live != null
+    val rows = remember(items, firstShown, markerId, markerCount, hideHelpers) {
+        val g = withMarker(group(items.drop(firstShown), hideHelpers), markerId, markerCount)
         if (firstShown > 0) listOf<Row_>(Row_.Earlier) + g else g
     }
     /** Tap a quote: jump to the message it quotes (loading earlier history first if it is not on screen). */
@@ -247,6 +252,12 @@ fun ChatScreen(
         if (phase != 2 || rows.isEmpty()) return@LaunchedEffect
         if (lastItem?.kind == "user") stick = true
         if (stick) { list.animateScrollToItem(rows.size - 1); seenId = lastId }
+    }
+    // A card arriving or leaving at the foot of the chat stays in view while he follows the end.
+    val cardKey = live?.cards?.joinToString { it.row + it.state }.orEmpty()
+    LaunchedEffect(cardKey) {
+        if (phase != 2 || live == null || live.cards.isEmpty() || !stick) return@LaunchedEffect
+        list.animateScrollToItem(rows.size)
     }
     // Reading the latest counts as having read it; leaving and coming back re-lands him on what is new.
     val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -312,6 +323,7 @@ fun ChatScreen(
                     }
                 }
             }
+            if (live != null && live.cards.isNotEmpty()) item(key = "live-cards") { com.past9.phoneaos.remote.LiveCardList(live) }
             if (status.working && !waitingOnYou) item(key = "working") { WorkingRow(status) }
         }
         // Reading older messages while new ones arrive: say so, and offer the way down.
