@@ -139,16 +139,19 @@ private val projectGlyphs: Map<String, androidx.compose.ui.graphics.vector.Image
 
 /** One helper as a calm, tappable row: who it is, what it's doing (or what it found), how long. */
 @Composable
-fun HelperCard(h: HelperView, onClick: () -> Unit, modifier: Modifier = Modifier, now: Long = System.currentTimeMillis()) {
+fun HelperCard(h: HelperView, onClick: () -> Unit, modifier: Modifier = Modifier, now: Long = System.currentTimeMillis(),
+               /** The small card a linked computer's helpers use at the foot of the chat (the desktop side panel's size). */
+               compact: Boolean = false, iconSize: Dp = 40.dp) {
     val cs = MaterialTheme.colorScheme
     val look = lookOf(h.state)
-    Surface(onClick = onClick, shape = MaterialTheme.shapes.extraLarge, color = cs.surfaceContainerLow, modifier = modifier.fillMaxWidth()) {
-        Row(Modifier.padding(start = 14.dp, end = 10.dp, top = 14.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (h.project.isNotBlank()) ProjectTile(h) else HelperOrb(h.state, profileColor = h.profileColor.takeIf { h.profile.isNotBlank() })
-            Spacer(Modifier.width(14.dp))
+    val pad = if (compact) 10.dp else 14.dp
+    Surface(onClick = onClick, shape = if (compact) MaterialTheme.shapes.large else MaterialTheme.shapes.extraLarge, color = cs.surfaceContainerLow, modifier = modifier.fillMaxWidth()) {
+        Row(Modifier.padding(start = pad + if (compact) 2.dp else 0.dp, end = 10.dp, top = pad, bottom = pad), verticalAlignment = Alignment.CenterVertically) {
+            if (h.project.isNotBlank()) ProjectTile(h, iconSize) else HelperOrb(h.state, iconSize, profileColor = h.profileColor.takeIf { h.profile.isNotBlank() })
+            Spacer(Modifier.width(if (compact) 12.dp else 14.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(h.label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Text(h.label, style = if (compact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     Spacer(Modifier.width(8.dp))
                     Text(if (h.working) spanLabel(now - h.startedAt) else look.word, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
                 }
@@ -158,7 +161,7 @@ fun HelperCard(h: HelperView, onClick: () -> Unit, modifier: Modifier = Modifier
                     h.result.isNotBlank() -> plainFirstLine(h.result)
                     else -> plainFirstLine(h.item.text)
                 }
-                Text(line, style = MaterialTheme.typography.bodyMedium, color = if (h.working) cs.primary else cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(line, style = if (compact) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium, color = if (h.working) cs.primary else cs.onSurfaceVariant, maxLines = if (compact) 1 else 2, overflow = TextOverflow.Ellipsis)
             }
             Icon(Icons.Rounded.ChevronRight, "Open ${h.label}", tint = cs.onSurfaceVariant)
         }

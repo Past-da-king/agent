@@ -162,6 +162,8 @@ class MainActivity : ComponentActivity() {
         if (offerReliability) com.past9.phoneaos.ui.screens.ReliabilitySheet { offerReliability = false }
         val items by remember(dataDb) { dataDb.chat().all() }.collectAsStateWithLifecycle(emptyList())
         val status by (remote?.status ?: g.runtime.status).collectAsStateWithLifecycle()
+        val liveCards = remote?.cards?.collectAsStateWithLifecycle()?.value
+        val liveUi = remote?.let { r -> liveCards?.let { list -> com.past9.phoneaos.remote.LiveCardsUi(list, r::cardView, r::stopCard) } }
         val goals by remember(dataDb) { dataDb.tasks().goals() }.collectAsStateWithLifecycle(emptyList())
         val tasks by remember(dataDb) { dataDb.tasks().tasks() }.collectAsStateWithLifecycle(emptyList())
         val memories by remember(dataDb) { dataDb.memory().all() }.collectAsStateWithLifecycle(emptyList())
@@ -396,7 +398,7 @@ class MainActivity : ComponentActivity() {
                 }
                 composable("chat") {
                     ChatScreen(items, status, settings.agentName, settings.userName, browserLive, draft, { draft = it },
-                        listening = dictating,
+                        listening = dictating, live = liveUi,
                         readMark = { g.settings.extra("chatRead")?.toLongOrNull() ?: Long.MAX_VALUE },
                         onRead = { id -> if (id > (g.settings.extra("chatRead")?.toLongOrNull() ?: 0L)) g.settings.setExtra("chatRead", id.toString()) },
                         actions = ChatActions(
