@@ -102,6 +102,7 @@ function command(deviceId, cmd) {
 
 async function rpc(node, sock, method, args) {
   switch (method) {
+    case 'helpers.cards': return cardsSnap()
     case 'data.list': return rows[args[0]] ?? []
     case 'data.get': return (rows[args[0]] ?? []).find((r) => r.id === args[1]) ?? null
     case 'data.upsert': {
@@ -244,6 +245,27 @@ function up(node) { if (node.up) return; node.up = true; serve(node); log(`${nod
   fs.writeFileSync('/tmp/fake-node-pic.png', Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]))
 }
 fs.writeFileSync('/tmp/fake-node-hello.txt', 'Hello from the fake node. This file was sent to the phone with send_file.\n')
+
+// Helper and project agent cards, as the desktop publishes them (shared/helper-cards.ts). /cards?spec=Garden:3,main:1,Shop:4&done=2
+// sets them: per place, the number working (a project's first card is its project agent, the rest its helpers); done=N adds finished cards.
+let cards = []; let cardsSeq = 0; const cardStart = Date.now()
+const cardIcons = { Garden: ['heart', 'teal'], Shop: ['bolt', 'ember'], Studio: ['palette', 'rose'], Site: ['globe', 'ocean'] }
+const cardsSnap = () => ({ seq: cardsSeq, at: Date.now(), cards })
+function setCards(spec, done) {
+  const out = []; let i = 0
+  const one = (o) => out.push({ queued: false, line: 'Working on step ' + (++i), done: '', model: '', startedAt: cardStart - i * 60000, endedAt: null, brief: o.label, result: '', steps: [], chat: 'main', projectChat: '', depth: 0, state: 'working', ...o, row: o.id })
+  for (const part of String(spec || '').split(',').filter(Boolean)) {
+    const [place, nRaw] = part.split(':'); const n = Number(nRaw || 1)
+    if (place === 'main') { for (let k = 0; k < n; k++) one({ id: 'm' + k, label: 'Main helper ' + (k + 1), owner: { kind: 'main' } }); continue }
+    const [glyph, color] = cardIcons[place] ?? ['folder', 'iris']
+    const owner = { kind: 'project', id: 'p-' + place, name: place, icon: { glyph, color } }
+    one({ id: 'pa-' + place, label: place, projectChat: 'pc-' + place, owner })
+    for (let k = 1; k < n; k++) one({ id: place + '-h' + k, label: place + ' helper ' + k, depth: 1, chat: 'pc-' + place, owner })
+  }
+  for (let k = 0; k < Number(done || 0); k++) one({ id: 'd' + k, label: 'Finished job ' + (k + 1), state: 'done', done: 'Finished it', result: 'Finished it', endedAt: Date.now() - k * 1000, owner: { kind: 'main' } })
+  cards = out; cardsSeq++
+  broadcast('agent:evt:helpers.cards', cardsSnap()); log(`cards ${spec} done=${done ?? 0}: ${out.length}`)
+}
 nodes.forEach(serve)
 http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x')
@@ -253,6 +275,7 @@ http.createServer((req, res) => {
   if (url.pathname === '/flaky') { flakyHealth = Number(url.searchParams.get('n') ?? 1); return json(res, 200, { ok: true }) }
   if (url.pathname === '/wsdelay') { wsDelay = Number(url.searchParams.get('ms') ?? 0); return json(res, 200, { ok: true }) }
   if (url.pathname === '/forget') { passes.clear(); for (const n of nodes) for (const s of n.sockets) s.terminate(); return json(res, 200, { ok: true }) }
+  if (url.pathname === '/cards') { setCards(url.searchParams.get('spec'), url.searchParams.get('done')); return json(res, 200, { ok: true, n: cards.length }) }
   if (url.pathname === '/offer') return json(res, 200, newOffer())
   if (url.pathname === '/state') return json(res, 200, { upgrades, nodes: nodes.map((x) => ({ name: x.name, up: x.up, sockets: x.sockets.size })), devices: [...devices.values()].map((d) => d.name), rows: Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, v.length])) })
   json(res, 404, {})

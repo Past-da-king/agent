@@ -56,4 +56,28 @@ class LiveCardsTest {
         // The same card keeps the same id while it is redrawn.
         assertEquals(project.id, LiveCards.view(cards[0], ids).id)
     }
+
+    private fun card(id: String, project: String?, working: Boolean, depth: Int = 0) = LiveCards.card(JSONObject()
+        .put("id", id).put("state", if (working) "working" else "done").put("depth", depth)
+        .put("owner", if (project == null) JSONObject().put("kind", "main") else JSONObject().put("kind", "project").put("name", project).put("icon", JSONObject().put("glyph", "heart").put("color", "teal"))))!!
+
+    @Test fun pillCountsWorkingAgentsPerPlace() {
+        val cards = listOf(card("a", "Garden", true), card("a1", "Garden", true, 1), card("a2", "Garden", false, 1),
+            card("m", null, true), card("b", "Shop", true), card("b1", "Shop", true, 1), card("b2", "Shop", true, 1), card("c", "Old", false))
+        val g = com.past9.phoneaos.remote.pillGroups(cards)
+        assertEquals(listOf("p:Garden" to 2, "main" to 1, "p:Shop" to 3), g.map { it.key to it.count })
+        assertEquals("a", g[0].card.id)
+        assertTrue(g[0].isProject && !g[1].isProject)
+        // Nothing working: no pill.
+        assertTrue(com.past9.phoneaos.remote.pillGroups(listOf(card("x", "Garden", false))).isEmpty())
+    }
+
+    @Test fun foldsPastTwoUntilHeChooses() {
+        val f: (String, Int) -> Boolean = { c, n -> com.past9.phoneaos.remote.foldedFor(c, n) }
+        assertEquals(listOf(false, false, false, true, true), listOf(0, 1, 2, 3, 8).map { f("", it) })
+        assertEquals(listOf(false, false, false), listOf(0, 3, 8).map { f("open", it) })
+        assertEquals(listOf(false, true, true), listOf(0, 1, 8).map { f("closed", it) })
+        val fold = com.past9.phoneaos.remote.AgentsFold(null)
+        assertTrue(fold.folded(3)); fold.set(true); assertTrue(!fold.folded(8)); fold.set(false); assertTrue(fold.folded(1))
+    }
 }

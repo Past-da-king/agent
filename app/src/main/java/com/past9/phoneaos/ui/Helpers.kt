@@ -105,7 +105,7 @@ fun HelperOrb(state: String, size: Dp = 40.dp, profileColor: String? = null) {
  * the project's colour. A working project gets a small spinner in the corner, as helpers do.
  */
 @Composable
-fun ProjectTile(h: HelperView, size: Dp = 40.dp) {
+fun ProjectTile(h: HelperView, size: Dp = 40.dp, spinner: Boolean = true) {
     val accent = com.past9.phoneaos.ui.theme.accentOf(h.projectColor)
     val bitmap = remember(h.projectImage) {
         runCatching {
@@ -124,7 +124,7 @@ fun ProjectTile(h: HelperView, size: Dp = 40.dp) {
                 else -> Text(h.project.take(1).uppercase(), style = MaterialTheme.typography.titleMedium, color = Color.White)
             }
         }
-        if (h.working) LoadingIndicator(Modifier.size(size * 0.45f).align(Alignment.BottomEnd).clip(CircleShape).background(MaterialTheme.colorScheme.surface), color = accent.lP)
+        if (h.working && spinner) LoadingIndicator(Modifier.size(size * 0.45f).align(Alignment.BottomEnd).clip(CircleShape).background(MaterialTheme.colorScheme.surface), color = accent.lP)
     }
 }
 
