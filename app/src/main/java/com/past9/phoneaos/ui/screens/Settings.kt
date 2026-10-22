@@ -86,9 +86,8 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
             }
             SectionHeader("Voice", "Talking instead of typing", Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
-                Line(Icons.Rounded.RecordVoiceOver, "Voice", listOf(
-                    mapOf("system" to "Phone voice", "gemini" to "Google voice", "openai" to "OpenAI voice", "elevenlabs" to "ElevenLabs voice")[s.ttsProvider] ?: "Phone voice",
-                    if (s.liveEnabled) "live calls on" else null).filterNotNull().joinToString(" · ")) { voiceSheet = true }
+                Line(Icons.Rounded.RecordVoiceOver, "Voice",
+                    mapOf("system" to "Phone voice", "gemini" to "Google voice", "openai" to "OpenAI voice", "elevenlabs" to "ElevenLabs voice")[s.ttsProvider] ?: "Phone voice") { voiceSheet = true }
             }
             SectionHeader("Background", "So routines and browsing keep going", Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {

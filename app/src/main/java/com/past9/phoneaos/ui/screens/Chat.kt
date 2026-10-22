@@ -93,6 +93,8 @@ data class ChatActions(
     /** Open a live card (by id) in its sheet. */
     val onCard: (String) -> Unit = {},
     val onCall: (() -> Unit)? = null,
+    /** False when this phone can't place a call right now: the button still shows, dimmed, and a tap says why. */
+    val callReady: Boolean = true,
     /** Non-null while a reply is being read aloud: tap to stop it. */
     val onStopSpeaking: (() -> Unit)? = null,
     /** Open a report (its file path) in the full-screen reader. */
@@ -379,7 +381,10 @@ private fun ChatTopBar(agentName: String, status: AgentStatus, browserLive: Bool
                 }
             }
             if (actions.onStopSpeaking != null) FilledTonalIconButton(onClick = actions.onStopSpeaking) { Icon(Icons.Rounded.VolumeOff, "Stop reading aloud") }
-            if (actions.onCall != null) IconButton(onClick = actions.onCall) { Icon(Icons.Rounded.Call, "Call your agent") }
+            if (actions.onCall != null) IconButton(onClick = actions.onCall) {
+                Icon(Icons.Rounded.Call, if (actions.callReady) "Call your agent" else "Call your agent (needs setup)",
+                    tint = if (actions.callReady) LocalContentColor.current else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
+            }
             AnimatedVisibility(browserLive, enter = scaleIn(spring(0.6f, 800f)) + fadeIn(), exit = scaleOut() + fadeOut()) {
                 FilledTonalIconButton(onClick = actions.onBrowser) { Icon(Icons.Rounded.Language, "Watch the agent's browser") }
             }

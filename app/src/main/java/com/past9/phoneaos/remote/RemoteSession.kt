@@ -266,7 +266,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         }
     }
 
-    private fun brainName(): String = (current?.brain?.name ?: link.nodeName).ifBlank { "your computer" }
+    /** Never a machine name in the conversation (notices, status): which computer answers lives in Settings > Linked devices. */
+    private fun brainName(): String = "your computer"
 
     /** A line in the chat when something the person did couldn't reach the computer. */
     private fun notice(text: String) = scope.launch {
@@ -434,7 +435,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     }
 
     private fun publishStatus() {
-        _status.value = AgentStatus(working = turnRunning, label = if (turnRunning) "Working on ${brainName()}" else "")
+        _status.value = AgentStatus(working = turnRunning, label = if (turnRunning) "Working" else "")
     }
 
     private fun onEvent(name: String, payload: Any?) {

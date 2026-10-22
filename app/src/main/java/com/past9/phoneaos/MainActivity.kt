@@ -11,6 +11,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
@@ -207,7 +208,8 @@ class MainActivity : ComponentActivity() {
             }
         }
         val linkState = remote?.state?.collectAsStateWithLifecycle()?.value
-        val modelLabel = if (remote != null) "On " + ((linkState as? com.past9.phoneaos.remote.LinkState.Connected)?.brain?.name ?: remote!!.link.nodeName.ifBlank { "your computer" })
+        // Linked: no model pill and no machine name in the chat; the computer picks its own model.
+        val modelLabel = if (remote != null) ""
             else if (onSub) prettyModel(settings.subModel) else settings.model.substringAfterLast('/')
         val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(4)) { uris ->
             scope.launch { uris.forEach { u -> importImage(u)?.let { attachments += it } } }
@@ -265,7 +267,10 @@ class MainActivity : ComponentActivity() {
         // Start CameraX early (no camera is opened, no permission is asked) so the camera card opens fast.
         LaunchedEffect(route) { if (route == "chat") com.past9.phoneaos.camera.CameraWarm.warm(this@MainActivity) }
         val micPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) nav.navigate("call") }
-        fun startCall() { if (androidx.core.content.ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) nav.navigate("call") else micPerm.launch(Manifest.permission.RECORD_AUDIO) }
+        // The call button always shows. When this phone can't place the call, a tap says why instead of hiding it.
+        var callWhy by remember { mutableStateOf<String?>(null) }
+        fun startCall() { g.call.unavailableReason(remote != null)?.let { callWhy = it; return }
+            if (androidx.core.content.ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) nav.navigate("call") else micPerm.launch(Manifest.permission.RECORD_AUDIO) }
         val notifPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { conn = conn.copy(notificationsAllowed = it) }
         // The agent asked for a permission mid-task: show Android's prompt and hand the answer back.
         val permReq by com.past9.phoneaos.system.PermissionBroker.pending.collectAsStateWithLifecycle()
@@ -356,9 +361,18 @@ class MainActivity : ComponentActivity() {
         val barPad = 112.dp
 
         androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxSize()) {
-        remote?.let { com.past9.phoneaos.remote.RemoteStrip(it) }
+        // Linked: no bar at all while something answers (failover is silent); a bar only when nothing can.
+        remote?.let { com.past9.phoneaos.remote.RemoteTroubleBar(it, onDevices = { nav.navigate("linked") { launchSingleTop = true } }) }
+        callWhy?.let { why ->
+            androidx.compose.material3.AlertDialog(onDismissRequest = { callWhy = null },
+                icon = { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.Call, null) },
+                title = { androidx.compose.material3.Text("Calls need a Google key") },
+                text = { androidx.compose.material3.Text(why) },
+                confirmButton = { androidx.compose.material3.TextButton(onClick = { callWhy = null; nav.navigate("settings") { launchSingleTop = true } }) { androidx.compose.material3.Text("Open Settings") } },
+                dismissButton = { androidx.compose.material3.TextButton(onClick = { callWhy = null }) { androidx.compose.material3.Text("Not now") } })
+        }
         androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxWidth().weight(1f)
-            .then(if (remote != null) androidx.compose.ui.Modifier.consumeWindowInsets(WindowInsets.statusBars) else androidx.compose.ui.Modifier)) {
+            .then(if (linkState?.let { com.past9.phoneaos.remote.RemoteTrouble.shows(it) } == true) androidx.compose.ui.Modifier.consumeWindowInsets(WindowInsets.statusBars) else androidx.compose.ui.Modifier)) {
             NavHost(nav, startDestination = "home") {
                 composable("home") {
                     androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.surface) {
@@ -367,7 +381,7 @@ class MainActivity : ComponentActivity() {
                             onAnswer = { id, o -> g.runtime.answer(id, o) },
                             onToggleTask = { t -> ops.updateTask(t.copy(status = if (t.status == "done") "todo" else "done", updatedAt = System.currentTimeMillis())) },
                             onTasks = { go("tasks") }, onGoal = { nav.navigate("profile") }, onRoutines = { go("routines") },
-                            onSettings = { nav.navigate("settings") }, onCall = if (settings.liveEnabled) ({ startCall() }) else null, onBrowser = { nav.navigate("browser") }, onNotifications = { nav.navigate("notifications") },
+                            onSettings = { nav.navigate("settings") }, onCall = { startCall() }, onBrowser = { nav.navigate("browser") }, onNotifications = { nav.navigate("notifications") },
                             onCard = { openCard = it.id },
                         ), bottomPadding = barPad + 24.dp)
                     }
@@ -414,7 +428,7 @@ class MainActivity : ComponentActivity() {
                                 attachments.clear(); docs.clear() }, onStop = { g.runtime.stop() },
                             onAttachDoc = { docPicker.launch(arrayOf("*/*")) }, onCamera = { cameraOrigin = it }, onRemoveDoc = { docs.remove(it) },
                             onAttach = { picker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-                            onRemoveAttachment = { attachments.remove(it) }, onModel = { openModels() }, onCall = if (settings.liveEnabled) ({ startCall() }) else null, onStopSpeaking = if (speakingNow) ({ g.stopSpeaking() }) else null,
+                            onRemoveAttachment = { attachments.remove(it) }, onModel = { openModels() }, onCall = { startCall() }, callReady = settings.let { g.call.unavailableReason(remote != null) == null },onStopSpeaking = if (speakingNow) ({ g.stopSpeaking() }) else null,
                             onAnswer = { id, o -> g.runtime.answer(id, o) },
                             onReport = { path -> nav.navigate("report?path=" + Uri.encode(path)) },
                             onMenu = { nav.popBackStack() }, onBrowser = { nav.navigate("browser") }, onProfile = { nav.navigate("profile") },
