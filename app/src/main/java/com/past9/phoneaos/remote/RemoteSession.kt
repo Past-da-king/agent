@@ -384,7 +384,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
             val item = db.chat().get(itemId)
             item?.let { db.chat().update(it.copy(meta = JSONObject(it.meta).put("answer", option).toString())) }
             runCatching {
-                if (item?.kind == "approval") call("chat.decide", listOf(rid, if (isYes(option)) "approve" else "decline"))
+                val approval = item?.kind == "approval" || item?.let { runCatching { JSONObject(it.meta).optString("remoteKind") }.getOrNull() } == "approval"
+                if (approval) call("chat.decide", listOf(rid, if (isYes(option)) "approve" else "decline"))
                 else call("chat.answer", listOf(rid, option))
             }.onFailure { notice("Couldn't answer on ${brainName()}: ${it.message}") }
         }
@@ -435,7 +436,11 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         val projects = list("project")
         val allChat = list("chat_item")
         // The phone keeps the recent part of the main chat; the full history stays on the computer.
-        val chat = allChat.filter(RemoteRows::inMainChat).sortedBy { it.optLong("createdAt") }.takeLast(CHAT_ROWS)
+        // Plus every card still waiting on him, from any chat and however old: the computer counts those as waiting for
+        // you, so Home's Needs you must show them and let him answer (22 Oct 2026: two helper cards were invisible).
+        val mainTail = allChat.filter(RemoteRows::inMainChat).sortedBy { it.optLong("createdAt") }.takeLast(CHAT_ROWS)
+        val tailIds = mainTail.map { it.optString("id") }.toSet()
+        val chat = (mainTail + allChat.filter { RemoteRows.isOpenCard(it) && it.optString("id") !in tailIds }).sortedBy { it.optLong("createdAt") }
         chat.forEach(::noteBrainRow)
         // Project chats show as helper rows with the project's icon.
         runCatching { (call("chat.states", listOf()) as? JSONArray)?.let { a -> running.clear(); for (i in 0 until a.length()) a.optJSONObject(i)?.takeIf { it.optBoolean("running") }?.let { running += it.optString("chat") } } }
@@ -496,6 +501,10 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         when (entity) {
             "chat_item" -> {
                 val c = RemoteRows.chatOf(row)
+                // A card from another chat: shown while it waits, and updated (answered) once the phone has it.
+                if (c != "main" && (RemoteRows.isOpenCard(row) || (row.optString("kind") in setOf("question", "approval") && ids.localOrNull(row.optString("id")) != null))) {
+                    putChat(RemoteRows.chat(row, ids, notes))
+                }
                 if (c == "main") { noteBrainRow(row); putChat(RemoteRows.chat(row, ids, notes)); fetchMedia(row) }
                 else if (projectOf.containsKey(c)) {
                     val list = projectRows.getOrPut(c) { ArrayList() }
