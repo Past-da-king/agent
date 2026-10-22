@@ -71,3 +71,8 @@ See `git log -1` on `feature/remote`.
 - Voice notes from the computer: rows of kind voice_note (meta.file = a note name in the desktop's voice-notes folder) now map to the phone's voice row. The audio comes over /v1/rpc with voice.noteAudio (the desktop player's own call, {"$b64"} on the wire) and is saved in files/linked-notes. States: loading, ready, or "Audio unavailable" with the reason and Try again. It never falls back to text; the script shows only under "Read it".
 - Mic: SystemDictation (android.speech.SpeechRecognizer, Google's service preferred, device locale, partial results, EXTRA_PREFER_OFFLINE false, keeps listening across pauses). The Gemini Live stream (Dictation.kt) is only the fallback for a phone with no recogniser, and a toast says so.
 - Proof: fake node (now serves voice.noteAudio; say "voice", or "gone" for a missing note) on agent-redroid: MediaPlayer state:started for the app, screenshots in ~/phone-aos/proof-0143. Suite 552 run, 2 fail (the old OpenUiButtonsAndPromptTest ones).
+
+## 0.14.4 (22 Oct): live helper cards
+- The brain (desktop 0.2.45) publishes helper and project agent cards: RPC helpers.cards on connect, event agent:evt:helpers.cards on change. remote/LiveCards.kt keeps the newest list; remote/LiveCardsUi.kt draws them at the foot of the chat (project first, helpers indented, live line, done line, older finished folded). Older computers keep the helper rows.
+- Proof against a real headless node on agent-redroid: ~/phone-aos/proof-0144 (cards in seconds, live lines, tap follows live, kill/reopen and node restart mid-run). Suite 555 run, 2 old OpenUi fails.
+- Not yet installed on his phone (not plugged in at 10:30).
