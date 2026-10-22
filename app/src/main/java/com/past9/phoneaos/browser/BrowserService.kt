@@ -28,11 +28,14 @@ class BrowserService : Service() {
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "Background browsing", NotificationManager.IMPORTANCE_LOW))
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java).putExtra("open", "browser"), PendingIntent.FLAG_IMMUTABLE)
-        val st = com.past9.phoneaos.App.graph(this).settings.state.value
-        val n = com.past9.phoneaos.system.Identity.asAgent(this, androidx.core.app.NotificationCompat.Builder(this, CHANNEL)
-            .setContentTitle("${st.agentName.ifBlank { "Your agent" }} is browsing").setContentText("Tap to watch or take over")
-            .setSmallIcon(com.past9.phoneaos.system.Identity.statIcon(this, st.mascot)).setOngoing(true).setContentIntent(open), "", "I'm browsing. Tap to watch or take over.").build()
-        if (Build.VERSION.SDK_INT >= 34) startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(ID, n)
+        val n = {
+            val st = com.past9.phoneaos.App.graph(this).settings.state.value
+            com.past9.phoneaos.system.Identity.asAgent(this, androidx.core.app.NotificationCompat.Builder(this, CHANNEL)
+                .setContentTitle("${st.agentName.ifBlank { "Your agent" }} is browsing").setContentText("Tap to watch or take over")
+                .setSmallIcon(com.past9.phoneaos.system.Identity.statIcon(this, st.mascot)).setOngoing(true).setContentIntent(open), "", "I'm browsing. Tap to watch or take over.").build()
+        }
+        // Foreground first, through the guard (system/ForegroundGuard.kt): never stopped before it gets there.
+        if (!com.past9.phoneaos.system.ForegroundGuard.enter(this, ID, if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0, n)) return
         _running.value = true
         // Battery: a browser left open after a task kept a WebView and this service alive forever.
         // Close everything once nothing has used it for a few minutes; the next browse reopens it,
@@ -50,7 +53,7 @@ class BrowserService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_NOT_STICKY
 
-    override fun onDestroy() { idle?.cancel(); engines.values.forEach { it.destroy() }; engines.clear(); _engines.value = emptyMap(); _running.value = false; super.onDestroy() }
+    override fun onDestroy() { com.past9.phoneaos.system.ForegroundGuard.left(this); idle?.cancel(); engines.values.forEach { it.destroy() }; engines.clear(); _engines.value = emptyMap(); _running.value = false; super.onDestroy() }
 
     companion object {
         private const val CHANNEL = "browser"
@@ -68,8 +71,8 @@ class BrowserService : Service() {
         private const val MAX = 4
         private const val IDLE_MS = 3 * 60_000L
 
-        fun start(context: Context) { context.startForegroundService(Intent(context, BrowserService::class.java)) }
-        fun stop(context: Context) { context.stopService(Intent(context, BrowserService::class.java)) }
+        fun start(context: Context) { com.past9.phoneaos.system.ForegroundGuard.start(context, BrowserService::class.java) }
+        fun stop(context: Context) { com.past9.phoneaos.system.ForegroundGuard.stop(context, BrowserService::class.java) }
 
         /** Start the service if needed and get (or open) the browser for this agent. */
         suspend fun await(context: Context, owner: String = "main", profile: String = "Personal"): BrowserEngine {

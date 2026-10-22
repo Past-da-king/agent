@@ -57,10 +57,11 @@ class AndroidPhone(private val context: Context) : PhoneBridge {
 
     override fun workStarted() {
         activeCount = active.incrementAndGet()
-        if (activeCount == 1) runCatching { context.startForegroundService(Intent(context, WorkService::class.java)) }
+        if (activeCount == 1) ForegroundGuard.start(context, WorkService::class.java)
     }
     override fun workFinished() {
-        if (active.decrementAndGet() <= 0) { active.set(0); activeCount = 0; context.stopService(Intent(context, WorkService::class.java)) } else activeCount = active.get()
+        // A quick turn can finish before the service is up: the guard stops it once it is, never before (that crashes).
+        if (active.decrementAndGet() <= 0) { active.set(0); activeCount = 0; ForegroundGuard.stop(context, WorkService::class.java) } else activeCount = active.get()
     }
 
     /** The "Agent is working: N helpers" line follows the count, and a safety-net check runs while any helper is working. */
@@ -101,9 +102,10 @@ class WorkService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onCreate() {
         super.onCreate()
-        val n = build(this)
-        if (Build.VERSION.SDK_INT >= 34) startForeground(42, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(42, n)
+        // Foreground first, through the guard: a throw while building the notification still reaches startForeground.
+        ForegroundGuard.enter(this, 42, if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0) { build(this) }
     }
+    override fun onDestroy() { ForegroundGuard.left(this); handler.removeCallbacksAndMessages(null); super.onDestroy() }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // intent == null: Android restarted us after killing the app. Creating the graph (in build) resumes the cut-off helpers;
         // if there turns out to be nothing to resume, don't hang around.

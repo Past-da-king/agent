@@ -74,7 +74,7 @@ object ExactAlarms {
      * not later from a worker where it would be refused and the work killed half way.
      */
     fun holdProcess(context: Context) {
-        runCatching { context.startForegroundService(Intent(context, WorkService::class.java).putExtra(WorkService.EXTRA_KEEPALIVE, true)) }
+        ForegroundGuard.start(context, WorkService::class.java, Intent(context, WorkService::class.java).putExtra(WorkService.EXTRA_KEEPALIVE, true))
     }
 }
 

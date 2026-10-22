@@ -14,6 +14,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.past9.phoneaos.App
 import com.past9.phoneaos.MainActivity
+import com.past9.phoneaos.system.ForegroundGuard
 import com.past9.phoneaos.system.Identity
 
 /**
@@ -23,22 +24,25 @@ import com.past9.phoneaos.system.Identity
  */
 class CallService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
-    private var foreground = false
+
+    /**
+     * startForeground first, in onCreate, and exactly once (calling it again later re-runs Android 14's mic eligibility
+     * check, which throws when the screen is off). Through ForegroundGuard: if the mic type is refused it still reaches
+     * the foreground, and a stop that came early waits until then. Stopping before startForeground crashed the app
+     * (22 Oct 2026, a call refused by a computer still on 0.2.47).
+     */
+    override fun onCreate() {
+        super.onCreate()
+        val type = if (Build.VERSION.SDK_INT >= 30) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK else 0
+        if (!ForegroundGuard.enter(this, ID, type) { notification() }) Log.w("CallService", "not holding the mic: the call was ended before it started")
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_END) { App.graph(this).call.end(); stopSelf(); return START_NOT_STICKY }
-        // startForeground exactly once: calling it again later re-runs Android 14's mic eligibility
-        // check, which throws when the screen is off.
-        if (!foreground) try {
-            val n = notification()
-            if (Build.VERSION.SDK_INT >= 30) startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
-            else startForeground(ID, n)
-            foreground = true
-        } catch (e: Exception) {
-            Log.w("CallService", "could not hold the mic: ${e.message}"); stopSelf()
-        }
         return START_NOT_STICKY
     }
+
+    override fun onDestroy() { ForegroundGuard.left(this); super.onDestroy() }
 
     /**
      * An ongoing-call notification (Android's CallStyle): the green call chip in the status bar and the top
@@ -67,7 +71,7 @@ class CallService : Service() {
         private const val ID = 77
         private const val CHANNEL = "calls_live"
         private const val ACTION_END = "end"
-        fun start(context: Context) = runCatching { context.startForegroundService(Intent(context, CallService::class.java)) }
-        fun stop(context: Context) = runCatching { context.stopService(Intent(context, CallService::class.java)) }
+        fun start(context: Context): Boolean = ForegroundGuard.start(context, CallService::class.java)
+        fun stop(context: Context) = ForegroundGuard.stop(context, CallService::class.java)
     }
 }

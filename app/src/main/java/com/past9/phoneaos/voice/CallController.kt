@@ -106,15 +106,17 @@ class CallController(
             When the main agent asks the user something, it waits until it gets an answer, and your conversation carries on meanwhile. Put the question to the user naturally, at a good moment. If it's a choice or a question, take their answer (or decide yourself if they tell you to) and call answer_agent_question with it plus anything from the call that matters. If it needs them to DO something (hold Approve on a payment or send, sign in, type a code), tell them exactly what to tap: the card is on the call screen.
         """.trimIndent()
         _state.value = CallState(active = true, phase = "connecting")
-        // Started while the call screen is in front, which is what Android requires for the mic.
-        CallService.start(context)
+        // Pre-flight first (the key, or the computer's one-use token); the call service starts only once the call really
+        // can, in begin(). A refusal is a message on the call screen, never a started-then-stopped service (that crashed
+        // the app on 22 Oct 2026 when a computer on 0.2.47 refused the call). The call screen stays in front meanwhile,
+        // which is what Android requires for the mic.
         scope.launch {
             if (r == null) { begin(LiveAuth.keyUrl(key!!), null, system, null, null); return@launch }
             when (val t = linkedAuth(r)) {
                 is LiveAuth.Token.Ok -> begin(t.url, { (kotlinx.coroutines.runBlocking { linkedAuth(r) } as? LiveAuth.Token.Ok)?.url }, system, t.model, t.voice)
                 // No key on the computer but one here: the call still goes, on this phone's key.
                 is LiveAuth.Token.No -> if (key != null) begin(LiveAuth.keyUrl(key), null, system, null, null)
-                    else { _state.value = CallState(phase = "failed", error = t.why); CallService.stop(context); remote = null }
+                    else { _state.value = CallState(phase = "failed", error = t.why); remote = null }
             }
         }
     }
@@ -128,6 +130,9 @@ class CallController(
         val system = base + (if (pinned.isNotBlank()) "\n\nWhat you know about them:\n$pinned" else "") +
             (if (recent.isNotBlank()) "\n\nThe chat so far (this call continues it):\n$recent" else "")
         callStart = System.currentTimeMillis(); callLines.clear(); callTimes.clear()
+        // Ended while the token was on its way: nothing to start.
+        if (!_state.value.active) { remote = null; return }
+        CallService.start(context)
         // A computer's token is locked to the Live model its key reaches, so the call uses that model.
         val phoneVoice = s.ttsVoice.takeIf { s.ttsProvider == "gemini" && it.isNotBlank() }
         live = LiveSession(url, model?.ifBlank { null } ?: "gemini-3.1-flash-live-preview", phoneVoice ?: voice?.ifBlank { null } ?: "Kore", system,
