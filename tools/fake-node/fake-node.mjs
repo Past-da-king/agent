@@ -135,6 +135,7 @@ async function rpc(node, sock, method, args) {
         if (t.includes('notify')) command(sock.deviceId, { id: rid('cmd'), kind: 'notify', title: 'From your computer', body: 'A notification sent by the agent on ' + node.name })
         if (t.includes('picture')) addRow('chat_item', { id: rid('ci'), createdAt: Date.now(), kind: 'activity', text: 'Took a screenshot', meta: JSON.stringify({ tool: 'browser', image: '/tmp/fake-node-pic.png' }) })
         if (t.includes('project')) projectRun()
+        if (t.includes('browse')) command(sock.deviceId, { id: rid('cmd'), kind: 'tool', tool: 'browser_open', args: { url: 'https://example.com/' }, chatId: 'main', deadlineMs: 90000 })
         if (t.includes('ask')) command(sock.deviceId, { id: rid('cmd'), kind: 'tool', tool: 'ask_user', args: { question: 'Shall I book the 15:00 slot?', options: ['Yes', 'No'] }, chatId: 'main', deadlineMs: 120000 })
         if (t.includes('tool')) command(sock.deviceId, { id: rid('cmd'), kind: 'tool', tool: 'notifications_read', args: {}, chatId: 'main', deadlineMs: 30000 })
         addRow('chat_item', { id: rid('ci'), createdAt: Date.now(), kind: 'agent', text: `This is ${node.name}. You said: ${text}`, meta: '{}' })

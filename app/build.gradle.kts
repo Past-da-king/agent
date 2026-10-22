@@ -16,8 +16,8 @@ android {
     applicationId = "com.past9.phoneaos"
     minSdk = 28
     targetSdk = 28
-    versionCode = 90
-    versionName = "0.14.0"
+    versionCode = 91
+    versionName = "0.14.1"
     // Android never lets an installed app rename itself or change the icon Samsung shows on
     // notifications, so a personal build bakes the owner's agent in: -PagentName=Hina -PagentIcon=ic_app_heart_red
     resValue("string", "app_name", (project.findProperty("agentName") as String?) ?: "Agent")
@@ -45,7 +45,10 @@ android {
 
   buildTypes {
     release {
-      isMinifyEnabled = false
+      // Unused library code and resources are dropped; the app's own classes stay whole (proguard-rules.pro).
+      isMinifyEnabled = true
+      isShrinkResources = true
+      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfigs.findByName("release")?.let { signingConfig = it }
     }
   }
