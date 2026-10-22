@@ -318,6 +318,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         val allChat = list("chat_item")
         // The phone keeps the recent part of the main chat; the full history stays on the computer.
         val chat = allChat.filter(RemoteRows::inMainChat).sortedBy { it.optLong("createdAt") }.takeLast(CHAT_ROWS)
+        chat.forEach(::noteBrainRow)
         // Project chats show as helper rows with the project's icon.
         runCatching { (call("chat.states", listOf()) as? JSONArray)?.let { a -> running.clear(); for (i in 0 until a.length()) a.optJSONObject(i)?.takeIf { it.optBoolean("running") }?.let { running += it.optString("chat") } } }
         projectOf.clear(); projects.forEach { p -> p.optJSONArray("chats").strings().forEach { c -> projectOf[c] = p } }
@@ -377,7 +378,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         when (entity) {
             "chat_item" -> {
                 val c = RemoteRows.chatOf(row)
-                if (c == "main") { putChat(RemoteRows.chat(row, ids)); fetchMedia(row) }
+                if (c == "main") { noteBrainRow(row); putChat(RemoteRows.chat(row, ids)); fetchMedia(row) }
                 else if (projectOf.containsKey(c)) {
                     val list = projectRows.getOrPut(c) { ArrayList() }
                     list.removeAll { it.optString("id") == row.optString("id") }; list += row
@@ -429,7 +430,17 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     private val projectRows = ConcurrentHashMap<String, MutableList<JSONObject>>()
     private val running: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
+    /** Project chats the computer already shows with its own helper row in the main chat: the phone adds none for them. */
+    private val brainShown: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    private fun noteBrainRow(row: JSONObject) {
+        if (row.optString("kind") != "helper") return
+        val c = runCatching { JSONObject(row.optString("meta").ifBlank { "{}" }).optString("projectChat") }.getOrDefault("")
+        if (c.isNotBlank() && brainShown.add(c)) ids.localOrNull("project-chat:$c")?.let { lid -> scope.launch { runCatching { db.openHelper.writableDatabase.execSQL("DELETE FROM chat_items WHERE id = $lid") } } }
+    }
+
     private fun projectRow(chat: String): ChatItem? {
+        if (chat in brainShown) return null
         val p = projectOf[chat] ?: return null
         return RemoteRows.projectHelper(p, chat, projectRows[chat].orEmpty().toList(), chat in running, ids)
     }

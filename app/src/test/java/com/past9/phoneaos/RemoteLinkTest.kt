@@ -359,4 +359,14 @@ class RemoteLinkTest {
         val img = parts.getJSONObject(1)
         assertEquals("image", img.getString("type")); assertEquals("image/png", img.getString("mime")); assertEquals("AQID", img.getString("data"))
     }
+
+    @Test fun aProjectAgentRowFromTheComputerShowsItsProjectAndLiveStep() {
+        val meta = JSONObject().put("label", "E2E test project").put("state", "working").put("summary", "Reading the brief")
+            .put("project", JSONObject().put("id", "p1").put("name", "E2E test project").put("glyph", "tasks").put("color", "teal")).put("projectChat", "pc1")
+        val h = com.past9.phoneaos.ui.HelperView(com.past9.phoneaos.data.ChatItem(7, "helper", "brief", meta.toString(), 1L), emptyList())
+        assertEquals("E2E test project", h.project); assertEquals("tasks", h.projectGlyph); assertEquals("teal", h.projectColor)
+        assertEquals("Reading the brief", h.now)
+        val plain = com.past9.phoneaos.ui.HelperView(com.past9.phoneaos.data.ChatItem(8, "helper", "brief", JSONObject().put("label", "Helper").put("state", "done").put("summary", "x").toString(), 1L), emptyList())
+        assertEquals("", plain.project); assertEquals("", plain.now)
+    }
 }

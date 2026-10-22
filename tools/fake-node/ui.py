@@ -31,7 +31,10 @@ cmd = sys.argv[1]
 if cmd == "tap":
     x, y = find(sys.argv[2]); sh("shell", "input", "tap", str(x), str(y)); print("tapped", sys.argv[2], x, y)
 elif cmd == "text":
-    sh("shell", "input", "text", sys.argv[2].replace(" ", "%s"))
+    t = sys.argv[2]
+    for c in "\\\"'()&;<>|$`":  # the device shell would eat these
+        t = t.replace(c, "\\" + c)
+    sh("shell", "input", "text", t.replace(" ", "%s"))
 elif cmd == "key":
     sh("shell", "input", "keyevent", sys.argv[2])
 elif cmd == "dump":

@@ -33,7 +33,8 @@ data class HelperView(val item: ChatItem, val steps: List<ChatItem>) {
     /** working | done | failed | stopped */
     val state: String get() = meta.optString("state").ifBlank { "working" }
     val working get() = state == "working"
-    val now: String get() = meta.optString("now")
+    /** The live step. A linked computer's helper rows call it summary. */
+    val now: String get() = meta.optString("now").ifBlank { if (working) meta.optString("summary") else "" }
     val result: String get() = meta.optString("result")
     val model: String get() = meta.optString("model").substringAfterLast('/')
     val startedAt: Long get() = meta.optLong("startedAt", item.createdAt)
@@ -44,10 +45,12 @@ data class HelperView(val item: ChatItem, val steps: List<ChatItem>) {
     val profile: String get() = meta.optString("profile")
     val profileColor: String get() = meta.optString("profileColor").ifBlank { "iris" }
     /** Set when this row is work the agent handed to a project (a linked computer's project chat): its name and icon. */
-    val project: String get() = meta.optString("projectName")
-    val projectGlyph: String get() = meta.optString("projectGlyph")
-    val projectColor: String get() = meta.optString("projectColor").ifBlank { "iris" }
-    val projectImage: String get() = meta.optString("projectImage")
+    // Rows from a linked computer carry project { id, name, glyph, color, image }; rows the phone builds use flat fields.
+    private val projectObj: JSONObject? get() = meta.optJSONObject("project")
+    val project: String get() = meta.optString("projectName").ifBlank { projectObj?.optString("name").orEmpty() }
+    val projectGlyph: String get() = meta.optString("projectGlyph").ifBlank { projectObj?.optString("glyph").orEmpty() }
+    val projectColor: String get() = meta.optString("projectColor").ifBlank { projectObj?.optString("color").orEmpty() }.ifBlank { "iris" }
+    val projectImage: String get() = meta.optString("projectImage").ifBlank { projectObj?.optString("image").orEmpty() }
 
     companion object {
         /** Every helper in the chat, each with its own steps. */
@@ -111,17 +114,28 @@ fun ProjectTile(h: HelperView, size: Dp = 40.dp) {
         }.getOrNull()
     }
     val emoji = h.projectGlyph.takeIf { g -> g.isNotEmpty() && g.none { it.isLetterOrDigit() || it == '-' } }
+    val glyph = projectGlyphs[h.projectGlyph]
     Box(Modifier.size(size)) {
         Box(Modifier.fillMaxSize().clip(androidx.compose.foundation.shape.RoundedCornerShape(size * 0.28f)).background(accent.lP), contentAlignment = Alignment.Center) {
             when {
                 bitmap != null -> androidx.compose.foundation.Image(bitmap, h.project, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
                 emoji != null -> Text(emoji, style = MaterialTheme.typography.titleLarge)
+                glyph != null -> Icon(glyph, h.project, Modifier.size(size * 0.55f), tint = Color.White)
                 else -> Text(h.project.take(1).uppercase(), style = MaterialTheme.typography.titleMedium, color = Color.White)
             }
         }
         if (h.working) LoadingIndicator(Modifier.size(size * 0.45f).align(Alignment.BottomEnd).clip(CircleShape).background(MaterialTheme.colorScheme.surface), color = accent.lP)
     }
 }
+
+/** The desktop app's project icon names (its own icon set) drawn with the phone's matching icons. */
+private val projectGlyphs: Map<String, androidx.compose.ui.graphics.vector.ImageVector> = mapOf(
+    "folder" to Icons.Rounded.Folder, "building" to Icons.Rounded.Business, "code" to Icons.Rounded.Code, "term" to Icons.Rounded.Terminal,
+    "globe" to Icons.Rounded.Public, "doc" to Icons.Rounded.Description, "mail" to Icons.Rounded.Mail, "cal" to Icons.Rounded.CalendarMonth,
+    "chat" to Icons.Rounded.ChatBubble, "tasks" to Icons.Rounded.TaskAlt, "heart" to Icons.Rounded.Favorite, "bolt" to Icons.Rounded.Bolt,
+    "shield" to Icons.Rounded.Shield, "key" to Icons.Rounded.Key, "palette" to Icons.Rounded.Palette, "monitor" to Icons.Rounded.Monitor,
+    "phone" to Icons.Rounded.PhoneAndroid, "person" to Icons.Rounded.Person, "server" to Icons.Rounded.Dns, "shot" to Icons.Rounded.Screenshot,
+)
 
 /** One helper as a calm, tappable row: who it is, what it's doing (or what it found), how long. */
 @Composable
