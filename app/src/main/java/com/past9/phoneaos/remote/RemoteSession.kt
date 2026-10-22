@@ -163,7 +163,11 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
 
     fun facts(): DeviceFacts = phoneFacts(app)
 
-    private fun hello(): JSONObject = JSONObject().put("device", facts().toJson()).put("tools", DeviceTools.catalogue(app))
+    private fun hello(): JSONObject {
+        val f = facts().toJson()
+        lastFacts = f.toString()
+        return JSONObject().put("device", f).put("tools", DeviceTools.catalogue(app))
+    }
 
     /** The tools it lends changed (a switch in Settings): say hello again with the new list. */
     fun factsChangedForce() { rpc?.sendHello() }
@@ -411,6 +415,8 @@ object RemoteHub {
     private val _session = MutableStateFlow<RemoteSession?>(null)
     /** Non-null while the phone uses a computer's agent. */
     val session: StateFlow<RemoteSession?> = _session
+    /** A link code that arrived from outside (agent://pair from the camera app): the link screen opens with it. */
+    val pendingOffer = MutableStateFlow<String?>(null)
     private val _link = MutableStateFlow<Link?>(null)
     /** The saved link, on or off. */
     val link: StateFlow<Link?> = _link

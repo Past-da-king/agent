@@ -105,6 +105,8 @@ class MainActivity : ComponentActivity() {
 
     private fun handle(i: Intent?) {
         if (i == null) return
+        // A link code (agent://pair?...) from the phone's own camera app, a shared QR, or adb.
+        i.data?.takeIf { it.scheme == "agent" && it.host == "pair" }?.let { com.past9.phoneaos.remote.RemoteHub.pendingOffer.value = it.toString(); return }
         // adb hook for checking how notifications look: am start -n <pkg>/.MainActivity --es open testnotify
         // adb hook for checking sites in the agent's browser: am start -n <pkg>/.MainActivity --es open browser --es url https://...
         i.getStringExtra("url")?.takeIf { i.getStringExtra("open") == "browser" }?.let { u ->
@@ -141,6 +143,12 @@ class MainActivity : ComponentActivity() {
     private fun Root(g: Graph) {
         val settings by g.settings.state.collectAsStateWithLifecycle()
         if (!settings.onboarded) { Onboarding(g); return }
+        val offer by com.past9.phoneaos.remote.RemoteHub.pendingOffer.collectAsStateWithLifecycle()
+        offer?.let { o ->
+            com.past9.phoneaos.remote.LinkScreen(onBack = { com.past9.phoneaos.remote.RemoteHub.pendingOffer.value = null },
+                onLinked = { com.past9.phoneaos.remote.RemoteHub.pendingOffer.value = null }, offerText = o)
+            return
+        }
         // Linked to a computer: the same screens show the computer's data, and edits and messages go there.
         val remote by com.past9.phoneaos.remote.RemoteHub.session.collectAsStateWithLifecycle()
         val dataDb = remote?.db ?: g.db
@@ -186,6 +194,8 @@ class MainActivity : ComponentActivity() {
         var modelErr by remember { mutableStateOf<String?>(null) }
         val onSub = settings.mode == PowerMode.SUBSCRIPTION
         fun openModels(forHelpers: Boolean = false) {
+            // Linked: the computer picks its own model.
+            if (remote != null) return
             pickingHelper = forHelpers
             modelSheet = true; modelList = null; modelErr = null
             scope.launch {
@@ -195,7 +205,9 @@ class MainActivity : ComponentActivity() {
                 }.onFailure { modelErr = "Couldn't load models: ${it.message}" }
             }
         }
-        val modelLabel = if (onSub) prettyModel(settings.subModel) else settings.model.substringAfterLast('/')
+        val linkState = remote?.state?.collectAsStateWithLifecycle()?.value
+        val modelLabel = if (remote != null) "On " + ((linkState as? com.past9.phoneaos.remote.LinkState.Connected)?.brain?.name ?: remote!!.link.nodeName.ifBlank { "your computer" })
+            else if (onSub) prettyModel(settings.subModel) else settings.model.substringAfterLast('/')
         val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(4)) { uris ->
             scope.launch { uris.forEach { u -> importImage(u)?.let { attachments += it } } }
         }
@@ -693,7 +705,12 @@ class MainActivity : ComponentActivity() {
         val notifPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
         val st = g.settings.state.value
         var linking by remember { mutableStateOf(false) }
-        if (linking) { com.past9.phoneaos.remote.LinkScreen(onBack = { linking = false }, onLinked = { g.settings.setOnboarded(true) }); return }
+        val offer by com.past9.phoneaos.remote.RemoteHub.pendingOffer.collectAsStateWithLifecycle()
+        if (linking || offer != null) {
+            com.past9.phoneaos.remote.LinkScreen(onBack = { linking = false; com.past9.phoneaos.remote.RemoteHub.pendingOffer.value = null },
+                onLinked = { com.past9.phoneaos.remote.RemoteHub.pendingOffer.value = null; g.settings.setOnboarded(true) }, offerText = offer)
+            return
+        }
         OnboardingScreen(onboardingActions(g).copy(
             linkDevice = { linking = true },
             subSetup = { kind, back, next -> SubSetupFlow(g, kind, onBack = back, onDone = next, onUseKey = back) },

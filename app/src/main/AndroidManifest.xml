@@ -58,6 +58,13 @@
             android:exported="true"
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
+            <!-- A link code scanned with the phone's own camera app (agent://pair?...) opens the link screen. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="agent" android:host="pair" />
+            </intent-filter>
         </activity>
 
         <!-- Share sheet: links, text, photos, videos, voice notes and files from any app. A see-through sheet over the app you shared from; never opens the main app. -->

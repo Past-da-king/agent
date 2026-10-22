@@ -15,6 +15,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -26,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -113,7 +115,7 @@ private suspend fun pair(context: Context, offer: PairOffer?, typedUrl: String?,
 
 /** "Use the agent on my computer": scan the QR the computer shows, or type its address and the short code. */
 @Composable
-fun LinkScreen(onBack: () -> Unit, onLinked: () -> Unit) {
+fun LinkScreen(onBack: () -> Unit, onLinked: () -> Unit, offerText: String? = null) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var step by remember { mutableStateOf<LinkStep>(LinkStep.Ready) }
@@ -128,6 +130,7 @@ fun LinkScreen(onBack: () -> Unit, onLinked: () -> Unit) {
         step = LinkStep.Busy(offer.name)
         scope.launch { step = pair(context, offer, null, offer.code) }
     }
+    LaunchedEffect(offerText) { offerText?.let { scanned(it) } }
     SubScreen("Use the agent on my computer", "Link this phone to a computer or server", onBack) { pad ->
         Column(Modifier.padding(pad).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             when (val s = step) {
@@ -173,15 +176,17 @@ fun LinkScreen(onBack: () -> Unit, onLinked: () -> Unit) {
                         }
                         TextButton(onClick = { typing = true; if (step is LinkStep.Failed) step = LinkStep.Ready }, modifier = Modifier.fillMaxWidth()) { Text("Type the address and code instead") }
                     } else {
-                        OutlinedTextField(address, { address = it }, label = { Text("Computer's address") }, placeholder = { Text("192.168.1.20 or my-pc.local") },
-                            singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri))
-                        OutlinedTextField(code, { code = it.uppercase().take(9) }, label = { Text("Code") }, placeholder = { Text("ABCD-EFGH") },
-                            singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters))
                         val url = Pairing.address(address)
                         val sc = Pairing.shortCode(code)
+                        fun link() { if (url != null && sc != null) { step = LinkStep.Busy(url.removePrefix("https://")); scope.launch { step = pair(context, null, url, sc) } } }
+                        OutlinedTextField(address, { address = it }, label = { Text("Computer's address") }, placeholder = { Text("192.168.1.20 or my-pc.local") },
+                            singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next))
+                        OutlinedTextField(code, { code = it.uppercase().take(9) }, label = { Text("Code") }, placeholder = { Text("ABCD-EFGH") },
+                            singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Go),
+                            keyboardActions = KeyboardActions(onGo = { link() }))
                         if (address.isNotBlank() && url == null) Text(if (address.trim().startsWith("http://", true)) "Linking only works over https." else "That doesn't look like an address.",
                             color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                        Button(onClick = { step = LinkStep.Busy(url!!.removePrefix("https://")); scope.launch { step = pair(context, null, url, sc!!) } },
+                        Button(onClick = { link() },
                             enabled = url != null && sc != null, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("Link") }
                         TextButton(onClick = { typing = false; if (step is LinkStep.Failed) step = LinkStep.Ready }, modifier = Modifier.fillMaxWidth()) { Text("Scan the QR code instead") }
                     }
