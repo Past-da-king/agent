@@ -43,9 +43,13 @@ Dev home: this checkout, server `~/phone-aos/app-remote`, branch `feature/remote
     was torn down while CameraX was still starting, and the teardown waited for it). Now it never waits.
   - Full suite: 543 tests, 541 pass; the 2 failures are OpenUiButtonsAndPromptTest (bookViewingAsksTheAgentAboutThatFlat,
     openListingOpensTheLinkAndSendsNothing), failing in every full run since 17 Oct. No new failures.
-- APK size: 85.8 MB (0.13.0: 86.2 MB). Thin: no runtimes inside; the size is unshrunk dex (~70 MB, minify is off on
-  this line) plus ML Kit OCR (11 MB). R8 shrinking would likely bring it to 30-60 MB but needs keep rules and a full
-  re-test, so it is left for a separate change.
+- 0.14.1 (8000755): release shrinking on, 85.8 MB to 35.6 MB, behaviour unchanged. The app's own classes are kept
+  whole (no renaming, no optimising); BouncyCastle, sshj, EdDSA and ML Kit kept whole. Proven on the shrunk build on
+  Android 13: clean start with no reflection errors; local mode with its own key (fake OpenAI-compatible model: key
+  check, 71 tools, task_add saved and shown on Home); linked mode (pairing, chat, notify, file, picture, project
+  row, question card, lent browser_open through the WebView). The emulator caught one shrink problem first (ML Kit
+  registrars stripped, so OCR would have silently stopped); a keep rule fixed it. Full suite: 543, 541 pass, the
+  same 2 old OpenUi failures. APK: Downloads/agent/Agent-0.14.1.apk on the PC (sha256 f0df8c5e...).
 
 ## Not proven / open
 - Against the real desktop or headless node: its /v1/pair, /v1/devices and /v1/rpc were not built when this was
@@ -54,6 +58,8 @@ Dev home: this checkout, server `~/phone-aos/app-remote`, branch `feature/remote
 - Not installed on the owner's phone (not asked to).
 
 ## Next
+- Re-run the redroid proof against the REAL headless node from workstream C (asked C for the commit, a running
+  node, a CLI pairing offer and a turn-answering provider).
 - Run against the real node once A's pairing + RPC land; adjust field names if theirs differ.
 - A delegated project agent shown like a helper with the project's icon (s9): the phone shows whatever helper rows
   the brain writes into the main chat; the icon needs the brain to put it in the row's meta.
