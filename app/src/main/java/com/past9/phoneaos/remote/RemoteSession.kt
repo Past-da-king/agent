@@ -310,6 +310,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
 
     /** Read everything again (on connect, after a failover, or when the computer says many rows changed). */
     suspend fun reloadAll() {
+        // A fresh read tries again any note that failed for a passing reason (the link was down, a timeout).
+        noteFailed.entries.removeIf { it.value != NOTE_GONE }
         val goals = list("goal")
         val tasks = list("task")
         val memory = list("memory").filter(RemoteRows::isGeneralMemory)
@@ -329,7 +331,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
             replace("tasks", tasks.map { RemoteRows.task(it, ids) }.also { rows -> rows.forEach { putTask(it) } }.map { it.id })
             replace("memories", memory.map { RemoteRows.memory(it, ids) }.also { rows -> rows.forEach { putMemory(it) } }.map { it.id })
             replace("triggers", triggers.map { RemoteRows.trigger(it, ids) }.also { rows -> rows.forEach { db.triggers().upsert(it) } }.map { it.id })
-            val keep = chat.map { RemoteRows.chat(it, ids) }.onEach { putChat(it) }.map { it.id }.toMutableSet()
+            val keep = chat.map { RemoteRows.chat(it, ids, notes) }.onEach { putChat(it) }.map { it.id }.toMutableSet()
             projectRows.keys.forEach { c -> projectRow(c)?.let { putChat(it); keep += it.id } }
             // Questions from lent tools stay; notices the phone wrote itself go at the next full read.
             replace("chat_items", (keep + RemoteAsk.itemIds()).toList())
@@ -378,7 +380,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         when (entity) {
             "chat_item" -> {
                 val c = RemoteRows.chatOf(row)
-                if (c == "main") { noteBrainRow(row); putChat(RemoteRows.chat(row, ids)); fetchMedia(row) }
+                if (c == "main") { noteBrainRow(row); putChat(RemoteRows.chat(row, ids, notes)); fetchMedia(row) }
                 else if (projectOf.containsKey(c)) {
                     val list = projectRows.getOrPut(c) { ArrayList() }
                     list.removeAll { it.optString("id") == row.optString("id") }; list += row
@@ -445,8 +447,61 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         return RemoteRows.projectHelper(p, chat, projectRows[chat].orEmpty().toList(), chat in running, ids)
     }
 
+    // ---- voice notes from the computer ------------------------------------------------------------
+
+    /** The computer's voice notes, copied here once (they are only note names there, in its voice-notes folder). */
+    private val noteDir: File by lazy { File(app.filesDir, "linked-notes").apply { mkdirs() } }
+    private val noteFailed = ConcurrentHashMap<String, String>()
+    private val noteFetching: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    val notes = object : RemoteRows.NoteAudio {
+        override fun local(name: String): File = File(noteDir, name)
+        override fun failed(name: String): String? = noteFailed[name]
+    }
+
+    /**
+     * A voice note's audio comes over the link with voice.noteAudio (the same call the desktop's own player uses), is
+     * saved next to the phone's data and the row then points at it. When it cannot be had, the row says so: it never
+     * turns into text on its own.
+     */
+    private fun fetchNote(row: JSONObject) {
+        if (row.optString("kind") != "voice_note") return
+        val meta = runCatching { JSONObject(row.optString("meta").ifBlank { "{}" }) }.getOrNull() ?: return
+        val name = RemoteRows.noteName(meta)
+        if (name.isEmpty() || notes.local(name).let { it.isFile && it.length() > 44 } || !noteFetching.add(name)) return
+        scope.launch {
+            try {
+                val bytes = try {
+                    RemoteRows.noteBytes(call("voice.noteAudio", listOf(name), 120_000)) ?: run { noteFailed[name] = NOTE_GONE; null }
+                } catch (e: Exception) {
+                    noteFailed[name] = "Couldn't get the audio from ${brainName()}: ${e.message ?: e::class.java.simpleName}"; null
+                }
+                if (bytes != null) {
+                    val tmp = File(noteDir, "$name.part")
+                    tmp.writeBytes(bytes)
+                    if (!tmp.renameTo(notes.local(name))) { tmp.delete(); noteFailed[name] = "Couldn't save the audio on this phone." }
+                    else noteFailed.remove(name)
+                }
+                val lid = ids.localOrNull(row.optString("id")) ?: return@launch
+                db.chat().get(lid)?.let { db.chat().update(it.copy(meta = RemoteRows.voiceMeta(row.optString("meta"), notes).toString())) }
+            } finally { noteFetching.remove(name) }
+        }
+    }
+
+    /** He tapped "Try again" on a note whose audio did not come. */
+    fun retryNote(localId: Long) = scope.launch {
+        val item = db.chat().get(localId) ?: return@launch
+        val name = runCatching { JSONObject(item.meta).optString("remoteNote") }.getOrDefault("")
+        if (name.isEmpty()) return@launch
+        noteFailed.remove(name)
+        val rid = ids.remote(localId) ?: return@launch
+        val meta = JSONObject(item.meta).apply { remove("path"); remove("audio"); remove("audioError"); remove("remoteNote") }
+        db.chat().update(item.copy(meta = RemoteRows.voiceMeta(meta.toString(), notes).toString()))
+        fetchNote(JSONObject().put("id", rid).put("kind", "voice_note").put("meta", meta.toString()))
+    }
+
     /** Pictures in a chat row are paths on the computer: fetch each once through /v1/file and point the row at the copy. */
     private fun fetchMedia(row: JSONObject) {
+        fetchNote(row)
         val meta = runCatching { JSONObject(row.optString("meta").ifBlank { "{}" }) }.getOrNull() ?: return
         val paths = RemoteRows.mediaPaths(meta).filter { !File(it).exists() }
         if (paths.isEmpty()) return
@@ -472,6 +527,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
 
     companion object {
         const val CHAT_ROWS = 400
+        const val NOTE_GONE = "The computer no longer has this voice note."
         const val EVT_DATA = "agent:evt:data.changed"
         const val EVT_CHAT = "agent:evt:chat.event"
         const val EVT_DEVICES = "agent:evt:devices.changed"

@@ -17,7 +17,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 /**
- * Voice-to-text for the composer, streamed to Google's Gemini 3.5 Transcribe Live model.
+ * Voice-to-text for the composer, streamed to Google's Gemini 3.5 Transcribe Live model. Since 0.14.3 this is only the
+ * fallback for a phone with no speech recogniser of its own ([SystemDictation] is the default).
  *
  * It replaces the keyboard's speech recogniser (which mangled South African English mixed with isiZulu).
  * Audio goes up as 16 kHz mono PCM16; text comes back while he is still talking: `interimInputTranscription`
@@ -34,7 +35,7 @@ class Dictation(
     private val vocabulary: List<String> = emptyList(),
     private val onText: (String) -> Unit,
     private val onEnd: (error: String?) -> Unit,
-) {
+) : Dictating {
     private val http = OkHttpClient.Builder().readTimeout(0, TimeUnit.MILLISECONDS).pingInterval(20, TimeUnit.SECONDS).build()
     private var ws: WebSocket? = null
     private var rec: AudioRecord? = null
@@ -130,7 +131,7 @@ class Dictation(
     }
 
     /** He tapped stop: stop listening, let the model finish the last words, then close. */
-    fun finish() {
+    override fun finish() {
         if (!running.get() || finishing) return
         finishing = true
         runCatching { rec?.stop(); rec?.release() }; rec = null
@@ -140,7 +141,7 @@ class Dictation(
     }
 
     /** Throw it away (leaving the screen): nothing more is delivered. */
-    fun cancel() { ended.set(true); close() }
+    override fun cancel() { ended.set(true); close() }
 
     private fun end(error: String?) {
         if (!ended.compareAndSet(false, true)) return

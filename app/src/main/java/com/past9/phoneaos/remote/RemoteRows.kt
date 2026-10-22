@@ -42,9 +42,51 @@ object RemoteRows {
     /** The phone shows the person's general memory; a project's own pages stay on the computer. */
     fun isGeneralMemory(o: JSONObject): Boolean = o.optString("project").isBlank()
 
-    fun chat(o: JSONObject, ids: RemoteIds): ChatItem {
+    fun chat(o: JSONObject, ids: RemoteIds, notes: NoteAudio? = null): ChatItem {
         val created = o.optLong("createdAt", System.currentTimeMillis())
-        return ChatItem(ids.local(o.getString("id"), created), o.optString("kind", "notice"), o.optString("text"), o.optString("meta").ifBlank { "{}" }, created)
+        val id = ids.local(o.getString("id"), created)
+        val meta = o.optString("meta").ifBlank { "{}" }
+        if (o.optString("kind") == "voice_note") return ChatItem(id, "voice", o.optString("text"), voiceMeta(meta, notes).toString(), created)
+        return ChatItem(id, o.optString("kind", "notice"), o.optString("text"), meta, created)
+    }
+
+    /** Where the phone keeps the computer's voice notes, and how fetching each one went. */
+    interface NoteAudio {
+        /** The phone's copy of a note (it may not exist yet). */
+        fun local(name: String): java.io.File
+        /** Why a note could not be fetched, or null when it has not failed. */
+        fun failed(name: String): String?
+    }
+
+    /** A note name on the computer (desktop voice service: only plain names in its voice-notes folder), or "". */
+    fun noteName(meta: JSONObject): String = meta.optString("file").takeIf { NOTE_NAME.matches(it) }.orEmpty()
+    private val NOTE_NAME = Regex("^[\\w-]{1,100}\\.wav$")
+
+    /**
+     * The computer's voice note (kind voice_note, meta.file = a note name on that computer) as the phone's voice row:
+     * "path" is the phone's copy once it is here, and "audio" says ready, loading or unavailable (with "audioError").
+     * The script stays in the row's text, shown only when he asks to read it.
+     */
+    fun voiceMeta(rawMeta: String, notes: NoteAudio?): JSONObject {
+        val m = runCatching { JSONObject(rawMeta) }.getOrDefault(JSONObject())
+        val name = noteName(m)
+        m.put("remoteNote", name)
+        val local = if (name.isEmpty() || notes == null) null else notes.local(name)
+        val failed = if (name.isEmpty() || notes == null) null else notes.failed(name)
+        when {
+            local != null && local.isFile && local.length() > 44 -> m.put("path", local.absolutePath).put("audio", "ready")
+            name.isEmpty() -> m.put("path", "").put("audio", "unavailable").put("audioError", "This note has no audio file on the computer.")
+            failed != null -> m.put("path", "").put("audio", "unavailable").put("audioError", failed)
+            else -> m.put("path", "").put("audio", "loading")
+        }
+        return m
+    }
+
+    /** The bytes of a voice.noteAudio answer ({"$b64": ...} on the wire), or null when the computer has no such note. */
+    fun noteBytes(value: Any?): ByteArray? {
+        val b64 = (value as? JSONObject)?.optString("\$b64").orEmpty()
+        if (b64.isEmpty()) return null
+        return java.util.Base64.getDecoder().decode(b64)
     }
 
     fun memory(o: JSONObject, ids: RemoteIds): MemoryRow {

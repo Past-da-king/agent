@@ -6,7 +6,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.speech.RecognizerIntent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -279,36 +278,38 @@ class MainActivity : ComponentActivity() {
         }
         LaunchedEffect(fileReq) { fileReq?.let { if (activeFile == null) { activeFile = it; filePicker.launch(it.mimeTypes) } } }
         LaunchedEffect(permReq) { permReq?.let { if (activeReq == null) { activeReq = it; permLauncher.launch(it.permissions) } } }
-        val voice = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
-            r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let { draft = if (draft.isBlank()) it else "$draft $it" }
-        }
-        // Dictation: Google's newest live transcription model when a Gemini key is set, the device recogniser otherwise.
-        var dictation by remember { mutableStateOf<com.past9.phoneaos.voice.Dictation?>(null) }
+        // Dictation: the phone's own speech recogniser (the keyboard's and the assistant's, Google's on most phones), live
+        // into the message box in the phone's language. Only a phone with no recogniser at all uses the Gemini
+        // transcription stream instead (with a Gemini key), and the person is told so.
+        var dictation by remember { mutableStateOf<com.past9.phoneaos.voice.Dictating?>(null) }
         var dictating by remember { mutableStateOf(false) }
         DisposableEffect(Unit) { onDispose { dictation?.cancel() } }
-        fun legacyMic() { runCatching { voice.launch(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)) } }
+        fun say(text: String) = android.widget.Toast.makeText(this@MainActivity, text, android.widget.Toast.LENGTH_LONG).show()
         fun online(): Boolean = runCatching {
             val cm = getSystemService(android.net.ConnectivityManager::class.java)
             cm.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
         }.getOrDefault(false)
         fun startDictation() {
-            val key = g.settings.voiceKey("gemini")
-            if (key == null || !online()) { legacyMic(); return }
             val base = draft
             fun join(t: String) = if (t.isBlank()) base else if (base.isBlank()) t else base.trimEnd() + " " + t
-            var heard = false
+            val done: (String?) -> Unit = { err -> runOnUiThread { dictating = false; dictation = null; if (err != null) say(err) } }
+            if (com.past9.phoneaos.voice.SystemDictation.available(this@MainActivity)) {
+                val d = com.past9.phoneaos.voice.SystemDictation(this@MainActivity, onText = { t -> runOnUiThread { draft = join(t) } }, onEnd = done)
+                dictation = d; dictating = true; d.start(); return
+            }
+            val key = g.settings.voiceKey("gemini")
+            if (key == null || !online()) { say("This phone has no speech recogniser, so the mic can't listen. Install Google's Speech Services, or add a Gemini key in Settings, Voice."); return }
+            say("This phone has no speech recogniser, so your words go to Gemini to be written down.")
             val vocab = listOf(settings.agentName, settings.userName).filter { it.isNotBlank() && it != "Your agent" }
-            val d = com.past9.phoneaos.voice.Dictation(key, vocab, onText = { t -> runOnUiThread { heard = heard || t.isNotBlank(); draft = join(t) } }, onEnd = { err ->
-                runOnUiThread { dictating = false; dictation = null; if (err != null && !heard) legacyMic() }
-            })
+            val d = com.past9.phoneaos.voice.Dictation(key, vocab, onText = { t -> runOnUiThread { draft = join(t) } }, onEnd = done)
             dictation = d; dictating = true; d.start()
         }
-        val dictPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) startDictation() }
+        val dictPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) startDictation() else say("The mic needs the microphone permission.") }
         fun toggleMic() {
             val d = dictation
             if (d != null) { d.finish(); return }
             if (androidx.core.content.ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) startDictation()
-            else if (g.settings.voiceKey("gemini") == null) legacyMic() else dictPerm.launch(Manifest.permission.RECORD_AUDIO)
+            else dictPerm.launch(Manifest.permission.RECORD_AUDIO)
         }
         fun refreshConnections() = scope.launch {
             val has = g.settings.composioKey() != null
