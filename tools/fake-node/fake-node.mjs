@@ -3,6 +3,7 @@
 // own self-signed certificate. A control port on loopback takes them down and up to prove failover.
 //
 //   node fake-node.mjs --host <address the phone can reach> --ports 17801,17802 --control 17809 --ws <path to the ws package>
+//   Voice notes: put a .wav in --notes (default /tmp/fake-node-notes) and say "voice" (or "gone" for a missing one).
 //   curl -X POST http://127.0.0.1:17809/down?node=desk     (and /up?node=desk, /offer, /code)
 //
 // Nothing here is a real secret: certificates and passes are made fresh on every start and live in memory.
@@ -17,6 +18,7 @@ import { createRequire } from 'node:module'
 
 const arg = (name, dflt) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : dflt }
 const HOST = arg('host', '127.0.0.1')
+const NOTES = arg('notes', '/tmp/fake-node-notes')
 const PORTS = arg('ports', '17801,17802').split(',').map(Number)
 const CONTROL = Number(arg('control', '17809'))
 const require = createRequire(import.meta.url)
@@ -120,6 +122,7 @@ async function rpc(node, sock, method, args) {
     case 'chat.decide': log(`chat.decide ${args[0]} -> ${args[1]}`); return null
     case 'routines.runNow': log(`routines.runNow ${args[0]}`); return null
     case 'files.savePasted': { const [name, mime, bytes] = args; log(`files.savePasted ${name} ${mime} ${Buffer.from(bytes.$b64, 'base64').length} bytes`); return { path: `/tmp/${name}`, name, mime } }
+    case 'voice.noteAudio': { const f = path.join(NOTES, String(args[0] ?? '')); const ok = /^[\w-]+\.wav$/.test(String(args[0])) && fs.existsSync(f); log(`voice.noteAudio ${args[0]} -> ${ok ? fs.statSync(f).size + ' bytes' : 'null'}`); return ok ? { $b64: fs.readFileSync(f).toString('base64') } : null }
     case 'device.ack': log(`device.ack ${args[0]} ok=${args[1]} note=${args[2]}`); return null
     case 'device.result': log(`device.result ${args[0]} ok=${args[1]} value=${String(args[2]).slice(0, 160).replace(/\n/g, ' ')}`); return null
     case 'chat.send': {
@@ -135,6 +138,9 @@ async function rpc(node, sock, method, args) {
         if (t.includes('notify')) command(sock.deviceId, { id: rid('cmd'), kind: 'notify', title: 'From your computer', body: 'A notification sent by the agent on ' + node.name })
         if (t.includes('picture')) addRow('chat_item', { id: rid('ci'), createdAt: Date.now(), kind: 'activity', text: 'Took a screenshot', meta: JSON.stringify({ tool: 'browser', image: '/tmp/fake-node-pic.png' }) })
         if (t.includes('project')) projectRun()
+        // A voice note the way the desktop's voice_note tool writes it: meta.file is a note name on the computer.
+        if (t.includes('voice')) { const file = fs.readdirSync(NOTES).find((f) => f.endsWith('.wav')) ?? 'none.wav'; addRow('chat_item', { id: rid('ci'), createdAt: Date.now(), kind: 'voice_note', text: 'This is the spoken script of the voice note.', meta: JSON.stringify({ file, durationMs: 20000, style: 'warm' }) }) }
+        if (t.includes('gone')) addRow('chat_item', { id: rid('ci'), createdAt: Date.now(), kind: 'voice_note', text: 'A note whose audio the computer no longer has.', meta: JSON.stringify({ file: '1700000000000-deadbeef.wav', durationMs: 5000, style: 'warm' }) })
         if (t.includes('browse')) command(sock.deviceId, { id: rid('cmd'), kind: 'tool', tool: 'browser_open', args: { url: 'https://example.com/' }, chatId: 'main', deadlineMs: 90000 })
         if (t.includes('ask')) command(sock.deviceId, { id: rid('cmd'), kind: 'tool', tool: 'ask_user', args: { question: 'Shall I book the 15:00 slot?', options: ['Yes', 'No'] }, chatId: 'main', deadlineMs: 120000 })
         if (t.includes('tool')) command(sock.deviceId, { id: rid('cmd'), kind: 'tool', tool: 'notifications_read', args: {}, chatId: 'main', deadlineMs: 30000 })
