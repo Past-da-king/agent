@@ -29,9 +29,14 @@ import javax.net.ssl.X509TrustManager
  * be any of the computer's addresses (LAN, VPN, a public name), so the host name is not checked: the pin is the check.
  */
 object Pinning {
+    const val CERT_CHANGED = "This computer's certificate is not the one this phone was linked with."
+
     class PinnedTrust(private val allowed: () -> Collection<String>, private val trustOnFirstUse: Boolean = false) : X509TrustManager {
         /** The fingerprint of the last certificate a server showed, whether accepted or not. */
         @Volatile var seen: String? = null
+            private set
+        /** True when the last certificate a server showed was refused: the computer's certificate changed. */
+        @Volatile var refused = false
             private set
 
         override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) = throw CertificateException("Not a server")
@@ -40,7 +45,8 @@ object Pinning {
             val fp = Pairing.fingerprint(leaf.encoded)
             seen = fp
             if (trustOnFirstUse) return
-            if (fp !in allowed()) throw CertificateException("This computer's certificate is not the one this phone was linked with.")
+            refused = fp !in allowed()
+            if (refused) throw CertificateException(CERT_CHANGED)
         }
         override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
     }
@@ -122,6 +128,33 @@ class RemoteApi(private val http: OkHttpClient) {
 
 class RpcException(message: String) : Exception(message)
 
+/** Why a link to a computer ended or never opened, so the screen can say what to do about it. */
+enum class LinkProblem {
+    /** The computer refused this phone's pass (401/403) or took it out (close 4003): scan again. */
+    Unpaired,
+    /** The computer showed a different certificate than the one in the QR code: link again. */
+    CertChanged,
+    /** Nothing answered at that address. */
+    Unreachable,
+    /** It answered, then the link dropped (or the phone closed it). */
+    Dropped;
+
+    companion object {
+        /** From a failed WebSocket: the HTTP answer if there was one, else the exception. */
+        fun of(t: Throwable?, httpCode: Int?): LinkProblem {
+            if (httpCode == 401 || httpCode == 403) return Unpaired
+            var e: Throwable? = t
+            while (e != null) {
+                if (e is CertificateException || e.message?.contains(Pinning.CERT_CHANGED) == true) return CertChanged
+                if (e is java.net.ConnectException || e is java.net.NoRouteToHostException || e is java.net.UnknownHostException || e is java.net.SocketTimeoutException) return Unreachable
+                e = e.cause
+            }
+            return Dropped
+        }
+        fun ofClose(code: Int): LinkProblem = if (code == 4003) Unpaired else Dropped
+    }
+}
+
 /**
  * The app contract over a WebSocket (protocol s5.1): hello with this phone's facts first, then calls by dotted name
  * and events from the computer. One instance per connection; make a new one to reconnect.
@@ -136,8 +169,13 @@ class RpcClient(
     interface Listener {
         fun onOpen(rpc: RpcClient)
         fun onEvent(rpc: RpcClient, name: String, payload: Any?)
-        fun onClosed(rpc: RpcClient, why: String)
+        /** [opened]: the socket opened before it ended; [problem]: what went wrong, for the screen. */
+        fun onClosed(rpc: RpcClient, why: String, opened: Boolean, problem: LinkProblem)
     }
+
+    /** When the socket opened (0 = never). */
+    @Volatile var openedAt = 0L
+        private set
 
     private val calls = ConcurrentHashMap<String, CompletableDeferred<Any?>>()
     private val seq = AtomicLong()
@@ -152,15 +190,22 @@ class RpcClient(
         ws = http.newBuilder().pingInterval(20, TimeUnit.SECONDS).readTimeout(0, TimeUnit.MILLISECONDS).build().newWebSocket(req, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 isOpen = true
+                openedAt = System.currentTimeMillis()
                 sendHello()
                 listener.onOpen(this@RpcClient)
             }
             override fun onMessage(webSocket: WebSocket, text: String) = handle(text)
-            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) { webSocket.close(1000, null) }
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) = end("closed ($code${if (reason.isNotBlank()) " $reason" else ""})")
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) = end(t.message ?: t::class.java.simpleName)
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) { webSocket.close(1000, null); closeCode = code }
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) =
+                end("closed ($code${if (reason.isNotBlank()) " $reason" else ""})", LinkProblem.ofClose(code))
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                val code = response?.code
+                end(if (code != null) "the computer answered $code" else (t.message ?: t::class.java.simpleName), closeCode?.let { LinkProblem.ofClose(it) }?.takeIf { it == LinkProblem.Unpaired } ?: LinkProblem.of(t, code))
+            }
         })
     }
+
+    @Volatile private var closeCode: Int? = null
 
     /** Again whenever the facts change (rotation, a new window size). */
     fun sendHello() { ws?.send(JSONObject(hello().toString()).put("type", "hello").toString()) }
@@ -174,7 +219,7 @@ class RpcClient(
         return try { withTimeout(timeoutMs) { d.await() } } finally { calls.remove(id) }
     }
 
-    fun close() { ws?.close(1000, "bye"); end("closed by the phone") }
+    fun close() { ws?.close(1000, "bye"); end("closed by the phone", LinkProblem.Dropped) }
 
     internal fun handle(text: String) {
         val o = runCatching { JSONObject(text) }.getOrNull() ?: return
@@ -188,11 +233,11 @@ class RpcClient(
         }
     }
 
-    private fun end(why: String) {
+    private fun end(why: String, problem: LinkProblem) {
         isOpen = false
         if (!ended.compareAndSet(false, true)) return
         calls.values.forEach { it.completeExceptionally(RpcException(why)) }
         calls.clear()
-        listener.onClosed(this, why)
+        listener.onClosed(this, why, openedAt > 0, problem)
     }
 }

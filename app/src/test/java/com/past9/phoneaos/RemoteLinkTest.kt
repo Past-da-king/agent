@@ -277,7 +277,7 @@ class RemoteLinkTest {
                 object : RpcClient.Listener {
                     override fun onOpen(rpc: RpcClient) { opened.countDown() }
                     override fun onEvent(rpc: RpcClient, name: String, payload: Any?) { events.add(name to payload) }
-                    override fun onClosed(rpc: RpcClient, why: String) {}
+                    override fun onClosed(rpc: RpcClient, why: String, opened: Boolean, problem: com.past9.phoneaos.remote.LinkProblem) {}
                 })
             rpc.connect()
             assertTrue(opened.await(10, TimeUnit.SECONDS))

@@ -237,18 +237,25 @@ fun RemoteStrip(session: RemoteSession) {
     val state by session.state.collectAsStateWithLifecycle()
     val cs = MaterialTheme.colorScheme
     val none = state is LinkState.NoAgents
+    val retrying = state as? LinkState.Retrying
+    // The countdown on "Trying again in N s" ticks once a second while it shows.
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    if (retrying != null) androidx.compose.runtime.LaunchedEffect(retrying) {
+        while (true) { now = System.currentTimeMillis(); kotlinx.coroutines.delay(1_000) }
+    }
     Surface(color = if (none) cs.errorContainer else cs.surfaceContainer) {
-        Row(Modifier.fillMaxWidth().statusBarsPadding().heightIn(min = 30.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().statusBarsPadding().heightIn(min = 30.dp).padding(horizontal = 16.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             val (dot, text) = when (val s = state) {
                 is LinkState.Connected -> Color(0xFF2E9E5B) to "Answered by ${s.brain.name}"
                 LinkState.Connecting -> Color(0xFFE0A100) to "Connecting to ${session.link.nodeName.ifBlank { "your computer" }}..."
                 LinkState.Paused -> Color(0xFFE0A100) to "Linked to ${session.link.nodeName.ifBlank { "your computer" }}"
-                is LinkState.NoAgents -> cs.error to "No agents available"
+                is LinkState.Retrying -> Color(0xFFE0A100) to (s.why + ((s.atMs - now + 999) / 1000).let { if (it > 0) " Trying again in $it s." else " Trying again..." })
+                is LinkState.NoAgents -> cs.error to s.why
             }
             Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
             Spacer(Modifier.width(8.dp))
             Text(text, style = MaterialTheme.typography.labelLarge, color = if (none) cs.onErrorContainer else cs.onSurfaceVariant, modifier = Modifier.weight(1f))
-            if (none) TextButton(onClick = { session.retry() }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Retry") }
+            if (none || retrying != null) TextButton(onClick = { session.retry() }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Retry") }
         }
     }
 }
@@ -300,6 +307,9 @@ fun LinkedDevicesScreen(onBack: () -> Unit) {
                         Box(Modifier.size(10.dp).clip(CircleShape).background(when { answering -> Color(0xFF2E9E5B); h?.ready == true -> Color(0xFF8BC34A); else -> MaterialTheme.colorScheme.outlineVariant }))
                     }
                 }
+                val trouble = (state as? LinkState.NoAgents)?.why ?: (state as? LinkState.Retrying)?.why
+                if (l.on && trouble != null) Text(trouble, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+                if (l.on && (state as? LinkState.NoAgents)?.rescan == true) TextButton(onClick = { adding = true }, modifier = Modifier.padding(start = 8.dp)) { Text("Scan the QR code again") }
                 if (l.on) TextButton(onClick = { session?.retry() }, modifier = Modifier.padding(start = 8.dp)) { Text("Check again") }
             }
             SectionHeader("Let your computers use this phone's", "So the agent there can browse from here, read notifications you allowed, and ask you.", Modifier.padding(start = 4.dp, top = 8.dp))

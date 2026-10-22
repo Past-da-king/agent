@@ -48,8 +48,26 @@ interface RemoteSink {
 sealed interface LinkState {
     data object Connecting : LinkState
     data class Connected(val brain: BrainRef, val url: String) : LinkState
-    data class NoAgents(val why: String) : LinkState
+    /** Nobody can answer. [rescan]: only linking again fixes it (the computer forgot this phone, or its certificate changed). */
+    data class NoAgents(val why: String, val rescan: Boolean = false) : LinkState
+    /** The last try failed for [why]; the next one is at [atMs] (Retry tries now). */
+    data class Retrying(val why: String, val atMs: Long) : LinkState
     data object Paused : LinkState
+}
+
+/** How long to wait before try number [failures] (1, 2, 4 ... 30 s, give or take a fifth so phones do not march in step). */
+internal fun backoffMs(failures: Int, random: Double = Math.random()): Long {
+    if (failures <= 0) return 0
+    val base = minOf(RemoteSession.MAX_BACKOFF_MS, 1_000L shl minOf(failures - 1, 15))
+    return (base * (0.8 + 0.4 * random)).toLong().coerceAtMost(RemoteSession.MAX_BACKOFF_MS)
+}
+
+/** What the screen says for each way a link fails: what happened and what to do. */
+internal fun linkReason(problem: LinkProblem, name: String): String = when (problem) {
+    LinkProblem.Unpaired -> "$name no longer knows this phone. Scan its QR code again: Settings, Linked devices, Link to a different computer."
+    LinkProblem.CertChanged -> "$name's certificate changed since this phone was linked. Scan its QR code again to trust it."
+    LinkProblem.Unreachable -> "Can't reach $name. Is the Agent app open there, with Devices on, on the same network?"
+    LinkProblem.Dropped -> "The link to $name dropped."
 }
 
 /** The phone's link to its brains. One per link; [RemoteHub] owns it. */
@@ -81,12 +99,25 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     val commands by lazy { DeviceCommands(app, this) }
 
     // ---- connecting and failover ------------------------------------------------------------
+    // One WebSocket per link carries every call and event; the health checks reuse pooled connections.
+    // 22 Oct 2026: a socket still opening used to count as "not ok", so the next check replaced it, and closing the
+    // old one kicked the next check at once. The check always beat the TLS handshake, so the phone opened about 15
+    // new connections a second, forever, and never connected. Now a socket that is opening is left alone, a
+    // replaced socket is detached before it is closed (no kick), and failures wait 1, 2, 4 ... 30 s.
+
+    @Volatile private var failures = 0
+    @Volatile private var nextTryAt = 0L
+    @Volatile private var connectStartedAt = 0L
+    private val trusts = ConcurrentHashMap<String, Pinning.PinnedTrust>()
 
     fun start() {
         if (loop?.isActive == true) return
         _state.value = if (current != null && rpc?.isOpen == true) _state.value else LinkState.Connecting
         loop = scope.launch {
             while (true) {
+                // Backing off: a kick (a failed call, the socket dropping) does not cut the wait short; Retry does.
+                val wait = nextTryAt - System.currentTimeMillis()
+                if (wait > 0) { withTimeoutOrNull(wait) { kick.receive() }; continue }
                 runCatching { probeAndMove() }
                 // Every 15 s, or at once when something failed.
                 withTimeoutOrNull(15_000) { kick.receive() }
@@ -94,12 +125,28 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         }
     }
 
-    /** Check every brain now (Retry, a failed call, the socket dropping). */
-    fun retry() { if (_state.value is LinkState.NoAgents) _state.value = LinkState.Connecting; kick.trySend(Unit); start() }
+    /** Check every brain now (Retry, coming back on screen). */
+    fun retry() {
+        if (_state.value is LinkState.NoAgents || _state.value is LinkState.Retrying) _state.value = LinkState.Connecting
+        nextTryAt = 0
+        kick.trySend(Unit); start()
+    }
 
     private fun clientFor(fp: String): OkHttpClient = clients.getOrPut(fp) {
-        Pinning.client(sharedHttp, Pinning.PinnedTrust({ listOf(fp) }))
+        Pinning.client(sharedHttp, trusts.getOrPut(fp) { Pinning.PinnedTrust({ listOf(fp) }) })
     }
+
+    /** The open socket goes without telling the loop (it is being replaced or the link is pausing). */
+    private fun detach() {
+        val old = rpc
+        rpc = null
+        old?.close()
+    }
+
+    private fun nameOf(pick: Pick?): String = (pick?.brain?.name ?: link.nodeName).ifBlank { "your computer" }
+
+    /** Words a person can act on, for the strip and Settings. */
+    internal fun reasonFor(problem: LinkProblem, name: String): String = linkReason(problem, name)
 
     private suspend fun probeAndMove() {
         val brains = link.brains
@@ -113,12 +160,22 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         for (b in brains) if (!seen.containsKey(b.id)) seen[b.id] = b.urls.firstNotNullOfOrNull { u -> RemoteApi(clientFor(b.fp)).health(u, 2_000) }
         _health.value = seen
         val cur = current
-        val curOk = cur != null && rpc?.isOpen == true && seen[cur.brain.id]?.ready == true
+        val r = rpc
+        // A socket that is still opening is left to finish (it gets CONNECT_GRACE_MS); replacing it is what stormed.
+        if (r != null && !r.isOpen && System.currentTimeMillis() - connectStartedAt < CONNECT_GRACE_MS) return
+        // An open socket is the best sign the brain is there: one missed health check does not drop it, a brain
+        // that says it is not ready does.
+        val curOk = cur != null && r?.isOpen == true && seen[cur.brain.id]?.ready != false
         when (val m = BrainChooser.decide(brains, cur, curOk, best, turnRunning)) {
             is BrainChooser.Move.To -> connectTo(m.pick)
             BrainChooser.Move.NoneAvailable -> {
-                rpc?.close(); rpc = null; current = null
-                _state.value = LinkState.NoAgents("None of your computers answered.")
+                detach(); current = null
+                val certChanged = brains.firstOrNull { trusts[it.fp]?.refused == true }
+                _state.value = when {
+                    certChanged != null -> LinkState.NoAgents(reasonFor(LinkProblem.CertChanged, certChanged.name.ifBlank { nameOf(null) }), rescan = true)
+                    brains.size <= 1 -> LinkState.NoAgents(reasonFor(LinkProblem.Unreachable, brains.firstOrNull()?.name?.ifBlank { null } ?: nameOf(null)))
+                    else -> LinkState.NoAgents("None of your computers answered. Are the Agent apps open there, with Devices on, on the same network?")
+                }
                 _status.value = AgentStatus()
             }
             BrainChooser.Move.Stay -> {}
@@ -126,9 +183,10 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     }
 
     private fun connectTo(pick: Pick) {
-        rpc?.close()
+        detach()
         current = pick
-        _state.value = LinkState.Connecting
+        if (_state.value !is LinkState.Retrying && _state.value !is LinkState.NoAgents) _state.value = LinkState.Connecting
+        connectStartedAt = System.currentTimeMillis()
         val c = RpcClient(clientFor(pick.brain.fp), pick.url, link.pass, ::hello, object : RpcClient.Listener {
             override fun onOpen(rpc: RpcClient) {
                 if (this@RemoteSession.rpc !== rpc) return
@@ -136,10 +194,27 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
                 scope.launch { runCatching { refreshBrains(pick) }; runCatching { reloadAll() }; runCatching { readRunState() } }
             }
             override fun onEvent(rpc: RpcClient, name: String, payload: Any?) { if (this@RemoteSession.rpc === rpc) onEvent(name, payload) }
-            override fun onClosed(rpc: RpcClient, why: String) {
+            override fun onClosed(rpc: RpcClient, why: String, opened: Boolean, problem: LinkProblem) {
                 if (this@RemoteSession.rpc !== rpc) return
                 this@RemoteSession.rpc = null
-                if (foreground || holdingWork) { _state.value = LinkState.Connecting; kick.trySend(Unit) }
+                val now = System.currentTimeMillis()
+                // A link that stayed up a while was fine: try again at once. One that failed or fell over waits longer each time.
+                failures = if (opened && now - rpc.openedAt >= STABLE_MS) 0 else failures + 1
+                val name = nameOf(pick)
+                android.util.Log.i("RemoteLink", "link to ${pick.url} ended: $why ($problem, opened=$opened, failures=$failures)")
+                if (problem == LinkProblem.Unpaired || problem == LinkProblem.CertChanged) {
+                    // Only linking again fixes these: say so, and look again only now and then.
+                    current = null
+                    nextTryAt = now + MAX_BACKOFF_MS
+                    _state.value = LinkState.NoAgents(reasonFor(problem, name), rescan = true)
+                    _status.value = AgentStatus()
+                    return
+                }
+                nextTryAt = now + backoffMs(failures)
+                if (foreground || holdingWork) {
+                    _state.value = if (failures == 0) LinkState.Connecting else LinkState.Retrying(reasonFor(problem, name), nextTryAt)
+                    kick.trySend(Unit)
+                }
             }
         })
         rpc = c
@@ -184,6 +259,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         foreground = true
         pauseJob?.cancel(); pauseJob = null
         if (_state.value is LinkState.Paused) _state.value = LinkState.Connecting
+        // Back on screen: try now rather than at the end of a backoff wait.
+        if (rpc?.isOpen != true && nextTryAt > System.currentTimeMillis()) retry()
         start(); factsMaybeChanged()
     }
 
@@ -200,7 +277,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
 
     private fun pause() {
         loop?.cancel(); loop = null
-        rpc?.close(); rpc = null; current = null
+        detach(); current = null
         _state.value = LinkState.Paused
         hold(false)
     }
@@ -214,7 +291,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
 
     fun close() {
         hold(false)
-        rpc?.close(); rpc = null
+        detach()
         scope.cancel()
     }
 
@@ -526,6 +603,12 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     val pass: String get() = link.pass
 
     companion object {
+        /** The longest wait between tries. */
+        const val MAX_BACKOFF_MS = 30_000L
+        /** How long a socket may take to open before a check may replace it. */
+        const val CONNECT_GRACE_MS = 20_000L
+        /** A link that stayed up this long was fine; the next failure starts the waits from 1 s again. */
+        const val STABLE_MS = 10_000L
         const val CHAT_ROWS = 400
         const val NOTE_GONE = "The computer no longer has this voice note."
         const val EVT_DATA = "agent:evt:data.changed"

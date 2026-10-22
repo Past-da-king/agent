@@ -166,9 +166,14 @@ function projectRun() {
   log('project run started in pc_kitchen')
 }
 
+// Fault switches for the reconnect tests (control port): /flaky?n=N fails the next N health checks,
+// /wsdelay?ms=M holds each upgrade M ms, /forget drops every pass (the phone must say scan again).
+let upgrades = 0, flakyHealth = 0, wsDelay = 0
+
 function serve(node) {
   const server = https.createServer({ key: node.tls.key, cert: node.tls.cert }, async (req, res) => {
     const url = new URL(req.url, node.url)
+    if (url.pathname === '/v1/health' && flakyHealth > 0) { flakyHealth--; log('health FLAKY'); return json(res, 503, { error: 'busy' }) }
     if (url.pathname === '/v1/health') return json(res, 200, { id: node.id, name: node.name, version: 'fake-0.1', roles: ['brain'], ready: true, busy: running, meshId: MESH })
     if (url.pathname === '/v1/pair' && req.method === 'POST') {
       const body = JSON.parse((await readBody(req)) || '{}')
@@ -190,7 +195,9 @@ function serve(node) {
     json(res, 404, { error: 'not found' })
   })
   const wss = new WebSocketServer({ noServer: true })
-  server.on('upgrade', (req, socket, head) => {
+  server.on('upgrade', async (req, socket, head) => {
+    upgrades++
+    if (wsDelay > 0) await new Promise((r) => setTimeout(r, wsDelay))
     const dev = new URL(req.url, node.url).pathname === '/v1/rpc' ? passOf(req) : null
     if (!dev) { socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n'); return socket.destroy() }
     wss.handleUpgrade(req, socket, head, (ws) => {
@@ -243,8 +250,11 @@ http.createServer((req, res) => {
   const n = nodes.find((x) => x.id.endsWith(url.searchParams.get('node') ?? '-'))
   if (url.pathname === '/down' && n) { down(n); return json(res, 200, { ok: true }) }
   if (url.pathname === '/up' && n) { up(n); return json(res, 200, { ok: true }) }
+  if (url.pathname === '/flaky') { flakyHealth = Number(url.searchParams.get('n') ?? 1); return json(res, 200, { ok: true }) }
+  if (url.pathname === '/wsdelay') { wsDelay = Number(url.searchParams.get('ms') ?? 0); return json(res, 200, { ok: true }) }
+  if (url.pathname === '/forget') { passes.clear(); for (const n of nodes) for (const s of n.sockets) s.terminate(); return json(res, 200, { ok: true }) }
   if (url.pathname === '/offer') return json(res, 200, newOffer())
-  if (url.pathname === '/state') return json(res, 200, { nodes: nodes.map((x) => ({ name: x.name, up: x.up, sockets: x.sockets.size })), devices: [...devices.values()].map((d) => d.name), rows: Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, v.length])) })
+  if (url.pathname === '/state') return json(res, 200, { upgrades, nodes: nodes.map((x) => ({ name: x.name, up: x.up, sockets: x.sockets.size })), devices: [...devices.values()].map((d) => d.name), rows: Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, v.length])) })
   json(res, 404, {})
 }).listen(CONTROL, '127.0.0.1', () => log(`control on 127.0.0.1:${CONTROL}`))
 newOffer()
