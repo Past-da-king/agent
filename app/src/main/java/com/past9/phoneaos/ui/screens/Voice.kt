@@ -92,12 +92,11 @@ fun VoiceSheet(s: AgentSettings, actions: VoiceActions, onDismiss: () -> Unit) {
                             Text("Live calls", style = MaterialTheme.typography.titleMedium)
                             Text("Call ${s.agentName} and just talk. It hands real work to your main agent and tells you when something matters.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
-                        Switch(s.liveEnabled, actions.setLive, enabled = actions.hasKey("gemini"))
                     }
-                    if (!actions.hasKey("gemini")) {
-                        Spacer(Modifier.height(8.dp))
-                        Text("Needs a Google (Gemini) key: pick Google above and save one. It runs on Gemini Live.", style = MaterialTheme.typography.bodySmall, color = cs.tertiary)
-                    }
+                    Spacer(Modifier.height(8.dp))
+                    // No switch: the phone button in the chat is always there, and works whenever a Google key is saved.
+                    if (actions.hasKey("gemini")) Text("Ready: tap the phone in the chat to call.", style = MaterialTheme.typography.bodySmall, color = cs.primary)
+                    else Text("Needs a Google (Gemini) key: pick Google above and save one. It runs on Gemini Live.", style = MaterialTheme.typography.bodySmall, color = cs.tertiary)
                 }
             }
         }

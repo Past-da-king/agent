@@ -231,33 +231,42 @@ fun QrScanner(modifier: Modifier, onText: (String) -> Unit) {
     AndroidView({ view }, modifier)
 }
 
-/** The slim line at the top while linked: who is answering, or that nobody is. */
+/**
+ * Shown at the top ONLY when nothing can answer. While linked and working there is no bar and no machine name
+ * anywhere in the conversation: failover between computers is silent. Which computer answers lives in
+ * Settings > Linked devices.
+ */
 @Composable
-fun RemoteStrip(session: RemoteSession) {
+fun RemoteTroubleBar(session: RemoteSession, onDevices: () -> Unit) {
     val state by session.state.collectAsStateWithLifecycle()
+    if (!RemoteTrouble.shows(state)) return
     val cs = MaterialTheme.colorScheme
-    val none = state is LinkState.NoAgents
     val retrying = state as? LinkState.Retrying
     // The countdown on "Trying again in N s" ticks once a second while it shows.
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     if (retrying != null) androidx.compose.runtime.LaunchedEffect(retrying) {
         while (true) { now = System.currentTimeMillis(); kotlinx.coroutines.delay(1_000) }
     }
-    Surface(color = if (none) cs.errorContainer else cs.surfaceContainer) {
-        Row(Modifier.fillMaxWidth().statusBarsPadding().heightIn(min = 30.dp).padding(horizontal = 16.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-            val (dot, text) = when (val s = state) {
-                is LinkState.Connected -> Color(0xFF2E9E5B) to "Answered by ${s.brain.name}"
-                LinkState.Connecting -> Color(0xFFE0A100) to "Connecting to ${session.link.nodeName.ifBlank { "your computer" }}..."
-                LinkState.Paused -> Color(0xFFE0A100) to "Linked to ${session.link.nodeName.ifBlank { "your computer" }}"
-                is LinkState.Retrying -> Color(0xFFE0A100) to (s.why + ((s.atMs - now + 999) / 1000).let { if (it > 0) " Trying again in $it s." else " Trying again..." })
-                is LinkState.NoAgents -> cs.error to s.why
-            }
-            Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
+    val text = when (val s = state) {
+        is LinkState.NoAgents -> s.why.ifBlank { RemoteTrouble.TEXT }
+        is LinkState.Retrying -> s.why + ((s.atMs - now + 999) / 1000).let { if (it > 0) " Trying again in $it s." else " Trying again..." }
+        else -> RemoteTrouble.TEXT
+    }
+    Surface(color = cs.errorContainer) {
+        Row(Modifier.fillMaxWidth().statusBarsPadding().heightIn(min = 36.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(cs.error))
             Spacer(Modifier.width(8.dp))
-            Text(text, style = MaterialTheme.typography.labelLarge, color = if (none) cs.onErrorContainer else cs.onSurfaceVariant, modifier = Modifier.weight(1f))
-            if (none || retrying != null) TextButton(onClick = { session.retry() }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Retry") }
+            Text(text, style = MaterialTheme.typography.labelLarge, color = cs.onErrorContainer, modifier = Modifier.weight(1f))
+            TextButton(onClick = onDevices, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Devices") }
+            TextButton(onClick = { session.retry() }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Retry") }
         }
     }
+}
+
+object RemoteTrouble {
+    const val TEXT = "Nothing can answer right now. Your computers are off or out of reach."
+    /** Only a real outage shows (nothing answers, or the last try failed and the next is waiting); connecting, paused and a silent switch to another computer do not. */
+    fun shows(state: LinkState): Boolean = state is LinkState.NoAgents || state is LinkState.Retrying
 }
 
 /** Settings > Linked devices. */
