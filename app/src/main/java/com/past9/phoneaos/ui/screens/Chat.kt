@@ -514,6 +514,13 @@ private fun VoiceBubble(item: ChatItem) {
 @Composable
 private fun UserBubble(item: ChatItem) {
     val text = item.text
+    // Not his: a project, the main agent, a call or a helper wrote it (meta.via, as the computer marks it). It says who,
+    // in a neutral bubble, never his own colour (22 Oct 2026: other agents' messages showed as if he sent them).
+    val sender = com.past9.phoneaos.remote.Sender.of(item.meta)
+    if (sender != null) Row(Modifier.fillMaxWidth().padding(start = 48.dp, bottom = 4.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+        Icon(senderIcon(sender), null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant); Spacer(Modifier.width(6.dp))
+        Text(sender.line, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
     val images = JSONObject(item.meta).optJSONArray("images")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
     if (images.isNotEmpty()) Box(Modifier.fillMaxWidth().padding(start = 64.dp, bottom = 6.dp), contentAlignment = Alignment.CenterEnd) {
         com.past9.phoneaos.ui.ImageStrip(images.map { com.past9.phoneaos.ui.ChatImage(java.io.File(it).toURI().toString(), "Your photo") })
@@ -530,10 +537,19 @@ private fun UserBubble(item: ChatItem) {
         }
     }
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-        Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(24.dp, 24.dp, 6.dp, 24.dp), modifier = Modifier.widthIn(max = 320.dp).padding(start = 48.dp)) {
-            Text(text.substringBefore("\n\n[Attached document:").substringBefore("\n\n[Shared with you").ifBlank { "Here's a document." }, Modifier.padding(horizontal = 16.dp, vertical = 11.dp), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+        Surface(color = if (sender == null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(24.dp, 24.dp, 6.dp, 24.dp), modifier = Modifier.widthIn(max = 320.dp).padding(start = 48.dp)) {
+            Text(text.substringBefore("\n\n[Attached document:").substringBefore("\n\n[Shared with you").ifBlank { "Here's a document." }, Modifier.padding(horizontal = 16.dp, vertical = 11.dp), style = MaterialTheme.typography.bodyLarge,
+                color = if (sender == null) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
         }
     }
+}
+
+private fun senderIcon(s: com.past9.phoneaos.remote.Sender): ImageVector = when (s.from) {
+    "call" -> Icons.Rounded.Call
+    "main" -> Icons.Rounded.Person
+    "routine" -> Icons.Rounded.Schedule
+    "helper", "worker", "system" -> Icons.Rounded.AutoAwesome
+    else -> Icons.Rounded.Folder
 }
 
 @Composable
@@ -562,7 +578,7 @@ fun ReplyQuote(quoted: ChatItem, onClick: () -> Unit) {
             Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.AutoMirrored.Rounded.Reply, null, Modifier.size(14.dp), tint = cs.primary); Spacer(Modifier.width(4.dp))
-                    Text("Replying to you", style = MaterialTheme.typography.labelMedium, color = cs.primary)
+                    Text(com.past9.phoneaos.remote.Sender.of(quoted.meta)?.let { "Replying to " + it.line.removePrefix("From ") } ?: "Replying to you", style = MaterialTheme.typography.labelMedium, color = cs.primary)
                 }
                 Text(quoted.text.substringBefore("\n\n[Attached document:").trim().ifBlank { "A photo or document" }, style = MaterialTheme.typography.bodySmall,
                     color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)

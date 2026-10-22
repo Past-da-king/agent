@@ -24,7 +24,7 @@ class CallAgentTest {
     fun theVoiceIsToldItCanDoAnythingAndNeverToRefuse() {
         val p = CallController.systemPrompt("Hina", "Ayanda", linked = true)
         assertTrue(p.contains("NEVER say you can't"))
-        assertTrue(p.contains("delegate_to_agent"))
+        assertTrue(p.contains("start_work"))
         assertTrue(p.contains("computer"))
         assertTrue(p.contains("Approve?"))
         assertFalse(CallController.systemPrompt("Hina", "Ayanda", linked = false).contains("their computer"))
@@ -34,7 +34,7 @@ class CallAgentTest {
     fun theCallDeclaresTheHandOffTheAnswerAndTheStatusTools() {
         val decls = CallController.callTools(true).getJSONObject(0).getJSONArray("functionDeclarations")
         val names = (0 until decls.length()).map { decls.getJSONObject(it).getString("name") }
-        assertEquals(listOf("delegate_to_agent", "answer_agent_question", "agent_status"), names)
+        assertEquals(listOf("start_work", "answer_question", "work_status"), names)
         assertTrue(decls.getJSONObject(0).getString("description").contains("on their computer"))
         assertTrue(decls.getJSONObject(1).getJSONObject("parameters").getJSONObject("properties").has("user_said"))
     }
@@ -47,7 +47,7 @@ class CallAgentTest {
         assertTrue(CallController.isApproval(open!!))
         assertEquals("Send the invoice to Shey", CallController.approvalWhat(open))
         val said = CallController.cardPrompt(open)
-        assertTrue(said, said.contains("It needs your OK to Send the invoice to Shey. Approve?"))
+        assertTrue(said, said.contains("I need your OK to Send the invoice to Shey. Approve?"))
         // Answered: no longer the open card.
         val answered = item.copy(meta = JSONObject(item.meta).put("answer", "Approve").toString())
         assertEquals(null, CallController.openQuestion(listOf(answered)))
@@ -60,7 +60,7 @@ class CallAgentTest {
         assertTrue(props.has("target")); assertTrue(props.has("new_chat"))
         val alone = CallController.callTools(false).getJSONObject(0).getJSONArray("functionDeclarations").getJSONObject(0).getJSONObject("parameters").getJSONObject("properties")
         assertFalse(alone.has("target"))
-        assertTrue(CallController.systemPrompt("Hina", "Ayanda", true).contains("Sent to the Strat Edge Website project"))
+        assertTrue(CallController.systemPrompt("Hina", "Ayanda", true).contains("I'm on it in the Strat Edge Website project"))
         assertTrue(CallController.systemPrompt("Hina", "Ayanda", true).contains("don't guess and don't send it to main"))
         val targets = org.json.JSONArray()
             .put(JSONObject().put("kind", "main").put("name", "Hina").put("running", false).put("doing", ""))
@@ -68,9 +68,9 @@ class CallAgentTest {
                 .put("chats", org.json.JSONArray().put(JSONObject().put("title", "Phone call routing").put("running", true))))
             .put(JSONObject().put("kind", "helper").put("name", "Desktop dictation fix").put("running", true).put("doing", "Building the installer"))
         val r = CallController.roster(targets)
-        assertTrue(r, r.contains("- The main agent (Hina), idle"))
-        assertTrue(r, r.contains("- Project Agent Desktop App, working: Wiring the RPC. Chats: \"Phone call routing\" (working)"))
-        assertTrue(r, r.contains("- Helper \"Desktop dictation fix\", working: Building the installer"))
+        assertTrue(r, r.contains("- Your main chat (target main), idle"))
+        assertTrue(r, r.contains("- Your project Agent Desktop App, working: Wiring the RPC. Chats: \"Phone call routing\" (working)"))
+        assertTrue(r, r.contains("- Your helper \"Desktop dictation fix\", working: Building the installer"))
         assertEquals("", CallController.roster(null))
     }
 

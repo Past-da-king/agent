@@ -10,7 +10,7 @@ import org.json.JSONObject
  * DEBUG BUILDS ONLY (src/debug): drives a call on an emulator, which has no microphone to talk into.
  *   adb shell am broadcast -a com.past9.phoneaos.CALL_PROBE -n com.past9.phoneaos/.voice.CallProbe --es say "Email Ben the report"
  *     puts the words to the REAL Live model as if the user said them (it decides which tool to call);
- *   ... --es tool delegate_to_agent --es args '{"task":"...","target":"main"}'
+ *   ... --es tool start_work --es args '{"task":"...","target":"main"}'
  *     simulates the model calling a tool, for a run with no Live session.
  * Every tool call and result is logged under the tag CallAgent.
  */
