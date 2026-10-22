@@ -35,7 +35,8 @@ import kotlin.concurrent.thread
  * because each direction gets its own AudioRecord/AudioTrack configured for its own rate.
  */
 class LiveSession(
-    private val apiKey: String,
+    /** Where to connect: [LiveAuth.keyUrl] with this phone's key, or a token URL from the linked computer. */
+    @Volatile private var url: String,
     private val model: String,
     private val voice: String,
     private val systemInstruction: String,
@@ -50,6 +51,8 @@ class LiveSession(
      * spinner before he could send. Same Live model as the call, so both hear him identically.
      */
     private val dictation: Boolean = false,
+    /** A fresh URL for a reconnect (a token is good for one new call), run off the main thread. Null keeps [url]. */
+    private val renew: (() -> String?)? = null,
     private val onEvent: (Event) -> Unit,
 ) {
     sealed class Event {
@@ -99,8 +102,6 @@ class LiveSession(
     }
 
     private fun connect() {
-        val url = "wss://generativelanguage.googleapis.com/ws/" +
-            "google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=$apiKey"
         ws = http.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 if (webSocket !== ws) return
@@ -149,6 +150,7 @@ class LiveSession(
         Log.i(TAG, "reconnecting (try $retries, ${if (resumeHandle != null) "resuming" else "fresh"}) after $why")
         thread(name = "aos-live-reconnect", isDaemon = true) {
             Thread.sleep(400L * (1 shl (retries - 1)).coerceAtMost(8))
+            renew?.let { r -> runCatching { r() }.getOrNull()?.let { url = it } }
             if (running.get()) connect()
         }
         return true

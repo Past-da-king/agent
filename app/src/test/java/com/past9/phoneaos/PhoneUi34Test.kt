@@ -49,9 +49,8 @@ class PhoneUi34Test {
         assertNull(CallController.reason(hasGeminiKey = true, linked = true))
         val alone = CallController.reason(hasGeminiKey = false, linked = false)
         val linked = CallController.reason(hasGeminiKey = false, linked = true)
-        assertNotNull(alone); assertNotNull(linked)
+        assertNotNull(alone); assertNull(linked)
         assertTrue(alone!!.contains("Settings, Voice"))
-        assertTrue(linked!!.contains("your computer"))
     }
 
     @Test fun linkedCallFindsTheComputersOpenQuestion() {

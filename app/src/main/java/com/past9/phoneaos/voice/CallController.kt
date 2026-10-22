@@ -50,11 +50,18 @@ class CallController(
     /** Why this phone can't place a call right now, in plain words, or null when it can. */
     fun unavailableReason(linked: Boolean): String? = reason(settings.voiceKey("gemini") != null, linked)
 
+    /** Linked: the computer mints a one-use token from its own key; if it has none, this phone's key (if any) is used. */
+    private suspend fun linkedAuth(r: com.past9.phoneaos.remote.RemoteSession): LiveAuth.Token = try {
+        LiveAuth.parse(r.call("voice.liveToken", emptyList(), 20_000))
+    } catch (e: Exception) {
+        LiveAuth.Token.No(if (LiveAuth.isOldComputer(e.message)) LiveAuth.OLD_COMPUTER else e.message ?: "Your computer didn't answer the call request.", false)
+    }
+
     companion object {
         fun reason(hasGeminiKey: Boolean, linked: Boolean): String? = when {
             hasGeminiKey -> null
-            linked -> "The call's voice runs on this phone with Gemini Live, and the link to your computer can't carry a call's audio yet. " +
-                "Add a Google (Gemini) key in Settings, Voice. The work you ask for on the call still runs on your computer."
+            // The linked computer starts the call with its own Google key (voice.liveToken); it says so if it has none.
+            linked -> null
             else -> "Calls run on Gemini Live. Add a Google (Gemini) key in Settings, Voice, then tap the phone again."
         }
 
@@ -87,7 +94,9 @@ class CallController(
     fun start() {
         if (_state.value.active) return
         remote = linked()
-        val key = settings.voiceKey("gemini") ?: run { _state.value = CallState(phase = "failed", error = unavailableReason(remote != null).orEmpty()); return }
+        val r = remote
+        val key = settings.voiceKey("gemini")
+        if (r == null && key == null) { _state.value = CallState(phase = "failed", error = unavailableReason(false).orEmpty()); return }
         val s = settings.state.value
         val name = s.agentName.takeIf { it != "Your agent" } ?: "your agent"
         val system = """
@@ -99,19 +108,30 @@ class CallController(
         _state.value = CallState(active = true, phase = "connecting")
         // Started while the call screen is in front, which is what Android requires for the mic.
         CallService.start(context)
-        scope.launch { begin(key, system) }
+        scope.launch {
+            if (r == null) { begin(LiveAuth.keyUrl(key!!), null, system, null, null); return@launch }
+            when (val t = linkedAuth(r)) {
+                is LiveAuth.Token.Ok -> begin(t.url, { (kotlinx.coroutines.runBlocking { linkedAuth(r) } as? LiveAuth.Token.Ok)?.url }, system, t.model, t.voice)
+                // No key on the computer but one here: the call still goes, on this phone's key.
+                is LiveAuth.Token.No -> if (key != null) begin(LiveAuth.keyUrl(key), null, system, null, null)
+                    else { _state.value = CallState(phase = "failed", error = t.why); CallService.stop(context); remote = null }
+            }
+        }
     }
 
     /** Gives the voice the last stretch of the chat and the user's pinned facts, so it picks up mid-thread. */
-    private suspend fun begin(key: String, base: String) {
+    private suspend fun begin(url: String, renew: (() -> String?)?, base: String, model: String?, voice: String?) {
         val s = settings.state.value
         val recent = db.chat().all().first().filter { it.kind == "user" || it.kind == "agent" }.takeLast(10)
             .joinToString("\n") { (if (it.kind == "user") "User: " else "You: ") + it.text.take(400) }
         val pinned = db.memory().pinned().joinToString("\n") { "- ${it.title}: ${it.body.take(200)}" }
         val system = base + (if (pinned.isNotBlank()) "\n\nWhat you know about them:\n$pinned" else "") +
             (if (recent.isNotBlank()) "\n\nThe chat so far (this call continues it):\n$recent" else "")
-        callStart = System.currentTimeMillis(); callLines.clear()
-        live = LiveSession(key, "gemini-3.1-flash-live-preview", s.ttsVoice.takeIf { s.ttsProvider == "gemini" && it.isNotBlank() } ?: "Kore", system, tools = tools) { e -> onEvent(e) }.also { it.start() }
+        callStart = System.currentTimeMillis(); callLines.clear(); callTimes.clear()
+        // A computer's token is locked to the Live model its key reaches, so the call uses that model.
+        val phoneVoice = s.ttsVoice.takeIf { s.ttsProvider == "gemini" && it.isNotBlank() }
+        live = LiveSession(url, model?.ifBlank { null } ?: "gemini-3.1-flash-live-preview", phoneVoice ?: voice?.ifBlank { null } ?: "Kore", system,
+            tools = tools, renew = renew) { e -> onEvent(e) }.also { it.start() }
         // Read the main agent's new messages and questions into the call.
         watcher = scope.launch {
             var last = db.chat().all().first().lastOrNull()?.id ?: 0L
@@ -137,6 +157,8 @@ class CallController(
         private set
     /** The whole call as said, in order, for the main agent and for the chat. */
     private val callLines = mutableListOf<Pair<String, String>>()
+    /** When each line was said, for the computer's copy of the call. */
+    private val callTimes = mutableListOf<Long>()
     private var bufWho = ""; private val buf = StringBuilder()
 
     /** A speaker finished a stretch: put it in the chat as one bubble, like any message. */
@@ -145,6 +167,7 @@ class CallController(
         buf.clear(); bufWho = ""
         if (text.isBlank()) return
         callLines += who to text
+        callTimes += System.currentTimeMillis()
         // Linked: the chat is the computer's mirror, so phone-only bubbles would not belong there. The computer gets
         // the call's words with each task the voice hands it (delegate_to_agent carries the transcript so far).
         if (remote != null) return
@@ -225,7 +248,13 @@ class CallController(
         flush()
         // The call becomes part of the conversation: the main agent remembers what was said.
         if (callLines.isNotEmpty() && remote == null) runtime.rememberCall(transcript(80))
-        callLines.clear()
+        // Linked: the call lands in the computer's chat as one call row, like a call held there.
+        val r = remote
+        if (callLines.isNotEmpty() && r != null) {
+            val record = LiveAuth.record(callStart, System.currentTimeMillis(), callLines.mapIndexed { i, (w, t) -> Triple(w, t, callTimes.getOrElse(i) { callStart }) })
+            scope.launch { runCatching { r.call("voice.callSave", listOf(record), 30_000) } }
+        }
+        callLines.clear(); callTimes.clear()
         watcher?.cancel(); watcher = null; live = null; remote = null
     }
 }
