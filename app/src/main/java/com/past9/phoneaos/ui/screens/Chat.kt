@@ -219,6 +219,9 @@ fun ChatScreen(
         minOf(byWindow, byUnread)
     }
     val hideHelpers = live != null
+    // The "On the computer" list folds into a pill above the message box (his choice is kept; see remote/LiveCardsUi.kt).
+    val fold = com.past9.phoneaos.remote.rememberAgentsFold()
+    val agentsFolded = live != null && fold.folded(live.cards.count { it.working })
     val rows = remember(items, firstShown, markerId, markerCount, hideHelpers) {
         val g = withMarker(group(items.drop(firstShown), hideHelpers), markerId, markerCount)
         if (firstShown > 0) listOf<Row_>(Row_.Earlier) + g else g
@@ -258,7 +261,7 @@ fun ChatScreen(
     // A card arriving or leaving at the foot of the chat stays in view while he follows the end.
     val cardKey = live?.cards?.joinToString { it.row + it.state }.orEmpty()
     LaunchedEffect(cardKey) {
-        if (phase != 2 || live == null || live.cards.isEmpty() || !stick) return@LaunchedEffect
+        if (phase != 2 || live == null || live.cards.isEmpty() || !stick || agentsFolded) return@LaunchedEffect
         list.animateScrollToItem(rows.size)
     }
     // Reading the latest counts as having read it; leaving and coming back re-lands him on what is new.
@@ -292,7 +295,15 @@ fun ChatScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = { ChatTopBar(agentName, status, browserLive, waitingOnYou, openCount, actions, modelLabel) },
-        bottomBar = { Box(Modifier.fillMaxWidth().padding(horizontal = com.past9.phoneaos.ui.sidePad(0.dp, com.past9.phoneaos.ui.Readable.CHAT + 32.dp))) { Composer(draft, onDraft, status.working, actions, attachments, docs, listening) } },
+        bottomBar = { Box(Modifier.fillMaxWidth().padding(horizontal = com.past9.phoneaos.ui.sidePad(0.dp, com.past9.phoneaos.ui.Readable.CHAT + 32.dp))) { Column {
+            if (live != null && agentsFolded && morning == null) Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(start = 16.dp, end = 16.dp, top = 6.dp)) {
+                com.past9.phoneaos.remote.AgentsPill(live, onOpen = {
+                    fold.set(true)
+                    // Open where he can see it: the list comes back at the foot of the chat.
+                    scope.launch { kotlinx.coroutines.delay(120); stick = true; list.animateScrollToItem(rows.size) }
+                })
+            }
+            Composer(draft, onDraft, status.working, actions, attachments, docs, listening) } } },
     ) { pad ->
         if (items.isEmpty() || morning != null) Welcome(userName, Modifier.padding(pad), actions.onSend, morning, hasChat = items.isNotEmpty())
         else LazyColumn(
@@ -325,7 +336,7 @@ fun ChatScreen(
                     }
                 }
             }
-            if (live != null && live.cards.isNotEmpty()) item(key = "live-cards") { com.past9.phoneaos.remote.LiveCardList(live) }
+            if (live != null && live.cards.isNotEmpty() && !agentsFolded) item(key = "live-cards") { com.past9.phoneaos.remote.LiveCardList(live, onCollapse = { fold.set(false) }) }
             if (status.working && !waitingOnYou) item(key = "working") { WorkingRow(status) }
         }
         // Reading older messages while new ones arrive: say so, and offer the way down.
