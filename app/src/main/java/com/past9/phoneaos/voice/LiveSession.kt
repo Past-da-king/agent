@@ -128,7 +128,10 @@ class LiveSession(
                 Log.i(TAG, "socket closed $code $reason")
                 // 1007: this model refused a setup field. Try once more without the resumption fields.
                 if (code == 1007 && resumeFields && !ready.get()) { resumeFields = false; resumeHandle = null; if (tryReconnect("setup refused: $reason")) return }
-                if (!tryReconnect("closed $code $reason")) { onEvent(Event.Closed(reason.ifBlank { "closed" })); stop() }
+                if (!tryReconnect("closed $code $reason")) {
+                    // Closed before the call ever got going (a bad key, a refused model): say why, not a bare "Call ended".
+                    onEvent(if (!everReady) Event.Failed(reason.ifBlank { "The call could not start." }) else Event.Closed(reason.ifBlank { "closed" })); stop()
+                }
             }
         })
     }
