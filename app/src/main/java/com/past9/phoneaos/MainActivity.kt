@@ -294,6 +294,8 @@ class MainActivity : ComponentActivity() {
             if (ck != null && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(ck)) {
                 // Composio Connect can't list its catalogue: show the popular apps (plus anything found by search) and ask for their status.
                 val cc = com.past9.phoneaos.tools.ComposioConnect
+                // The app tools may never have loaded in this process: opening Connections loads them too.
+                cc.ensureLoaded(ck)
                 // Plus the account's own apps and anything connected beyond the popular list, as Composio's replies showed them.
                 val catalog = com.past9.phoneaos.tools.AppCatalog
                 val apps = (catalog.popular + catalog.known(g.settings.composioApps()) + conn.toolkits).distinctBy { it.slug }
