@@ -248,7 +248,7 @@ class AgentRuntime(
             val rows = db.chat().all().first().filter { it.kind == "branch" }
             rows.filter { JSONObject(it.meta).optString("state") == "running" }.forEach { r ->
                 db.chat().update(r.copy(meta = JSONObject(r.meta).put("state", "interrupted").put("error", "Interrupted when the app closed.").toString()))
-                db.chat().insert(ChatItem(kind = "notice", text = "I was partway through \"${r.text.take(80)}\" when the app closed. Tell me to carry on and I will."))
+                db.chat().insert(ChatItem(kind = "notice", text = context.getString(com.past9.phoneaos.R.string.rt_interrupted_by_close, r.text.take(80))))
             }
             unmerged.set(rows.count { !JSONObject(it.meta).optBoolean("merged") })
             if (unmerged.get() > 0) mergeBranches()
@@ -317,7 +317,7 @@ class AgentRuntime(
         }
         if (picked.isNotEmpty()) {
             val list = picked.joinToString("; ")
-            db.chat().insert(ChatItem(kind = "notice", text = "The app restarted. ${picked.size} helper${if (picked.size > 1) "s" else ""} picked up where ${if (picked.size > 1) "they" else "it"} left off."))
+            db.chat().insert(ChatItem(kind = "notice", text = context.resources.getQuantityString(com.past9.phoneaos.R.plurals.rt_restart_resumed, picked.size, picked.size)))
             // The main agent hears it too, so it doesn't brief them again or tell the user they were lost.
             deliver("[The app restarted. These helpers were cut off and have been resumed from their last checkpoint: $list. They carry on by themselves; don't start them again. Their results arrive as usual. Say nothing to the user unless it matters.]")
         }
@@ -720,10 +720,10 @@ class AgentRuntime(
                 if (sub != null) branchSub(b, sub, text, images, first, parentSession) else branchApi(b, text, images, first, base)
             } catch (e: CancellationException) {
                 b.outcome = if (line.supersededBy != null) "superseded" else "stopped"
-                if (line.supersededBy == null) db.chat().insert(ChatItem(kind = "notice", text = "Stopped.", meta = JSONObject().put("branch", b.item).toString()))
+                if (line.supersededBy == null) db.chat().insert(ChatItem(kind = "notice", text = context.getString(com.past9.phoneaos.R.string.rt_stopped), meta = JSONObject().put("branch", b.item).toString()))
             } catch (e: Exception) {
                 b.outcome = "failed"; b.error = friendlyError(e)
-                db.chat().insert(ChatItem(kind = "notice", text = "A side thread (\"${b.userText.take(50)}\") failed: ${friendlyError(e)}", meta = JSONObject().put("error", true).put("branch", b.item).toString()))
+                db.chat().insert(ChatItem(kind = "notice", text = context.getString(com.past9.phoneaos.R.string.rt_branch_failed, b.userText.take(50), friendlyError(e)), meta = JSONObject().put("error", true).put("branch", b.item).toString()))
             } finally { phone.workFinished() }
         }
     }
@@ -961,7 +961,7 @@ class AgentRuntime(
         val provider = providerFactory(settings)
         if (provider == null) {
             db.chat().insert(ChatItem(kind = "notice", text = if (settings.state.value.mode == PowerMode.SUBSCRIPTION)
-                "Your ${settings.state.value.subKind.label} subscription isn't set up on this phone yet. Open Settings to finish setup, or switch to an API key." else "Add an API key in Settings so I can start working."))
+                context.getString(com.past9.phoneaos.R.string.rt_sub_not_setup, settings.state.value.subKind.label) else context.getString(com.past9.phoneaos.R.string.rt_add_key)))
             return
         }
         _status.value = _status.value.copy(working = true, label = "Thinking")
@@ -987,7 +987,7 @@ class AgentRuntime(
                 incoming = { generateSequence { mainLine.notes.poll() }.toList() })
         } catch (e: CancellationException) {
             // A correction closed this line: its work is kept, and the branch that replaced it carries on. That isn't "Stopped".
-            if (mainLine.supersededBy == null) db.chat().insert(ChatItem(kind = "notice", text = "Stopped."))
+            if (mainLine.supersededBy == null) db.chat().insert(ChatItem(kind = "notice", text = context.getString(com.past9.phoneaos.R.string.rt_stopped)))
         } catch (e: Exception) {
             db.chat().insert(ChatItem(kind = "notice", text = friendlyError(e), meta = JSONObject().put("error", true).toString()))
         } finally {
@@ -1043,7 +1043,7 @@ class AgentRuntime(
                         m.contains("Invalid bearer token", true) || m.contains("authentication_error", true) || m.contains("401") -> {
                             engine.forgetBadSignIn(); settings.setExtra("claude_session", null)
                             r.error = "sign-in rejected"
-                            db.chat().insert(ChatItem(kind = "notice", text = "Your ${settings.state.value.subKind.label} sign-in didn't work. Open Settings, Subscription, and sign in again.", meta = tag(JSONObject().put("error", true)).toString()))
+                            db.chat().insert(ChatItem(kind = "notice", text = context.getString(com.past9.phoneaos.R.string.rt_signin_failed, settings.state.value.subKind.label), meta = tag(JSONObject().put("error", true)).toString()))
                         }
                         // The same failure also came as text a moment ago: say it once.
                         m.contains("API Error:") -> {}
@@ -1073,7 +1073,7 @@ class AgentRuntime(
                 break
             }
         } catch (e: CancellationException) {
-            if (mainLine.supersededBy == null) db.chat().insert(ChatItem(kind = "notice", text = "Stopped."))
+            if (mainLine.supersededBy == null) db.chat().insert(ChatItem(kind = "notice", text = context.getString(com.past9.phoneaos.R.string.rt_stopped)))
         } catch (e: Exception) {
             db.chat().insert(ChatItem(kind = "notice", text = friendlyError(e), meta = JSONObject().put("error", true).toString()))
         } finally { lineEnded(mainLine); phone.workFinished() }
@@ -1196,7 +1196,7 @@ class AgentRuntime(
         val pm = context.getSystemService(android.os.PowerManager::class.java) ?: return
         if (pm.isIgnoringBatteryOptimizations(context.packageName) || settings.extra("battery_hint") != null) return
         settings.setExtra("battery_hint", "1")
-        db.chat().insert(ChatItem(kind = "notice", text = "Tip: helpers keep working with the app closed, but some phones (Samsung especially) stop background apps to save battery. Open Settings and tap \"Battery: unrestricted\" so they aren't cut off."))
+        db.chat().insert(ChatItem(kind = "notice", text = context.getString(com.past9.phoneaos.R.string.rt_battery_tip)))
     }
 
     /** One writer at a time: the step counter, the gate and the finish all edit the same row, and a read-modify-write that overlaps loses an edit. */
@@ -1460,10 +1460,10 @@ class AgentRuntime(
         val provider = if (sub == null) providerFactory(settings) else null
         if (sub == null && provider == null) {
             val msg = if (settings.state.value.mode == PowerMode.SUBSCRIPTION)
-                "Your ${settings.state.value.subKind.label} subscription isn't signed in or ready on this phone, so \"$name\" couldn't run. Open Settings to sign in again."
-            else "No AI is set up (no API key and no subscription), so \"$name\" couldn't run. Open Settings to set one up."
+                context.getString(com.past9.phoneaos.R.string.rt_routine_no_sub, settings.state.value.subKind.label, name)
+            else context.getString(com.past9.phoneaos.R.string.rt_routine_no_ai, name)
             db.chat().insert(ChatItem(kind = "notice", text = msg))
-            phone.notify("\"$name\" didn't run", msg)
+            phone.notify(context.getString(com.past9.phoneaos.R.string.rt_routine_didnt_run, name), msg)
             return msg
         }
         val ctx = ChatContext("routine", interactive = false)
@@ -1475,11 +1475,11 @@ class AgentRuntime(
                 else AgentLoop(provider!!, settings.state.value.model, routineTools()).run(sys, mutableListOf(Msg.user("Routine \"$name\": $prompt")), ctx)
             if (silentIf?.invoke(out) == true) return out
             db.chat().insert(ChatItem(kind = "agent", text = out, meta = JSONObject().put("routine", name).toString()))
-            phone.notify(name, out.lineSequence().firstOrNull { it.isNotBlank() }?.take(180) ?: "Done")
+            phone.notify(name, out.lineSequence().firstOrNull { it.isNotBlank() }?.take(180) ?: context.getString(com.past9.phoneaos.R.string.rt_done))
             out
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
             val msg = friendlyError(e)
-            db.chat().insert(ChatItem(kind = "notice", text = "Routine \"$name\" failed: $msg"))
+            db.chat().insert(ChatItem(kind = "notice", text = context.getString(com.past9.phoneaos.R.string.rt_routine_failed, name, msg)))
             msg
         } finally { phone.workFinished() }
     }
@@ -1574,10 +1574,10 @@ class AgentRuntime(
             val isApproval = question.startsWith("APPROVAL|")
             val connect = com.past9.phoneaos.tools.ConnectRequest.parse(question)
             when {
-                connect != null -> phone.notify("Connect ${connect.name}?", connect.summary, id, options)
-                isApproval -> phone.notify("Approve?", question.split("|").getOrElse(1) { "" }, id, options)
-                why != null -> phone.notify("${agentName()} needs you", "$why\n$question", id, options)
-                else -> phone.notify("Your agent has a question", question, id, options)
+                connect != null -> phone.notify(context.getString(com.past9.phoneaos.R.string.rt_notify_connect, connect.name), connect.summary, id, options)
+                isApproval -> phone.notify(context.getString(com.past9.phoneaos.R.string.rt_notify_approve), question.split("|").getOrElse(1) { "" }, id, options)
+                why != null -> phone.notify(context.getString(com.past9.phoneaos.R.string.rt_notify_needs_you, agentName()), "$why\n$question", id, options)
+                else -> phone.notify(context.getString(com.past9.phoneaos.R.string.rt_notify_question), question, id, options)
             }
             return try { d.await() } finally { mainQuestions.remove(id); if (helperItem == null) _status.value = prev.copy(helpers = helpers.size) }
         }
@@ -1647,7 +1647,7 @@ class AgentRuntime(
         com.past9.phoneaos.agent.Crashes.record(context, "self-check failed: $msg", null)
         if (before != msg) {
             db.chat().insert(ChatItem(kind = "notice", text = SelfCheck.notice(result)))
-            phone.notify("Tools don't work with $power", detail.take(160))
+            phone.notify(context.getString(com.past9.phoneaos.R.string.rt_notify_tools_broken, power), detail.take(160))
         }
         return result
     }

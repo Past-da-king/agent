@@ -65,7 +65,7 @@ object Wakes {
                 Check.HEADS_UP -> {
                     val inMin = ((w.since - now) / 60_000).coerceAtLeast(0)
                     if (w.since in 1 until now) Probe.Gone else Probe.Tell(w.reason.removeSuffix(" starts soon"),
-                        "Starts in $inMin min, at ${java.time.Instant.ofEpochMilli(w.since).atZone(java.time.ZoneId.systemDefault()).toLocalTime().withSecond(0).withNano(0)}.")
+                        context.getString(com.past9.phoneaos.R.string.svc_wake_starts_in, inMin, java.time.Instant.ofEpochMilli(w.since).atZone(java.time.ZoneId.systemDefault()).toLocalTime().withSecond(0).withNano(0).toString()))
                 }
                 Check.TASK_OPEN -> {
                     val t = g.db.tasks().task(c.taskId)

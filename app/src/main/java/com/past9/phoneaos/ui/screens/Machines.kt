@@ -1,5 +1,7 @@
 package com.past9.phoneaos.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.past9.phoneaos.R
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
@@ -58,8 +60,8 @@ fun MachinesLine(machines: List<Machine>, onClick: () -> Unit) {
         Icon(Icons.Rounded.Dns, null, tint = cs.primary)
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
-            Text("Machines", style = MaterialTheme.typography.titleSmall)
-            Text(if (machines.isEmpty()) "Hand heavy work to your servers and computers" else machines.joinToString(" · ") { it.name },
+            Text(stringResource(R.string.machines_title), style = MaterialTheme.typography.titleSmall)
+            Text(if (machines.isEmpty()) stringResource(R.string.machines_line_empty) else machines.joinToString(" · ") { it.name },
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (machines.isNotEmpty()) {
@@ -83,22 +85,22 @@ fun MachinesSheet(machines: List<Machine>, actions: MachineActions, onDismiss: (
         if (!checkOnOpen) return@LaunchedEffect
         machines.filter { checked[it.id] != true }.forEach { m -> checked[m.id] = true; status[m.id] = null; launch { status[m.id] = actions.onTest(m) ?: "" } }
     }
-    AppSheet(Icons.Rounded.Dns, "Heavy lifting", "Your machines", onDismiss, primary = "Add a machine", primaryEnabled = true, onPrimary = { onOpen(null) },
+    AppSheet(Icons.Rounded.Dns, stringResource(R.string.machines_eyebrow), stringResource(R.string.machines_your), onDismiss, primary = stringResource(R.string.machines_add), primaryEnabled = true, onPrimary = { onOpen(null) },
         shape = androidx.compose.material3.MaterialShapes.Cookie7Sided) {
         if (machines.isEmpty()) {
-            Text("Connect a server or computer you can sign in to. Your agent sends it the work your phone shouldn't do: building a site, crunching data, long scripts.",
+            Text(stringResource(R.string.machines_empty),
                 style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(20.dp))
-            Hint(Icons.Rounded.Cloud, "A server you rent", "A VPS from any provider")
-            Hint(Icons.Rounded.School, "A uni or work server", "Through its login server if it has one")
-            Hint(Icons.Rounded.Computer, "Your own computer", "Over Tailscale or your home network")
+            Hint(Icons.Rounded.Cloud, stringResource(R.string.machines_hint_vps), stringResource(R.string.machines_hint_vps_sub))
+            Hint(Icons.Rounded.School, stringResource(R.string.machines_hint_uni), stringResource(R.string.machines_hint_uni_sub))
+            Hint(Icons.Rounded.Computer, stringResource(R.string.machines_hint_own), stringResource(R.string.machines_hint_own_sub))
         } else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             machines.forEach { m -> MachineTile(m, status[m.id], checked[m.id] == true || m.id in initialStatus) { onOpen(m.id) } }
             Spacer(Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 4.dp)) {
                 Icon(Icons.Rounded.Lock, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.width(8.dp))
-                Text("Your agent only sees the names. Addresses, passwords and keys stay encrypted on this phone.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.machines_privacy), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -130,16 +132,16 @@ private fun MachineTile(m: Machine, status: String?, checked: Boolean, onClick: 
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(m.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                    if (m.trusted) { Spacer(Modifier.width(6.dp)); Icon(Icons.Rounded.Bolt, "Runs without asking", Modifier.size(16.dp), tint = cs.tertiary) }
+                    if (m.trusted) { Spacer(Modifier.width(6.dp)); Icon(Icons.Rounded.Bolt, stringResource(R.string.machines_runs_without_asking), Modifier.size(16.dp), tint = cs.tertiary) }
                 }
-                Text(m.about.ifBlank { "Not checked yet" }, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(m.about.ifBlank { stringResource(R.string.machines_not_checked) }, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Spacer(Modifier.width(8.dp))
             when {
                 !checked -> {}
                 status == null -> LoadingIndicator(Modifier.size(28.dp))
-                status.isEmpty() -> StatusPill("Online", extra.successContainer, extra.success)
-                else -> StatusPill("Can't reach", cs.errorContainer, cs.onErrorContainer)
+                status.isEmpty() -> StatusPill(stringResource(R.string.machines_online), extra.successContainer, extra.success)
+                else -> StatusPill(stringResource(R.string.machines_cant_reach), cs.errorContainer, cs.onErrorContainer)
             }
         }
     }
@@ -187,51 +189,51 @@ fun MachineSheet(existing: Machine?, others: List<Machine>, actions: MachineActi
         busy = false
     }
 
-    AppSheet(if (saved != null) machineIcon(saved!!) else Icons.Rounded.Dns, if (editing) "Machine" else "Heavy lifting", if (editing) existing!!.name else "New machine", onDismiss,
-        primary = when { busy -> "Connecting…"; result == "" -> "Done"; waitingForKey -> "Make a key"; proven -> "Save"; auth == MachineAuth.NEW_KEY && result == null -> "I've added it, connect"; else -> "Connect" },
+    AppSheet(if (saved != null) machineIcon(saved!!) else Icons.Rounded.Dns, if (editing) stringResource(R.string.machines_machine) else stringResource(R.string.machines_eyebrow), if (editing) existing!!.name else stringResource(R.string.machines_new), onDismiss,
+        primary = when { busy -> stringResource(R.string.machines_connecting); result == "" -> stringResource(R.string.machines_done); waitingForKey -> stringResource(R.string.machines_make_key); proven -> stringResource(R.string.machines_save); auth == MachineAuth.NEW_KEY && result == null -> stringResource(R.string.machines_added_connect); else -> stringResource(R.string.machines_connect) },
         primaryEnabled = ready || result == "", onPrimary = { if (result == "") onDone() else connect() },
         shape = androidx.compose.material3.MaterialShapes.Cookie7Sided,
         secondary = if (editing) ({
-            TextButton(onClick = { confirmDelete = true }, modifier = Modifier.fillMaxWidth().height(52.dp).padding(top = 4.dp)) { Text("Remove this machine", color = cs.error) }
+            TextButton(onClick = { confirmDelete = true }, modifier = Modifier.fillMaxWidth().height(52.dp).padding(top = 4.dp)) { Text(stringResource(R.string.machines_remove_this), color = cs.error) }
         }) else null) {
         Column(Modifier.animateContentSize()) {
 
-            SheetField(name, { name = it }, "Name", "Build server", big = true, singleLine = true)
+            SheetField(name, { name = it }, stringResource(R.string.machines_name), stringResource(R.string.machines_name_hint), big = true, singleLine = true)
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SheetField(host, { host = it.trim(); result = null }, "Address", "server.example.com", singleLine = true, modifier = Modifier.weight(1f),
+                SheetField(host, { host = it.trim(); result = null }, stringResource(R.string.machines_address), "server.example.com", singleLine = true, modifier = Modifier.weight(1f),
                     keyboard = plain.copy(keyboardType = KeyboardType.Uri))
-                SheetField(port, { port = it.filter(Char::isDigit).take(5); result = null }, "Port", "22", singleLine = true, modifier = Modifier.width(92.dp),
+                SheetField(port, { port = it.filter(Char::isDigit).take(5); result = null }, stringResource(R.string.machines_port), "22", singleLine = true, modifier = Modifier.width(92.dp),
                     keyboard = plain.copy(keyboardType = KeyboardType.Number))
             }
             Spacer(Modifier.height(16.dp))
-            SheetField(user, { user = it.trim(); result = null }, "Username", "you", singleLine = true, keyboard = plain)
+            SheetField(user, { user = it.trim(); result = null }, stringResource(R.string.machines_username), stringResource(R.string.machines_username_hint), singleLine = true, keyboard = plain)
 
             Spacer(Modifier.height(24.dp))
-            Text("SIGN IN WITH", style = Eyebrow, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+            Text(stringResource(R.string.machines_sign_in_with), style = Eyebrow, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ChoiceCard(Icons.Rounded.Password, "Password", "What you log in with", auth == MachineAuth.PASSWORD, { auth = MachineAuth.PASSWORD; result = null }, Modifier.weight(1f))
-                ChoiceCard(Icons.Rounded.Key, "Your key", "Paste one you use", auth == MachineAuth.KEY, { auth = MachineAuth.KEY; result = null }, Modifier.weight(1f))
-                ChoiceCard(Icons.Rounded.AutoAwesome, "New key", "Made on this phone", auth == MachineAuth.NEW_KEY, { auth = MachineAuth.NEW_KEY; result = null }, Modifier.weight(1f))
+                ChoiceCard(Icons.Rounded.Password, stringResource(R.string.machines_password), stringResource(R.string.machines_password_sub), auth == MachineAuth.PASSWORD, { auth = MachineAuth.PASSWORD; result = null }, Modifier.weight(1f))
+                ChoiceCard(Icons.Rounded.Key, stringResource(R.string.machines_your_key), stringResource(R.string.machines_your_key_sub), auth == MachineAuth.KEY, { auth = MachineAuth.KEY; result = null }, Modifier.weight(1f))
+                ChoiceCard(Icons.Rounded.AutoAwesome, stringResource(R.string.machines_new_key), stringResource(R.string.machines_new_key_sub), auth == MachineAuth.NEW_KEY, { auth = MachineAuth.NEW_KEY; result = null }, Modifier.weight(1f))
             }
             Spacer(Modifier.height(16.dp))
             when (auth) {
-                MachineAuth.PASSWORD -> SheetField(password, { password = it; result = null }, "Password", if (editing) "Saved. Leave empty to keep it" else "••••••••", singleLine = true, secret = true, keyboard = plain.copy(keyboardType = KeyboardType.Password))
+                MachineAuth.PASSWORD -> SheetField(password, { password = it; result = null }, stringResource(R.string.machines_password), if (editing) stringResource(R.string.machines_saved_keep) else "••••••••", singleLine = true, secret = true, keyboard = plain.copy(keyboardType = KeyboardType.Password))
                 MachineAuth.KEY -> {
-                    SheetField(key, { key = it; result = null }, "Private key", if (editing) "Saved. Leave empty to keep it" else "-----BEGIN OPENSSH PRIVATE KEY-----", minLines = 3, maxLines = 6, mono = true, keyboard = plain)
+                    SheetField(key, { key = it; result = null }, stringResource(R.string.machines_private_key), if (editing) stringResource(R.string.machines_saved_keep) else "-----BEGIN OPENSSH PRIVATE KEY-----", minLines = 3, maxLines = 6, mono = true, keyboard = plain)
                     Spacer(Modifier.height(12.dp))
-                    SheetField(passphrase, { passphrase = it; result = null }, "Key passphrase, if it has one", "", singleLine = true, secret = true, keyboard = plain.copy(keyboardType = KeyboardType.Password))
+                    SheetField(passphrase, { passphrase = it; result = null }, stringResource(R.string.machines_passphrase), "", singleLine = true, secret = true, keyboard = plain.copy(keyboardType = KeyboardType.Password))
                 }
-                MachineAuth.NEW_KEY -> if (pub == null) Text("A key just for this machine. You add its public half to the machine once, and no password is ever stored.",
+                MachineAuth.NEW_KEY -> if (pub == null) Text(stringResource(R.string.machines_new_key_explain),
                     style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
-                    else if (proven && !showKey) TextButton(onClick = { showKey = true }) { Icon(Icons.Rounded.Key, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Show this phone's public key") }
+                    else if (proven && !showKey) TextButton(onClick = { showKey = true }) { Icon(Icons.Rounded.Key, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.machines_show_public_key)) }
                     else if (result != "") PublicKeyCard(pub, actions.onCopy)
             }
 
             val gateways = others.filter { it.id != existing?.id }
             if (gateways.isNotEmpty()) {
                 Spacer(Modifier.height(24.dp))
-                ChoiceChips(listOf(Triple("", "Direct", Icons.Rounded.ArrowOutward)) + gateways.map { Triple(it.id, "Through ${it.name}", Icons.Rounded.AltRoute) }, via ?: "", { via = it.ifBlank { null } }, label = "Reach it")
+                ChoiceChips(listOf(Triple("", stringResource(R.string.machines_direct), Icons.Rounded.ArrowOutward)) + gateways.map { Triple(it.id, stringResource(R.string.machines_through, it.name), Icons.Rounded.AltRoute) }, via ?: "", { via = it.ifBlank { null } }, label = stringResource(R.string.machines_reach_it))
             }
 
             Spacer(Modifier.height(24.dp))
@@ -240,8 +242,8 @@ fun MachineSheet(existing: Machine?, others: List<Machine>, actions: MachineActi
                     Icon(if (trusted) Icons.Rounded.Bolt else Icons.Rounded.VerifiedUser, null, tint = if (trusted) cs.tertiary else cs.primary)
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Run without asking", style = MaterialTheme.typography.titleSmall)
-                        Text(if (trusted) "Your agent can change anything here on its own." else "Changes wait for your yes. Looking around never asks.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                        Text(stringResource(R.string.machines_run_without_asking), style = MaterialTheme.typography.titleSmall)
+                        Text(if (trusted) stringResource(R.string.machines_trusted_on) else stringResource(R.string.machines_trusted_off), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     }
                     Spacer(Modifier.width(12.dp))
                     Switch(trusted, { trusted = it })
@@ -249,15 +251,15 @@ fun MachineSheet(existing: Machine?, others: List<Machine>, actions: MachineActi
             }
             // The outcome sits right above the button that caused it.
             when {
-                result == "" -> { Spacer(Modifier.height(16.dp)); ResultCard(true, "Connected", saved?.let { s -> listOfNotNull(s.about.takeIf { it.isNotBlank() }, s.hostKey?.let { "Identity ${it.take(22)}…" }).joinToString(" · ") } ?: "") }
-                result != null -> { Spacer(Modifier.height(16.dp)); ResultCard(false, "Couldn't connect", result!!) }
+                result == "" -> { Spacer(Modifier.height(16.dp)); ResultCard(true, stringResource(R.string.machines_connected), saved?.let { s -> listOfNotNull(s.about.takeIf { it.isNotBlank() }, s.hostKey?.let { stringResource(R.string.machines_identity, it.take(22)) }).joinToString(" · ") } ?: "") }
+                result != null -> { Spacer(Modifier.height(16.dp)); ResultCard(false, stringResource(R.string.machines_couldnt_connect), result!!) }
             }
         }
     }
     if (confirmDelete && existing != null) AlertDialog(onDismissRequest = { confirmDelete = false },
-        title = { Text("Remove ${existing.name}?") }, text = { Text("Your agent loses access, and its saved password or key is deleted from this phone.") },
-        confirmButton = { TextButton(onClick = { confirmDelete = false; actions.onDelete(existing.id) }) { Text("Remove", color = cs.error) } },
-        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } })
+        title = { Text(stringResource(R.string.machines_remove_confirm, existing.name)) }, text = { Text(stringResource(R.string.machines_remove_confirm_body)) },
+        confirmButton = { TextButton(onClick = { confirmDelete = false; actions.onDelete(existing.id) }) { Text(stringResource(R.string.machines_remove), color = cs.error) } },
+        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.machines_cancel)) } })
 }
 
 @Composable
@@ -266,16 +268,16 @@ private fun PublicKeyCard(pub: String, onCopy: (String) -> Unit) {
     var copied by remember { mutableStateOf(false) }
     Surface(shape = RoundedCornerShape(24.dp), color = cs.primaryContainer, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(18.dp)) {
-            Text("ONE STEP ON THE MACHINE", style = Eyebrow, color = cs.onPrimaryContainer)
+            Text(stringResource(R.string.machines_one_step), style = Eyebrow, color = cs.onPrimaryContainer)
             Spacer(Modifier.height(6.dp))
-            Text("Add this line to ~/.ssh/authorized_keys there, or send it to whoever runs it.", style = MaterialTheme.typography.bodyMedium, color = cs.onPrimaryContainer)
+            Text(stringResource(R.string.machines_one_step_body), style = MaterialTheme.typography.bodyMedium, color = cs.onPrimaryContainer)
             Spacer(Modifier.height(12.dp))
             Surface(shape = RoundedCornerShape(16.dp), color = cs.surfaceContainerLowest, modifier = Modifier.fillMaxWidth()) {
                 Text(pub, Modifier.padding(14.dp), style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace), color = cs.onSurface, maxLines = 3, overflow = TextOverflow.Ellipsis)
             }
             Spacer(Modifier.height(12.dp))
             FilledTonalButton(onClick = { onCopy(pub); copied = true }, shapes = ButtonDefaults.shapes()) {
-                Icon(if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(if (copied) "Copied" else "Copy public key")
+                Icon(if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(if (copied) stringResource(R.string.machines_copied) else stringResource(R.string.machines_copy_public_key))
             }
         }
     }

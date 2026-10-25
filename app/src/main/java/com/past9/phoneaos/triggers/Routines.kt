@@ -37,14 +37,18 @@ object Routines {
         if (days.any { it < 1 } || days.isEmpty() || h !in 0..23 || m !in 0..59) null else Triple(days, h, m)
     }.getOrNull()
 
-    fun weeklyLabel(spec: String): String = parseWeekly(spec)?.let { (days, h, m) ->
-        val long = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+    /** @param context when given, the label is in the app's language (English without it). */
+    fun weeklyLabel(spec: String, context: Context? = null): String = parseWeekly(spec)?.let { (days, h, m) ->
+        val long = if (context == null) listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+            else (1..7).map { java.time.DayOfWeek.of(it).getDisplayName(java.time.format.TextStyle.FULL, context.resources.configuration.locales[0]) }
         val d = when {
-            days == setOf(1, 2, 3, 4, 5) -> "weekday"; days == setOf(6, 7) -> "weekend day"; days.size == 1 -> long[days.first() - 1]
+            days == setOf(1, 2, 3, 4, 5) -> context?.getString(com.past9.phoneaos.R.string.svc_weekly_weekday) ?: "weekday"
+            days == setOf(6, 7) -> context?.getString(com.past9.phoneaos.R.string.svc_weekly_weekend) ?: "weekend day"
+            days.size == 1 -> long[days.first() - 1]
             else -> days.sorted().joinToString(", ") { long[it - 1].take(3) }
         }
-        "Every $d at %02d:%02d".format(h, m)
-    } ?: "Weekly"
+        context?.getString(com.past9.phoneaos.R.string.svc_weekly_every, d, h, m) ?: "Every $d at %02d:%02d".format(h, m)
+    } ?: context?.getString(com.past9.phoneaos.R.string.svc_weekly) ?: "Weekly"
 
     private fun name(id: Long) = "routine-$id"
     private val net = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
@@ -189,17 +193,17 @@ class RoutineWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         if (!t.enabled && !inputData.getBoolean("manual", false)) return Result.success()
 
         if (t.kind == com.past9.phoneaos.cards.CardScripts.KIND) {
-            val out = runCatching { com.past9.phoneaos.cards.CardScripts.tick(applicationContext, t) }.getOrElse { "Refresh failed: ${it.message}" }
+            val out = runCatching { com.past9.phoneaos.cards.CardScripts.tick(applicationContext, t) }.getOrElse { applicationContext.getString(com.past9.phoneaos.R.string.svc_routine_refresh_failed, it.message) }
             g.db.triggers().get(id)?.let { g.db.triggers().upsert(it.copy(lastRunAt = System.currentTimeMillis(), lastResult = out.take(300))) }
             return Result.success()
         }
         if (t.kind == Watchers.KIND) {
-            val out = runCatching { Watchers.tick(applicationContext, t) }.getOrElse { "Check failed: ${it.message}" }
+            val out = runCatching { Watchers.tick(applicationContext, t) }.getOrElse { applicationContext.getString(com.past9.phoneaos.R.string.svc_routine_check_failed, it.message) }
             g.db.triggers().get(id)?.let { g.db.triggers().upsert(it.copy(lastRunAt = System.currentTimeMillis(), lastResult = out.take(300))) }
             return Result.success()
         }
         if (t.kind == Overnight.KIND) {
-            val out = runCatching { Overnight.run(g, full = true) }.getOrElse { "Overnight run failed: ${it.message}" }
+            val out = runCatching { Overnight.run(g, full = true) }.getOrElse { applicationContext.getString(com.past9.phoneaos.R.string.svc_routine_overnight_failed, it.message) }
             g.db.triggers().upsert(t.copy(lastRunAt = System.currentTimeMillis(), lastResult = out.take(500)))
             if (!manual) Routines.schedule(applicationContext, g.db.triggers().get(id)!!)
             return Result.success()
@@ -224,7 +228,7 @@ class RoutineWorker(context: Context, params: WorkerParameters) : CoroutineWorke
                 // Gmail unreachable. Retrying forever kept this periodic job in backoff for days (it never once
                 // completed on his phone): try twice, then record why and wait for the next period.
                 if (runAttemptCount < 2) return Result.retry()
-                g.db.triggers().get(id)?.let { g.db.triggers().upsert(it.copy(lastRunAt = System.currentTimeMillis(), lastResult = "Couldn't check Gmail: ${call.exceptionOrNull()?.message?.take(200)}")) }
+                g.db.triggers().get(id)?.let { g.db.triggers().upsert(it.copy(lastRunAt = System.currentTimeMillis(), lastResult = applicationContext.getString(com.past9.phoneaos.R.string.svc_routine_gmail_failed, call.exceptionOrNull()?.message?.take(200)))) }
                 return Result.success()
             }
             val newest = Routines.newestMessageId(res.optJSONObject("data") ?: res) ?: return Result.success()

@@ -73,8 +73,8 @@ object Identity {
      */
     fun asAgent(context: Context, b: androidx.core.app.NotificationCompat.Builder, title: String, body: String): androidx.core.app.NotificationCompat.Builder {
         val st = com.past9.phoneaos.App.graph(context).settings.state.value
-        val agent = publishAgentShortcut(context, st.agentName.ifBlank { "Your agent" }, st.mascot, st.accent)
-        val me = androidx.core.app.Person.Builder().setName(st.userName.ifBlank { "You" }).setKey("me").build()
+        val agent = publishAgentShortcut(context, st.agentName.ifBlank { context.getString(com.past9.phoneaos.R.string.svc_your_agent) }, st.mascot, st.accent)
+        val me = androidx.core.app.Person.Builder().setName(st.userName.ifBlank { context.getString(com.past9.phoneaos.R.string.svc_you) }).setKey("me").build()
         return b.setStyle(androidx.core.app.NotificationCompat.MessagingStyle(me).addMessage(if (title.isBlank()) body else "$title\n$body", System.currentTimeMillis(), agent))
             .setShortcutId("agent").setLargeIcon(avatar(context, st.mascot, st.accent, 192)).setCategory(androidx.core.app.NotificationCompat.CATEGORY_MESSAGE)
     }

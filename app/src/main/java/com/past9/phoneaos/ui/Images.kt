@@ -18,11 +18,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.SubcomposeAsyncImage
+import com.past9.phoneaos.R
 
 data class ChatImage(val url: String, val alt: String)
 
@@ -62,14 +64,14 @@ fun ImageStrip(images: List<ChatImage>, modifier: Modifier = Modifier) {
 @Composable
 private fun ChatImageView(img: ChatImage, modifier: Modifier, scale: ContentScale, onClick: () -> Unit) {
     SubcomposeAsyncImage(
-        model = img.url, contentDescription = img.alt.ifBlank { "Image" }, contentScale = scale,
+        model = img.url, contentDescription = img.alt.ifBlank { stringResource(R.string.ui_image) }, contentScale = scale,
         modifier = modifier.clip(MaterialTheme.shapes.large).clickable(onClick = onClick),
         loading = { Box(Modifier.size(220.dp, 160.dp).background(MaterialTheme.colorScheme.surfaceContainerHigh), contentAlignment = Alignment.Center) { LoadingIndicator(Modifier.size(36.dp)) } },
         error = {
             Row(Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh).defaultMinSize(200.dp, 80.dp).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.BrokenImage, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.width(10.dp))
-                Text(img.alt.ifBlank { "Image didn't load" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(img.alt.ifBlank { stringResource(R.string.ui_image_didnt_load) }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         },
     )
@@ -86,7 +88,7 @@ private fun FullImage(img: ChatImage, onClose: () -> Unit) {
                 modifier = Modifier.fillMaxSize().pointerInput(Unit) {
                     detectTransformGestures { _, p, z, _ -> zoom = (zoom * z).coerceIn(1f, 5f); pan = if (zoom == 1f) androidx.compose.ui.geometry.Offset.Zero else pan + p }
                 }.graphicsLayer { scaleX = zoom; scaleY = zoom; translationX = pan.x; translationY = pan.y })
-            FilledTonalIconButton(onClick = onClose, modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(12.dp)) { Icon(Icons.Rounded.Close, "Close") }
+            FilledTonalIconButton(onClick = onClose, modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(12.dp)) { Icon(Icons.Rounded.Close, stringResource(R.string.ui_close)) }
             if (img.alt.isNotBlank()) Text(img.alt, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(20.dp), color = Color(0xFFE9E7EE), style = MaterialTheme.typography.bodyMedium)
         }
     }

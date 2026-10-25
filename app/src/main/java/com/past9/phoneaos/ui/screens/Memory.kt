@@ -28,6 +28,10 @@ import com.past9.phoneaos.ui.SectionHeader
 import com.past9.phoneaos.ui.SubScreen
 import com.past9.phoneaos.ui.relativeTime
 import com.past9.phoneaos.ui.theme.Eyebrow
+import android.content.Context
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import com.past9.phoneaos.R
 
 data class MemoryActions(
     val onBack: () -> Unit = {},
@@ -43,20 +47,36 @@ data class MemoryActions(
 /** What an import or export did, shown as a card in the Memory list (never a pop-up). */
 data class TransferNote(val headline: String, val sub: String, val rows: List<Pair<String, Int>> = emptyList(), val unsorted: Int = 0, val footnote: String? = null, val ok: Boolean = true) { companion object }
 
-fun TransferNote.Companion.imported(s: com.past9.phoneaos.data.MemoryTransfer.Summary): TransferNote {
+// Built outside composition (MainActivity, tests): with a Context the text follows the app language, without one it stays English.
+private fun Context?.memStr(id: Int, en: String, vararg a: Any): String = this?.getString(id, *a) ?: en
+private fun Context?.memQty(id: Int, n: Int, en: String, vararg a: Any): String = this?.resources?.getQuantityString(id, n, *a) ?: en
+
+fun TransferNote.Companion.imported(s: com.past9.phoneaos.data.MemoryTransfer.Summary, ctx: Context? = null): TransferNote {
     val r = s.result
-    if (s.pages == 0) return TransferNote("Nothing to import", "No memory pages were found in that file." + if (s.ignored > 0) " ${s.ignored} file${if (s.ignored == 1) "" else "s"} couldn't be read." else "", ok = false)
-    val unsortedLine = if (r.unsorted > 0) " ${r.unsorted} came in unsorted: tap Show unsorted to classify them." else ""
-    return TransferNote("${s.pages} page${if (s.pages == 1) "" else "s"} ${if (r.added == s.pages) "added" else "imported"}", "Your agent can search them now.$unsortedLine",
-        listOf("New" to r.added, "Updated" to r.updated, "Already there" to r.skipped, "Unsorted" to r.unsorted, "Not pinned" to r.pinnedDropped).filter { (l, n) -> n > 0 || l == "New" }, r.unsorted,
-        if (r.pinnedDropped > 0) "Only ${com.past9.phoneaos.data.MemoryTransfer.MAX_PINNED} pages can be pinned, so ${r.pinnedDropped} came in unpinned." else null)
+    if (s.pages == 0) return TransferNote(ctx.memStr(R.string.memory_import_nothing, "Nothing to import"), ctx.memStr(R.string.memory_import_nothing_body, "No memory pages were found in that file.") + if (s.ignored > 0) " " + ctx.memQty(R.plurals.memory_import_ignored, s.ignored, "${s.ignored} file${if (s.ignored == 1) "" else "s"} couldn't be read.", s.ignored) else "", ok = false)
+    val unsortedLine = if (r.unsorted > 0) " " + ctx.memQty(R.plurals.memory_import_unsorted, r.unsorted, "${r.unsorted} came in unsorted: tap Show unsorted to classify them.", r.unsorted) else ""
+    val headline = if (r.added == s.pages) ctx.memQty(R.plurals.memory_import_added, s.pages, "${s.pages} page${if (s.pages == 1) "" else "s"} added", s.pages)
+        else ctx.memQty(R.plurals.memory_import_imported, s.pages, "${s.pages} page${if (s.pages == 1) "" else "s"} imported", s.pages)
+    return TransferNote(headline, ctx.memStr(R.string.memory_import_sub, "Your agent can search them now.") + unsortedLine,
+        listOf(ctx.memStr(R.string.memory_row_new, "New") to r.added, ctx.memStr(R.string.memory_row_updated, "Updated") to r.updated, ctx.memStr(R.string.memory_row_skipped, "Already there") to r.skipped,
+            ctx.memStr(R.string.memory_row_unsorted, "Unsorted") to r.unsorted, ctx.memStr(R.string.memory_row_not_pinned, "Not pinned") to r.pinnedDropped).filterIndexed { i, (_, n) -> n > 0 || i == 0 }, r.unsorted,
+        if (r.pinnedDropped > 0) ctx.memStr(R.string.memory_import_pinned_dropped, "Only ${com.past9.phoneaos.data.MemoryTransfer.MAX_PINNED} pages can be pinned, so ${r.pinnedDropped} came in unpinned.", com.past9.phoneaos.data.MemoryTransfer.MAX_PINNED, r.pinnedDropped) else null)
 }
-fun TransferNote.Companion.exported(n: Int) = TransferNote("$n page${if (n == 1) "" else "s"} saved", "One zip file. Import memories brings every page back.")
-fun TransferNote.Companion.failed(what: String, why: String?) = TransferNote("That didn't work", "$what${why?.takeIf { it.isNotBlank() }?.let { ": $it" } ?: ""}", ok = false)
+fun TransferNote.Companion.exported(n: Int, ctx: Context? = null) = TransferNote(ctx.memQty(R.plurals.memory_exported, n, "$n page${if (n == 1) "" else "s"} saved", n), ctx.memStr(R.string.memory_exported_sub, "One zip file. Import memories brings every page back."))
+fun TransferNote.Companion.failed(what: String, why: String?, ctx: Context? = null) = TransferNote(ctx.memStr(R.string.memory_failed, "That didn't work"), "$what${why?.takeIf { it.isNotBlank() }?.let { ": $it" } ?: ""}", ok = false)
 
 fun pageIcon(kind: String): ImageVector = when (kind) {
     "person" -> Icons.Rounded.Person; "company" -> Icons.Rounded.Business; "place" -> Icons.Rounded.Place; "project" -> Icons.Rounded.Flag
     "preference" -> Icons.Rounded.Favorite; "event" -> Icons.Rounded.Event; "how-to" -> Icons.Rounded.Lightbulb; else -> Icons.Rounded.Psychology
+}
+
+/** Display name of a page kind; unknown kinds are shown as written. */
+@Composable
+private fun kindLabel(k: String): String = when (k) {
+    "person" -> stringResource(R.string.memory_kind_person); "place" -> stringResource(R.string.memory_kind_place); "company" -> stringResource(R.string.memory_kind_company)
+    "project" -> stringResource(R.string.memory_kind_project); "preference" -> stringResource(R.string.memory_kind_preference); "event" -> stringResource(R.string.memory_kind_event)
+    "how-to" -> stringResource(R.string.memory_kind_howto); "fact" -> stringResource(R.string.memory_kind_fact)
+    else -> k.replaceFirstChar { it.uppercase() }
 }
 
 /** First readable line of a page, without markdown or link brackets. */
@@ -78,15 +98,16 @@ fun MemoryScreen(memories: List<MemoryRow>, actions: MemoryActions, bottomPaddin
         if (query.isBlank()) k else Recall.rank(query, k, 200)
     }
     // Back up or bring back memory as one zip: the system file picker chooses where it goes and what comes in.
-    val exportTo = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/zip")) { uri -> if (uri != null) { busy = "Saving your memories"; note = null; actions.onExport(uri) { busy = null; note = it } } }
-    val importFrom = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) { busy = "Bringing your memories in"; note = null; actions.onImport(uri) { busy = null; note = it } } }
+    val savingLabel = stringResource(R.string.memory_busy_saving); val importingLabel = stringResource(R.string.memory_busy_importing)
+    val exportTo = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/zip")) { uri -> if (uri != null) { busy = savingLabel; note = null; actions.onExport(uri) { busy = null; note = it } } }
+    val importFrom = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) { busy = importingLabel; note = null; actions.onImport(uri) { busy = null; note = it } } }
     val pickFile = { importFrom.launch(arrayOf("application/zip", "application/json", "text/*", "application/octet-stream", "application/x-zip-compressed")) }
     val saveFile = { exportTo.launch("agent-memories-${java.time.LocalDate.now()}.zip") }
-    SubScreen("Memory", "${memories.size} pages your agent keeps about your world", actions.onBack,
-        fab = { ExtendedFloatingActionButton(onClick = { adding = true }, icon = { Icon(Icons.Rounded.Add, null) }, text = { Text("New page") }, modifier = Modifier.padding(bottom = (bottomPadding - 40.dp).coerceAtLeast(0.dp))) }) { pad ->
+    SubScreen(stringResource(R.string.memory_title), pluralStringResource(R.plurals.memory_sub, memories.size, memories.size), actions.onBack,
+        fab = { ExtendedFloatingActionButton(onClick = { adding = true }, icon = { Icon(Icons.Rounded.Add, null) }, text = { Text(stringResource(R.string.memory_new_page)) }, modifier = Modifier.padding(bottom = (bottomPadding - 40.dp).coerceAtLeast(0.dp))) }) { pad ->
         LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = com.past9.phoneaos.ui.sidePad(16.dp), end = com.past9.phoneaos.ui.sidePad(16.dp), bottom = bottomPadding + 60.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
-                OutlinedTextField(query, { query = it }, placeholder = { Text("Search people, places, anything") }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true,
+                OutlinedTextField(query, { query = it }, placeholder = { Text(stringResource(R.string.memory_search)) }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true,
                     modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge)
             }
             // What an import or export just did, or that it is working: a card in the list, never a pop-up.
@@ -96,18 +117,18 @@ fun MemoryScreen(memories: List<MemoryRow>, actions: MemoryActions, bottomPaddin
             if (memories.isEmpty() && busy == null && note == null) item(key = "transfer-first") { TransferSection(pickFile, saveFile, canExport = false, modifier = Modifier.padding(top = 12.dp)) }
             if (kinds.size > 1 || unsorted > 0) item {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item { FilterChip(kind == null && !unsortedOnly, { kind = null; unsortedOnly = false }, label = { Text("All") }, shape = RoundedCornerShape(50)) }
-                    if (unsorted > 0) item { FilterChip(unsortedOnly, { unsortedOnly = !unsortedOnly }, label = { Text("Unsorted $unsorted") }, leadingIcon = { Icon(Icons.Rounded.Inbox, null, Modifier.size(16.dp)) }, shape = RoundedCornerShape(50)) }
-                    items(kinds) { k -> FilterChip(kind == k, { kind = if (kind == k) null else k }, label = { Text(k.replaceFirstChar { it.uppercase() }) }, leadingIcon = { Icon(pageIcon(k), null, Modifier.size(16.dp)) }, shape = RoundedCornerShape(50)) }
+                    item { FilterChip(kind == null && !unsortedOnly, { kind = null; unsortedOnly = false }, label = { Text(stringResource(R.string.memory_all)) }, shape = RoundedCornerShape(50)) }
+                    if (unsorted > 0) item { FilterChip(unsortedOnly, { unsortedOnly = !unsortedOnly }, label = { Text(stringResource(R.string.memory_unsorted_chip, unsorted)) }, leadingIcon = { Icon(Icons.Rounded.Inbox, null, Modifier.size(16.dp)) }, shape = RoundedCornerShape(50)) }
+                    items(kinds) { k -> FilterChip(kind == k, { kind = if (kind == k) null else k }, label = { Text(kindLabel(k)) }, leadingIcon = { Icon(pageIcon(k), null, Modifier.size(16.dp)) }, shape = RoundedCornerShape(50)) }
                 }
             }
-            if (memories.isEmpty()) item { EmptyState("Nothing remembered yet", "As you talk, your agent writes a page for each person, place and thing that matters, linked together like a wiki.") }
-            else if (shown.isEmpty()) item { EmptyState("No match", "Nothing in memory matches \"$query\".") }
+            if (memories.isEmpty()) item { EmptyState(stringResource(R.string.memory_empty), stringResource(R.string.memory_empty_body)) }
+            else if (shown.isEmpty()) item { EmptyState(stringResource(R.string.memory_no_match), stringResource(R.string.memory_no_match_body, query)) }
             val pinned = shown.filter { it.pinned }; val rest = shown.filter { !it.pinned }
             if (pinned.isNotEmpty() && query.isBlank()) {
-                item { SectionHeader("Pinned", "Always on your agent's mind", Modifier.padding(start = 4.dp, top = 6.dp)) }
+                item { SectionHeader(stringResource(R.string.memory_pinned), stringResource(R.string.memory_pinned_sub), Modifier.padding(start = 4.dp, top = 6.dp)) }
                 items(pinned, key = { "p${it.id}" }) { m -> PageRow(m, memories) { actions.onOpen(m) } }
-                item { SectionHeader("Everything else", "Newest first", Modifier.padding(start = 4.dp, top = 10.dp)) }
+                item { SectionHeader(stringResource(R.string.memory_rest), stringResource(R.string.memory_rest_sub), Modifier.padding(start = 4.dp, top = 10.dp)) }
                 items(rest, key = { it.id }) { m -> PageRow(m, memories) { actions.onOpen(m) } }
             } else items(shown, key = { it.id }) { m -> PageRow(m, memories) { actions.onOpen(m) } }
             if (memories.isNotEmpty() && busy == null) item(key = "transfer-last") { TransferSection(pickFile, saveFile, canExport = true, modifier = Modifier.padding(top = 18.dp)) }
@@ -120,10 +141,10 @@ fun MemoryScreen(memories: List<MemoryRow>, actions: MemoryActions, bottomPaddin
 @Composable
 private fun TransferSection(onImport: () -> Unit, onExport: () -> Unit, canExport: Boolean, modifier: Modifier = Modifier) {
     Column(modifier.fillMaxWidth()) {
-        SectionHeader("Back up and restore", if (canExport) "Save everything as one zip, or bring pages in from a zip or another tool" else "Bring your memory back from a zip, or from another tool", Modifier.padding(start = 4.dp, bottom = 10.dp))
+        SectionHeader(stringResource(R.string.memory_transfer_title), if (canExport) stringResource(R.string.memory_transfer_sub_export) else stringResource(R.string.memory_transfer_sub_import), Modifier.padding(start = 4.dp, bottom = 10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            FilledTonalButton(onClick = onImport, shapes = ButtonDefaults.shapes(), modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Icon(Icons.Rounded.FileUpload, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Import") }
-            if (canExport) FilledTonalButton(onClick = onExport, shapes = ButtonDefaults.shapes(), modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Icon(Icons.Rounded.FileDownload, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Export") }
+            FilledTonalButton(onClick = onImport, shapes = ButtonDefaults.shapes(), modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Icon(Icons.Rounded.FileUpload, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.memory_import)) }
+            if (canExport) FilledTonalButton(onClick = onExport, shapes = ButtonDefaults.shapes(), modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Icon(Icons.Rounded.FileDownload, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.memory_export)) }
         }
     }
 }
@@ -135,7 +156,7 @@ private fun TransferBusy(what: String) {
         Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
             CircularWavyProgressIndicator(modifier = Modifier.size(40.dp))
             Spacer(Modifier.width(16.dp))
-            Column { Text(what, style = MaterialTheme.typography.titleMedium); Text("This takes a few seconds. You can keep using the app.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant) }
+            Column { Text(what, style = MaterialTheme.typography.titleMedium); Text(stringResource(R.string.memory_busy_body), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant) }
         }
     }
 }
@@ -167,9 +188,9 @@ internal fun TransferCard(n: TransferNote, onPick: (String) -> Unit) {
             }
             n.footnote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (n.unsorted > 0) Button(onClick = { onPick("unsorted") }, shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Icon(Icons.Rounded.Inbox, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Show unsorted") }
-                if (n.unsorted > 0) FilledTonalButton(onClick = { onPick("done") }, shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Icon(Icons.Rounded.Check, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Done") }
-                else Button(onClick = { onPick("done") }, shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Icon(Icons.Rounded.Check, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Done") }
+                if (n.unsorted > 0) Button(onClick = { onPick("unsorted") }, shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Icon(Icons.Rounded.Inbox, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.memory_show_unsorted)) }
+                if (n.unsorted > 0) FilledTonalButton(onClick = { onPick("done") }, shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Icon(Icons.Rounded.Check, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.memory_done)) }
+                else Button(onClick = { onPick("done") }, shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Icon(Icons.Rounded.Check, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.memory_done)) }
             }
         }
     }
@@ -191,7 +212,7 @@ private fun PageRow(m: MemoryRow, all: List<MemoryRow>, onClick: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 Text(m.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(summaryOf(m.body), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(listOfNotNull(m.kind.uppercase(), if (links > 0) "$links LINK${if (links > 1) "S" else ""}" else null, relativeTime(m.updatedAt).uppercase()).joinToString(" · "),
+                Text(listOfNotNull(kindLabel(m.kind).uppercase(), if (links > 0) pluralStringResource(R.plurals.memory_links, links, links) else null, relativeTime(m.updatedAt).uppercase()).joinToString(" · "),
                     style = Eyebrow, color = cs.outline, modifier = Modifier.padding(top = 4.dp))
             }
         }
@@ -203,12 +224,12 @@ private fun PageRow(m: MemoryRow, all: List<MemoryRow>, onClick: () -> Unit) {
 fun WikiPageScreen(page: MemoryRow?, all: List<MemoryRow>, onBack: () -> Unit, onOpenTitle: (String) -> Unit, onSave: (MemoryRow) -> Unit, onDelete: (MemoryRow) -> Unit, onAsk: (String) -> Unit) {
     val cs = MaterialTheme.colorScheme
     var editing by remember { mutableStateOf(false) }
-    if (page == null) { SubScreen("Not found", null, onBack) { pad -> Box(Modifier.padding(pad)) { EmptyState("This page is gone", "It may have been deleted.") } }; return }
+    if (page == null) { SubScreen(stringResource(R.string.memory_not_found), null, onBack) { pad -> Box(Modifier.padding(pad)) { EmptyState(stringResource(R.string.memory_gone), stringResource(R.string.memory_gone_body)) } }; return }
     val known = remember(all) { all.map { it.title }.toSet() }
     val backlinks = remember(all, page) { all.filter { o -> o.id != page.id && linksIn(o.body).any { it.equals(page.title, true) } } }
-    SubScreen(page.title, page.kind.replaceFirstChar { it.uppercase() } + " · updated " + relativeTime(page.updatedAt), onBack, actions = {
-        IconButton(onClick = { onSave(page.copy(pinned = !page.pinned)) }) { Icon(if (page.pinned) Icons.Rounded.PushPin else Icons.Rounded.PushPin, if (page.pinned) "Unpin" else "Pin", tint = if (page.pinned) cs.primary else cs.onSurfaceVariant) }
-        IconButton(onClick = { editing = true }) { Icon(Icons.Rounded.Edit, "Edit page") }
+    SubScreen(page.title, stringResource(R.string.memory_updated, kindLabel(page.kind), relativeTime(page.updatedAt)), onBack, actions = {
+        IconButton(onClick = { onSave(page.copy(pinned = !page.pinned)) }) { Icon(if (page.pinned) Icons.Rounded.PushPin else Icons.Rounded.PushPin, if (page.pinned) stringResource(R.string.memory_unpin) else stringResource(R.string.memory_pin), tint = if (page.pinned) cs.primary else cs.onSurfaceVariant) }
+        IconButton(onClick = { editing = true }) { Icon(Icons.Rounded.Edit, stringResource(R.string.memory_edit_page)) }
     }) { pad ->
         Column(Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(horizontal = com.past9.phoneaos.ui.sidePad(20.dp)).padding(bottom = 48.dp)) {
             if (page.topics.isNotBlank()) {
@@ -221,7 +242,7 @@ fun WikiPageScreen(page: MemoryRow?, all: List<MemoryRow>, onBack: () -> Unit, o
             Markdown(page.body, onWikiLink = onOpenTitle, knownPages = known)
             if (backlinks.isNotEmpty()) {
                 Spacer(Modifier.height(28.dp))
-                SectionHeader("Linked from", "Pages that mention ${page.title}")
+                SectionHeader(stringResource(R.string.memory_linked_from), stringResource(R.string.memory_linked_from_sub, page.title))
                 Spacer(Modifier.height(8.dp))
                 backlinks.forEach { b ->
                     Surface(onClick = { onOpenTitle(b.title) }, shape = MaterialTheme.shapes.large, color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
@@ -234,7 +255,7 @@ fun WikiPageScreen(page: MemoryRow?, all: List<MemoryRow>, onBack: () -> Unit, o
             }
             Spacer(Modifier.height(20.dp))
             OutlinedButton(onClick = { onAsk("Tell me what you know about ${page.title}, and fix anything on its memory page that's out of date.") }, shapes = ButtonDefaults.shapes()) {
-                Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Ask your agent about this")
+                Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.memory_ask))
             }
         }
     }
@@ -247,19 +268,19 @@ internal fun PageEditor(m: MemoryRow, onDismiss: () -> Unit, onSave: (MemoryRow)
     var body by remember { mutableStateOf(m.body) }
     var tags by remember { mutableStateOf(m.topics) }
     var kind by remember { mutableStateOf(m.kind) }
-    com.past9.phoneaos.ui.AppSheet(pageIcon(kind), if (m.id == 0L) "Your agent's memory" else "Editing a page", if (m.id == 0L) "New page" else m.title.ifBlank { "Page" }, onDismiss,
-        primary = if (m.id == 0L) "Save to memory" else "Save changes", primaryEnabled = title.isNotBlank() && body.isNotBlank(),
+    com.past9.phoneaos.ui.AppSheet(pageIcon(kind), if (m.id == 0L) stringResource(R.string.memory_agent_memory) else stringResource(R.string.memory_editing), if (m.id == 0L) stringResource(R.string.memory_new_page) else m.title.ifBlank { stringResource(R.string.memory_page) }, onDismiss,
+        primary = if (m.id == 0L) stringResource(R.string.memory_save_to) else stringResource(R.string.memory_save_changes), primaryEnabled = title.isNotBlank() && body.isNotBlank(),
         onPrimary = { onSave(m.copy(title = title.trim(), body = body.trim(), topics = tags.split(",").map { it.trim() }.filter { it.isNotEmpty() && !it.equals(com.past9.phoneaos.data.MemoryTransfer.UNSORTED, true) }.joinToString(","), kind = kind, updatedAt = System.currentTimeMillis())) },
         shape = MaterialShapes.Flower,
-        secondary = onDelete?.let { del -> { TextButton(onClick = del, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("Forget this page", color = MaterialTheme.colorScheme.error) } } }) {
-        com.past9.phoneaos.ui.ChoiceChips(listOf("person" to "Person", "place" to "Place", "company" to "Company", "project" to "Project", "preference" to "Preference", "event" to "Event", "how-to" to "How-to", "fact" to "Fact")
-            .map { (id, l) -> Triple(id, l, pageIcon(id)) }, kind, { kind = it }, label = "What is it")
+        secondary = onDelete?.let { del -> { TextButton(onClick = del, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text(stringResource(R.string.memory_forget), color = MaterialTheme.colorScheme.error) } } }) {
+        com.past9.phoneaos.ui.ChoiceChips(listOf("person", "place", "company", "project", "preference", "event", "how-to", "fact")
+            .map { id -> Triple(id, kindLabel(id), pageIcon(id)) }, kind, { kind = it }, label = stringResource(R.string.memory_what_is))
         Spacer(Modifier.height(20.dp))
-        com.past9.phoneaos.ui.SheetField(title, { title = it }, "Title", "Lerato, Durban trip, Gym...", big = true, singleLine = true)
+        com.past9.phoneaos.ui.SheetField(title, { title = it }, stringResource(R.string.memory_title_field), stringResource(R.string.memory_title_hint), big = true, singleLine = true)
         Spacer(Modifier.height(16.dp))
-        com.past9.phoneaos.ui.SheetField(body, { body = it }, "The page", "What your agent should know. Link other pages with [[Name]].", minLines = 6)
+        com.past9.phoneaos.ui.SheetField(body, { body = it }, stringResource(R.string.memory_body), stringResource(R.string.memory_body_hint), minLines = 6)
         Spacer(Modifier.height(16.dp))
-        com.past9.phoneaos.ui.SheetField(tags, { tags = it }, "Tags", "family, work, health", singleLine = true)
+        com.past9.phoneaos.ui.SheetField(tags, { tags = it }, stringResource(R.string.memory_tags), stringResource(R.string.memory_tags_hint), singleLine = true)
     }
 }
 
@@ -281,7 +302,7 @@ fun MemoryTwoPane(memories: List<MemoryRow>, openId: Long?, onPick: (Long?) -> U
         val rest = com.past9.phoneaos.ui.windowWidthDp() - listWidth
         androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.LocalPaneWidth provides rest) {
             Box(Modifier.weight(1f).fillMaxHeight()) {
-                if (shown == null) EmptyState("No pages yet", "Tell your agent about people, places and plans, and their pages show up here.", Modifier.align(Alignment.Center))
+                if (shown == null) EmptyState(stringResource(R.string.memory_no_pages), stringResource(R.string.memory_no_pages_body), Modifier.align(Alignment.Center))
                 else WikiPageScreen(shown, memories, onBack = actions.onBack, onOpenTitle = onOpenTitle, onSave = actions.onSave,
                     onDelete = { m -> actions.onDelete(m); onPick(null) }, onAsk = onAsk)
             }
