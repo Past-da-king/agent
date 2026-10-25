@@ -1,6 +1,9 @@
 package com.past9.phoneaos.camera
 
 import android.Manifest
+import androidx.annotation.StringRes
+import androidx.compose.ui.res.stringResource
+import com.past9.phoneaos.R
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -82,8 +85,8 @@ private val Glass = Color(0x73000000)
 private val Emphasized = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 private val EmphasizedIn = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
 
-private enum class Flash(val mode: Int, val label: String) {
-    OFF(ImageCapture.FLASH_MODE_OFF, "Flash off"), ON(ImageCapture.FLASH_MODE_ON, "Flash on"), AUTO(ImageCapture.FLASH_MODE_AUTO, "Flash auto");
+private enum class Flash(val mode: Int, @StringRes val label: Int) {
+    OFF(ImageCapture.FLASH_MODE_OFF, R.string.camera_flash_off), ON(ImageCapture.FLASH_MODE_ON, R.string.camera_flash_on), AUTO(ImageCapture.FLASH_MODE_AUTO, R.string.camera_flash_auto);
     fun next() = entries[(ordinal + 1) % entries.size]
 }
 
@@ -168,9 +171,9 @@ fun CameraCard(origin: Rect, onClosed: () -> Unit, onSend: (path: String, captio
                 layout(c.maxWidth, c.maxHeight) { p.place((c.maxWidth - p.width) / 2, (c.maxHeight - p.height) / 2) }
             }.graphicsLayer { alpha = ((progress.value - 0.25f) / 0.6f).coerceIn(0f, 1f) }) {
                 when {
-                    !hasCamera -> Calm("There is no camera on this device.", "You can still attach a photo from your gallery.", null, null, onGallery, ::close)
-                    !granted -> Calm("The camera is off.", "Your agent only sees a photo when you take it and press Send.",
-                        if (asked) "Open settings" else null, { runCatching { ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
+                    !hasCamera -> Calm(stringResource(R.string.camera_none), stringResource(R.string.camera_none_sub), null, null, onGallery, ::close)
+                    !granted -> Calm(stringResource(R.string.camera_off), stringResource(R.string.camera_off_sub),
+                        if (asked) stringResource(R.string.camera_open_settings) else null, { runCatching { ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
                         onGallery, ::close, retry = if (asked) ({ perm.launch(Manifest.permission.CAMERA) }) else null)
                     else -> Live(cam, cardLife, progress, frozen, photo, onFrozen = { frozen = it }, onPhoto = { photo = it }, onRetake = ::retake, onClose = ::close, onGallery = onGallery, onSend = { cap -> photo?.let { onSend(it, cap); close() } })
                 }
@@ -182,7 +185,7 @@ fun CameraCard(origin: Rect, onClosed: () -> Unit, onSend: (path: String, captio
 @Composable
 private fun Calm(title: String, line: String, action: String?, onAction: (() -> Unit)?, onGallery: () -> Unit, onClose: () -> Unit, retry: (() -> Unit)? = null) {
     Box(Modifier.fillMaxSize()) {
-        CircleTool(Icons.Rounded.KeyboardArrowDown, "Close camera", onClose, Modifier.align(Alignment.TopStart).padding(14.dp))
+        CircleTool(Icons.Rounded.KeyboardArrowDown, stringResource(R.string.camera_close_camera), onClose, Modifier.align(Alignment.TopStart).padding(14.dp))
         Column(Modifier.align(Alignment.Center).padding(horizontal = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             AgentAvatar(working = false, size = 64.dp)
             Spacer(Modifier.height(18.dp))
@@ -191,8 +194,8 @@ private fun Calm(title: String, line: String, action: String?, onAction: (() -> 
             Text(line, style = MaterialTheme.typography.bodyMedium, color = OnStage.copy(alpha = 0.72f), textAlign = TextAlign.Center)
             Spacer(Modifier.height(20.dp))
             if (action != null && onAction != null) Button(onClick = onAction) { Text(action) }
-            if (retry != null) TextButton(onClick = retry) { Text("Try again") }
-            FilledTonalButton(onClick = onGallery) { Icon(Icons.Rounded.Image, null); Spacer(Modifier.width(8.dp)); Text("Choose from gallery") }
+            if (retry != null) TextButton(onClick = retry) { Text(stringResource(R.string.camera_try_again)) }
+            FilledTonalButton(onClick = onGallery) { Icon(Icons.Rounded.Image, null); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.camera_gallery)) }
         }
     }
 }
@@ -227,7 +230,7 @@ private fun Live(
             snapshotFlow { progress.value }.first { it >= 0.6f }
             val cam = binder.bind(owner, front, previewView.surfaceProvider, capture)
             camera = cam; hasFlash = cam?.cameraInfo?.hasFlashUnit() == true; failed = null
-        }.onFailure { if (it !is kotlinx.coroutines.CancellationException) failed = "The camera would not start." }
+        }.onFailure { if (it !is kotlinx.coroutines.CancellationException) failed = ctx.getString(R.string.camera_wont_start) }
     }
 
     fun shoot() {
@@ -241,10 +244,10 @@ private fun Live(
                 scope.launch {
                     val path = withContext(Dispatchers.IO) { CameraPhoto.compress(ctx, raw) }
                     busy = false
-                    if (path != null) onPhoto(path) else { onFrozen(null); failed = "That photo could not be saved. Try again." }
+                    if (path != null) onPhoto(path) else { onFrozen(null); failed = ctx.getString(R.string.camera_save_failed) }
                 }
             }
-            override fun onError(e: ImageCaptureException) { busy = false; raw.delete(); onFrozen(null); failed = "That photo could not be taken. Try again." }
+            override fun onError(e: ImageCaptureException) { busy = false; raw.delete(); onFrozen(null); failed = ctx.getString(R.string.camera_take_failed) }
         })
     }
 
@@ -272,22 +275,22 @@ private fun Live(
         })
         // Freeze-frame, then the real photo.
         if (reviewing) Box(Modifier.fillMaxSize().graphicsLayer { scaleX = shrink; scaleY = shrink }.clip(RoundedCornerShape(24.dp)).background(Stage)) {
-            if (photo != null) coil.compose.AsyncImage(File(photo), "The photo you took", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+            if (photo != null) coil.compose.AsyncImage(File(photo), stringResource(R.string.camera_photo_taken), Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
             else frozen?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
         }
 
         if (!reviewing) {
             Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 18.dp, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { CircleTool(Icons.Rounded.KeyboardArrowDown, "Close camera", onClose) }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { CircleTool(Icons.Rounded.KeyboardArrowDown, stringResource(R.string.camera_close_camera), onClose) }
                 Shutter(enabled = !busy && failed == null && streaming, onClick = ::shoot)
-                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { CircleTool(Icons.Rounded.MoreHoriz, "More camera options", { menu = !menu }) }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { CircleTool(Icons.Rounded.MoreHoriz, stringResource(R.string.camera_more_options), { menu = !menu }) }
             }
             AnimatedVisibility(menu, Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = 88.dp), enter = fadeIn(tween(140)) + scaleIn(tween(180), 0.9f, androidx.compose.ui.graphics.TransformOrigin(1f, 1f)), exit = fadeOut(tween(100)) + scaleOut(tween(120), 0.9f, androidx.compose.ui.graphics.TransformOrigin(1f, 1f))) {
                 Surface(shape = RoundedCornerShape(20.dp), color = Color(0xE61B1C22), contentColor = OnStage) {
                     Column(Modifier.padding(vertical = 6.dp).width(220.dp)) {
-                        MenuRow(Icons.Rounded.FlipCameraAndroid, "Flip camera") { menu = false; front = !front }
-                        if (hasFlash && !front) MenuRow(when (flash) { Flash.OFF -> Icons.Rounded.FlashOff; Flash.ON -> Icons.Rounded.FlashOn; Flash.AUTO -> Icons.Rounded.FlashAuto }, flash.label) { flash = flash.next() }
-                        MenuRow(Icons.Rounded.Image, "Choose from gallery") { menu = false; onGallery() }
+                        MenuRow(Icons.Rounded.FlipCameraAndroid, stringResource(R.string.camera_flip)) { menu = false; front = !front }
+                        if (hasFlash && !front) MenuRow(when (flash) { Flash.OFF -> Icons.Rounded.FlashOff; Flash.ON -> Icons.Rounded.FlashOn; Flash.AUTO -> Icons.Rounded.FlashAuto }, stringResource(flash.label)) { flash = flash.next() }
+                        MenuRow(Icons.Rounded.Image, stringResource(R.string.camera_gallery)) { menu = false; onGallery() }
                     }
                 }
             }
@@ -301,8 +304,8 @@ private fun Live(
                     Text(msg, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
                     Spacer(Modifier.height(14.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = { failed = null }) { Text("Dismiss") }
-                        FilledTonalButton(onClick = onClose) { Text("Close") }
+                        TextButton(onClick = { failed = null }) { Text(stringResource(R.string.camera_dismiss)) }
+                        FilledTonalButton(onClick = onClose) { Text(stringResource(R.string.camera_close)) }
                     }
                 }
             }
@@ -315,9 +318,10 @@ private fun Shutter(enabled: Boolean, onClick: () -> Unit) {
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
     val s by animateFloatAsState(if (pressed) 0.92f else 1f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium), label = "shutter")
+    val takePhoto = stringResource(R.string.camera_take_photo)
     Box(
         Modifier.size(72.dp).graphicsLayer { scaleX = s; scaleY = s; alpha = if (enabled) 1f else 0.6f }.clip(CircleShape).background(Color.White)
-            .clickable(interactionSource = src, indication = null, enabled = enabled, onClick = onClick).semantics { contentDescription = "Take photo" },
+            .clickable(interactionSource = src, indication = null, enabled = enabled, onClick = onClick).semantics { contentDescription = takePhoto },
         contentAlignment = Alignment.Center
     ) { Box(Modifier.size(62.dp).border(2.dp, Color(0x40000000), CircleShape)) }
 }
@@ -343,13 +347,13 @@ private fun BoxScope.Review(ready: Boolean, onRetake: () -> Unit, onSend: (Strin
     Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Surface(shape = RoundedCornerShape(26.dp), color = Color(0xCC1B1C22), modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp)) {
             Box(Modifier.padding(horizontal = 18.dp, vertical = 13.dp)) {
-                if (caption.isEmpty()) Text("Add a caption (optional)", style = MaterialTheme.typography.bodyLarge, color = OnStage.copy(alpha = 0.6f))
+                if (caption.isEmpty()) Text(stringResource(R.string.camera_caption_hint), style = MaterialTheme.typography.bodyLarge, color = OnStage.copy(alpha = 0.6f))
                 BasicTextField(caption, { caption = it }, textStyle = MaterialTheme.typography.bodyLarge.copy(color = OnStage), cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), maxLines = 3, modifier = Modifier.fillMaxWidth())
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            FilledTonalButton(onClick = onRetake, Modifier.weight(1f).heightIn(min = 52.dp)) { Icon(Icons.Rounded.Replay, null); Spacer(Modifier.width(8.dp)); Text("Retake") }
-            Button(onClick = { onSend(caption.trim()) }, enabled = ready, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Icon(Icons.AutoMirrored.Rounded.Send, null); Spacer(Modifier.width(8.dp)); Text("Send") }
+            FilledTonalButton(onClick = onRetake, Modifier.weight(1f).heightIn(min = 52.dp)) { Icon(Icons.Rounded.Replay, null); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.camera_retake)) }
+            Button(onClick = { onSend(caption.trim()) }, enabled = ready, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Icon(Icons.AutoMirrored.Rounded.Send, null); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.camera_send)) }
         }
     }
 }

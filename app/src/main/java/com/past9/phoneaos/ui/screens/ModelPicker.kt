@@ -1,5 +1,7 @@
 package com.past9.phoneaos.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.past9.phoneaos.R
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -26,17 +28,17 @@ fun ModelPickerSheet(title: String, models: List<ModelInfo>?, current: String, e
     val recent = LocalDate.now().minusDays(150).toString()
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp)) {
-            Text("MODEL", style = Eyebrow, color = cs.primary)
+            Text(stringResource(R.string.models_eyebrow), style = Eyebrow, color = cs.primary)
             Text(title, style = MaterialTheme.typography.headlineSmall)
-            Text(subtitle ?: "Pulled live from your provider. Newest first.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            Text(subtitle ?: stringResource(R.string.models_subtitle), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             Spacer(Modifier.height(12.dp))
-            if ((models?.size ?: 0) > 10) OutlinedTextField(q, { q = it }, placeholder = { Text("Search models") }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true,
+            if ((models?.size ?: 0) > 10) OutlinedTextField(q, { q = it }, placeholder = { Text(stringResource(R.string.models_search)) }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true,
                 modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge)
         }
         when {
             error != null -> Text(error, Modifier.padding(20.dp), color = cs.error)
             models == null -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { LoadingIndicator() }
-            models.isEmpty() -> Text("No models came back for this account.", Modifier.padding(20.dp), color = cs.onSurfaceVariant)
+            models.isEmpty() -> Text(stringResource(R.string.models_no_models), Modifier.padding(20.dp), color = cs.onSurfaceVariant)
             else -> LazyColumn(Modifier.fillMaxWidth().heightIn(max = 560.dp), contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 32.dp)) {
                 items(models.filter { q.isBlank() || it.name.contains(q, true) || it.id.contains(q, true) }, key = { it.id.ifBlank { "default" } }) { m ->
                     val sel = m.id == current
@@ -47,9 +49,9 @@ fun ModelPickerSheet(title: String, models: List<ModelInfo>?, current: String, e
                                 val sub = listOfNotNull(m.note.takeIf { it.isNotBlank() }, m.id.takeIf { it.isNotBlank() && it != m.name }, m.released.takeIf { it.isNotBlank() }).joinToString(" · ")
                                 if (sub.isNotBlank()) Text(sub, style = MaterialTheme.typography.bodySmall, color = if (sel) cs.onPrimaryContainer else cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
-                            if (m.released >= recent && m.released.isNotBlank()) StatusPill("New", cs.tertiaryContainer, cs.onTertiaryContainer, Modifier.padding(start = 6.dp))
-                            if (m.vision) Icon(Icons.Rounded.Image, "Sees images", Modifier.padding(start = 8.dp).size(18.dp), tint = if (sel) cs.onPrimaryContainer else cs.onSurfaceVariant)
-                            if (sel) Icon(Icons.Rounded.Check, "Selected", Modifier.padding(start = 8.dp), tint = cs.onPrimaryContainer)
+                            if (m.released >= recent && m.released.isNotBlank()) StatusPill(stringResource(R.string.models_new), cs.tertiaryContainer, cs.onTertiaryContainer, Modifier.padding(start = 6.dp))
+                            if (m.vision) Icon(Icons.Rounded.Image, stringResource(R.string.models_sees_images), Modifier.padding(start = 8.dp).size(18.dp), tint = if (sel) cs.onPrimaryContainer else cs.onSurfaceVariant)
+                            if (sel) Icon(Icons.Rounded.Check, stringResource(R.string.models_selected), Modifier.padding(start = 8.dp), tint = cs.onPrimaryContainer)
                         }
                     }
                 }

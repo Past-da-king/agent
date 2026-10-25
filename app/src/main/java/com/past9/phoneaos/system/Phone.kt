@@ -26,8 +26,8 @@ class AndroidPhone(private val context: Context) : PhoneBridge {
 
     init {
         val nm = context.getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel(CH_MESSAGES, "Messages from your agent", NotificationManager.IMPORTANCE_HIGH))
-        nm.createNotificationChannel(NotificationChannel(CH_WORK, "Agent working", NotificationManager.IMPORTANCE_MIN))
+        nm.createNotificationChannel(NotificationChannel(CH_MESSAGES, context.getString(R.string.svc_messages_channel), NotificationManager.IMPORTANCE_HIGH))
+        nm.createNotificationChannel(NotificationChannel(CH_WORK, context.getString(R.string.svc_work_channel), NotificationManager.IMPORTANCE_MIN))
     }
 
     override fun notify(title: String, body: String, questionItemId: Long?, options: List<String>) {
@@ -36,7 +36,7 @@ class AndroidPhone(private val context: Context) : PhoneBridge {
         val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE)
         val st = App.graph(context).settings.state.value
         val agent = Identity.publishAgentShortcut(context, st.agentName, st.mascot, st.accent)
-        val me = androidx.core.app.Person.Builder().setName(st.userName.ifBlank { "You" }).setKey("me").build()
+        val me = androidx.core.app.Person.Builder().setName(st.userName.ifBlank { context.getString(R.string.svc_you) }).setKey("me").build()
         val style = NotificationCompat.MessagingStyle(me).setConversationTitle(null).addMessage("$title\n$shown", System.currentTimeMillis(), agent)
         val b = NotificationCompat.Builder(context, CH_MESSAGES).setSmallIcon(Identity.statIcon(context, st.mascot)).setContentTitle(title)
             .setColor(com.past9.phoneaos.ui.theme.accentOf(st.accent).lP.let { android.graphics.Color.rgb((it.red * 255).toInt(), (it.green * 255).toInt(), (it.blue * 255).toInt()) })
@@ -115,17 +115,17 @@ class WorkService : Service() {
 
     companion object {
         const val EXTRA_KEEPALIVE = "keepalive"
-        fun text(helpers: Int) = if (helpers > 0) "Working: $helpers helper${if (helpers > 1) "s" else ""}" else "Working on it"
+        fun text(context: Context, helpers: Int) = if (helpers > 0) context.resources.getQuantityString(R.plurals.svc_work_helpers, helpers, helpers) else context.getString(R.string.svc_work_on_it)
 
         fun build(context: Context): android.app.Notification {
             val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
             val st = App.graph(context).settings.state.value
-            val who = st.agentName.ifBlank { "Agent" }
+            val who = when (st.agentName) { "" -> "Agent"; "Your agent" -> context.getString(R.string.svc_your_agent); else -> st.agentName }
             val h = AndroidPhone.helperCount
             return Identity.asAgent(context, NotificationCompat.Builder(context, AndroidPhone.CH_WORK).setSmallIcon(Identity.statIcon(context, st.mascot))
-                .setContentTitle(if (h > 0) "$who is working: $h helper${if (h > 1) "s" else ""}" else "$who is working")
-                .setContentText("You can leave the app. I will let you know.").setOngoing(true).setContentIntent(open),
-                "", text(h)).build()
+                .setContentTitle(if (h > 0) context.resources.getQuantityString(R.plurals.svc_work_title_helpers, h, who, h) else context.getString(R.string.svc_work_title, who))
+                .setContentText(context.getString(R.string.svc_work_text)).setOngoing(true).setContentIntent(open),
+                "", text(context, h)).build()
         }
 
         /** Update the ongoing notification in place (the helper count changed). */
