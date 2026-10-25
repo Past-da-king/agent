@@ -28,6 +28,10 @@ object ComposioConnect {
     @Volatile private var session: String? = null
     @Volatile private var sessionKey: String? = null
     @Volatile var tools: List<JSONObject> = emptyList(); private set
+    /** The key the tools were loaded for, why the last load failed, and when: a failed load is retried, but at most once a minute. */
+    @Volatile private var toolsKey: String? = null
+    @Volatile var lastError: String? = null; private set
+    @Volatile private var failedAt = 0L
 
     fun isConsumerKey(key: String?) = key?.trim()?.startsWith("ck_") == true
 
@@ -90,9 +94,21 @@ object ComposioConnect {
                 r.optJSONArray("tools")?.let { a -> for (i in 0 until a.length()) all += a.getJSONObject(i) }
                 cursor = r.optString("nextCursor").takeIf { it.isNotBlank() && it != "null" }
             } while (cursor != null && all.size < 200)
-            tools = all
+            tools = all; toolsKey = key
             if (all.isEmpty()) "Composio Connect accepted the key but offered no tools." else null
         }.getOrElse { session = null; sessionKey = null; it.message ?: "Couldn't reach Composio Connect" }
+            .also { lastError = it; failedAt = if (it == null) 0L else System.currentTimeMillis() }
+    }
+
+    /**
+     * The tools for this key, loading them if they aren't there. They were only loaded when the app process started, so a
+     * process started in the background with no network (a routine, a wake) kept an empty list for as long as it lived:
+     * every agent and helper silently had no app tools. Returns why they're missing, or null when they're there.
+     */
+    suspend fun ensureLoaded(key: String, now: Long = System.currentTimeMillis()): String? {
+        if (tools.isNotEmpty() && toolsKey == key) return null
+        if (failedAt > 0 && now - failedAt < 60_000) return lastError
+        return load(key)
     }
 
     /**
