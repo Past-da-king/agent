@@ -517,6 +517,9 @@ class AgentRuntime(
             else appendLine("- No machines connected. If a task is too heavy for the phone, tell the user they can add any server or computer they can SSH into under Connections > Machines.")
             if (!s.composioEnabled) appendLine("- No apps are connected yet (Gmail, Calendar...). If a task needs one, tell the user they can connect apps in Connections.")
             else if (com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(settings.composioKey())) appendLine("- Connected apps run through the COMPOSIO_* tools (Composio Connect): search for the right tool, check or start connections, then execute. If an app isn't connected, COMPOSIO_MANAGE_CONNECTIONS with action add and a short reason: the user gets a Connect card and the tool waits until it's done. Never paste sign-in links into the chat. An app can have several accounts (two Outlooks, four Gmails): COMPOSIO_MANAGE_CONNECTIONS list shows each with its email, and COMPOSIO_MULTI_EXECUTE_TOOL takes `account` to pick one. Act in the account the task belongs to; for 'my email' in general check every account and say which one each result came from. Never move data from one account through another unless asked, and always name the account used. Actions that send, post, pay or delete ask the user first automatically.")
+            // The tools couldn't be loaded: say so, or the agent concludes the user's connections are broken.
+            if (s.composioEnabled && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(settings.composioKey()) && com.past9.phoneaos.tools.ComposioConnect.tools.isEmpty())
+                appendLine("- Right now this app couldn't load the Composio tools (${com.past9.phoneaos.tools.ComposioConnect.lastError ?: "not loaded yet"}), so you have no connected-app tools this turn. The user's connections are not the problem: don't ask them to reconnect or disconnect apps. Say plainly that the apps can't be reached right now and that it is retried on the next message.")
             else appendLine("- Connected apps run through apps_find_tools then apps_run (apps_connected lists accounts; pass `account` to pick one). If an app isn't connected, apps_connect asks the user and opens the sign-in. Act in the account the task belongs to and name the account used.")
             // Composio Connect can't list the user's apps, so the agent would only ever try the ones it can name. Tell it which they are.
             if (s.composioEnabled && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(settings.composioKey())) settings.composioApps().keys.sorted().takeIf { it.isNotEmpty() }?.let { apps ->
@@ -706,6 +709,7 @@ class AgentRuntime(
 
     /** Run one turn on a branch: its first (forked from the parent's state), or a helper's result coming back to it. */
     private suspend fun runBranchTurn(b: Branch, text: String, images: List<String>, first: Boolean, base: List<Msg> = emptyList(), parentSession: String? = null) {
+        ensureAppTools()
         val line = b.line
         b.lock.withLock {
             line.job = kotlin.coroutines.coroutineContext[Job]
@@ -943,7 +947,14 @@ class AgentRuntime(
     }
 
     /** @param fromUser a message the user sent: it starts a fresh 5-step budget. A helper's result coming back doesn't. */
+    /** Composio Connect's tools for this turn: loaded if missing (see ComposioConnect.ensureLoaded). */
+    private suspend fun ensureAppTools() {
+        val k = settings.composioKey()?.trim() ?: return
+        if (settings.state.value.composioEnabled && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(k)) com.past9.phoneaos.tools.ComposioConnect.ensureLoaded(k)
+    }
+
     private suspend fun runTurn(userText: String, images: List<String> = emptyList(), fromUser: Boolean = true, replyTo: Long? = null) {
+        ensureAppTools()
         if (fromUser) { mainBudget.used = 0; mainLine.calls.used = 0 }
         mainTurn.origin = replyTo; mainTurn.late = !fromUser
         if (settings.state.value.mode == PowerMode.SUBSCRIPTION && subscription?.ready == true) return runSubscriptionTurn(userText, subscription!!, images)
@@ -1315,6 +1326,7 @@ class AgentRuntime(
 
     private suspend fun runHelper(itemId: Long, label: String, history: MutableList<Msg>, prompt: String, resume: String?, ctx: ChatContext,
                                   provider: LlmProvider?, sub: SubscriptionEngine?, model: String, brief: String = history.first().text) {
+        ensureAppTools()
         phone.workStarted()
         var state = "failed"; var result = ""
         try {
@@ -1443,6 +1455,7 @@ class AgentRuntime(
      *   and no notification goes out.
      */
     suspend fun runBackground(name: String, prompt: String, silentIf: ((String) -> Boolean)? = null): String {
+        ensureAppTools()
         val sub = subscriptionForBackground()
         val provider = if (sub == null) providerFactory(settings) else null
         if (sub == null && provider == null) {
