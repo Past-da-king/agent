@@ -123,6 +123,8 @@ class Graph(context: Context) {
 class App : Application(), coil.ImageLoaderFactory {
     val graph by lazy { Graph(this) }
 
+    override fun attachBaseContext(base: Context) = super.attachBaseContext(com.past9.phoneaos.system.AppLocale.wrap(base))
+
     override fun onCreate() {
         super.onCreate()
         CrashGuard.install(this)

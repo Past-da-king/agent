@@ -57,7 +57,7 @@ object Watchers {
     suspend fun tick(context: Context, t: TriggerRow): String {
         val g = App.graph(context)
         val file = scriptFile(context, t.id)
-        if (!file.exists()) return "No script yet."
+        if (!file.exists()) return context.getString(com.past9.phoneaos.R.string.svc_watch_no_script)
         val meta = runCatching { JSONObject(t.cursor) }.getOrElse { JSONObject() }
         val o = execute(context, file.readText(), meta.optString("state", "{}"))
         if (!o.ok) {
@@ -67,17 +67,17 @@ object Watchers {
             if (breaks >= BREAKS_BEFORE_REPAIR) {
                 meta.put("breaks", 0); g.db.triggers().upsert(t.copy(cursor = meta.toString()))
                 g.runtime.runBackground("Fix watcher: ${t.name}", "Your watcher #${t.id} \"${t.name}\" broke (the site probably changed). Output:\n${o.raw}\n\nCurrent script:\n```js\n${file.readText()}\n```\nFind out what changed (browser, run_code), fix the script, test it with run_code, then save it with watcher_save using id ${t.id}. Only tell the user if you can't fix it.")
-                return "Broke twice, asked your agent to fix it"
+                return context.getString(com.past9.phoneaos.R.string.svc_watch_broke_twice)
             }
-            return "Didn't work this time, will retry"
+            return context.getString(com.past9.phoneaos.R.string.svc_watch_retry)
         }
         meta.put("breaks", 0).put("state", o.state)
         g.db.triggers().upsert(t.copy(cursor = meta.toString()))
         if (o.fire) {
             g.runtime.runBackground(t.name, "Your watcher \"${t.name}\" just fired: ${o.message}\n\n${t.prompt}")
-            return "Fired: ${o.message}"
+            return context.getString(com.past9.phoneaos.R.string.svc_watch_fired, o.message)
         }
-        return o.message.ifBlank { "Checked, nothing yet" }
+        return o.message.ifBlank { context.getString(com.past9.phoneaos.R.string.svc_watch_nothing_yet) }
     }
 }
 
@@ -107,7 +107,7 @@ class WatcherSaveTool(private val context: Context, private val onChange: suspen
         ctx.activity("${if (existing == null) "New" else "Updated"} watcher: ${row.name}", JSONObject().put("tool", "routines"))
         // Run it once now so a broken script shows up straight away, not at the first tick.
         val first = Watchers.execute(context, input.optString("script"), "{}")
-        if (first.ok) dao.upsert(row.copy(id = id, cursor = JSONObject().put("state", first.state).toString(), lastRunAt = System.currentTimeMillis(), lastResult = first.message.ifBlank { "Checked, nothing yet" }))
+        if (first.ok) dao.upsert(row.copy(id = id, cursor = JSONObject().put("state", first.state).toString(), lastRunAt = System.currentTimeMillis(), lastResult = first.message.ifBlank { context.getString(com.past9.phoneaos.R.string.svc_watch_nothing_yet) }))
         return if (!first.ok) "Saved as watcher #$id, BUT the first run failed:\n${first.raw}\nFix the script and save again with id $id."
         else "Watcher #$id saved. Checks every $minutes min. First run: fire=${first.fire} ${first.message}"
     }

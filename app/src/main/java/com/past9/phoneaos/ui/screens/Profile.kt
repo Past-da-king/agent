@@ -1,5 +1,8 @@
 package com.past9.phoneaos.ui.screens
 
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import com.past9.phoneaos.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -58,22 +61,22 @@ fun ProfileScreen(home: HomeState, memories: List<MemoryRow>, actions: ProfileAc
             Box(Modifier.fillMaxWidth().background(cs.primaryContainer, MaterialTheme.shapes.extraLarge.copy(topStart = androidx.compose.foundation.shape.CornerSize(0.dp), topEnd = androidx.compose.foundation.shape.CornerSize(0.dp)))) {
                 Column(Modifier.fillMaxWidth().statusBarsPadding().padding(bottom = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-                        IconButton(onClick = actions.onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = cs.onPrimaryContainer) }
+                        IconButton(onClick = actions.onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.profile_back), tint = cs.onPrimaryContainer) }
                         Spacer(Modifier.weight(1f))
-                        IconButton(onClick = actions.onStyle) { Icon(Icons.Rounded.Palette, "Change colour and look", tint = cs.onPrimaryContainer) }
+                        IconButton(onClick = actions.onStyle) { Icon(Icons.Rounded.Palette, stringResource(R.string.profile_change_look), tint = cs.onPrimaryContainer) }
                     }
                     AgentAvatar(working = home.status.working, needsYou = home.items.any { it.kind == "question" && !org.json.JSONObject(it.meta).has("answer") }, size = 128.dp)
                     Spacer(Modifier.height(16.dp))
-                    Text(home.agentName, style = MaterialTheme.typography.headlineMedium, color = cs.onPrimaryContainer)
+                    Text(if (home.agentName == "Your agent") stringResource(R.string.profile_your_agent) else home.agentName, style = MaterialTheme.typography.headlineMedium, color = cs.onPrimaryContainer)
                     Spacer(Modifier.height(4.dp))
                     Text(nowLine(home), style = MaterialTheme.typography.bodyLarge, color = cs.onPrimaryContainer, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 32.dp))
                     Spacer(Modifier.height(18.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Stat("${goals.size}", "goals"); home.tasks.count { it.owner == "agent" && it.status == "done" }.let { n -> Stat("$n", if (n == 1) "step done" else "steps done") }; Stat("${memories.size}", "memories"); Stat("${home.routines.count { it.enabled }}", "routines")
+                        Stat("${goals.size}", pluralStringResource(R.plurals.profile_stat_goals, goals.size)); home.tasks.count { it.owner == "agent" && it.status == "done" }.let { n -> Stat("$n", pluralStringResource(R.plurals.profile_stat_steps, n)) }; Stat("${memories.size}", pluralStringResource(R.plurals.profile_stat_memories, memories.size)); home.routines.count { it.enabled }.let { n -> Stat("$n", pluralStringResource(R.plurals.profile_stat_routines, n)) }
                     }
                     Spacer(Modifier.height(18.dp))
                     Button(onClick = actions.onChat, shapes = ButtonDefaults.shapes(), colors = ButtonDefaults.buttonColors(containerColor = cs.onPrimaryContainer, contentColor = cs.primaryContainer)) {
-                        Text("Talk to ${home.agentName.removePrefix("Your ").replaceFirstChar { it.uppercase() }.let { if (home.agentName == "Your agent") "your agent" else home.agentName }}")
+                        Text(if (home.agentName == "Your agent") stringResource(R.string.profile_talk_to_your_agent) else stringResource(R.string.profile_talk_to, home.agentName))
                         Spacer(Modifier.width(8.dp)); Icon(Icons.AutoMirrored.Rounded.ArrowForward, null)
                     }
                 }
@@ -81,15 +84,15 @@ fun ProfileScreen(home: HomeState, memories: List<MemoryRow>, actions: ProfileAc
         }
         item {
             val running = helpers.filter { it.working }
-            SectionHeader("Helpers", if (running.isEmpty()) "None working right now. I hand bigger jobs to helpers." else "${running.size} working for you right now. Tap one to see it.",
+            SectionHeader(stringResource(R.string.profile_helpers), if (running.isEmpty()) stringResource(R.string.profile_helpers_none) else stringResource(R.string.profile_helpers_running, running.size),
                 Modifier.padding(horizontal = 20.dp))
         }
         items(helpers.filter { it.working }, key = { "h${it.id}" }) { h -> HelperCard(h, onClick = { openHelper = h.id }, modifier = Modifier.padding(horizontal = 16.dp), now = home.now) }
-        item { SectionHeader("What I think about you", "Things I keep in mind so you don't repeat yourself", Modifier.padding(horizontal = 20.dp)) { TextButton(onClick = actions.onMemory) { Text("All") } } }
+        item { SectionHeader(stringResource(R.string.profile_about), stringResource(R.string.profile_about_sub), Modifier.padding(horizontal = 20.dp)) { TextButton(onClick = actions.onMemory) { Text(stringResource(R.string.profile_all)) } } }
         item {
             Surface(shape = MaterialTheme.shapes.extraLarge, color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                 Column(Modifier.padding(vertical = 8.dp)) {
-                    if (about.isEmpty()) Text("Nothing yet. The more we talk, the more I pick up: your people, your preferences, how you like things done.", Modifier.padding(18.dp), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    if (about.isEmpty()) Text(stringResource(R.string.profile_about_empty), Modifier.padding(18.dp), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                     about.forEach { m ->
                         Row(Modifier.padding(horizontal = 18.dp, vertical = 8.dp), verticalAlignment = Alignment.Top) {
                             Icon(if (m.pinned) Icons.Rounded.PushPin else Icons.Rounded.Psychology, null, Modifier.size(18.dp).padding(top = 2.dp), tint = cs.primary)
@@ -103,9 +106,9 @@ fun ProfileScreen(home: HomeState, memories: List<MemoryRow>, actions: ProfileAc
                 }
             }
         }
-        item { SectionHeader("Goals I'm working on", if (goals.isEmpty()) "None right now${if (achieved > 0) " · $achieved achieved" else ""}" else "${goals.size} open${if (achieved > 0) " · $achieved achieved" else ""}, blocked first", Modifier.padding(horizontal = 20.dp, vertical = 2.dp)) }
+        item { SectionHeader(stringResource(R.string.profile_goals), if (goals.isEmpty()) (if (achieved > 0) stringResource(R.string.profile_goals_none_achieved, achieved) else stringResource(R.string.profile_goals_none)) else (if (achieved > 0) stringResource(R.string.profile_goals_open_achieved, goals.size, achieved) else stringResource(R.string.profile_goals_open, goals.size)), Modifier.padding(horizontal = 20.dp, vertical = 2.dp)) }
         if (goals.isEmpty()) item {
-            Text("Give me something bigger, like \"plan my trip to Durban\", and I'll break it into steps and tick them off here.", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+            Text(stringResource(R.string.profile_goals_empty), Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
         }
         items(goals, key = { it.id }) { g -> GoalDetail(g, home.tasks.filter { it.goalId == g.id }) }
     }
@@ -132,7 +135,7 @@ private fun GoalDetail(g: GoalRow, tasks: List<TaskRow>) {
         Column(Modifier.padding(vertical = 16.dp)) {
             Row(Modifier.padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(if (blocked.isNotEmpty()) "BLOCKED · $done/${tasks.size} DONE" else "$done/${tasks.size} DONE", style = Eyebrow, color = if (blocked.isNotEmpty()) cs.tertiary else cs.primary)
+                    Text(if (blocked.isNotEmpty()) stringResource(R.string.profile_goal_blocked, done, tasks.size) else stringResource(R.string.profile_goal_done, done, tasks.size), style = Eyebrow, color = if (blocked.isNotEmpty()) cs.tertiary else cs.primary)
                     Text(g.title, style = MaterialTheme.typography.titleLarge)
                     if (g.why.isNotBlank()) Text(g.why, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 }
@@ -144,8 +147,8 @@ private fun GoalDetail(g: GoalRow, tasks: List<TaskRow>) {
             blocked.forEach { b ->
                 Surface(shape = MaterialTheme.shapes.large, color = cs.tertiaryContainer, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
                     Column(Modifier.padding(14.dp)) {
-                        Text("STUCK ON: ${b.title.uppercase()}", style = Eyebrow, color = cs.onTertiaryContainer, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(b.blocker.ifBlank { "Waiting on something" }, style = MaterialTheme.typography.bodyMedium, color = cs.onTertiaryContainer)
+                        Text(stringResource(R.string.profile_stuck_on, b.title.uppercase()), style = Eyebrow, color = cs.onTertiaryContainer, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(b.blocker.ifBlank { stringResource(R.string.profile_waiting) }, style = MaterialTheme.typography.bodyMedium, color = cs.onTertiaryContainer)
                     }
                 }
             }
@@ -161,14 +164,14 @@ private fun StepLine(t: TaskRow) {
     val extra = LocalExtra.current
     Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
         when (t.status) {
-            "done" -> Icon(Icons.Rounded.CheckCircle, "Done", Modifier.size(22.dp), tint = extra.success)
+            "done" -> Icon(Icons.Rounded.CheckCircle, stringResource(R.string.profile_done), Modifier.size(22.dp), tint = extra.success)
             "doing" -> LoadingIndicator(Modifier.size(24.dp))
-            "blocked" -> Icon(Icons.Rounded.PauseCircle, "Blocked", Modifier.size(22.dp), tint = cs.tertiary)
+            "blocked" -> Icon(Icons.Rounded.PauseCircle, stringResource(R.string.profile_blocked), Modifier.size(22.dp), tint = cs.tertiary)
             else -> Box(Modifier.size(20.dp).clip(CircleShape).background(cs.outlineVariant))
         }
         Spacer(Modifier.width(14.dp))
         Text(t.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis,
             textDecoration = if (t.status == "done") TextDecoration.LineThrough else null, color = if (t.status == "done") cs.onSurfaceVariant else cs.onSurface)
-        if (t.owner == "user") StatusPill("You", cs.primaryContainer, cs.onPrimaryContainer)
+        if (t.owner == "user") StatusPill(stringResource(R.string.profile_you), cs.primaryContainer, cs.onPrimaryContainer)
     }
 }

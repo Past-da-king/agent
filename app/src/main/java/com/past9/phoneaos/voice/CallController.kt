@@ -55,7 +55,7 @@ class CallController(private val context: Context, private val db: AppDb, privat
 
     fun start() {
         if (_state.value.active) return
-        val key = settings.voiceKey("gemini") ?: run { _state.value = CallState(phase = "failed", error = "Add a Google (Gemini) key in Settings, Voice."); return }
+        val key = settings.voiceKey("gemini") ?: run { _state.value = CallState(phase = "failed", error = context.getString(com.past9.phoneaos.R.string.svc_call_needs_key)); return }
         val s = settings.state.value
         val name = s.agentName.takeIf { it != "Your agent" } ?: "your agent"
         val system = """
