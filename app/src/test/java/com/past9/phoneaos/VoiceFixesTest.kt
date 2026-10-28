@@ -75,7 +75,9 @@ class VoiceFixesTest {
     @Test fun otherRowsAreUnchanged() {
         val o = JSONObject().put("id", "c_a").put("kind", "agent").put("text", "hi").put("meta", "{\"x\":1}").put("createdAt", 5L)
         val item = RemoteRows.chat(o, RemoteIds(), notes)
-        assertEquals("agent", item.kind); assertEquals("{\"x\":1}", item.meta)
+        assertEquals("agent", item.kind)
+        // The row keeps its own meta; only the computer's id rides along (meta.rid, since 0.14.11) so a restart can map it back.
+        val m = JSONObject(item.meta); assertEquals(1, m.getInt("x")); assertEquals("c_a", m.getString("rid")); assertEquals(setOf("x", "rid"), m.keys().asSequence().toSet())
     }
 
     @Test fun recogniserPrefersGoogle() {
