@@ -767,6 +767,30 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         }
     }
 
+    private fun toolkitsOf(v: Any?): List<com.past9.phoneaos.tools.Toolkit> {
+        val a = v as? JSONArray ?: return emptyList()
+        return (0 until a.length()).mapNotNull { a.optJSONObject(it) }.filter { it.optString("slug").isNotBlank() }
+            .map { com.past9.phoneaos.tools.Toolkit(it.optString("slug"), it.optString("name").ifBlank { it.optString("slug") }, it.optString("line"), it.optString("logo"), 0, false, true) }
+    }
+
+    /** Every app the computer can connect: read when the Add panel opens, never in the background. */
+    suspend fun appCatalog(): List<com.past9.phoneaos.tools.Toolkit> = toolkitsOf(call("apps.catalog", listOf(), 60_000))
+
+    suspend fun searchApps(query: String): List<com.past9.phoneaos.tools.Toolkit> = toolkitsOf(call("apps.search", listOf(query), 30_000))
+
+    /** The computer's agent profiles (id, name): a new account can go straight into one. */
+    suspend fun agentProfiles(): List<Pair<String, String>> {
+        val a = call("profiles.list", listOf(), 20_000) as? JSONArray ?: return emptyList()
+        return (0 until a.length()).mapNotNull { a.optJSONObject(it) }.filter { it.optString("id").isNotBlank() }.map { it.optString("id") to it.optString("name").ifBlank { "Profile" } }
+    }
+
+    /** Ask the computer to start connecting [app]; the sign-in link comes back to open in this phone's browser. */
+    suspend fun connectApp(app: String, profileId: String): String {
+        val v = call("apps.connectLink", listOf(app, profileId), 60_000) as? JSONObject ?: throw RpcException("The computer didn't answer.")
+        if (!v.optBoolean("ok")) throw RpcException(v.optString("message").ifBlank { "The computer could not start the sign-in." })
+        return v.optString("link")
+    }
+
     /** The apps connected on the computer (Settings > Connections of the linked computer), read when the screen opens. */
     suspend fun connectedApps(): Pair<List<com.past9.phoneaos.tools.Connection>, List<com.past9.phoneaos.tools.Toolkit>> {
         val v = call("apps.status", listOf(), 30_000) as? JSONObject ?: throw RpcException("The computer didn't answer.")

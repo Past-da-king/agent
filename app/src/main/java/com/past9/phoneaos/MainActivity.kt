@@ -215,6 +215,8 @@ class MainActivity : ComponentActivity() {
             scope.launch { uris.forEach { u -> importImage(u)?.let { attachments += it } } }
         }
         var conn by remember { mutableStateOf(ConnectionsState(hasKey = settings.composioEnabled)) }
+        // Linked to a computer: an app being added, waiting for which of the computer's profiles it goes into.
+        var pendingRemote by remember { mutableStateOf<Pair<String, List<Pair<String, String>>>?>(null) }
         val profileList by g.runtime.profiles.profiles.collectAsStateWithLifecycle()
         val accountRules by g.runtime.profiles.rules.collectAsStateWithLifecycle()
         val ps = g.runtime.profiles
@@ -509,7 +511,18 @@ class MainActivity : ComponentActivity() {
                     ))
                 }
                 composable("connections") {
-                    LaunchedEffect(Unit) { refreshConnections() }
+                    // Read when the screen opens and when he comes back from the sign-in in the browser; never in the background.
+                    val lifeState = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsStateWithLifecycle().value
+                    LaunchedEffect(lifeState) { if (lifeState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) refreshConnections() }
+                    pendingRemote?.let { (slug, profs) ->
+                        androidx.compose.material3.AlertDialog(onDismissRequest = { pendingRemote = null },
+                            title = { androidx.compose.material3.Text("Which profile is it for?") },
+                            text = { androidx.compose.foundation.layout.Column {
+                                profs.forEach { (id, name) -> androidx.compose.material3.TextButton(onClick = { pendingRemote = null; com.past9.phoneaos.remote.RemoteHub.session.value?.let { rs -> scope.launch { runCatching { rs.connectApp(slug, id) }.onSuccess { open(it) }.onFailure { conn = conn.copy(error = "Couldn't start the sign-in on your computer: ${it.message}") } } } }) { androidx.compose.material3.Text(name) } }
+                                androidx.compose.material3.TextButton(onClick = { pendingRemote = null; com.past9.phoneaos.remote.RemoteHub.session.value?.let { rs -> scope.launch { runCatching { rs.connectApp(slug, "") }.onSuccess { open(it) }.onFailure { conn = conn.copy(error = "Couldn't start the sign-in on your computer: ${it.message}") } } } }) { androidx.compose.material3.Text("No profile") }
+                            } },
+                            confirmButton = {})
+                    }
                     val machines by g.runtime.machines.store.machines.collectAsStateWithLifecycle()
                     val learnedApps by g.runtime.learned.apps.collectAsStateWithLifecycle()
                     // Re-read on every return to this screen: the user may have just switched All files access on.
@@ -534,7 +547,15 @@ class MainActivity : ComponentActivity() {
                         onBack = { nav.popBackStack() },
                         onSaveKey = { k -> saveComposio(g, k).also { if (it == null) refreshConnections() } },
                         onRemoveKey = { g.settings.setComposioKey(null); conn = ConnectionsState(hasKey = false) },
+                        onLoadCatalog = { com.past9.phoneaos.remote.RemoteHub.session.value?.let { rs -> scope.launch { runCatching { rs.appCatalog() }.onSuccess { c -> conn = conn.copy(consumer = true, toolkits = (c + conn.toolkits).distinctBy { it.slug }) } } } },
                         onConnect = { slug -> scope.launch {
+                            val linkedRs = com.past9.phoneaos.remote.RemoteHub.session.value
+                            if (linkedRs != null) {
+                                val profs = runCatching { linkedRs.agentProfiles() }.getOrDefault(emptyList())
+                                if (profs.isNotEmpty()) pendingRemote = slug to profs
+                                else runCatching { linkedRs.connectApp(slug, "") }.onSuccess { open(it) }.onFailure { conn = conn.copy(error = "Couldn't start the sign-in on your computer: ${it.message}") }
+                                return@launch
+                            }
                             val ck = g.settings.composioKey()?.trim()
                             if (ck != null && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(ck)) {
                                 val beforeIds = conn.connected.filter { it.toolkit == slug && it.status == "ACTIVE" }.map { it.id }.toSet(); val before = beforeIds.size
@@ -572,6 +593,13 @@ class MainActivity : ComponentActivity() {
                         machine = machineActions(g),
                         onAllowPhoneFiles = { com.past9.phoneaos.tools.openAllFilesSettings(this@MainActivity) },
                         onSearchAll = { q -> scope.launch {
+                            val linkedRs = com.past9.phoneaos.remote.RemoteHub.session.value
+                            if (linkedRs != null) {
+                                conn = conn.copy(searching = true)
+                                val hits = runCatching { linkedRs.searchApps(q) }.getOrDefault(emptyList())
+                                conn = conn.copy(searching = false, searched = q, toolkits = (conn.toolkits + hits).distinctBy { it.slug }, hits = hits.map { it.slug }.toSet())
+                                return@launch
+                            }
                             val ck = g.settings.composioKey()?.trim() ?: return@launch
                             conn = conn.copy(searching = true, error = null)
                             runCatching { com.past9.phoneaos.tools.ComposioConnect.searchApps(ck, q) }.onSuccess { found ->

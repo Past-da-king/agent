@@ -79,6 +79,8 @@ data class ConnectionsActions(
     val onRemoveLearned: (id: String) -> Unit = {},
     /** Ask the agent to learn this site or app (opens the chat so the user can watch). */
     val onTeach: (String) -> Unit = {},
+    /** Linked to a computer: the Add panel opened, so read the apps it can connect. */
+    val onLoadCatalog: () -> Unit = {},
 )
 
 /** Accounts of one app that are the same sign-in (same email or name, or none shared). The first is the keeper. */
@@ -138,12 +140,23 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
             if (state.remote) {
                 if (state.error != null) item { Text(state.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(4.dp)) }
                 if (state.loading) item { Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { LoadingIndicator() } }
-                item { AppsSummary(state.connected, logos, appsOpen) { appsOpen = !appsOpen } }
+                item { AppsSummary(state.connected, logos, appsOpen) { appsOpen = !appsOpen; if (appsOpen) actions.onLoadCatalog() } }
                 if (appsOpen && state.connected.isNotEmpty()) item {
                     AppCard(padding = PaddingValues(vertical = 4.dp)) {
                         state.connected.filter { it.status == "ACTIVE" }.forEach { c -> val tk = state.toolkits.firstOrNull { it.slug == c.toolkit }
                             ConnectedLine(c, tk?.name ?: prettySlug(c.toolkit), actions, tk?.logo.orEmpty(), emptyList(), com.past9.phoneaos.data.AccountRules.DEFAULT) { } }
                     }
+                }
+                if (appsOpen) item {
+                    OutlinedTextField(query, { query = it }, placeholder = { Text("Search apps to add") }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                        singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp), shape = MaterialTheme.shapes.extraLarge)
+                }
+                val rlist = if (!appsOpen) emptyList() else state.toolkits.filter { query.isBlank() || it.name.contains(query, true) || it.slug.contains(query, true) || (state.searched == query.trim() && it.slug in state.hits) }
+                items(rlist.take(80), key = { "add-" + it.slug }) { t ->
+                    val mine = state.connected.filter { it.toolkit == t.slug && it.status == "ACTIVE" }
+                    ToolkitLine(t, mine.isNotEmpty(), canAddAnother = mine.isNotEmpty()) { actions.onConnect(t.slug) } }
+                if (appsOpen && query.isNotBlank() && state.searched != query.trim()) item {
+                    TextButton(onClick = { actions.onSearchAll(query.trim()) }, enabled = !state.searching, modifier = Modifier.fillMaxWidth()) { Text(if (state.searching) "Searching" else "Search all apps for “${query.trim()}”") }
                 }
             } else if (!state.hasKey) item {
                 AppCard { ComposioKeyForm(actions.onSaveKey, actions.onOpenUrl) {} }
