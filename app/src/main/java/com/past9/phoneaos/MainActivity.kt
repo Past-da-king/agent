@@ -319,8 +319,16 @@ class MainActivity : ComponentActivity() {
             else dictPerm.launch(Manifest.permission.RECORD_AUDIO)
         }
         fun refreshConnections() = scope.launch {
+            // Linked to a computer: its connected apps are the phone's apps. Read when this screen opens, small, and no key is asked for.
+            val linked = com.past9.phoneaos.remote.RemoteHub.session.value
+            if (linked != null) {
+                conn = conn.copy(remote = true, hasKey = true, loading = true, error = null, notificationsAllowed = notificationsAllowed())
+                try { val (c, t) = linked.connectedApps(); conn = conn.copy(connected = c, toolkits = t, loading = false) }
+                catch (e: Exception) { conn = conn.copy(loading = false, error = "Couldn't read the apps from your computer: ${e.message}") }
+                return@launch
+            }
             val has = g.settings.composioKey() != null
-            conn = conn.copy(hasKey = has, loading = has, error = null, notificationsAllowed = notificationsAllowed())
+            conn = conn.copy(remote = false, hasKey = has, loading = has, error = null, notificationsAllowed = notificationsAllowed())
             if (!has) return@launch
             val ck = g.settings.composioKey()?.trim()
             if (ck != null && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(ck)) {
@@ -446,6 +454,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 composable("tasks") {
+                    LaunchedEffect(Unit) { com.past9.phoneaos.remote.RemoteHub.session.value?.need("task", "goal") }
                     TasksScreen(goals, tasks, bottomPadding = barPad, actions = TaskActions(
                         onBack = { nav.popBackStack() },
                         onToggle = { t -> ops.updateTask(t.copy(status = if (t.status == "done") "todo" else "done", updatedAt = System.currentTimeMillis())) },
@@ -455,6 +464,7 @@ class MainActivity : ComponentActivity() {
                     ))
                 }
                 composable("memory") {
+                    LaunchedEffect(Unit) { com.past9.phoneaos.remote.RemoteHub.session.value?.need("memory") }
                     // A landscape tablet shows the list and a page side by side; a phone opens the page full screen.
                     val twoPane = com.past9.phoneaos.ui.widthClass() == com.past9.phoneaos.ui.WidthClass.EXPANDED
                     var openId by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<Long?>(null) }
@@ -489,6 +499,7 @@ class MainActivity : ComponentActivity() {
                         onAsk = { p -> g.runtime.send(p); nav.navigate("chat") })
                 }
                 composable("routines") {
+                    LaunchedEffect(Unit) { com.past9.phoneaos.remote.RemoteHub.session.value?.need("trigger") }
                     RoutinesScreen(routines, bottomPadding = barPad, actions = RoutineActions(
                         onBack = { nav.popBackStack() },
                         onToggle = { r -> ops.saveRoutine(r.copy(enabled = !r.enabled)) },

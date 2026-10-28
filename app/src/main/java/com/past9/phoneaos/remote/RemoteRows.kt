@@ -27,6 +27,9 @@ class RemoteIds {
     }
 
     fun remote(localId: Long): String? = toRemote[localId]
+
+    /** A mapping read back from a stored row (its meta.rid) after a restart. */
+    @Synchronized fun learn(remoteId: String, localId: Long) { toLocal.putIfAbsent(remoteId, localId); toRemote.putIfAbsent(localId, remoteId) }
     fun localOrNull(remoteId: String): Long? = toLocal[remoteId]
     fun forget(remoteId: String) { toLocal.remove(remoteId)?.let { toRemote.remove(it) } }
 }
@@ -42,13 +45,16 @@ object RemoteRows {
     /** The phone shows the person's general memory; a project's own pages stay on the computer. */
     fun isGeneralMemory(o: JSONObject): Boolean = o.optString("project").isBlank()
 
+    /** The computer's id rides in the row, so a restart can map the phone's number back to it (answering a card). */
+    fun withRid(meta: String, rid: String): String = runCatching { JSONObject(meta).put("rid", rid).toString() }.getOrDefault(meta)
+
     fun chat(o: JSONObject, ids: RemoteIds, notes: NoteAudio? = null): ChatItem {
         val created = o.optLong("createdAt", System.currentTimeMillis())
         val id = ids.local(o.getString("id"), created)
         val meta = o.optString("meta").ifBlank { "{}" }
         if (o.optString("kind") == "voice_note") return ChatItem(id, "voice", o.optString("text"), voiceMeta(meta, notes).toString(), created)
         if (o.optString("kind") == "question" || o.optString("kind") == "approval") return card(o, id, meta, created)
-        return ChatItem(id, o.optString("kind", "notice"), o.optString("text"), meta, created)
+        return ChatItem(id, o.optString("kind", "notice"), o.optString("text"), withRid(meta, o.getString("id")), created)
     }
 
     /**
@@ -72,6 +78,7 @@ object RemoteRows {
         val m = runCatching { JSONObject(rawMeta) }.getOrDefault(JSONObject())
         val kind = o.optString("kind")
         m.put("remoteKind", kind)
+        m.put("rid", o.optString("id"))
         val by = m.optString("by")
         if (by.isNotBlank() && m.optString("why").isBlank()) m.put("whyBy", by).put("why", "a helper is waiting on this")
         if (kind == "question") {

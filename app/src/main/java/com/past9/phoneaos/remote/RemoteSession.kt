@@ -1,6 +1,9 @@
 package com.past9.phoneaos.remote
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.os.Build
 import androidx.room.withTransaction
 import com.past9.phoneaos.App
@@ -97,6 +100,33 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     @Volatile private var cardsSeq = -1L
 
     @Volatile private var rpc: RpcClient? = null
+
+    // ---- data use (0.14.11): small reads on mobile data, deltas on reconnect, nothing re-pulled per chat nudge ----------
+    // The computer (0.2.90 and later) understands device.prefs, data.since, data.page and list limits. An older one does
+    // not: then the phone reads as before (bounded by that computer), but still never reloads on a chat nudge.
+    @Volatile private var protocolV2 = false
+    /** On a metered network (mobile data): only the newest messages and open cards up front, no media, no card stream. */
+    @Volatile var metered = false
+        private set
+    @Volatile private var helpersOpen = false
+    private var syncJob: Job? = null
+    @Volatile private var lastSeq = -1L
+    private val loadedKinds: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private val _earlierMore = MutableStateFlow(false)
+    /** Older messages are on the computer: the chat offers Load earlier. */
+    val earlierMore: StateFlow<Boolean> = _earlierMore
+    private val _earlierLoading = MutableStateFlow(false)
+    val earlierLoading: StateFlow<Boolean> = _earlierLoading
+    private val cm: ConnectivityManager? by lazy { app.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager }
+    private val netCb = object : ConnectivityManager.NetworkCallback() {
+        override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) { networkChanged() }
+        override fun onLost(network: Network) { networkChanged() }
+    }
+    private fun readMetered(): Boolean = runCatching { cm?.isActiveNetworkMetered ?: false }.getOrDefault(false)
+    init {
+        metered = readMetered()
+        runCatching { cm?.registerDefaultNetworkCallback(netCb) }
+    }
     @Volatile private var current: Pick? = null
     @Volatile private var turnRunning = false
     @Volatile private var foreground = true
@@ -126,9 +156,11 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
                 // Backing off: a kick (a failed call, the socket dropping) does not cut the wait short; Retry does.
                 val wait = nextTryAt - System.currentTimeMillis()
                 if (wait > 0) { withTimeoutOrNull(wait) { kick.receive() }; continue }
-                runCatching { probeAndMove() }
-                // Every 15 s, or at once when something failed.
-                withTimeoutOrNull(15_000) { kick.receive() }
+                // An open socket is its own health check: on mobile data nothing else is asked (each check is a new TLS
+                // handshake and a request). Off mobile data an open link is looked at once a minute, not every 15 s.
+                val open = rpc?.isOpen == true && current != null
+                if (!(open && metered)) runCatching { probeAndMove() }
+                withTimeoutOrNull(if (open) (if (metered) 300_000L else 60_000L) else 15_000L) { kick.receive() }
             }
         }
     }
@@ -201,7 +233,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
             override fun onOpen(rpc: RpcClient) {
                 if (this@RemoteSession.rpc !== rpc) return
                 _state.value = LinkState.Connected(pick.brain, pick.url)
-                scope.launch { runCatching { refreshBrains(pick) }; runCatching { loadCards() }; runCatching { reloadAll() }; runCatching { readRunState() } }
+                syncJob?.cancel()
+                syncJob = scope.launch { connectSync(pick); runCatching { readRunState() } }
             }
             override fun onEvent(rpc: RpcClient, name: String, payload: Any?) { if (this@RemoteSession.rpc === rpc) onEvent(name, payload) }
             override fun onClosed(rpc: RpcClient, why: String, opened: Boolean, problem: LinkProblem) {
@@ -328,6 +361,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     }
 
     fun close() {
+        runCatching { cm?.unregisterNetworkCallback(netCb) }
         hold(false)
         detach()
         scope.cancel()
@@ -506,7 +540,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
 
     /** One DataChange (desktop ipc.ts): the row as it is now, a deleted id, or reset. */
     suspend fun applyChange(o: JSONObject) {
-        if (o.optBoolean("reset")) { reloadSoon(); return }
+        if (o.optBoolean("reset")) { if (protocolV2) resyncSoon() else reloadSoon(); return }
         val entity = o.optString("entity")
         val row = o.optJSONObject("row")
         if (o.optBoolean("deleted") || row == null) {
@@ -541,7 +575,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
                 }
                 if (isCard) cardNotice(row, newCard)
             }
-            "project" -> reloadSoon()
+            "project" -> if (!protocolV2) reloadSoon()
             "memory" -> if (RemoteRows.isGeneralMemory(row)) putMemory(RemoteRows.memory(row, ids)) else ids.localOrNull(row.optString("id"))?.let { db.memory().delete(it) }
             "task" -> putTask(RemoteRows.task(row, ids))
             "goal" -> putGoal(RemoteRows.goal(row, ids))
@@ -555,7 +589,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
 
     private fun onEvent(name: String, payload: Any?) {
         when (name) {
-            EVT_DATA -> (payload as? JSONObject)?.let { p -> scope.launch { runCatching { applyChange(p) } } }
+            EVT_DATA -> (payload as? JSONObject)?.let { p -> scope.launch { runCatching { applyChange(p) }; p.optLong("seq", -1L).takeIf { it >= 0 }?.let(::noteSeq) } }
             EVT_CHAT -> (payload as? JSONObject)?.let { e ->
                 val chat = e.optString("chat")
                 if (chat.isNotEmpty() && chat != "main") {
@@ -572,13 +606,175 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
                         // Between turns: a higher brain that came back takes over now.
                         kick.trySend(Unit)
                     }
-                    "chat_changed" -> reloadSoon()
+                    // "chat_changed" says only that something changed: the rows themselves come as data.changed.
+                    // Reloading here pulled the whole chat again on every helper step (hundreds of MB an hour).
+                    "chat_changed" -> {}
                 }
             }
             EVT_CARDS -> onCards(payload)
             EVT_DEVICES -> current?.let { p -> scope.launch { runCatching { refreshBrains(p) } } }
             EVT_COMMAND -> (payload as? JSONObject)?.let { c -> scope.launch { commands.handle(c) } }
         }
+    }
+
+    // ---- the small way to sync (protocol v2) ------------------------------------------------------------------------
+
+    private fun prefsJson(): JSONObject = JSONObject().put("v", 2).put("metered", metered).put("helpers", helpersOpen || !metered)
+
+    private fun seqKey(pick: Pick) = "remote_seq_${link.deviceId}_${pick.brain.id}"
+    private fun loadSeq(pick: Pick): Long = App.graph(app).settings.extra(seqKey(pick))?.toLongOrNull() ?: -1L
+
+    /** The newest change-log number this phone holds; kept so a reconnect asks only for what came after. */
+    private fun noteSeq(seq: Long) {
+        if (seq <= lastSeq) return
+        lastSeq = seq
+        current?.let { p -> App.graph(app).settings.setExtra(seqKey(p), seq.toString()) }
+    }
+
+    private fun chatRowCount(): Int = db.query("SELECT COUNT(*) FROM chat_items WHERE kind IN ('user','agent')", null).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+
+    /** First thing on every connection: say what this phone wants, then catch up by delta, or read the small first list. */
+    private fun warmIds() {
+        runCatching {
+            db.query("SELECT id, meta FROM chat_items ORDER BY id DESC LIMIT 800", null).use { c ->
+                while (c.moveToNext()) {
+                    val rid = runCatching { JSONObject(c.getString(1)).optString("rid") }.getOrDefault("")
+                    if (rid.isNotBlank()) ids.learn(rid, c.getLong(0))
+                }
+            }
+        }
+    }
+
+    private suspend fun connectSync(pick: Pick) {
+        loadedKinds.clear()
+        warmIds()
+        protocolV2 = try { call("device.prefs", listOf(prefsJson()), 15_000); true } catch (e: RpcException) { false }
+        if (!protocolV2) {
+            // An older computer: the way it always was (its own list is bounded).
+            runCatching { refreshBrains(pick) }; runCatching { loadCards() }; runCatching { reloadAll() }
+            return
+        }
+        if (!metered) runCatching { refreshBrains(pick) }
+        lastSeq = loadSeq(pick)
+        val caught = lastSeq >= 0 && chatRowCount() > 0 && runCatching { catchUp(lastSeq) }.getOrDefault(false)
+        if (!caught) {
+            lastSeq = -1L
+            initialLoad(if (metered) FIRST_ROWS else CHAT_ROWS)
+        }
+        if (!metered) runCatching { fullSync(initial = caught) } else if (helpersOpen) runCatching { loadCards() }
+    }
+
+    /** What changed after [seq], applied row by row. False: too much changed or the number is not known: read afresh. */
+    private suspend fun catchUp(seq: Long): Boolean {
+        val v = call("data.since", listOf(seq), 30_000) as? JSONObject ?: return false
+        if (v.optBoolean("reset")) return false
+        val a = v.optJSONArray("changes")
+        if (a != null) for (i in 0 until a.length()) a.optJSONObject(i)?.let { runCatching { applyChange(it) } }
+        noteSeq(v.optLong("seq", seq))
+        publishStatus()
+        return true
+    }
+
+    /** The newest [limit] messages of the main chat and every card waiting for an answer: nothing else. */
+    private suspend fun initialLoad(limit: Int) {
+        val r = call("data.list", listOf("chat_item", JSONObject().put("v", 2).put("limit", limit).put("withSeq", true)), 60_000) as? JSONObject ?: return
+        val a = r.optJSONArray("rows") ?: return
+        val rows = (0 until a.length()).mapNotNull { a.optJSONObject(it) }.filter { it.optString("id").isNotBlank() }
+        rows.forEach(::noteBrainRow)
+        db.withTransaction { rows.forEach { putChat(RemoteRows.chat(it, ids, notes)) } }
+        _earlierMore.value = r.optBoolean("more")
+        noteSeq(r.optLong("seq", -1L))
+        publishStatus()
+        rows.forEach { fetchMedia(it) }
+        rows.forEach { runCatching { cardNoticeIfOpen(it) } }
+    }
+
+    private fun cardNoticeIfOpen(row: JSONObject) { if (row.optString("kind") in setOf("question", "approval") && RemoteRows.isOpenCard(row)) cardNotice(row, false) }
+
+    /** Off mobile data: everything, in the background, so it is all here when it is wanted. */
+    private suspend fun fullSync(initial: Boolean) {
+        if (initial) initialLoad(CHAT_ROWS)
+        for (e in LISTS) runCatching { loadEntity(e) }
+        runCatching { loadCards() }
+    }
+
+    /** A list is read when its screen opens (mobile data) and the first time it is asked for on a connection. */
+    fun need(vararg entities: String) {
+        if (!protocolV2) return
+        scope.launch { for (e in entities) runCatching { ensureLoaded(e) } }
+    }
+
+    private suspend fun ensureLoaded(entity: String) {
+        if (!loadedKinds.add(entity)) return
+        try { loadEntity(entity) } catch (e: Exception) { loadedKinds.remove(entity); throw e }
+    }
+
+    private suspend fun loadEntity(entity: String) {
+        loadedKinds.add(entity)
+        val r = call("data.list", listOf(entity, JSONObject().put("v", 2).put("withSeq", true)), 60_000) as? JSONObject ?: return
+        val a = r.optJSONArray("rows") ?: return
+        val rows = (0 until a.length()).mapNotNull { a.optJSONObject(it) }.filter { it.optString("id").isNotBlank() }
+        db.withTransaction {
+            when (entity) {
+                "goal" -> replace("goals", rows.map { RemoteRows.goal(it, ids) }.onEach { putGoal(it) }.map { it.id })
+                "task" -> replace("tasks", rows.map { RemoteRows.task(it, ids) }.onEach { putTask(it) }.map { it.id })
+                "memory" -> replace("memories", rows.filter(RemoteRows::isGeneralMemory).map { RemoteRows.memory(it, ids) }.onEach { putMemory(it) }.map { it.id })
+                "trigger" -> replace("triggers", rows.map { RemoteRows.trigger(it, ids) }.onEach { db.triggers().upsert(it) }.map { it.id })
+            }
+        }
+    }
+
+    private var resyncJob: Job? = null
+    /** The computer says many rows changed: read afresh, small on mobile data, everything off it. */
+    private fun resyncSoon() { resyncJob?.cancel(); resyncJob = scope.launch { delay(400); runCatching { loadedKinds.clear(); initialLoad(if (metered) FIRST_ROWS else CHAT_ROWS); if (!metered) fullSync(initial = false) } } }
+
+    /** The network changed between mobile data and Wi-Fi: tell the computer; catch up in full on Wi-Fi, stop big transfers on mobile. */
+    private fun networkChanged() {
+        val now = readMetered()
+        if (now == metered) return
+        metered = now
+        android.util.Log.i("RemoteLink", "network is now ${if (now) "metered" else "unmetered"}")
+        if (!protocolV2 || rpc?.isOpen != true) return
+        syncJob?.cancel(); resyncJob?.cancel()
+        scope.launch { runCatching { call("device.prefs", listOf(prefsJson()), 15_000) } }
+        if (!now) syncJob = scope.launch { runCatching { fullSync(initial = true) } }
+    }
+
+    /** The helpers list is on screen (or left): the computer streams the cards only then while this phone is on mobile data. */
+    fun setHelpersOpen(on: Boolean) {
+        if (helpersOpen == on) return
+        helpersOpen = on
+        if (!protocolV2 || rpc?.isOpen != true) return
+        scope.launch { runCatching { call("device.prefs", listOf(prefsJson()), 15_000) }; if (on) runCatching { loadCards() } }
+    }
+
+    /** Load earlier: the next [PAGE_ROWS] older messages of the main chat. */
+    fun loadEarlier() {
+        if (!protocolV2 || _earlierLoading.value) return
+        _earlierLoading.value = true
+        scope.launch {
+            try {
+                val oldest = db.query("SELECT MIN(createdAt) FROM chat_items WHERE kind IN ('user','agent')", null).use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else 0L }
+                val r = call("data.page", listOf(if (oldest > 0) oldest else null, PAGE_ROWS), 30_000) as? JSONObject ?: return@launch
+                val a = r.optJSONArray("rows")
+                val rows = if (a == null) emptyList() else (0 until a.length()).mapNotNull { a.optJSONObject(it) }.filter { it.optString("id").isNotBlank() }
+                db.withTransaction { rows.forEach { putChat(RemoteRows.chat(it, ids, notes)) } }
+                rows.forEach { fetchMedia(it) }
+                _earlierMore.value = r.optBoolean("more")
+            } catch (e: Exception) {
+                notice("Couldn't load earlier messages: ${e.message}")
+            } finally { _earlierLoading.value = false }
+        }
+    }
+
+    /** The apps connected on the computer (Settings > Connections of the linked computer), read when the screen opens. */
+    suspend fun connectedApps(): Pair<List<com.past9.phoneaos.tools.Connection>, List<com.past9.phoneaos.tools.Toolkit>> {
+        val v = call("apps.status", listOf(), 30_000) as? JSONObject ?: throw RpcException("The computer didn't answer.")
+        val a = v.optJSONArray("accounts") ?: JSONArray()
+        val accounts = (0 until a.length()).mapNotNull { a.optJSONObject(it) }
+        val connected = accounts.map { o -> com.past9.phoneaos.tools.Connection(o.optString("id"), o.optString("app"), o.optString("status").uppercase(), o.optString("label").ifBlank { o.optString("appName") }) }
+        val kits = accounts.distinctBy { it.optString("app") }.map { o -> com.past9.phoneaos.tools.Toolkit(o.optString("app"), o.optString("appName").ifBlank { o.optString("app") }, "", o.optString("logo"), 0, false, true) }
+        return connected to kits
     }
 
     // ---- project chats as helper rows, and pictures from the computer ----------------------------------
@@ -656,6 +852,21 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
 
     /** Pictures in a chat row are paths on the computer: fetch each once through /v1/file and point the row at the copy. */
     private fun fetchMedia(row: JSONObject) {
+        // On mobile data a picture or a voice note comes only when he taps it (fetchMediaFor).
+        if (metered) return
+        fetchNow(row)
+    }
+
+    /** He tapped a picture or a note that was left on the computer to save data. */
+    fun fetchMediaFor(localId: Long) {
+        val rid = ids.remote(localId) ?: return
+        scope.launch {
+            val item = db.chat().get(localId) ?: return@launch
+            fetchNow(JSONObject().put("id", rid).put("kind", if (item.kind == "voice") "voice_note" else item.kind).put("meta", item.meta))
+        }
+    }
+
+    private fun fetchNow(row: JSONObject) {
         fetchNote(row)
         val meta = runCatching { JSONObject(row.optString("meta").ifBlank { "{}" }) }.getOrNull() ?: return
         val paths = RemoteRows.mediaPaths(meta).filter { !File(it).exists() }
@@ -688,6 +899,12 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         /** A link that stayed up this long was fine; the next failure starts the waits from 1 s again. */
         const val STABLE_MS = 10_000L
         const val CHAT_ROWS = 400
+        /** The first read on mobile data: the newest messages. */
+        const val FIRST_ROWS = 20
+        /** Load earlier: how many at a time. */
+        const val PAGE_ROWS = 20
+        /** The small lists, read on Wi-Fi or when their screen opens. */
+        val LISTS = listOf("goal", "task", "memory", "trigger")
         const val NOTE_GONE = "The computer no longer has this voice note."
         const val EVT_DATA = "agent:evt:data.changed"
         const val EVT_CHAT = "agent:evt:chat.event"

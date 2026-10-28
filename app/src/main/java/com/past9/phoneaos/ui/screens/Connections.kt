@@ -52,6 +52,8 @@ data class ConnectionsState(
     val browserProfiles: List<String> = listOf("Personal"),
     /** Web apps the agent mapped and wrote its own tools for. */
     val learned: List<com.past9.phoneaos.connections.LearnedApp> = emptyList(),
+    /** Linked to a computer: the apps below are the computer's, read from it; no key is asked for here. */
+    val remote: Boolean = false,
 )
 
 data class ConnectionsActions(
@@ -132,8 +134,18 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                 }
             }
             if (state.hasKey) item { ProfilesSection(state.profiles, logos) { id -> sheet = "profile:" + (id ?: "new") } }
-            item { SectionHeader("Your apps", if (state.consumer) "Tap Connect and sign in. Your agent can use it straight away." else "Gmail, Calendar, Drive, Slack and 250+ more, through Composio with your own key", Modifier.padding(start = 4.dp, top = 16.dp)) }
-            if (!state.hasKey) item {
+            item { SectionHeader("Your apps", if (state.remote) "Connected on your computer. Manage them there." else if (state.consumer) "Tap Connect and sign in. Your agent can use it straight away." else "Gmail, Calendar, Drive, Slack and 250+ more, through Composio with your own key", Modifier.padding(start = 4.dp, top = 16.dp)) }
+            if (state.remote) {
+                if (state.error != null) item { Text(state.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(4.dp)) }
+                if (state.loading) item { Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { LoadingIndicator() } }
+                item { AppsSummary(state.connected, logos, appsOpen) { appsOpen = !appsOpen } }
+                if (appsOpen && state.connected.isNotEmpty()) item {
+                    AppCard(padding = PaddingValues(vertical = 4.dp)) {
+                        state.connected.filter { it.status == "ACTIVE" }.forEach { c -> val tk = state.toolkits.firstOrNull { it.slug == c.toolkit }
+                            ConnectedLine(c, tk?.name ?: prettySlug(c.toolkit), actions, tk?.logo.orEmpty(), emptyList(), com.past9.phoneaos.data.AccountRules.DEFAULT) { } }
+                    }
+                }
+            } else if (!state.hasKey) item {
                 AppCard { ComposioKeyForm(actions.onSaveKey, actions.onOpenUrl) {} }
             } else {
                 if (state.error != null) item { Text(state.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(4.dp)) }

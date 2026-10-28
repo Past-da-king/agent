@@ -1,5 +1,6 @@
 package com.past9.phoneaos.ui.screens
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.animation.AnimatedContent
@@ -290,6 +291,9 @@ fun ChatScreen(
     val newSince = items.count { it.id > seenId && it.kind != "user" && it.kind != "activity" && !JSONObject(it.meta).has("helper") }
     val waitingOnYou = items.any { it.kind == "question" && !JSONObject(it.meta).has("answer") }
 
+    val rs = com.past9.phoneaos.remote.RemoteHub.session.collectAsStateWithLifecycle().value
+    val earlierMore = rs?.earlierMore?.collectAsStateWithLifecycle()?.value == true
+    val earlierLoading = rs?.earlierLoading?.collectAsStateWithLifecycle()?.value == true
     // A tap on a generated UI's button (OpenUI @ToAssistant) goes to the agent quietly; a follow-up suggestion is sent like a typed message.
     androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.openui.LocalOpenUiSend provides actions.onSend, com.past9.phoneaos.ui.openui.LocalOpenUiAct provides actions.onAct) {
     Scaffold(
@@ -311,6 +315,9 @@ fun ChatScreen(
             contentPadding = PaddingValues(start = com.past9.phoneaos.ui.sidePad(16.dp, com.past9.phoneaos.ui.Readable.CHAT), end = com.past9.phoneaos.ui.sidePad(16.dp, com.past9.phoneaos.ui.Readable.CHAT), top = 8.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            if (earlierMore) item(key = "remote-earlier") {
+                TextButton(onClick = { rs?.loadEarlier() }, enabled = !earlierLoading, modifier = Modifier.fillMaxWidth()) { Text(if (earlierLoading) "Loading..." else "Load earlier") }
+            }
             items(rows, key = { it.key }) { r ->
                 when (r) {
                     is Row_.Earlier -> TextButton(onClick = { window += CHAT_PAGE }, modifier = Modifier.fillMaxWidth()) { Text("Earlier messages") }
@@ -698,7 +705,11 @@ private fun ImageActivity(item: ChatItem) {
     AppCard(padding = PaddingValues(10.dp)) {
         Text(item.text, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = 6.dp, bottom = 8.dp, top = 2.dp))
         if (bmp != null) androidx.compose.foundation.Image(bmp, item.text, Modifier.fillMaxWidth().heightIn(max = 420.dp).clip(MaterialTheme.shapes.medium), contentScale = ContentScale.Crop, alignment = Alignment.TopCenter)
-        else Text("Screenshot no longer available", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(6.dp))
+        else {
+            Text("Screenshot no longer available", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(6.dp))
+            val rs = com.past9.phoneaos.remote.RemoteHub.session.value
+            if (rs != null && rs.metered) TextButton(onClick = { rs.fetchMediaFor(item.id) }) { Text("Load picture") }
+        }
     }
 }
 
