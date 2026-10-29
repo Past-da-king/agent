@@ -160,7 +160,10 @@ class MentionsTest {
         val message = Mentions.withChip(acme, picked.rest)
         assertEquals("@Acme please ", message)
         assertEquals("Acme" to "please ", Mentions.chipOf(message, projects)?.let { it.first.name to it.second })
-        assertEquals("Acme" to "", Mentions.chipOf("@Acme", projects)?.let { it.first.name to it.second })
+        assertEquals("Acme" to "", Mentions.chipOf("@Acme ", projects)?.let { it.first.name to it.second })
+        // still being typed: not a chip yet, or the space typed next would land after it
+        assertNull(Mentions.chipOf("@Acme", projects))
+        assertNull(Mentions.chipOf("@acme", projects))
         assertNull(Mentions.chipOf("@Acmex hi", projects))
         assertNull(Mentions.chipOf("hi @Acme", projects))
     }

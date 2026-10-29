@@ -125,7 +125,7 @@ object Mentions {
         if (!text.startsWith("@")) return null
         val lower = text.substring(1).lowercase()
         val hit = list.flatMap { p -> (listOf(p.name) + p.aliases).map { p to it } }.sortedByDescending { it.second.length }
-            .firstOrNull { (_, n) -> lower.startsWith(n.lowercase()) && (text.length == 1 + n.length || text[1 + n.length].isWhitespace()) } ?: return null
+            .firstOrNull { (_, n) -> lower.startsWith(n.lowercase()) && text.length > 1 + n.length && text[1 + n.length].isWhitespace() } ?: return null
         val rest = text.substring(1 + hit.second.length).let { if (it.isNotEmpty() && it[0].isWhitespace()) it.substring(1) else it }
         return hit.first to rest
     }
