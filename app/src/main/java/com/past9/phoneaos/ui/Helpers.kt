@@ -106,25 +106,31 @@ fun HelperOrb(state: String, size: Dp = 40.dp, profileColor: String? = null) {
  */
 @Composable
 fun ProjectTile(h: HelperView, size: Dp = 40.dp, spinner: Boolean = true) {
-    val accent = com.past9.phoneaos.ui.theme.accentOf(h.projectColor)
-    val bitmap = remember(h.projectImage) {
+    ProjectIconTile(h.project, h.projectGlyph, h.projectColor, h.projectImage, size, working = h.working && spinner)
+}
+
+/** The same tile from a project's own icon fields (the @-mention picker, a project chat's header). */
+@Composable
+fun ProjectIconTile(name: String, glyphName: String, color: String, image: String, size: Dp = 40.dp, working: Boolean = false) {
+    val accent = com.past9.phoneaos.ui.theme.accentOf(color)
+    val bitmap = remember(image) {
         runCatching {
-            val b64 = h.projectImage.substringAfter("base64,", "")
+            val b64 = image.substringAfter("base64,", "")
             if (b64.isEmpty()) null else android.util.Base64.decode(b64, android.util.Base64.DEFAULT).let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) }?.asImageBitmap()
         }.getOrNull()
     }
-    val emoji = h.projectGlyph.takeIf { g -> g.isNotEmpty() && g.none { it.isLetterOrDigit() || it == '-' } }
-    val glyph = projectGlyphs[h.projectGlyph]
+    val emoji = glyphName.takeIf { g -> g.isNotEmpty() && g.none { it.isLetterOrDigit() || it == '-' } }
+    val glyph = projectGlyphs[glyphName]
     Box(Modifier.size(size)) {
         Box(Modifier.fillMaxSize().clip(androidx.compose.foundation.shape.RoundedCornerShape(size * 0.28f)).background(accent.lP), contentAlignment = Alignment.Center) {
             when {
-                bitmap != null -> androidx.compose.foundation.Image(bitmap, h.project, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
-                emoji != null -> Text(emoji, style = MaterialTheme.typography.titleLarge)
-                glyph != null -> Icon(glyph, h.project, Modifier.size(size * 0.55f), tint = Color.White)
-                else -> Text(h.project.take(1).uppercase(), style = MaterialTheme.typography.titleMedium, color = Color.White)
+                bitmap != null -> androidx.compose.foundation.Image(bitmap, name, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+                emoji != null -> Text(emoji, style = if (size < 32.dp) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleLarge)
+                glyph != null -> Icon(glyph, name, Modifier.size(size * 0.55f), tint = Color.White)
+                else -> Text(name.take(1).uppercase(), style = MaterialTheme.typography.titleMedium, color = Color.White)
             }
         }
-        if (h.working && spinner) LoadingIndicator(Modifier.size(size * 0.45f).align(Alignment.BottomEnd).clip(CircleShape).background(MaterialTheme.colorScheme.surface), color = accent.lP)
+        if (working) LoadingIndicator(Modifier.size(size * 0.45f).align(Alignment.BottomEnd).clip(CircleShape).background(MaterialTheme.colorScheme.surface), color = accent.lP)
     }
 }
 

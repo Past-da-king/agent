@@ -100,6 +100,8 @@ data class ChatActions(
     val onStopSpeaking: (() -> Unit)? = null,
     /** Open a report (its file path) in the full-screen reader. */
     val onReport: (String) -> Unit = {},
+    /** Open one of the computer's chats (a project chat an @-mention went to): its id and the project's name. */
+    val onOpenChat: (String, String) -> Unit = { _, _ -> },
 )
 
 /**
@@ -339,7 +341,8 @@ fun ChatScreen(
                         "branch" -> BranchRow(r.item, items.filter { a -> JSONObject(a.meta).optLong("branch") == r.item.id && (a.kind == "activity" || a.kind == "agent") })
                         "helper" -> HelperRow(r.item, items.filter { a -> a.kind == "activity" && JSONObject(a.meta).optLong("helper") == r.item.id })
                         "activity" -> if (JSONObject(r.item.meta).has("file")) FileCard(r.item) else ImageActivity(r.item)
-                        else -> Notice(r.item)
+                        else -> { val sent = com.past9.phoneaos.remote.Mentions.noticeOf(r.item.meta)
+                            if (sent != null) MentionSent(sent) { actions.onOpenChat(sent.chat, sent.name) } else Notice(r.item) }
                     }
                 }
             }
@@ -1079,6 +1082,47 @@ private fun Notice(item: ChatItem) {
     }
 }
 
+/** "Sent to Acme": an @-mention went to that project's chat on the computer; a tap opens it. */
+@Composable
+fun MentionSent(sent: com.past9.phoneaos.remote.MentionNotice, onOpen: () -> Unit) {
+    val project = com.past9.phoneaos.remote.RemoteHub.session.collectAsStateWithLifecycle().value?.mentions?.collectAsStateWithLifecycle()?.value?.firstOrNull { it.id == sent.project }
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Surface(onClick = onOpen, shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.heightIn(min = 40.dp)) {
+            Row(Modifier.padding(start = 8.dp, end = 14.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (project != null) com.past9.phoneaos.ui.ProjectIconTile(project.name, project.glyph, project.color, project.image, 24.dp)
+                else Icon(Icons.Rounded.ChatBubble, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(8.dp))
+                Text(buildString { append("Sent to "); append(sent.name); if (sent.fresh) append(" in a new chat") }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                Spacer(Modifier.width(8.dp))
+                Text("Open chat", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            }
+        }
+    }
+}
+
+/** The '@' list above the message box: the computer's projects that fit what he typed. */
+@Composable
+private fun MentionList(items: List<com.past9.phoneaos.remote.MentionProject>, onPick: (com.past9.phoneaos.remote.MentionProject) -> Unit) {
+    Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, tonalElevation = 2.dp, shadowElevation = 6.dp,
+        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp)) {
+        Column(Modifier.padding(vertical = 6.dp).heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
+            Text("Send to a project", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 16.dp, top = 6.dp, bottom = 4.dp))
+            items.forEach { p ->
+                Surface(onClick = { onPick(p) }, color = androidx.compose.ui.graphics.Color.Transparent, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp)) {
+                    Row(Modifier.heightIn(min = 52.dp).padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        com.past9.phoneaos.ui.ProjectIconTile(p.name, p.glyph, p.color, p.image, 32.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(p.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (p.aliases.isNotEmpty()) Text(p.aliases.joinToString(", "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun WorkingRow(status: AgentStatus) {
     Row(Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1103,8 +1147,25 @@ private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean,
             }
         }
     }
+    // The box keeps its caret here, so the '@' word at the caret can be found and replaced (an outside change to the
+    // draft, a dictation or a send, puts the caret at the end).
+    var field by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(draft, androidx.compose.ui.text.TextRange(draft.length))) }
+    val shown = if (field.text == draft) field else androidx.compose.ui.text.input.TextFieldValue(draft, androidx.compose.ui.text.TextRange(draft.length))
+    // '@' offers the computer's projects (remote/Mentions.kt); only while linked to a computer, which routes the message.
+    val session = com.past9.phoneaos.remote.RemoteHub.session.collectAsStateWithLifecycle().value
+    val typing = if (session == null) null else com.past9.phoneaos.remote.Mentions.atCaret(shown.text, shown.selection.start)
+    var dismissedAt by remember { mutableIntStateOf(-1) }
+    LaunchedEffect(typing != null, session) { if (typing != null) session?.refreshMentions() }
+    val known = session?.mentions?.collectAsStateWithLifecycle()?.value.orEmpty()
+    val picks = if (typing == null || typing.first == dismissedAt) emptyList() else com.past9.phoneaos.remote.Mentions.rank(typing.second, known)
+    if (picks.isNotEmpty()) androidx.activity.compose.BackHandler { dismissedAt = typing?.first ?: -1 }
     Surface(color = MaterialTheme.colorScheme.surface) {
       Column(Modifier.navigationBarsPadding().imePadding()) {
+        if (picks.isNotEmpty()) MentionList(picks) { p ->
+            val (text, caret) = com.past9.phoneaos.remote.Mentions.insert(shown.text, shown.selection.start, p.name)
+            field = androidx.compose.ui.text.input.TextFieldValue(text, androidx.compose.ui.text.TextRange(caret))
+            onDraft(text)
+        }
         if (docs.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             docs.forEach { name ->
                 InputChip(selected = false, onClick = { actions.onRemoveDoc(name) }, label = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 180.dp)) },
@@ -1128,8 +1189,8 @@ private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean,
                     var camBounds by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
                     IconButton(onClick = { actions.onCamera(camBounds) }, modifier = Modifier.onGloballyPositioned { camBounds = it.boundsInRoot() }) { Icon(Icons.Rounded.PhotoCamera, "Take a photo", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                     Box(Modifier.weight(1f).padding(vertical = 16.dp)) {
-                        if (draft.isEmpty()) Text("Ask for anything", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        BasicTextField(draft, onDraft, textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                        if (draft.isEmpty()) Text(if (session != null) "Ask anything, or @ a project" else "Ask for anything", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        BasicTextField(shown, { v -> field = v; if (v.text != draft) onDraft(v.text); if (dismissedAt >= 0 && com.past9.phoneaos.remote.Mentions.atCaret(v.text, v.selection.start)?.first != dismissedAt) dismissedAt = -1 }, textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
                             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), maxLines = 6, modifier = Modifier.fillMaxWidth())
                     }
                     IconButton(onClick = actions.onMic) { Icon(if (listening) Icons.Rounded.Stop else Icons.Rounded.Mic, if (listening) "Stop listening" else "Speak", tint = if (listening) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) }

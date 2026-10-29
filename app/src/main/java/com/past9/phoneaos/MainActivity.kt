@@ -448,12 +448,16 @@ class MainActivity : ComponentActivity() {
                             onRemoveAttachment = { attachments.remove(it) }, onModel = { openModels() }, onCall = { startCall() }, callReady = settings.let { g.call.unavailableReason(remote != null) == null },onStopSpeaking = if (speakingNow) ({ g.stopSpeaking() }) else null,
                             onAnswer = { id, o -> g.runtime.answer(id, o) },
                             onReport = { path -> nav.navigate("report?path=" + Uri.encode(path)) },
+                            onOpenChat = { chat, name -> nav.navigate("pchat/" + Uri.encode(chat) + "?name=" + Uri.encode(name)) },
                             onMenu = { nav.popBackStack() }, onBrowser = { nav.navigate("browser") }, onProfile = { nav.navigate("profile") },
                             onMic = { toggleMic() },
                         ), openCount = tasks.count { it.status != "done" }, attachments = attachments, modelLabel = modelLabel, docs = docs.keys.toList(),
                         morning = if (!morningNow) null else (brief?.takeIf { it.ideas.isNotEmpty() }?.let { b ->
                             com.past9.phoneaos.ui.screens.MorningUi(b.greeting, b.line, b.body, b.ideas.map { it.icon to it.text }, preparingBrief, { com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity) })
                         } ?: com.past9.phoneaos.ui.screens.MorningUi(preparing = preparingBrief, onBackToChat = { com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity) })))
+                }
+                composable("pchat/{chat}?name={name}") { e ->
+                    com.past9.phoneaos.ui.screens.ProjectChatScreen(e.arguments?.getString("chat").orEmpty(), e.arguments?.getString("name").orEmpty(), onBack = { nav.popBackStack() })
                 }
                 composable("report?path={path}") { e ->
                     // A button in a report's cards asks the agent, like in the chat.

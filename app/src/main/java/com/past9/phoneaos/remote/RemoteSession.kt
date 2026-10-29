@@ -621,6 +621,44 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         }
     }
 
+    // ---- @-mentions (29 Oct 2026): the picker's projects, and a project's own chat ----------------------------------
+
+    private val mentionCache by lazy { MentionCache({ App.graph(app).settings.extra(it) }, { k, v -> App.graph(app).settings.setExtra(k, v) }) }
+    private val _mentions by lazy { MutableStateFlow(mentionCache.projects) }
+    /** The computer's projects for the '@' picker: the phone's copy at once, refreshed by [refreshMentions]. */
+    val mentions: StateFlow<List<MentionProject>> get() = _mentions
+    @Volatile private var mentionsAskedAt = 0L
+
+    /**
+     * The picker opened: show the kept list now and ask the computer whether it is still current, with the stamp the
+     * phone has (a few bytes back when it is). At most once every 20 s, so a picker opened and closed costs nothing.
+     */
+    fun refreshMentions() {
+        val now = System.currentTimeMillis()
+        if (now - mentionsAskedAt < 20_000) return
+        mentionsAskedAt = now
+        scope.launch {
+            runCatching { call("chat.mentions", listOf(mentionCache.stamp), 15_000) as? JSONObject }
+                .onSuccess { r -> val changed = mentionCache.take(r); _mentions.value = mentionCache.projects; android.util.Log.i("Mentions", "list ${if (changed) "changed" else "same"} (${mentionCache.projects.size} projects, metered=$metered)") }
+                .onFailure { mentionsAskedAt = 0L; android.util.Log.w("Mentions", "list not refreshed: ${it.message}") }
+        }
+    }
+
+    /** A project chat's newest messages, oldest first (data.where by chat: a few rows, never the whole chat table). */
+    suspend fun chatRows(chat: String, limit: Int = 40): List<JSONObject> {
+        val where = JSONObject().put("chat", chat).put("kinds", JSONArray(listOf("user", "agent", "notice"))).put("limit", limit).put("newestFirst", true)
+        val a = call("data.where", listOf("chat_item", where), 30_000) as? JSONArray ?: return emptyList()
+        return (0 until a.length()).mapNotNull { a.optJSONObject(it) }.filter { RemoteRows.chatOf(it) == chat }.sortedBy { it.optLong("createdAt") }
+    }
+
+    /** Whether a chat on the computer is at work now. */
+    suspend fun chatRunning(chat: String): Boolean = runCatching { (call("chat.state", listOf(chat), 15_000) as? JSONObject)?.optBoolean("running") == true }.getOrDefault(chat in running)
+
+    /** A message of his into one of the computer's chats (a project chat opened from a "Sent to" line). */
+    suspend fun sendTo(chat: String, text: String) {
+        call("chat.send", listOf(text.trim(), JSONArray(), chat), 60_000)
+    }
+
     // ---- the small way to sync (protocol v2) ------------------------------------------------------------------------
 
     private fun prefsJson(): JSONObject = JSONObject().put("v", 2).put("metered", metered).put("helpers", helpersOpen || !metered)
