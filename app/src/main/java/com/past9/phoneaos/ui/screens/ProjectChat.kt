@@ -44,21 +44,43 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit) {
     var problem by remember { mutableStateOf("") }
     var working by remember { mutableStateOf(false) }
     var draft by remember { mutableStateOf("") }
+    var more by remember { mutableStateOf(false) }
+    var loadingOlder by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val list = rememberLazyListState()
 
+    // Mobile-data rules: the newest PAGE messages, older ones a page at a time as he scrolls up (data.where before).
+    suspend fun page(s: RemoteSession, before: Long?): List<JSONObject> {
+        val a = s.call("data.where", listOf("chat_item", com.past9.phoneaos.remote.Mentions.pageWhere(chat, PAGE, before)), 30_000) as? org.json.JSONArray ?: return emptyList()
+        return (0 until a.length()).mapNotNull { a.optJSONObject(it) }.filter { RemoteRows.chatOf(it) == chat }
+    }
     suspend fun load(s: RemoteSession) {
-        runCatching { s.chatRows(chat) to s.chatRunning(chat) }
-            .onSuccess { (r, w) -> rows = r; working = w; problem = ""; loaded = true }
+        runCatching { page(s, null) to s.chatRunning(chat) }
+            .onSuccess { (r, w) -> if (!loaded) more = r.size >= PAGE; rows = com.past9.phoneaos.remote.Mentions.merge(rows, r); working = w; problem = ""; loaded = true }
             .onFailure { problem = "Couldn't read this chat from your computer: ${it.message}"; loaded = true }
     }
+    suspend fun loadOlder(s: RemoteSession) {
+        if (loadingOlder || !more) return
+        loadingOlder = true
+        val oldest = rows.minOfOrNull { it.optLong("createdAt") } ?: 0L
+        runCatching { page(s, oldest) }
+            .onSuccess { r -> more = r.size >= PAGE; rows = com.past9.phoneaos.remote.Mentions.merge(rows, r); android.util.Log.i("Mentions", "older page: ${r.size} rows") }
+            .onFailure { problem = "Couldn't load earlier messages: ${it.message}" }
+        loadingOlder = false
+    }
+    // Scrolled up to the top: the page above.
+    val atTop by remember { derivedStateOf { list.firstVisibleItemIndex == 0 && list.layoutInfo.totalItemsCount > 0 } }
+    var settled by remember { mutableStateOf(false) }
+    LaunchedEffect(atTop, more, session, settled) { if (atTop && more && loaded && settled) session?.let { loadOlder(it) } }
     LaunchedEffect(session, chat) {
         val s = session ?: return@LaunchedEffect
         load(s)
         // Follow it: a row of this chat changed, or its run started or ended. A burst of changes is read once.
         s.events.filter { (event, payload) -> concerns(event, payload, chat) }.collectLatest { delay(if (s.metered) 900 else 400); load(s) }
     }
-    LaunchedEffect(rows.size, rows.lastOrNull()?.optString("text")?.length) { if (rows.isNotEmpty()) list.animateScrollToItem(rows.size - 1) }
+    // Follow the newest message (not when a page above arrives).
+    val newestKey = rows.lastOrNull()?.let { it.optString("id") + it.optString("text").length }
+    LaunchedEffect(newestKey) { if (rows.isNotEmpty()) { list.scrollToItem(list.layoutInfo.totalItemsCount.coerceAtLeast(1) - 1); delay(300); settled = true } }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -98,6 +120,7 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit) {
         },
     ) { pad ->
         LazyColumn(state = list, modifier = Modifier.fillMaxSize().padding(pad), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (more) item(key = "older") { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { TextButton(onClick = { session?.let { s -> scope.launch { loadOlder(s) } } }, enabled = !loadingOlder) { Text(if (loadingOlder) "Loading..." else "Earlier messages") } } }
             if (problem.isNotEmpty()) item(key = "problem") { Text(problem, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
             if (!loaded) item(key = "loading") { Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { LoadingIndicator() } }
             else if (rows.isEmpty() && problem.isEmpty()) item(key = "empty") { Text("Nothing in this chat yet.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -122,6 +145,9 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit) {
         }
     }
 }
+
+/** Messages read at a time on the phone (mobile-data rules). */
+internal const val PAGE = 20
 
 /** Whether a link event is about this chat: one of its rows, or its run starting or ending. */
 internal fun concerns(event: String, payload: Any?, chat: String): Boolean {

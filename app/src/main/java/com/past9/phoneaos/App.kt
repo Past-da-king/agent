@@ -139,6 +139,8 @@ class App : Application(), coil.ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         CrashGuard.install(this)
+        // A project's answer to an @-mention is told in a notification while he is away (remote/Mentions.kt).
+        com.past9.phoneaos.remote.MentionReplies.start(this)
     }
 
     /** App logos from Composio are SVGs; teach the image loader to draw them. */

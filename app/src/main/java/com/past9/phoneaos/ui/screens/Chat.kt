@@ -342,7 +342,12 @@ fun ChatScreen(
                         "helper" -> HelperRow(r.item, items.filter { a -> a.kind == "activity" && JSONObject(a.meta).optLong("helper") == r.item.id })
                         "activity" -> if (JSONObject(r.item.meta).has("file")) FileCard(r.item) else ImageActivity(r.item)
                         else -> { val sent = com.past9.phoneaos.remote.Mentions.noticeOf(r.item.meta)
-                            if (sent != null) MentionSent(sent) { actions.onOpenChat(sent.chat, sent.name) } else Notice(r.item) }
+                            val answer = if (sent == null) com.past9.phoneaos.remote.Mentions.replyOf(r.item.meta) else null
+                            when {
+                                sent != null -> MentionSent(sent) { actions.onOpenChat(sent.chat, sent.name) }
+                                answer != null -> MentionReplyCard(r.item, answer) { actions.onOpenChat(answer.chat, answer.name) }
+                                else -> Notice(r.item)
+                            } }
                     }
                 }
             }
@@ -1092,10 +1097,65 @@ fun MentionSent(sent: com.past9.phoneaos.remote.MentionNotice, onOpen: () -> Uni
                 if (project != null) com.past9.phoneaos.ui.ProjectIconTile(project.name, project.glyph, project.color, project.image, 24.dp)
                 else Icon(Icons.Rounded.ChatBubble, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(8.dp))
-                Text(buildString { append("Sent to "); append(sent.name); if (sent.fresh) append(" in a new chat") }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                Text(buildString { append("Sent to "); append(sent.name); if (sent.fresh) append(" in a new chat"); if (sent.said.isNotBlank()) { append(": "); append(sent.said) } }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 240.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("Open chat", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             }
+        }
+    }
+}
+
+/**
+ * A project's answer to what he sent it with '@' (the computer copies it here when that chat has answered): the
+ * project's tile and colour, the answer, a way into the chat, and a reply that goes back to that same project chat
+ * (its answer comes back here as another card).
+ */
+@Composable
+fun MentionReplyCard(item: ChatItem, reply: com.past9.phoneaos.remote.MentionReply, onOpen: () -> Unit) {
+    val session = com.past9.phoneaos.remote.RemoteHub.session.collectAsStateWithLifecycle().value
+    val image = session?.mentions?.collectAsStateWithLifecycle()?.value?.firstOrNull { it.id == reply.project }?.image.orEmpty()
+    val accent = com.past9.phoneaos.ui.theme.accentOf(reply.color)
+    var replying by remember(item.id) { mutableStateOf(false) }
+    var draft by remember(item.id) { mutableStateOf("") }
+    var problem by remember(item.id) { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val long = item.text.length > 600
+    Surface(shape = RoundedCornerShape(24.dp), color = accent.lP.copy(alpha = 0.10f), border = androidx.compose.foundation.BorderStroke(1.dp, accent.lP.copy(alpha = 0.35f)), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                com.past9.phoneaos.ui.ProjectIconTile(reply.name, reply.glyph, reply.color, image, 28.dp)
+                Spacer(Modifier.width(10.dp))
+                Text(reply.name, style = MaterialTheme.typography.titleSmall, color = accent.lP, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                Spacer(Modifier.width(6.dp))
+                Text("replied", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Spacer(Modifier.height(8.dp))
+            Markdown(if (long) item.text.take(600).trimEnd() + "…" else item.text, style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilledTonalButton(onClick = onOpen, modifier = Modifier.heightIn(min = 44.dp)) { Text("Open ${reply.name} chat", maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                OutlinedButton(onClick = { replying = !replying }, modifier = Modifier.heightIn(min = 44.dp)) { Text("Reply") }
+            }
+            if (replying) {
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
+                        Box(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                            if (draft.isEmpty()) Text("Reply to ${reply.name}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            BasicTextField(draft, { draft = it }, textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface), cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), maxLines = 5, modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    FilledIconButton(onClick = {
+                        val s = session ?: return@FilledIconButton
+                        val text = draft.trim(); if (text.isEmpty()) return@FilledIconButton
+                        draft = ""; replying = false; problem = ""
+                        scope.launch { runCatching { s.call("chat.send", com.past9.phoneaos.remote.Mentions.replyArgs(reply.chat, text), 60_000) }.onFailure { problem = "Couldn't send that: ${it.message}"; draft = text; replying = true } }
+                    }, enabled = draft.isNotBlank() && session != null, modifier = Modifier.size(48.dp)) { Icon(Icons.AutoMirrored.Rounded.ArrowForward, "Send to ${reply.name}") }
+                }
+            }
+            if (problem.isNotEmpty()) Text(problem, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
         }
     }
 }

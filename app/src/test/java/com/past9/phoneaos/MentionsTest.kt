@@ -2,6 +2,10 @@ package com.past9.phoneaos
 
 import com.past9.phoneaos.remote.MentionCache
 import com.past9.phoneaos.remote.MentionProject
+import com.past9.phoneaos.remote.MentionReplies
+import com.past9.phoneaos.remote.RemoteIds
+import com.past9.phoneaos.remote.RemoteRows
+import com.past9.phoneaos.remote.Sender
 import com.past9.phoneaos.remote.Mentions
 import com.past9.phoneaos.remote.RemoteSession
 import com.past9.phoneaos.ui.screens.concerns
@@ -94,5 +98,57 @@ class MentionsTest {
         assertTrue(concerns(RemoteSession.EVT_CHAT, JSONObject().put("chat", "pc1").put("type", "run_finished"), "pc1"))
         assertFalse(concerns(RemoteSession.EVT_CHAT, JSONObject().put("chat", "pc2").put("type", "run_finished"), "pc1"))
         assertFalse(concerns("other", JSONArray(), "pc1"))
+    }
+
+    private fun replyRow(id: String, text: String, at: Long) = JSONObject().put("id", id).put("kind", "notice").put("text", text).put("createdAt", at)
+        .put("meta", JSONObject().put("mentionReply", JSONObject().put("project", "a").put("name", "Acme").put("chat", "pc1").put("glyph", "bolt").put("color", "teal")).toString())
+
+    @Test
+    fun aProjectsAnswerIsACardAndToldOnce() {
+        val now = 1_800_000_000_000L
+        val r = Mentions.replyOf(replyRow("x", "Fixed 3 follow-ups.", now).optString("meta"))!!
+        assertEquals("Acme", r.name); assertEquals("pc1", r.chat); assertEquals("teal", r.color)
+        assertNull(Mentions.replyOf("{}"))
+        val change = JSONObject().put("entity", "chat_item").put("row", replyRow("r-told-1", "Fixed 3 follow-ups.", now))
+        assertEquals("Acme" to "Fixed 3 follow-ups.", MentionReplies.toTell(change, now))
+        assertNull("the same answer is told once", MentionReplies.toTell(change, now + 1000))
+        assertNull("an old answer a fresh read brings back is not told", MentionReplies.toTell(JSONObject().put("entity", "chat_item").put("row", replyRow("r-old", "old", now - 3_600_000)), now))
+        assertNull("a plain notice is not an answer", MentionReplies.toTell(JSONObject().put("entity", "chat_item").put("row", JSONObject().put("id", "n1").put("kind", "notice").put("text", "hi").put("meta", "{}")), now))
+        assertNull("a deletion is not an answer", MentionReplies.toTell(JSONObject().put("entity", "chat_item").put("deleted", true).put("id", "r2"), now))
+    }
+
+    @Test
+    fun aReplyOnTheCardGoesToTheSameProjectChat() {
+        val args = Mentions.replyArgs("pc1", "  yes, send them ")
+        assertEquals("yes, send them", args[0]); assertEquals("pc1", args[2])
+        assertEquals("main", (args[3] as JSONObject).optString("replyIn"))
+    }
+
+    @Test
+    fun aProjectChatIsRead20AtATime() {
+        val first = Mentions.pageWhere("pc1", 20)
+        assertEquals(20, first.optInt("limit")); assertTrue(first.optBoolean("newestFirst")); assertFalse(first.has("before")); assertEquals("pc1", first.optString("chat"))
+        assertEquals(123L, Mentions.pageWhere("pc1", 20, 123L).optLong("before"))
+        val a = (1..3).map { JSONObject().put("id", "m$it").put("createdAt", it * 10L).put("text", "v1") }
+        val newer = listOf(JSONObject().put("id", "m3").put("createdAt", 30L).put("text", "v2"), JSONObject().put("id", "m4").put("createdAt", 40L).put("text", "v1"))
+        val older = listOf(JSONObject().put("id", "m0").put("createdAt", 0L).put("text", "v1"))
+        val merged = Mentions.merge(Mentions.merge(a, newer), older)
+        assertEquals(listOf("m0", "m1", "m2", "m3", "m4"), merged.map { it.optString("id") })
+        assertEquals("v2", merged.first { it.optString("id") == "m3" }.optString("text"))
+    }
+
+    @Test
+    fun aProjectWritingToTheMainChatReadsCleanly() {
+        // message_main on the computer: the row's text is the message itself, meta.via says which project and chat.
+        val row = JSONObject().put("id", "pm1").put("kind", "user").put("text", "The follow-ups are drafted, 4 wait for a yes.").put("createdAt", 1_800_000_000_000L)
+            .put("meta", JSONObject().put("via", JSONObject().put("from", "project").put("name", "Acme").put("chat", "pc1").put("title", "Follow-ups")).toString())
+        val item = RemoteRows.chat(row, RemoteIds())
+        assertEquals("The follow-ups are drafted, 4 wait for a yes.", item.text)
+        assertFalse(item.text.contains("[From"))
+        assertEquals("From Acme · Follow-ups", Sender.of(item.meta)?.line)
+        assertFalse(Sender.isHis(item.kind, item.meta))
+        // "Sent to" keeps what he sent for the line
+        val sent = Mentions.noticeOf(JSONObject().put("mention", JSONObject().put("project", "a").put("name", "Acme").put("chat", "pc1").put("said", "fix the follow-ups")).toString())!!
+        assertEquals("fix the follow-ups", sent.said)
     }
 }

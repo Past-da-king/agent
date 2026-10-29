@@ -1,5 +1,7 @@
 package com.past9.phoneaos.remote
 
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -12,7 +14,10 @@ import org.json.JSONObject
 data class MentionProject(val id: String, val name: String, val aliases: List<String>, val glyph: String, val color: String, val image: String, val railAt: Long)
 
 /** What the chat a mention was typed in shows: "Sent to X", which opens that project's chat. */
-data class MentionNotice(val project: String, val name: String, val chat: String, val fresh: Boolean)
+data class MentionNotice(val project: String, val name: String, val chat: String, val fresh: Boolean, val said: String = "")
+
+/** A project's answer to what he sent it, as the main chat shows it: a card in the project's colour (meta.mentionReply). */
+data class MentionReply(val project: String, val name: String, val chat: String, val glyph: String, val color: String)
 
 object Mentions {
     fun projectsOf(a: JSONArray?): List<MentionProject> {
@@ -33,7 +38,28 @@ object Mentions {
         val m = runCatching { JSONObject(meta.ifBlank { "{}" }).optJSONObject("mention") }.getOrNull() ?: return null
         val chat = m.optString("chat"); val name = m.optString("name")
         if (chat.isBlank() || !m.has("name")) return null
-        return MentionNotice(m.optString("project"), name, chat, m.optBoolean("fresh"))
+        return MentionNotice(m.optString("project"), name, chat, m.optBoolean("fresh"), m.optString("said"))
+    }
+
+    fun replyOf(meta: String): MentionReply? {
+        val m = runCatching { JSONObject(meta.ifBlank { "{}" }).optJSONObject("mentionReply") }.getOrNull() ?: return null
+        val chat = m.optString("chat")
+        if (chat.isBlank() || !m.has("name")) return null
+        return MentionReply(m.optString("project"), m.optString("name"), chat, m.optString("glyph"), m.optString("color").ifBlank { "iris" })
+    }
+
+    /** The send that answers on a project's card: into that same project chat, its answer back to the main chat. */
+    fun replyArgs(chat: String, text: String): List<Any?> = listOf(text.trim(), JSONArray(), chat, JSONObject().put("replyIn", "main"))
+
+    /** A page of a project chat, newest first: the newest [limit], or those before [before] (ms) for the page above. */
+    fun pageWhere(chat: String, limit: Int, before: Long? = null): JSONObject =
+        JSONObject().put("chat", chat).put("kinds", JSONArray(listOf("user", "agent", "notice"))).put("limit", limit).put("newestFirst", true).apply { if (before != null && before > 0) put("before", before) }
+
+    /** Rows by id, oldest first: a newer read replaces the copy it had, a page above adds to it. */
+    fun merge(have: List<JSONObject>, more: List<JSONObject>): List<JSONObject> {
+        val byId = LinkedHashMap<String, JSONObject>()
+        (have + more).forEach { byId[it.optString("id")] = it }
+        return byId.values.sortedWith(compareBy<JSONObject> { it.optLong("createdAt") }.thenBy { it.optString("id") })
     }
 
     private fun words(t: String) = t.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
@@ -113,5 +139,54 @@ class MentionCache(private val read: (String) -> String?, private val write: (St
     companion object {
         const val KEY_LIST = "mentions_list"
         const val KEY_STAMP = "mentions_stamp"
+    }
+}
+
+/**
+ * A project's answer lands while he is away from the app: a notification with the project's name and the answer
+ * (29 Oct 2026). Rows come over the link as data changes; each answer is told once (ids kept), and an old one a
+ * fresh read brings back is not told again.
+ */
+object MentionReplies {
+    private val told = java.util.Collections.synchronizedSet(LinkedHashSet<String>())
+    @Volatile private var started = 0
+    @Volatile private var visible = 0
+
+    /** Whether this data change is a project's answer that should be told, and what to say: (title, body). */
+    fun toTell(payload: JSONObject, now: Long = System.currentTimeMillis()): Pair<String, String>? {
+        if (payload.optBoolean("deleted") || payload.optString("entity") != "chat_item") return null
+        val row = payload.optJSONObject("row") ?: return null
+        val id = row.optString("id")
+        if (id.isBlank() || RemoteRows.chatOf(row) != "main") return null
+        val reply = Mentions.replyOf(row.optString("meta")) ?: return null
+        val at = row.optLong("createdAt")
+        if (at > 0 && now - at > 10 * 60_000) return null
+        if (!told.add(id)) return null
+        while (told.size > 200) told.remove(told.first())
+        return reply.name to row.optString("text").trim()
+    }
+
+    fun start(app: android.app.Application) {
+        if (started++ > 0) return
+        app.registerActivityLifecycleCallbacks(object : android.app.Application.ActivityLifecycleCallbacks {
+            override fun onActivityStarted(a: android.app.Activity) { visible++ }
+            override fun onActivityStopped(a: android.app.Activity) { visible = maxOf(0, visible - 1) }
+            override fun onActivityCreated(a: android.app.Activity, b: android.os.Bundle?) {}
+            override fun onActivityResumed(a: android.app.Activity) {}
+            override fun onActivityPaused(a: android.app.Activity) {}
+            override fun onActivitySaveInstanceState(a: android.app.Activity, b: android.os.Bundle) {}
+            override fun onActivityDestroyed(a: android.app.Activity) {}
+        })
+        val g = com.past9.phoneaos.App.graph(app)
+        g.scope.launch {
+            RemoteHub.session.collectLatest { s ->
+                s?.events?.collect { (event, payload) ->
+                    if (event != RemoteSession.EVT_DATA) return@collect
+                    val tell = (payload as? JSONObject)?.let { toTell(it) } ?: return@collect
+                    android.util.Log.i("Mentions", "answer from ${tell.first} (${tell.second.length} chars), app visible=${visible > 0}")
+                    if (visible == 0) runCatching { g.phone.notify(tell.first, tell.second) }
+                }
+            }
+        }
     }
 }
