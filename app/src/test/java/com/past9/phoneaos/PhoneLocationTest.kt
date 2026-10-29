@@ -112,6 +112,11 @@ class PhoneLocationTest {
         // The wake-up foreground service keeps the process at 125: that is not on screen.
         assertEquals(false, PhoneLocation.onScreenImportance(android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE))
         assertEquals(true, PhoneLocation.onScreenImportance(android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND))
+        // Nothing shown (answered in 40 ms) and still while-in-use: open settings. He saw it and kept while-in-use: leave it.
+        assertEquals(true, PhoneLocation.settingsInstead(40, false))
+        assertEquals(false, PhoneLocation.settingsInstead(9_000, false))
+        assertEquals(false, PhoneLocation.settingsInstead(40, true))
+        assertEquals("location_bg_asked_v2", PhoneLocation.BG_ASKED_KEY)
     }
 
     @Test

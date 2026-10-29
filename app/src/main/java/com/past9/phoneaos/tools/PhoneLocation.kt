@@ -51,7 +51,8 @@ object PhoneLocation {
     /** Background: an agent asks while the phone is locked in his pocket, and Android gives a backgrounded app no
      *  location at all (not even the last known one) without "Allow all the time". Asked once, after the first yes. */
     const val BACKGROUND = Manifest.permission.ACCESS_BACKGROUND_LOCATION
-    const val BG_ASKED_KEY = "location_bg_asked"
+    /** v2: 0.15.8 marked it asked although Android showed nothing (its permission flag already said yes). */
+    const val BG_ASKED_KEY = "location_bg_asked_v2"
 
     /** On screen (the app is open and visible): Android's "while using the app" covers it. */
     fun onScreen(): Boolean = runCatching {
@@ -74,6 +75,8 @@ object PhoneLocation {
     }
 
     fun backgroundFrom(opMode: Int?, permGranted: Boolean): Boolean = if (opMode == null) permGranted else opMode == android.app.AppOpsManager.MODE_ALLOWED
+
+    fun settingsInstead(askMs: Long, background: Boolean) = !background && askMs < 1_500
 
     /** Android's own page for this app, where Location > Allow all the time is one tap. */
     fun openAppSettings(context: Context) = runCatching {
@@ -185,10 +188,14 @@ class PhoneLocationTool(private val context: Context, private val askMs: Long = 
         if (!PhoneLocation.hasBackground(context) && settings?.extra(PhoneLocation.BG_ASKED_KEY) != "1" && PhoneLocation.onScreen()) {
             settings?.setExtra(PhoneLocation.BG_ASKED_KEY, "1")
             android.util.Log.i("PhoneLocation", "asking for all-the-time location")
+            val t0 = SystemClock.elapsedRealtime()
             withTimeoutOrNull(30_000) { PermissionBroker.request(context, arrayOf(PhoneLocation.BACKGROUND)) { PhoneLocation.askNote(context, "", background = true) } }
             NotificationManagerCompat.from(context).cancel(PhoneLocation.NOTE_ID)
-            // Android said yes without showing anything, yet the app-op is still while-in-use: open the app's settings page.
-            if (!PhoneLocation.hasBackground(context)) { android.util.Log.i("PhoneLocation", "opening app settings for all-the-time"); PhoneLocation.openAppSettings(context) }
+            // Android answered at once without showing anything (its flag already said yes) while the app-op is still
+            // while-in-use: open the app's own settings page instead. If he saw the dialog and kept "while in use", leave it.
+            if (PhoneLocation.settingsInstead(SystemClock.elapsedRealtime() - t0, PhoneLocation.hasBackground(context))) {
+                android.util.Log.i("PhoneLocation", "opening app settings for all-the-time"); PhoneLocation.openAppSettings(context)
+            }
         }
         android.util.Log.i("PhoneLocation", "background=${PhoneLocation.hasBackground(context)} onScreen=${PhoneLocation.onScreen()}")
         if (!PhoneLocation.hasBackground(context) && !PhoneLocation.onScreen())
