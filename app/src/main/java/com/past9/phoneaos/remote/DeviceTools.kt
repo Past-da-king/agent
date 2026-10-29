@@ -191,7 +191,12 @@ class DeviceCommands(private val context: Context, private val session: RemoteSe
     private suspend fun act(c: JSONObject): Pair<Boolean, String> = when (c.optString("kind")) {
         "open_url" -> {
             val url = c.optString("url")
-            if (url.startsWith("/v1/")) receive(c.put("path", url), open = true)
+            val app = com.past9.phoneaos.miniapps.MiniAppRules.idFromLink(url)
+            if (app != null) {
+                // The computer's miniapp_open: bring the app up with that mini-app open.
+                com.past9.phoneaos.miniapps.MiniAppsHub.pendingOpen.value = app
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage(context.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)); true to "opened"
+            } else if (url.startsWith("/v1/")) receive(c.put("path", url), open = true)
             else if (url.startsWith("https://") || url.startsWith("http://")) {
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true to "opened"
             } else false to "Not a web address."

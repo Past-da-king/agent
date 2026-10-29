@@ -1,5 +1,7 @@
 package com.past9.phoneaos
 
+import androidx.compose.material.icons.rounded.Apps
+
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
@@ -111,6 +113,8 @@ class MainActivity : ComponentActivity() {
         i.getStringExtra("miniapp")?.let { com.past9.phoneaos.miniapps.MiniAppsHub.pendingOpen.value = it }
         // A link code (agent://pair?...) from the phone's own camera app, a shared QR, or adb.
         i.data?.takeIf { it.scheme == "agent" && it.host == "pair" }?.let { com.past9.phoneaos.remote.RemoteHub.pendingOffer.value = it.toString(); return }
+        // A mini-app card in the chat, or the computer opening one here (miniapp_open): agent://miniapp/<id>.
+        com.past9.phoneaos.miniapps.MiniAppRules.idFromLink(i.data?.toString())?.let { com.past9.phoneaos.miniapps.MiniAppsHub.pendingOpen.value = it; return }
         // adb hook for checking how notifications look: am start -n <pkg>/.MainActivity --es open testnotify
         // adb hook for checking sites in the agent's browser: am start -n <pkg>/.MainActivity --es open browser --es url https://...
         i.getStringExtra("url")?.takeIf { i.getStringExtra("open") == "browser" }?.let { u ->
@@ -182,16 +186,24 @@ class MainActivity : ComponentActivity() {
         val route = backEntry?.destination?.route ?: "home"
         val scope = rememberCoroutineScope()
         val ops = remember(remote) { com.past9.phoneaos.remote.DataOps(applicationContext, remote, g.scope) }
-        var draft by rememberSaveable { mutableStateOf("") }
-        val attachments = remember { mutableStateListOf<String>() }
+        val draftState = rememberSaveable { mutableStateOf("") }
+        var draft by draftState
+        // The main chat's message box; a project or helper chat has its own (ui/Composer.kt). The pickers below fill
+        // the box that asked ([boxFor]), so a photo picked in a project chat goes with that chat's message.
+        val mainBox = remember { com.past9.phoneaos.ui.ComposerBox(draftState) }
+        var boxFor by remember { mutableStateOf<com.past9.phoneaos.ui.ComposerBox?>(null) }
+        val attachments = mainBox.attachments
         /** Where the camera button is, while the in-place camera card is open (it grows out of there). */
         var cameraOrigin by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+        /** Where the camera's shot goes: the chat whose camera button opened it (null: the main chat). */
+        var cameraSend by remember { mutableStateOf<((String, String) -> Unit)?>(null) }
         // Documents attached in chat: name -> (extracted text, page images)
-        val docs = remember { mutableStateMapOf<String, Pair<String, List<String>>>() }
-        val docPaths = remember { mutableStateMapOf<String, String>() }
+        val docs = mainBox.docs
+        val docPaths = mainBox.docPaths
         val docPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
             val reader = com.past9.phoneaos.tools.FilesPickTool(this@MainActivity)
-            scope.launch { uris.forEach { u -> val name = reader.displayName(u); reader.keepCopy(u, name)?.let { docPaths[name] = it.path }; docs[name] = reader.readDocument(u) } }
+            val box = boxFor ?: mainBox
+            scope.launch { uris.forEach { u -> val name = reader.displayName(u); reader.keepCopy(u, name)?.let { box.docPaths[name] = it.path }; box.docs[name] = reader.readDocument(u) } }
         }
         var modelSheet by remember { mutableStateOf(false) }
         /** The picker is choosing the helpers' model rather than the main agent's. */
@@ -216,7 +228,8 @@ class MainActivity : ComponentActivity() {
         val modelLabel = if (remote != null) ""
             else if (onSub) prettyModel(settings.subModel) else settings.model.substringAfterLast('/')
         val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(4)) { uris ->
-            scope.launch { uris.forEach { u -> importImage(u)?.let { attachments += it } } }
+            val box = boxFor ?: mainBox
+            scope.launch { uris.forEach { u -> importImage(u)?.let { box.attachments += it } } }
         }
         var conn by remember { mutableStateOf(ConnectionsState(hasKey = settings.composioEnabled)) }
         // Linked to a computer: an app being added, waiting for which of the computer's profiles it goes into.
@@ -296,33 +309,46 @@ class MainActivity : ComponentActivity() {
         // transcription stream instead (with a Gemini key), and the person is told so.
         var dictation by remember { mutableStateOf<com.past9.phoneaos.voice.Dictating?>(null) }
         var dictating by remember { mutableStateOf(false) }
+        /** The message box the mic is writing into. */
+        var dictBox by remember { mutableStateOf<com.past9.phoneaos.ui.ComposerBox?>(null) }
         DisposableEffect(Unit) { onDispose { dictation?.cancel() } }
-        fun say(text: String) = android.widget.Toast.makeText(this@MainActivity, text, android.widget.Toast.LENGTH_LONG).show()
+        fun say(text: String) = com.past9.phoneaos.ui.AppNotice.say(text)
         fun online(): Boolean = runCatching {
             val cm = getSystemService(android.net.ConnectivityManager::class.java)
             cm.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
         }.getOrDefault(false)
         fun startDictation() {
-            val base = draft
+            val box = dictBox ?: mainBox
+            val base = box.draft
             fun join(t: String) = if (t.isBlank()) base else if (base.isBlank()) t else base.trimEnd() + " " + t
             val done: (String?) -> Unit = { err -> runOnUiThread { dictating = false; dictation = null; if (err != null) say(err) } }
             if (com.past9.phoneaos.voice.SystemDictation.available(this@MainActivity)) {
-                val d = com.past9.phoneaos.voice.SystemDictation(this@MainActivity, onText = { t -> runOnUiThread { draft = join(t) } }, onEnd = done)
+                val d = com.past9.phoneaos.voice.SystemDictation(this@MainActivity, onText = { t -> runOnUiThread { box.draft = join(t) } }, onEnd = done)
                 dictation = d; dictating = true; d.start(); return
             }
             val key = g.settings.voiceKey("gemini")
             if (key == null || !online()) { say("This phone has no speech recogniser, so the mic can't listen. Install Google's Speech Services, or add a Gemini key in Settings, Voice."); return }
             say("This phone has no speech recogniser, so your words go to Gemini to be written down.")
             val vocab = listOf(settings.agentName, settings.userName).filter { it.isNotBlank() && it != "Your agent" }
-            val d = com.past9.phoneaos.voice.Dictation(key, vocab, onText = { t -> runOnUiThread { draft = join(t) } }, onEnd = done)
+            val d = com.past9.phoneaos.voice.Dictation(key, vocab, onText = { t -> runOnUiThread { box.draft = join(t) } }, onEnd = done)
             dictation = d; dictating = true; d.start()
         }
         val dictPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) startDictation() else say("The mic needs the microphone permission.") }
-        fun toggleMic() {
+        fun toggleMic(box: com.past9.phoneaos.ui.ComposerBox = mainBox) {
             val d = dictation
             if (d != null) { d.finish(); return }
+            dictBox = box
             if (androidx.core.content.ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) startDictation()
             else dictPerm.launch(Manifest.permission.RECORD_AUDIO)
+        }
+        val composerTools = remember {
+            object : com.past9.phoneaos.ui.ComposerTools {
+                override fun pickPhotos(box: com.past9.phoneaos.ui.ComposerBox) { boxFor = box; picker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+                override fun pickDocs(box: com.past9.phoneaos.ui.ComposerBox) { boxFor = box; docPicker.launch(arrayOf("*/*")) }
+                override fun camera(box: com.past9.phoneaos.ui.ComposerBox, origin: androidx.compose.ui.geometry.Rect, send: (String, String) -> Unit) { boxFor = box; cameraSend = if (box === mainBox) null else send; cameraOrigin = origin }
+                override fun mic(box: com.past9.phoneaos.ui.ComposerBox) = toggleMic(box)
+                override fun listening(box: com.past9.phoneaos.ui.ComposerBox): Boolean = dictating && (dictBox ?: mainBox) === box
+            }
         }
         fun refreshConnections() = scope.launch {
             // Linked to a computer: its connected apps are the phone's apps. Read when this screen opens, small, and no key is asked for.
@@ -331,6 +357,9 @@ class MainActivity : ComponentActivity() {
                 conn = conn.copy(remote = true, hasKey = true, loading = true, error = null, notificationsAllowed = notificationsAllowed())
                 try { val (c, t) = linked.connectedApps(); conn = conn.copy(connected = c, toolkits = t, loading = false) }
                 catch (e: Exception) { conn = conn.copy(loading = false, error = "Couldn't read the apps from your computer: ${e.message}") }
+                // His machines and the computer's learned apps: small lists, read when the screen opens.
+                runCatching { linked.meshDevices() }.onSuccess { conn = conn.copy(devices = it) }
+                runCatching { linked.learnedApps() }.onSuccess { conn = conn.copy(learned = it) }
                 return@launch
             }
             val has = g.settings.composioKey() != null
@@ -380,15 +409,12 @@ class MainActivity : ComponentActivity() {
         // Linked: no bar at all while something answers (failover is silent); a bar only when nothing can.
         remote?.let { com.past9.phoneaos.remote.RemoteTroubleBar(it, onDevices = { nav.navigate("linked") { launchSingleTop = true } }) }
         callWhy?.let { why ->
-            androidx.compose.material3.AlertDialog(onDismissRequest = { callWhy = null },
-                icon = { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.Call, null) },
-                title = { androidx.compose.material3.Text("Calls need a Google key") },
-                text = { androidx.compose.material3.Text(why) },
-                confirmButton = { androidx.compose.material3.TextButton(onClick = { callWhy = null; nav.navigate("settings") { launchSingleTop = true } }) { androidx.compose.material3.Text("Open Settings") } },
-                dismissButton = { androidx.compose.material3.TextButton(onClick = { callWhy = null }) { androidx.compose.material3.Text("Not now") } })
+            com.past9.phoneaos.ui.ConfirmSheet(androidx.compose.material.icons.Icons.Rounded.Call, "Calls", "Calls need a Google key", why,
+                confirm = "Open Settings", onConfirm = { callWhy = null; nav.navigate("settings") { launchSingleTop = true } }, onDismiss = { callWhy = null })
         }
         androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxWidth().weight(1f)
             .then(if (linkState?.let { com.past9.phoneaos.remote.RemoteTrouble.shows(it) } == true) androidx.compose.ui.Modifier.consumeWindowInsets(WindowInsets.statusBars) else androidx.compose.ui.Modifier)) {
+            androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.LocalComposerTools provides composerTools) {
             NavHost(nav, startDestination = "home") {
                 composable("home") {
                     androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.surface) {
@@ -429,7 +455,7 @@ class MainActivity : ComponentActivity() {
                 }
                 composable("chat") {
                     ChatScreen(items, status, settings.agentName, settings.userName, browserLive, draft, { draft = it },
-                        listening = dictating, live = liveUi,
+                        listening = composerTools.listening(mainBox), live = liveUi,
                         readMark = { g.settings.extra("chatRead")?.toLongOrNull() ?: Long.MAX_VALUE },
                         onRead = { id -> if (id > (g.settings.extra("chatRead")?.toLongOrNull() ?: 0L)) g.settings.setExtra("chatRead", id.toString()) },
                         actions = ChatActions(
@@ -443,14 +469,14 @@ class MainActivity : ComponentActivity() {
                                 val docText = docs.entries.joinToString("") { (n, d) -> "\n\n[Attached document: $n${docPaths[n]?.let { p -> ", file saved at $p (you can upload it with browser_upload)" }.orEmpty()}]\n${d.first.take(30_000)}" }
                                 g.runtime.send(it + docText, attachments.toList() + docs.values.flatMap { d -> d.second }.take(6), docs.keys.toList(), voiceReply = true)
                                 attachments.clear(); docs.clear() }, onStop = { g.runtime.stop() },
-                            onAttachDoc = { docPicker.launch(arrayOf("*/*")) }, onCamera = { cameraOrigin = it }, onRemoveDoc = { docs.remove(it) },
-                            onAttach = { picker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                            onAttachDoc = { composerTools.pickDocs(mainBox) }, onCamera = { composerTools.camera(mainBox, it) { _, _ -> } }, onRemoveDoc = { docs.remove(it); docPaths.remove(it) },
+                            onAttach = { composerTools.pickPhotos(mainBox) },
                             onRemoveAttachment = { attachments.remove(it) }, onModel = { openModels() }, onCall = { startCall() }, callReady = settings.let { g.call.unavailableReason(remote != null) == null },onStopSpeaking = if (speakingNow) ({ g.stopSpeaking() }) else null,
                             onAnswer = { id, o -> g.runtime.answer(id, o) },
                             onReport = { path -> nav.navigate("report?path=" + Uri.encode(path)) },
                             onOpenChat = { chat, name -> nav.navigate("pchat/" + Uri.encode(chat) + "?name=" + Uri.encode(name)) },
                             onMenu = { nav.popBackStack() }, onBrowser = { nav.navigate("browser") }, onProfile = { nav.navigate("profile") },
-                            onMic = { toggleMic() },
+                            onMic = { toggleMic(mainBox) },
                         ), openCount = tasks.count { it.status != "done" }, attachments = attachments, modelLabel = modelLabel, docs = docs.keys.toList(),
                         morning = if (!morningNow) null else (brief?.takeIf { it.ideas.isNotEmpty() }?.let { b ->
                             com.past9.phoneaos.ui.screens.MorningUi(b.greeting, b.line, b.body, b.ideas.map { it.icon to it.text }, preparingBrief, { com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity) })
@@ -526,20 +552,20 @@ class MainActivity : ComponentActivity() {
                     val lifeState = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsStateWithLifecycle().value
                     LaunchedEffect(lifeState) { if (lifeState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) refreshConnections() }
                     pendingRemote?.let { (slug, profs) ->
-                        androidx.compose.material3.AlertDialog(onDismissRequest = { pendingRemote = null },
-                            title = { androidx.compose.material3.Text("Which profile is it for?") },
-                            text = { androidx.compose.foundation.layout.Column {
-                                profs.forEach { (id, name) -> androidx.compose.material3.TextButton(onClick = { pendingRemote = null; com.past9.phoneaos.remote.RemoteHub.session.value?.let { rs -> scope.launch { runCatching { rs.connectApp(slug, id) }.onSuccess { open(it) }.onFailure { conn = conn.copy(error = "Couldn't start the sign-in on your computer: ${it.message}") } } } }) { androidx.compose.material3.Text(name) } }
-                                androidx.compose.material3.TextButton(onClick = { pendingRemote = null; com.past9.phoneaos.remote.RemoteHub.session.value?.let { rs -> scope.launch { runCatching { rs.connectApp(slug, "") }.onSuccess { open(it) }.onFailure { conn = conn.copy(error = "Couldn't start the sign-in on your computer: ${it.message}") } } } }) { androidx.compose.material3.Text("No profile") }
-                            } },
-                            confirmButton = {})
+                        // One slide-up sheet of the computer's profiles. 'No profile' IS General (an account in no profile is
+                        // in General), so it is offered once, as General.
+                        com.past9.phoneaos.ui.ChoiceSheet(androidx.compose.material.icons.Icons.Rounded.Apps, com.past9.phoneaos.tools.AppCatalog.name(slug), "Which profile is it for?",
+                            com.past9.phoneaos.ui.screens.profileChoices(profs),
+                            onPick = { c -> pendingRemote = null; com.past9.phoneaos.remote.RemoteHub.session.value?.let { rs -> scope.launch { runCatching { rs.connectApp(slug, c.id) }.onSuccess { open(it) }.onFailure { conn = conn.copy(error = "Couldn't start the sign-in on your computer: ${it.message}") } } } },
+                            onDismiss = { pendingRemote = null }, line = "Its account goes into that part of your life. You can change it later.")
                     }
                     val machines by g.runtime.machines.store.machines.collectAsStateWithLifecycle()
                     val learnedApps by g.runtime.learned.apps.collectAsStateWithLifecycle()
                     // Re-read on every return to this screen: the user may have just switched All files access on.
                     val resumed = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsStateWithLifecycle().value
                     val phoneFiles = remember(resumed) { com.past9.phoneaos.tools.phoneFilesAllowed() }
-                    ConnectionsScreen(conn.copy(machines = machines, phoneFiles = phoneFiles, profiles = profileList, rules = accountRules, browserProfiles = settings.browserProfiles, learned = learnedApps), bottomPadding = barPad + 24.dp, actions = ConnectionsActions(
+                    ConnectionsScreen(conn.copy(machines = machines, phoneFiles = phoneFiles, profiles = profileList, rules = accountRules, browserProfiles = settings.browserProfiles, learned = if (conn.remote) conn.learned else learnedApps, miniApps = miniApps), bottomPadding = barPad + 24.dp, actions = ConnectionsActions(
+                        onMiniApps = { nav.navigate("miniapps") { launchSingleTop = true } }, onLinkedDevices = { nav.navigate("linked") { launchSingleTop = true } },
                         profile = profileActions,
                         onTrustLearned = { id, on -> g.runtime.learned.setTrusted(id, on) },
                         onRemoveLearned = { id -> g.runtime.learned.remove(id) },
@@ -698,6 +724,7 @@ class MainActivity : ComponentActivity() {
                     ))
                 }
             }
+            }
             justConnected?.let { a ->
                 com.past9.phoneaos.ui.screens.AddToProfileSheet(a, conn.toolkits.firstOrNull { it.slug == a.slug }?.logo ?: com.past9.phoneaos.tools.AppCatalog.logo(a.slug),
                     accountRules[a.id] ?: com.past9.phoneaos.data.AccountRules.DEFAULT, profileList, profileActions) { justConnected = null }
@@ -729,14 +756,18 @@ class MainActivity : ComponentActivity() {
                     modelSheet = false
                 }, onDismiss = { modelSheet = false },
                 subtitle = if (pickingHelper) "Your agent plans and hands the work to helpers. Pick what they run on." else null)
-            LaunchedEffect(route) { if (route != "chat") cameraOrigin = null }
+            LaunchedEffect(route) { if (route != "chat" && !route.startsWith("pchat")) { cameraOrigin = null; cameraSend = null } }
             cameraOrigin?.let { o ->
                 com.past9.phoneaos.camera.CameraCard(o, onClosed = { cameraOrigin = null },
                     onSend = { path, caption ->
-                        g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity)
-                        g.runtime.send(caption, listOf(path), emptyList())
+                        // The shot goes to the chat whose camera button opened it.
+                        val to = cameraSend
+                        if (to != null) to(path, caption) else {
+                            g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity)
+                            g.runtime.send(caption, listOf(path), emptyList())
+                        }
                     },
-                    onGallery = { cameraOrigin = null; picker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
+                    onGallery = { cameraOrigin = null; composerTools.pickPhotos(boxFor ?: mainBox) })
             }
             androidx.compose.animation.AnimatedVisibility(route in barRoutes, modifier = androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
                 enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut()) {

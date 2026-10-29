@@ -54,6 +54,10 @@ data class ConnectionsState(
     val learned: List<com.past9.phoneaos.connections.LearnedApp> = emptyList(),
     /** Linked to a computer: the apps below are the computer's, read from it; no key is asked for here. */
     val remote: Boolean = false,
+    /** Linked: his computers, servers and phones on the link, with their state (devices.list on the computer). */
+    val devices: List<com.past9.phoneaos.remote.MeshDevice> = emptyList(),
+    /** His mini-apps (made on the computer), for the Apps line. */
+    val miniApps: List<com.past9.phoneaos.miniapps.MiniAppInfo> = emptyList(),
 )
 
 data class ConnectionsActions(
@@ -81,7 +85,28 @@ data class ConnectionsActions(
     val onTeach: (String) -> Unit = {},
     /** Linked to a computer: the Add panel opened, so read the apps it can connect. */
     val onLoadCatalog: () -> Unit = {},
+    /** His mini-apps: the Apps page (open, pin, unpin). */
+    val onMiniApps: () -> Unit = {},
+    /** Linked devices: order, roles, add another (Settings > Linked devices). */
+    val onLinkedDevices: () -> Unit = {},
 )
+
+/**
+ * One row per account (29 Oct 2026: Fathom showed three times). The same connection id is one account, and accounts of
+ * one app that are the same sign-in (same email or name, or the app names nobody) are one row; second is how many
+ * connections it stands for.
+ */
+fun accountRows(connected: List<Connection>): List<Pair<Connection, Int>> =
+    connected.filter { it.status == "ACTIVE" }.distinctBy { it.id }.groupBy { it.toolkit to identityOf(it).lowercase() }.values.map { it.first() to it.size }
+
+/**
+ * The computer's profiles as sheet choices, General first. General holds none of his accounts, which is exactly what
+ * "no profile" means, so the two are one choice (id "" = no profile) and a profile named General is not offered twice.
+ */
+fun profileChoices(profs: List<Pair<String, String>>): List<com.past9.phoneaos.ui.SheetChoice> =
+    listOf(com.past9.phoneaos.ui.SheetChoice("", "General", "Not one part of your life in particular")) +
+        profs.filter { (id, name) -> id.isNotBlank() && !name.trim().equals("General", true) }.distinctBy { it.first }
+            .map { (id, name) -> com.past9.phoneaos.ui.SheetChoice(id, name) }
 
 /** Accounts of one app that are the same sign-in (same email or name, or none shared). The first is the keeper. */
 fun duplicateGroups(connected: List<Connection>): List<List<Connection>> =
@@ -110,7 +135,7 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
     when (val sh = sheet) {
         null -> {}
         else -> if (sh.startsWith("profile:") || sh.startsWith("account:")) {} else when (sh) {
-        "learned" -> LearnedSheet(state.learned, actions, onDismiss = { sheet = null })
+        "learned" -> LearnedSheet(state.learned, actions, onDismiss = { sheet = null }, remote = state.remote)
         "list" -> MachinesSheet(state.machines, actions.machine, onDismiss = { sheet = null }, onOpen = { sheet = it ?: "new" })
         else -> MachineSheet(state.machines.firstOrNull { it.id == sh }, state.machines, actions.machine.copy(onDelete = { actions.machine.onDelete(it); sheet = "list" }),
             onDismiss = { sheet = "list" }, onDone = { sheet = "list" })
@@ -131,24 +156,27 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                     }
                     PhoneLine(Icons.Rounded.FolderOpen, "Files on this phone", if (state.phoneFiles) "Your agent can find and upload your files" else "Let your agent find files to upload or send",
                         state.phoneFiles, if (state.phoneFiles) null else actions.onAllowPhoneFiles)
-                    MachinesLine(state.machines) { sheet = "list" }
-                    LearnedLine(state.learned) { sheet = "learned" }
+                    if (!state.remote) MachinesLine(state.machines) { sheet = "list" }
+                    LearnedLine(state.learned, state.remote) { sheet = "learned" }
+                    MiniAppsLine(state.miniApps, actions.onMiniApps)
                 }
             }
+            // Linked: his machines are the computers, servers and phones on the link, shown with their state.
+            if (state.remote) item { LinkedMachines(state.devices, state.machines, onDevices = actions.onLinkedDevices, onAdd = { sheet = "list" }) }
             if (state.hasKey) item { ProfilesSection(state.profiles, logos) { id -> sheet = "profile:" + (id ?: "new") } }
             item { SectionHeader("Your apps", if (state.remote) "Connected on your computer. Manage them there." else if (state.consumer) "Tap Connect and sign in. Your agent can use it straight away." else "Gmail, Calendar, Drive, Slack and 250+ more, through Composio with your own key", Modifier.padding(start = 4.dp, top = 16.dp)) }
             if (state.remote) {
                 if (state.error != null) item { Text(state.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(4.dp)) }
                 if (state.loading) item { Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { LoadingIndicator() } }
-                item { AppsSummary(state.connected, logos, appsOpen) { appsOpen = !appsOpen; if (appsOpen) actions.onLoadCatalog() } }
+                item { AppsSummary(accountRows(state.connected).map { it.first }, logos, appsOpen) { appsOpen = !appsOpen; if (appsOpen) actions.onLoadCatalog() } }
                 if (appsOpen && state.connected.isNotEmpty()) item {
                     AppCard(padding = PaddingValues(vertical = 4.dp)) {
-                        state.connected.filter { it.status == "ACTIVE" }.forEach { c -> val tk = state.toolkits.firstOrNull { it.slug == c.toolkit }
-                            ConnectedLine(c, tk?.name ?: prettySlug(c.toolkit), actions, tk?.logo.orEmpty(), emptyList(), com.past9.phoneaos.data.AccountRules.DEFAULT) { } }
+                        accountRows(state.connected).forEach { (c, n) -> val tk = state.toolkits.firstOrNull { it.slug == c.toolkit }
+                            ConnectedLine(c, tk?.name ?: prettySlug(c.toolkit), actions, tk?.logo.orEmpty(), emptyList(), com.past9.phoneaos.data.AccountRules.DEFAULT, copies = n) { } }
                     }
                 }
                 if (appsOpen) item {
-                    OutlinedTextField(query, { query = it }, placeholder = { Text("Search apps to add") }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                    com.past9.phoneaos.ui.AppTextField(query, { query = it }, placeholder = { Text("Search apps to add") }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
                         singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp), shape = MaterialTheme.shapes.extraLarge)
                 }
                 val rlist = if (!appsOpen) emptyList() else state.toolkits.filter { query.isBlank() || it.name.contains(query, true) || it.slug.contains(query, true) || (state.searched == query.trim() && it.slug in state.hits) }
@@ -189,7 +217,7 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                     }
                 }
                 if (appsOpen) item {
-                    OutlinedTextField(query, { query = it }, placeholder = { Text(if (state.consumer) "Search apps" else "Search ${if (state.toolkits.isEmpty()) "" else "${state.toolkits.size} "}apps") }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                    com.past9.phoneaos.ui.AppTextField(query, { query = it }, placeholder = { Text(if (state.consumer) "Search apps" else "Search ${if (state.toolkits.isEmpty()) "" else "${state.toolkits.size} "}apps") }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
                         singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp), shape = MaterialTheme.shapes.extraLarge)
                 }
                 if (state.loading && appsOpen) item { Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { LoadingIndicator() } }
@@ -243,7 +271,7 @@ private fun Initial(name: String, logo: String = "") = AppLogo(name, logo)
 fun AppLogo(name: String, logo: String, size: androidx.compose.ui.unit.Dp = 40.dp) {
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(size * 0.28f)
     if (logo.isNotBlank()) {
-        coil.compose.SubcomposeAsyncImage(model = logo, contentDescription = null, modifier = Modifier.size(size).clip(shape).background(androidx.compose.ui.graphics.Color(0xFFF7F7F8)).padding(size * 0.16f),
+        coil.compose.SubcomposeAsyncImage(model = logo, contentDescription = null, modifier = Modifier.size(size).clip(shape).background(com.past9.phoneaos.ui.theme.BrandMarks.logoTile).padding(size * 0.16f),
             error = { InitialBox(name, size, shape) }, loading = { InitialBox(name, size, shape) })
         return
     }
@@ -259,14 +287,14 @@ private fun InitialBox(name: String, size: androidx.compose.ui.unit.Dp = 40.dp, 
 
 @Composable
 private fun ConnectedLine(c: Connection, name: String, actions: ConnectionsActions, logo: String = "", profiles: List<String> = emptyList(),
-                          rules: com.past9.phoneaos.data.AccountRules = com.past9.phoneaos.data.AccountRules.DEFAULT, onOpen: () -> Unit = {}) {
+                          rules: com.past9.phoneaos.data.AccountRules = com.past9.phoneaos.data.AccountRules.DEFAULT, copies: Int = 1, onOpen: () -> Unit = {}) {
     Surface(onClick = onOpen, color = androidx.compose.ui.graphics.Color.Transparent) {
     Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Initial(name, logo)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(name, style = MaterialTheme.typography.titleSmall)
-            Text(identityOf(c).ifBlank { if (c.status == "ACTIVE") "Connected" else "Sign-in not finished" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(identityOf(c).ifBlank { if (c.status == "ACTIVE") "Connected" else "Sign-in not finished" } + (if (copies > 1) " \u00b7 connected $copies times on your computer" else ""), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             ProfileTags(profiles, rules)
         }
         val extra = LocalExtra.current
@@ -335,7 +363,7 @@ private fun AppsSummary(connected: List<Connection>, logos: Map<String, String>,
                         }
                     }
                 }
-                if (apps.size > 6) Box(Modifier.size(40.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(11.dp)).background(cs.surfaceContainerHighest), contentAlignment = Alignment.Center) {
+                if (apps.size > 6) Box(Modifier.size(40.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm)).background(cs.surfaceContainerHighest), contentAlignment = Alignment.Center) {
                     Text("+${apps.size - 6}", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
                 }
             }
@@ -351,14 +379,14 @@ private fun AppsSummary(connected: List<Connection>, logos: Map<String, String>,
 
 /** One line in the Built in card: how many web apps the agent has taught itself. Tapping it slides the list up. */
 @Composable
-private fun LearnedLine(apps: List<com.past9.phoneaos.connections.LearnedApp>, onClick: () -> Unit) {
+private fun LearnedLine(apps: List<com.past9.phoneaos.connections.LearnedApp>, remote: Boolean = false, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Rounded.Hub, null, tint = cs.primary)
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
             Text("Learned apps", style = MaterialTheme.typography.titleSmall)
-            Text(if (apps.isEmpty()) "Sites your agent maps once, then uses without clicking" else apps.joinToString(" \u00b7 ") { it.name },
+            Text(if (apps.isEmpty()) (if (remote) "None on your computer yet" else "Sites your agent maps once, then uses without clicking") else apps.joinToString(" \u00b7 ") { it.name },
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (apps.isNotEmpty()) {
@@ -376,15 +404,15 @@ private fun LearnedLine(apps: List<com.past9.phoneaos.connections.LearnedApp>, o
  * to teach it another. Anything that changes things asks first unless the user trusts that app here.
  */
 @Composable
-internal fun LearnedSheet(apps: List<com.past9.phoneaos.connections.LearnedApp>, actions: ConnectionsActions, onDismiss: () -> Unit, initialOpen: String? = null) {
+internal fun LearnedSheet(apps: List<com.past9.phoneaos.connections.LearnedApp>, actions: ConnectionsActions, onDismiss: () -> Unit, initialOpen: String? = null, remote: Boolean = false) {
     var teach by remember { mutableStateOf("") }
     var open by remember { mutableStateOf(initialOpen) }
-    AppSheet(Icons.Rounded.Hub, "Learned apps", "Sites your agent knows", onDismiss, primary = "Teach your agent this app", primaryEnabled = teach.isNotBlank(),
+    AppSheet(Icons.Rounded.Hub, "Learned apps", if (remote) "On your computer" else "Sites your agent knows", onDismiss, primary = "Teach your agent this app", primaryEnabled = teach.isNotBlank(),
         onPrimary = { actions.onTeach(teach.trim()); onDismiss() }, shape = MaterialShapes.Cookie7Sided) {
         if (apps.isEmpty()) Text("Name a site or app you use all the time. Your agent opens it, works out how it works, and writes itself tools for it, so next time it calls a tool instead of clicking through the app.",
             style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            apps.forEach { a -> LearnedTile(a, open == a.id, { open = if (open == a.id) null else a.id }, actions) }
+            apps.forEach { a -> LearnedTile(a, open == a.id, { open = if (open == a.id) null else a.id }, actions, remote) }
         }
         Spacer(Modifier.height(24.dp))
         com.past9.phoneaos.ui.SheetField(teach, { teach = it }, "Teach a new one", "WhatsApp Web, your school portal, your bank", singleLine = true,
@@ -393,7 +421,7 @@ internal fun LearnedSheet(apps: List<com.past9.phoneaos.connections.LearnedApp>,
 }
 
 @Composable
-private fun LearnedTile(a: com.past9.phoneaos.connections.LearnedApp, expanded: Boolean, onToggle: () -> Unit, actions: ConnectionsActions) {
+private fun LearnedTile(a: com.past9.phoneaos.connections.LearnedApp, expanded: Boolean, onToggle: () -> Unit, actions: ConnectionsActions, remote: Boolean = false) {
     val cs = MaterialTheme.colorScheme
     var confirming by remember(a.id) { mutableStateOf(false) }
     Surface(shape = MaterialTheme.shapes.large, color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth().animateContentSize()) {
@@ -416,7 +444,9 @@ private fun LearnedTile(a: com.past9.phoneaos.connections.LearnedApp, expanded: 
                     a.tools.forEach { t -> Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(50), color = if (t.readOnly) cs.surfaceContainerHighest else cs.tertiaryContainer) {
                         Text(t.name.replace('_', ' '), Modifier.padding(horizontal = 10.dp, vertical = 5.dp), style = MaterialTheme.typography.labelMedium, color = if (t.readOnly) cs.onSurfaceVariant else cs.onTertiaryContainer) } }
                 }
-                if (a.writes > 0) Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                // Linked: trusting or removing one is done on the computer itself (it decides what may run without asking).
+                if (remote) Text(if (a.trusted) "Runs changes without asking (set on your computer)" else "Asks before it sends, posts or deletes", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
+                if (!remote && a.writes > 0) Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Change things without asking", style = MaterialTheme.typography.titleSmall)
                         Text(if (a.trusted) "Sending, posting and deleting run straight away" else "It asks you each time before it sends, posts or deletes", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
@@ -424,12 +454,78 @@ private fun LearnedTile(a: com.past9.phoneaos.connections.LearnedApp, expanded: 
                     Switch(a.trusted, { actions.onTrustLearned(a.id, it) })
                 }
                 Spacer(Modifier.height(8.dp))
-                if (!confirming) TextButton(onClick = { confirming = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Remove", color = cs.error) }
+                if (remote) Unit else if (!confirming) TextButton(onClick = { confirming = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Remove", color = cs.error) }
                 else Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                     OutlinedButton(onClick = { confirming = false }, shapes = ButtonDefaults.shapes(), modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("Keep") }
                     Button(onClick = { actions.onRemoveLearned(a.id) }, shapes = ButtonDefaults.shapes(), colors = ButtonDefaults.buttonColors(containerColor = cs.error, contentColor = cs.onError), modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("Remove its tools") }
                 }
             }
+        }
+    }
+}
+
+
+/** The Built in card's Apps line: his mini-apps (dashboards, trackers) and how many are pinned. Opens the Apps page. */
+@Composable
+private fun MiniAppsLine(apps: List<com.past9.phoneaos.miniapps.MiniAppInfo>, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val pinned = apps.count { it.pinned > 0 }
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Rounded.Dashboard, null, tint = cs.primary)
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Apps", style = MaterialTheme.typography.titleSmall)
+            Text(if (apps.isEmpty()) "Dashboards and trackers your agent makes for you" else (if (pinned > 0) "$pinned pinned · " else "") + apps.joinToString(" · ") { it.name },
+                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (apps.isNotEmpty()) {
+            Box(Modifier.size(28.dp).clip(androidx.compose.foundation.shape.CircleShape).background(cs.primaryContainer), contentAlignment = Alignment.Center) {
+                Text("${apps.size}", style = MaterialTheme.typography.labelLarge, color = cs.onPrimaryContainer)
+            }
+            Spacer(Modifier.width(4.dp))
+        }
+        Icon(Icons.Rounded.ChevronRight, null, tint = cs.onSurfaceVariant)
+    }
+}
+
+/**
+ * Linked to a computer: his machines are the devices on the link (the computers that answer, servers, phones), each
+ * with its state. Adding an SSH machine is the second action, not the headline (29 Oct 2026).
+ */
+@Composable
+internal fun LinkedMachines(devices: List<com.past9.phoneaos.remote.MeshDevice>, ssh: List<com.past9.phoneaos.machines.Machine>, onDevices: () -> Unit, onAdd: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Column {
+        SectionHeader("Your machines", if (devices.isEmpty()) "Reading them from your computer" else "Linked to this phone", Modifier.padding(start = 4.dp, top = 16.dp, bottom = 8.dp))
+        AppCard(padding = PaddingValues(vertical = 4.dp)) {
+            devices.forEach { d ->
+                Row(Modifier.fillMaxWidth().clickable(onClick = onDevices).heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(40.dp).clip(MaterialTheme.shapes.small).background(cs.secondaryContainer), contentAlignment = Alignment.Center) {
+                        Icon(when (d.kind) { "phone" -> Icons.Rounded.Smartphone; "tablet" -> Icons.Rounded.TabletAndroid; "server" -> Icons.Rounded.Dns; else -> Icons.Rounded.Computer }, null, tint = cs.onSecondaryContainer)
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(d.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(d.line, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    val extra = LocalExtra.current
+                    when (d.state) {
+                        com.past9.phoneaos.remote.MeshDevice.State.ANSWERING -> StatusPill("Answering", extra.successContainer, extra.success)
+                        com.past9.phoneaos.remote.MeshDevice.State.ONLINE -> StatusPill("Online", extra.successContainer, extra.success)
+                        com.past9.phoneaos.remote.MeshDevice.State.SELF -> StatusPill("This phone", cs.primaryContainer, cs.onPrimaryContainer)
+                        com.past9.phoneaos.remote.MeshDevice.State.AWAY -> StatusPill("Away", cs.surfaceContainerHighest, cs.onSurfaceVariant)
+                    }
+                }
+            }
+            if (ssh.isNotEmpty()) Row(Modifier.fillMaxWidth().clickable(onClick = onAdd).heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Terminal, null, tint = cs.primary); Spacer(Modifier.width(16.dp))
+                Text("SSH machines: " + ssh.joinToString(" · ") { it.name }, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Icon(Icons.Rounded.ChevronRight, null, tint = cs.onSurfaceVariant)
+            }
+        }
+        Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            TextButton(onClick = onAdd) { Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Add a machine") }
+            TextButton(onClick = onDevices) { Text("Linked devices") }
         }
     }
 }

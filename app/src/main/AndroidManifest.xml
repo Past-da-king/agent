@@ -73,6 +73,12 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="agent" android:host="pair" />
             </intent-filter>
+            <!-- A card in the chat, or the computer's miniapp_open: agent://miniapp/<id> opens that mini-app here. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="agent" android:host="miniapp" />
+            </intent-filter>
         </activity>
 
         <!-- Share sheet: links, text, photos, videos, voice notes and files from any app. A see-through sheet over the app you shared from; never opens the main app. -->

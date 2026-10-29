@@ -37,6 +37,15 @@ object MiniAppRules {
 
     fun isAppId(id: String) = Regex("^ma[a-z0-9]{6,30}$").matches(id)
 
+    /** agent://miniapp/<id> (a chat card, or the computer's miniapp_open) -> the app's id; anything else -> null. */
+    fun idFromLink(link: String?): String? {
+        val m = Regex("^agent://miniapp/([A-Za-z0-9_-]{2,40})/?$").find(link?.trim().orEmpty()) ?: return null
+        return m.groupValues[1]
+    }
+
+    /** Every mini-app a reply links to (agent://miniapp/<id>), once each, in order: each becomes a card under it. */
+    fun linksIn(text: String): List<String> = Regex("agent://miniapp/([A-Za-z0-9_-]{2,40})").findAll(text).map { it.groupValues[1] }.distinct().toList()
+
     /** May the WebView showing [appId] load this address? Only its own virtual host over https. */
     fun mayLoad(appId: String, scheme: String?, host: String?): Boolean = scheme == "https" && host == hostOf(appId)
 
@@ -70,6 +79,15 @@ object MiniAppsHub {
     val pushes: SharedFlow<Pair<String, JSONObject>> = _pushes
     /** A home-screen shortcut asked to open this app. */
     val pendingOpen = MutableStateFlow<String?>(null)
+
+    /** Files of mini-apps already served, by app, version and path (about 2 MB at most), so opening one again is instant. */
+    private val files = object : LinkedHashMap<String, JSONObject>(32, 0.75f, true) {
+        var bytes = 0
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, JSONObject>?): Boolean =
+            (bytes > 2_000_000).also { if (it && eldest != null) bytes -= eldest.value.optString("body").length }
+    }
+    @Synchronized fun served(key: String): JSONObject? = files[key]
+    @Synchronized fun keep(key: String, file: JSONObject) { files[key] = file; files.bytes += file.optString("body").length }
     private var started = false
     private var reload: Job? = null
     private var stateJob: Job? = null

@@ -390,14 +390,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         if (clean.isEmpty()) return
         scope.launch {
             try {
-                val attachments = JSONArray()
-                for (p in images) {
-                    val f = File(p)
-                    if (!f.isFile) continue
-                    val mime = if (f.name.endsWith(".png", true)) "image/png" else "image/jpeg"
-                    val b64 = android.util.Base64.encodeToString(f.readBytes(), android.util.Base64.NO_WRAP)
-                    (call("files.savePasted", listOf(f.name, mime, JSONObject().put("\$b64", b64)), 120_000) as? JSONObject)?.let { attachments.put(it) }
-                }
+                val attachments = uploadImages(images)
                 turnRunning = true; publishStatus()
                 call("chat.send", if (attachments.length() > 0) listOf(clean, attachments) else listOf(clean), 60_000)
                 // A message the computer sent on to a project chat ('@Acme ...') starts no run here: read the real state,
@@ -657,9 +650,74 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     /** Whether a chat on the computer is at work now. */
     suspend fun chatRunning(chat: String): Boolean = runCatching { (call("chat.state", listOf(chat), 15_000) as? JSONObject)?.optBoolean("running") == true }.getOrDefault(chat in running)
 
-    /** A message of his into one of the computer's chats (a project chat opened from a "Sent to" line). */
-    suspend fun sendTo(chat: String, text: String) {
-        call("chat.send", listOf(text.trim(), JSONArray(), chat), 60_000)
+    /**
+     * A message of his into one of the computer's chats (a project or helper chat), with its pictures. Until 0.15.11 this
+     * always sent an empty attachment list, so a photo picked there never reached the computer (29 Oct 2026).
+     */
+    suspend fun sendTo(chat: String, text: String, images: List<String> = emptyList()) {
+        val attachments = uploadImages(images)
+        val words = text.trim().ifEmpty { if (attachments.length() > 0) "What do you make of this?" else "" }
+        if (words.isEmpty()) return
+        call("chat.send", listOf(words, attachments, chat), 60_000)
+    }
+
+    /**
+     * Every picture of a message, saved on the computer first (files.savePasted: one call per picture, its bytes as
+     * {$b64}), so chat.send carries only their paths. Same on Wi-Fi and mobile data: pictures are already scaled to
+     * 1568 px JPEG on the phone. A picture that fails to go throws, so the message is never sent without it.
+     */
+    suspend fun uploadImages(images: List<String>): JSONArray {
+        val attachments = JSONArray()
+        for (p in images) {
+            val f = File(p)
+            if (!f.isFile) throw java.io.IOException("The photo ${f.name} is no longer on this phone.")
+            val mime = when { f.name.endsWith(".png", true) -> "image/png"; f.name.endsWith(".webp", true) -> "image/webp"; else -> "image/jpeg" }
+            val b64 = android.util.Base64.encodeToString(f.readBytes(), android.util.Base64.NO_WRAP)
+            val saved = call("files.savePasted", listOf(f.name, mime, JSONObject().put("\$b64", b64)), 120_000) as? JSONObject
+                ?: throw java.io.IOException("Your computer didn't keep the photo ${f.name}.")
+            attachments.put(saved)
+        }
+        if (images.isNotEmpty()) android.util.Log.i("Attach", "uploaded ${attachments.length()} of ${images.size} pictures (metered=$metered)")
+        return attachments
+    }
+
+    /** A reply on a project's answer card, with its pictures: into that project chat, its answer back to the main chat. */
+    suspend fun replyTo(chat: String, text: String, images: List<String> = emptyList()) {
+        val attachments = uploadImages(images)
+        val words = text.trim().ifEmpty { if (attachments.length() > 0) "What do you make of this?" else "" }
+        if (words.isEmpty()) return
+        call("chat.send", Mentions.replyArgs(chat, words, attachments), 60_000)
+    }
+
+    /** His machines on the link, with their state, for Connections. */
+    suspend fun meshDevices(): List<MeshDevice> {
+        val raw = call("devices.list", listOf(), 20_000)
+        val answering = (state.value as? LinkState.Connected)?.brain?.id
+        val ready = health.value.filterValues { it?.ready == true }.keys
+        return MeshDevice.parse(raw, link.deviceId, answering, ready)
+    }
+
+    /** The web apps the computer's agent taught itself (read only here: they run there). */
+    suspend fun learnedApps(): List<com.past9.phoneaos.connections.LearnedApp> = MeshDevice.learned(call("apps.learned", listOf(), 20_000))
+
+    /**
+     * The pictures of a row of another chat (a project chat the phone only looks into): each fetched once into the
+     * same cache the main chat uses, path on the computer -> path here. On mobile data only when [force] (he tapped).
+     */
+    suspend fun picturesOf(meta: JSONObject, force: Boolean): Map<String, String> {
+        val paths = RemoteRows.mediaPaths(meta)
+        if (paths.isEmpty()) return emptyMap()
+        val dir = File(app.cacheDir, "linked-media").apply { mkdirs() }
+        val out = LinkedHashMap<String, String>()
+        val (api, url) = downloader() ?: return emptyMap()
+        for (p in paths) {
+            val ext = p.substringAfterLast('.', "jpg").take(5).lowercase()
+            val f = File(dir, Integer.toHexString(p.hashCode()) + "-" + p.length + "." + ext)
+            if (f.exists() && f.length() > 0L) { out[p] = f.absolutePath; continue }
+            if (metered && !force) continue
+            runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { api.download(url, p, pass) { input, _ -> f.outputStream().use { input.copyTo(it) } } }; out[p] = f.absolutePath }
+        }
+        return out
     }
 
     // ---- the small way to sync (protocol v2) ------------------------------------------------------------------------
@@ -826,7 +884,9 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     /** The computer's agent profiles (id, name): a new account can go straight into one. */
     suspend fun agentProfiles(): List<Pair<String, String>> {
         val a = call("profiles.list", listOf(), 20_000) as? JSONArray ?: return emptyList()
-        return (0 until a.length()).mapNotNull { a.optJSONObject(it) }.filter { it.optString("id").isNotBlank() }.map { it.optString("id") to it.optString("name").ifBlank { "Profile" } }
+        // General (the default, which holds none of his accounts) is the same as no profile: the phone offers it once, as General.
+        return (0 until a.length()).mapNotNull { a.optJSONObject(it) }.filter { it.optString("id").isNotBlank() && !it.optBoolean("general") }
+            .map { it.optString("id") to it.optString("name").ifBlank { "Profile" } }
     }
 
     /** Ask the computer to start connecting [app]; the sign-in link comes back to open in this phone's browser. */
@@ -841,7 +901,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         val v = call("apps.status", listOf(), 30_000) as? JSONObject ?: throw RpcException("The computer didn't answer.")
         val a = v.optJSONArray("accounts") ?: JSONArray()
         val accounts = (0 until a.length()).mapNotNull { a.optJSONObject(it) }
-        val connected = accounts.map { o -> com.past9.phoneaos.tools.Connection(o.optString("id"), o.optString("app"), o.optString("status").uppercase(), o.optString("label").ifBlank { o.optString("appName") }) }
+        // One row per connection id: the computer can list an account once per profile it is in.
+        val connected = accounts.distinctBy { it.optString("id") }.map { o -> com.past9.phoneaos.tools.Connection(o.optString("id"), o.optString("app"), o.optString("status").uppercase(), o.optString("label").ifBlank { o.optString("appName") }) }
         val kits = accounts.distinctBy { it.optString("app") }.map { o -> com.past9.phoneaos.tools.Toolkit(o.optString("app"), o.optString("appName").ifBlank { o.optString("app") }, "", o.optString("logo"), 0, false, true) }
         return connected to kits
     }

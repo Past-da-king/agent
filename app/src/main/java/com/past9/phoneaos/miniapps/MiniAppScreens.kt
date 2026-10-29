@@ -10,7 +10,12 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -78,33 +83,59 @@ private fun AppTile(app: MiniAppInfo, size: Int = 52) {
     }
 }
 
-/** Home's row of pinned apps, in the sidebar's order, and the way to all of them. Long-press: a home-screen shortcut. */
+/**
+ * Home's pinned apps: ONE small row of pills (his ask, 29 Oct 2026: small, right before To-dos), in the sidebar's
+ * order, then All apps. Long-press a pill: a home-screen shortcut. Nothing shows when none is pinned.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PinnedAppsRow(apps: List<MiniAppInfo>, onOpen: (String) -> Unit, onAll: () -> Unit) {
     val context = LocalContext.current
     val pinned = MiniAppRules.pinned(apps)
-    if (apps.isEmpty()) return
-    Column {
-        Text("YOUR APPS", style = Eyebrow, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(pinned, key = { it.id }) { app ->
-                Column(Modifier.width(72.dp).combinedClickable(onClick = { onOpen(app.id) }, onLongClick = { pinShortcut(context, app) }), horizontalAlignment = Alignment.CenterHorizontally) {
-                    AppTile(app)
-                    Text(app.name, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
-                }
-            }
-            item(key = "all") {
-                Column(Modifier.width(72.dp).combinedClickable(onClick = onAll), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Surface(shape = RoundedCornerShape(15.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.size(52.dp)) {
-                        Box(contentAlignment = Alignment.Center) {
-                            val rest = apps.size - pinned.size
-                            if (rest > 0) Text("+$rest", style = MaterialTheme.typography.titleSmall) else Icon(Icons.Rounded.Dashboard, null)
-                        }
+    if (pinned.isEmpty()) return
+    val cs = MaterialTheme.colorScheme
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        items(pinned, key = { it.id }) { app ->
+            Surface(shape = RoundedCornerShape(50), color = cs.surfaceContainerHigh, contentColor = cs.onSurface,
+                modifier = Modifier.heightIn(min = 40.dp).clip(RoundedCornerShape(50)).combinedClickable(onClick = { onOpen(app.id) }, onLongClick = { pinShortcut(context, app) })
+                    .semantics { contentDescription = "Open ${app.name}" }) {
+                Row(Modifier.padding(start = 6.dp, end = 14.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(28.dp).clip(CircleShape).background(cs.secondaryContainer), contentAlignment = Alignment.Center) {
+                        Icon(miniAppIcon(app.icon), null, Modifier.size(16.dp), tint = cs.onSecondaryContainer)
                     }
-                    Text("All apps", style = MaterialTheme.typography.labelMedium, maxLines = 1, modifier = Modifier.padding(top = 6.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(app.name, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 140.dp))
                 }
             }
+        }
+        item(key = "all") {
+            Surface(onClick = onAll, shape = RoundedCornerShape(50), color = androidx.compose.ui.graphics.Color.Transparent, contentColor = cs.primary, modifier = Modifier.heightIn(min = 40.dp)) {
+                Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Dashboard, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp))
+                    Text(if (apps.size > pinned.size) "All ${apps.size}" else "All apps", style = MaterialTheme.typography.labelLarge)
+                }
+            }
+        }
+    }
+}
+
+/** A mini-app in a reply: its tile, name and what it shows, and Open (on this phone). */
+@Composable
+fun MiniAppCard(id: String) {
+    val apps by MiniAppsHub.apps.collectAsState()
+    val app = apps.firstOrNull { it.id == id }
+    val cs = MaterialTheme.colorScheme
+    Surface(onClick = { MiniAppsHub.pendingOpen.value = id }, shape = MaterialTheme.shapes.large, color = cs.surfaceContainerHigh, contentColor = cs.onSurface,
+        modifier = Modifier.fillMaxWidth().widthIn(max = 420.dp).semantics { contentDescription = "Open ${app?.name ?: "the app"}" }) {
+        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (app != null) AppTile(app, 44) else Box(Modifier.size(44.dp).clip(MaterialTheme.shapes.small).background(cs.secondaryContainer))
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(app?.name ?: "Your app", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(app?.description?.ifBlank { null } ?: "Made for you on your computer", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            Spacer(Modifier.width(8.dp))
+            FilledTonalButton(onClick = { MiniAppsHub.pendingOpen.value = id }, shapes = ButtonDefaults.shapes()) { Text("Open") }
         }
     }
 }
@@ -185,17 +216,20 @@ fun MiniAppFrame(id: String, apps: List<MiniAppInfo>, dark: Boolean, accent: Str
         view?.evaluateJavascript("window.__agentReceive&&window.__agentReceive(${JSONObject.quote(MiniAppRules.themeMessage(dark, accent).toString())})", null)
     }
 
-    Scaffold(topBar = {
-        TopAppBar(title = { Text(app?.name ?: "App", maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") } },
-            actions = { if (app != null) FilterChip(selected = app.pinned > 0, onClick = { scope.launch { runCatching { MiniAppsHub.pin(app.id, app.pinned == 0) } } }, label = { Text(if (app.pinned > 0) "Pinned" else "Pin") }, leadingIcon = { Icon(Icons.Rounded.PushPin, null, Modifier.size(18.dp)) }) })
-    }) { pad ->
+    // Full screen and native (Ayanda, 29 Oct 2026): no header bar. The app's own surface runs under the status bar,
+    // the page sits inside the system bars and gesture insets, Android back leaves, and one small floating control
+    // closes it. The WebView is made at once, while the computer opens the session, so it shows as soon as it can.
+    val cs = MaterialTheme.colorScheme
+    val openedAt = remember(id) { android.os.SystemClock.elapsedRealtime() }
+    androidx.activity.compose.BackHandler(onBack = onBack)
+    Box(Modifier.fillMaxSize().background(cs.surface)) {
         val sid = sessionId
+        val inset = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)
         when {
-            failed != null -> Box(Modifier.padding(pad).fillMaxSize(), contentAlignment = Alignment.Center) { EmptyState("This app cannot open", failed ?: "") }
-            sid == null -> Box(Modifier.padding(pad).fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            failed != null -> Box(inset, contentAlignment = Alignment.Center) { EmptyState("This app cannot open", failed ?: "") }
+            sid == null -> Box(inset, contentAlignment = Alignment.Center) { LoadingIndicator() }
             else -> key(version) {
-                AndroidView(modifier = Modifier.padding(pad).fillMaxSize(), factory = { context ->
+                AndroidView(modifier = inset, factory = { context ->
                     WebView(context).also { web ->
                         web.settings.apply {
                             javaScriptEnabled = true
@@ -210,20 +244,26 @@ fun MiniAppFrame(id: String, apps: List<MiniAppInfo>, dark: Boolean, accent: Str
                             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                             cacheMode = WebSettings.LOAD_NO_CACHE
                         }
-                        web.webViewClient = FrameClient(id)
+                        web.webViewClient = FrameClient(id, "${app?.version ?: 0}.$version", openedAt)
                         web.addJavascriptInterface(Bridge(web, sid), "AgentBridge")
                         web.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                        web.overScrollMode = android.view.View.OVER_SCROLL_NEVER
                         web.loadUrl("https://${MiniAppRules.hostOf(id)}/index.html?theme=${if (dark) "dark" else "light"}&accent=$accent")
                         view = web
                     }
                 })
             }
         }
+        // The one control: small, floating, in the corner the app's own content leaves free.
+        Surface(onClick = onBack, shape = androidx.compose.foundation.shape.CircleShape, color = cs.surfaceContainerHigh.copy(alpha = 0.92f), contentColor = cs.onSurface, shadowElevation = 2.dp,
+            modifier = Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(top = 6.dp, end = 8.dp).size(36.dp).semantics { contentDescription = "Close ${app?.name ?: "the app"}" }) {
+            Box(contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Close, null, Modifier.size(18.dp)) }
+        }
     }
 }
 
 /** Serves the app's files from the computer and refuses everything else. */
-private class FrameClient(private val id: String) : WebViewClient() {
+private class FrameClient(private val id: String, private val version: String, private val openedAt: Long) : WebViewClient() {
     private val blocked get() = WebResourceResponse("text/plain", "utf-8", 403, "Blocked", mapOf("Cache-Control" to "no-store"), ByteArrayInputStream(ByteArray(0)))
 
     override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse {
@@ -233,12 +273,20 @@ private class FrameClient(private val id: String) : WebViewClient() {
             return blocked
         }
         val s = MiniAppsHub.session() ?: return blocked
+        val path = url.encodedPath + (url.encodedQuery?.let { "?$it" } ?: "")
+        // A file of this version seen before is served from the phone (fast to open again); a changed app is a new version.
+        val cacheKey = "$id@$version$path"
         // This runs on the WebView's own loader thread: waiting here is what it expects.
-        val r = runBlocking { withTimeoutOrNull(20_000) { runCatching { s.call("miniapps.serve", listOf(id, url.encodedPath + (url.encodedQuery?.let { "?$it" } ?: "")), 20_000) as? JSONObject }.getOrNull() } } ?: return blocked
+        val r = MiniAppsHub.served(cacheKey) ?: runBlocking { withTimeoutOrNull(20_000) { runCatching { s.call("miniapps.serve", listOf(id, path), 20_000) as? JSONObject }.getOrNull() } }
+            ?.also { if (it.optInt("status") == 200) MiniAppsHub.keep(cacheKey, it) } ?: return blocked
         val type = r.optString("type", "text/plain").substringBefore(';').trim()
         val headers = mapOf("Content-Security-Policy" to r.optString("csp"), "X-Content-Type-Options" to "nosniff", "Cache-Control" to "no-store", "Referrer-Policy" to "no-referrer")
         val status = r.optInt("status", 404)
         return WebResourceResponse(type, "utf-8", status, if (status == 200) "OK" else "Not found", headers, ByteArrayInputStream(r.optString("body").toByteArray(Charsets.UTF_8)))
+    }
+
+    override fun onPageFinished(view: WebView, url: String) {
+        android.util.Log.i("MiniApp", "opened $id in ${android.os.SystemClock.elapsedRealtime() - openedAt} ms")
     }
 
     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {

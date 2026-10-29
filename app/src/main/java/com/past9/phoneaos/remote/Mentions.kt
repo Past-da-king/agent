@@ -49,7 +49,7 @@ object Mentions {
     }
 
     /** The send that answers on a project's card: into that same project chat, its answer back to the main chat. */
-    fun replyArgs(chat: String, text: String): List<Any?> = listOf(text.trim(), JSONArray(), chat, JSONObject().put("replyIn", "main"))
+    fun replyArgs(chat: String, text: String, attachments: JSONArray = JSONArray()): List<Any?> = listOf(text.trim(), attachments, chat, JSONObject().put("replyIn", "main"))
 
     /** A page of a project chat, newest first: the newest [limit], or those before [before] (ms) for the page above. */
     fun pageWhere(chat: String, limit: Int, before: Long? = null): JSONObject =

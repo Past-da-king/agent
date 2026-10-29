@@ -1,5 +1,7 @@
 package com.past9.phoneaos.ui.screens
 
+import androidx.compose.material.icons.rounded.Image
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -43,7 +45,8 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit) {
     var loaded by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf("") }
     var working by remember { mutableStateOf(false) }
-    var draft by remember { mutableStateOf("") }
+    val box = com.past9.phoneaos.ui.rememberComposerBox()
+    val tools = com.past9.phoneaos.ui.LocalComposerTools.current
     var more by remember { mutableStateOf(false) }
     var loadingOlder by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -96,27 +99,13 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit) {
             }
         },
         bottomBar = {
-            Surface(color = MaterialTheme.colorScheme.surface) {
-                Row(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp), verticalAlignment = Alignment.Bottom) {
-                    Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) {
-                        Box(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
-                            if (draft.isEmpty()) Text("Message $name", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            BasicTextField(draft, { draft = it }, textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), maxLines = 6, modifier = Modifier.fillMaxWidth())
-                        }
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    val canSend = draft.isNotBlank() && session != null
-                    FilledIconButton(onClick = {
-                        val s = session ?: return@FilledIconButton
-                        val text = draft.trim(); if (text.isEmpty()) return@FilledIconButton
-                        draft = ""
-                        scope.launch { runCatching { s.sendTo(chat, text) }.onFailure { problem = "Couldn't send that: ${it.message}"; draft = text }; load(s) }
-                    }, enabled = canSend, modifier = Modifier.size(56.dp), shape = CircleShape) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowForward, "Send to $name")
-                    }
-                }
-            }
+            // THE message box (the main chat's): photos, documents, camera, mic, '@' another project. Its sends carry
+            // their pictures (sendTo uploads each first; before 0.15.11 this box was text only and sent none).
+            val acts = com.past9.phoneaos.ui.composerActionsFor(box, tools, working, send = { text, pics ->
+                val s = session ?: return@composerActionsFor
+                scope.launch { runCatching { s.sendTo(chat, text, pics) }.onFailure { problem = "Couldn't send that: ${it.message}"; box.draft = text }; load(s) }
+            }, stop = { session?.let { s -> scope.launch { runCatching { s.call("chat.stop", listOf(chat), 15_000) } } } })
+            MessageComposer(box.draft, { box.draft = it }, working, acts, box.attachments, box.docs.keys.toList(), tools?.listening(box) == true, placeholder = "Message $name")
         },
     ) { pad ->
         LazyColumn(state = list, modifier = Modifier.fillMaxSize().padding(pad), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -130,9 +119,11 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit) {
                         val via = runCatching { JSONObject(row.optString("meta").ifBlank { "{}" }).optJSONObject("via") }.getOrNull()
                         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
                             if (via != null) Text("From ${via.optString("name").ifBlank { "another chat" }}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Surface(shape = RoundedCornerShape(20.dp), color = if (via == null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.widthIn(max = 320.dp)) {
+                            Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md), color = if (via == null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.widthIn(max = 320.dp)) {
                                 Text(row.optString("text"), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
                             }
+                            // The pictures he sent with it (paths on the computer, fetched here once; on mobile data on a tap).
+                            RowPictures(row, session)
                         }
                     }
                     "agent" -> Markdown(row.optString("text"), Modifier.fillMaxWidth().padding(end = 12.dp))
@@ -156,5 +147,28 @@ internal fun concerns(event: String, payload: Any?, chat: String): Boolean {
         RemoteSession.EVT_CHAT -> p.optString("chat") == chat && p.optString("type") in setOf("run_started", "run_finished", "chat_changed")
         RemoteSession.EVT_DATA -> p.optString("entity") == "chat_item" && (p.optJSONObject("row")?.let { RemoteRows.chatOf(it) == chat } ?: false)
         else -> false
+    }
+}
+
+/**
+ * A project chat message's pictures (its attachments and images on the computer), drawn under the bubble. On Wi-Fi they
+ * come at once; on mobile data a tap brings them (the same rule as the main chat).
+ */
+@Composable
+private fun RowPictures(row: JSONObject, session: RemoteSession?) {
+    val meta = remember(row.optString("id"), row.optString("meta")) { runCatching { JSONObject(row.optString("meta").ifBlank { "{}" }) }.getOrNull() ?: JSONObject() }
+    val count = remember(meta) { RemoteRows.mediaPaths(meta).size }
+    if (count == 0 || session == null) return
+    var local by remember(meta) { mutableStateOf<List<String>>(emptyList()) }
+    var asked by remember(meta) { mutableStateOf(false) }
+    LaunchedEffect(meta, asked) { local = runCatching { session.picturesOf(meta, force = asked).values.toList() }.getOrDefault(emptyList()) }
+    Spacer(Modifier.height(6.dp))
+    if (local.isNotEmpty()) com.past9.phoneaos.ui.ImageStrip(local.map { com.past9.phoneaos.ui.ChatImage(java.io.File(it).toURI().toString(), "Photo you sent") }, Modifier.widthIn(max = 320.dp))
+    else Surface(onClick = { asked = true }, shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(androidx.compose.material.icons.Icons.Rounded.Image, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(8.dp))
+            Text(if (count == 1) "1 photo · tap to load" else "$count photos · tap to load", style = MaterialTheme.typography.labelLarge)
+        }
     }
 }

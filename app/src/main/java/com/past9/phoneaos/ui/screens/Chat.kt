@@ -106,7 +106,11 @@ data class ChatActions(
     val onReport: (String) -> Unit = {},
     /** Open one of the computer's chats (a project chat an @-mention went to): its id and the project's name. */
     val onOpenChat: (String, String) -> Unit = { _, _ -> },
-)
+) {
+    /** The message box's part: the same [com.past9.phoneaos.ui.ComposerActions] every chat's box takes. */
+    fun composer() = com.past9.phoneaos.ui.ComposerActions(onSend = onSend, onSendVoice = onSendVoice, onStop = onStop, onAttach = onAttach, onAttachDoc = onAttachDoc,
+        onCamera = onCamera, onMic = onMic, onRemoveAttachment = onRemoveAttachment, onRemoveDoc = onRemoveDoc)
+}
 
 /**
  * The user's message this reply answers, when that isn't obvious: the reply came later, from helpers' results,
@@ -313,7 +317,7 @@ fun ChatScreen(
                     scope.launch { kotlinx.coroutines.delay(120); stick = true; list.animateScrollToItem(rows.size) }
                 })
             }
-            Composer(draft, onDraft, status.working, actions, attachments, docs, listening) } } },
+            MessageComposer(draft, onDraft, status.working, actions.composer(), attachments, docs, listening) } } },
     ) { pad ->
         if (items.isEmpty() || morning != null) Welcome(userName, Modifier.padding(pad), actions.onSend, morning, hasChat = items.isNotEmpty())
         else LazyColumn(
@@ -525,7 +529,7 @@ private fun VoiceBubble(item: ChatItem) {
     val t = rememberInfiniteTransition(label = "voice")
     val wave by t.animateFloat(0f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "wave")
     Column(Modifier.fillMaxWidth().padding(end = 48.dp)) {
-        Surface(shape = RoundedCornerShape(28.dp), color = cs.primaryContainer) {
+        Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg), color = cs.primaryContainer) {
             Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 MorphIconButton(onClick = {
                     if (playing) { com.past9.phoneaos.voice.Tts.stop(); playing = false }
@@ -583,7 +587,7 @@ private fun UserBubble(item: ChatItem) {
         }
     }
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-        Surface(color = if (sender == null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(24.dp, 24.dp, 6.dp, 24.dp), modifier = Modifier.widthIn(max = 320.dp).padding(start = 48.dp)) {
+        Surface(color = if (sender == null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg, com.past9.phoneaos.ui.theme.Radius.lg, com.past9.phoneaos.ui.theme.Radius.xs, com.past9.phoneaos.ui.theme.Radius.lg), modifier = Modifier.widthIn(max = 320.dp).padding(start = 48.dp)) {
             Text(text.substringBefore("\n\n[Attached document:").substringBefore("\n\n[Shared with you").ifBlank { "Here's a document." }, Modifier.padding(horizontal = 16.dp, vertical = 11.dp), style = MaterialTheme.typography.bodyLarge,
                 color = if (sender == null) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
         }
@@ -611,6 +615,8 @@ private fun AgentMessage(item: ChatItem, quoted: ChatItem? = null, onQuote: (Lon
             }
         }
         Markdown(com.past9.phoneaos.voice.Tts.stripEmoji(item.text))
+        // A reply that links a mini-app (agent://miniapp/<id>, from miniapp_open): a card that opens it on this phone.
+        com.past9.phoneaos.miniapps.MiniAppRules.linksIn(item.text).forEach { id -> Spacer(Modifier.height(8.dp)); com.past9.phoneaos.miniapps.MiniAppCard(id) }
     }
 }
 
@@ -618,7 +624,7 @@ private fun AgentMessage(item: ChatItem, quoted: ChatItem? = null, onQuote: (Lon
 @Composable
 fun ReplyQuote(quoted: ChatItem, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    Surface(onClick = onClick, shape = RoundedCornerShape(14.dp), color = cs.surfaceContainerLow, modifier = Modifier.widthIn(max = 340.dp)) {
+    Surface(onClick = onClick, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm), color = cs.surfaceContainerLow, modifier = Modifier.widthIn(max = 340.dp)) {
         Row(Modifier.height(IntrinsicSize.Min)) {
             Box(Modifier.width(4.dp).fillMaxHeight().background(cs.primary))
             Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
@@ -639,10 +645,10 @@ fun ReportCard(item: ChatItem, onOpen: () -> Unit) {
     val meta = JSONObject(item.meta)
     val cs = MaterialTheme.colorScheme
     val minutes = (meta.optInt("words") / 220).coerceAtLeast(1)
-    Surface(onClick = onOpen, shape = RoundedCornerShape(28.dp), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
+    Surface(onClick = onOpen, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(cs.primaryContainer), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(48.dp).clip(RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm)).background(cs.primaryContainer), contentAlignment = Alignment.Center) {
                     Icon(Icons.AutoMirrored.Rounded.Article, null, tint = cs.onPrimaryContainer)
                 }
                 Spacer(Modifier.width(14.dp))
@@ -672,10 +678,10 @@ fun iconFor(tool: String): ImageVector = when (tool) {
 private fun CallRow(items: List<ChatItem>, agentName: String) {
     var open by remember { mutableStateOf(false) }
     val cs = MaterialTheme.colorScheme
-    Surface(onClick = { open = !open }, shape = RoundedCornerShape(20.dp), color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+    Surface(onClick = { open = !open }, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md), color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp).animateContentSize()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(28.dp).clip(RoundedCornerShape(10.dp)).background(cs.primaryContainer), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(28.dp).clip(RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm)).background(cs.primaryContainer), contentAlignment = Alignment.Center) {
                     Icon(Icons.Rounded.Call, null, Modifier.size(16.dp), tint = cs.onPrimaryContainer)
                 }
                 Spacer(Modifier.width(10.dp))
@@ -703,7 +709,7 @@ private fun StepsRow(items: List<ChatItem>) {
     val last = items.last()
     Column(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable { open = !open }.padding(vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(28.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.secondaryContainer), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(28.dp).clip(RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm)).background(MaterialTheme.colorScheme.secondaryContainer), contentAlignment = Alignment.Center) {
                 Icon(iconFor(JSONObject(last.meta).optString("tool")), null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
             }
             Spacer(Modifier.width(10.dp))
@@ -726,9 +732,9 @@ private fun StepsRow(items: List<ChatItem>) {
                     }
                     // A command on a machine: its last lines of output, terminal style.
                     JSONObject(a.meta).optString("result").takeIf { it.isNotBlank() && JSONObject(a.meta).optString("tool") == "machine" }?.let { out ->
-                        Surface(shape = RoundedCornerShape(12.dp), color = androidx.compose.ui.graphics.Color(0xFF15161A), modifier = Modifier.fillMaxWidth().padding(start = 22.dp)) {
+                        Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm), color = com.past9.phoneaos.ui.theme.Media.terminal, modifier = Modifier.fillMaxWidth().padding(start = 22.dp)) {
                             Text(out.trim().lines().takeLast(8).joinToString("\n"), Modifier.horizontalScroll(rememberScrollState()).padding(10.dp),
-                                style = MaterialTheme.typography.labelSmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace), color = androidx.compose.ui.graphics.Color(0xFFD8F3DC))
+                                style = MaterialTheme.typography.labelSmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace), color = com.past9.phoneaos.ui.theme.Media.onTerminal)
                         }
                     }
                 }
@@ -779,7 +785,7 @@ fun BranchRow(item: ChatItem, steps: List<ChatItem>) {
             Text("Branch · $label · ${item.text.take(32)}${if (item.text.length > 32) "..." else ""}", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
-    if (open) ModalBottomSheet(onDismissRequest = { open = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = cs.surfaceContainerLow) {
+    if (open) com.past9.phoneaos.ui.AgentSheet({ open = false }) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 32.dp)) {
             Text("BRANCH", style = com.past9.phoneaos.ui.theme.Eyebrow, color = cs.onSurfaceVariant)
             Text(item.text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp))
@@ -922,7 +928,7 @@ fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
         val ok = answer == "Approve"
         Column(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable { open = !open }.padding(vertical = 4.dp).animateContentSize()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(28.dp).clip(RoundedCornerShape(10.dp)).background(if (ok) LocalExtra.current.successContainer else cs.surfaceContainerHigh), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(28.dp).clip(RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm)).background(if (ok) LocalExtra.current.successContainer else cs.surfaceContainerHigh), contentAlignment = Alignment.Center) {
                     Icon(if (ok) Icons.Rounded.Check else Icons.Rounded.Close, null, Modifier.size(16.dp), tint = if (ok) LocalExtra.current.success else cs.onSurfaceVariant)
                 }
                 Spacer(Modifier.width(10.dp))
@@ -960,9 +966,9 @@ private fun ApprovalDetails(details: String) {
     val cs = MaterialTheme.colorScheme
     val json = remember(details) { runCatching { JSONObject(details) }.getOrNull() }
     when {
-        details.startsWith("$ ") -> Surface(shape = MaterialTheme.shapes.medium, color = androidx.compose.ui.graphics.Color(0xFF15161A), modifier = Modifier.fillMaxWidth()) {
+        details.startsWith("$ ") -> Surface(shape = MaterialTheme.shapes.medium, color = com.past9.phoneaos.ui.theme.Media.terminal, modifier = Modifier.fillMaxWidth()) {
             Text(details, Modifier.horizontalScroll(rememberScrollState()).padding(14.dp), style = MaterialTheme.typography.bodySmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace),
-                color = androidx.compose.ui.graphics.Color(0xFFD8F3DC))
+                color = com.past9.phoneaos.ui.theme.Media.onTerminal)
         }
         json != null -> Surface(shape = MaterialTheme.shapes.medium, color = cs.surfaceContainerLowest, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp).heightIn(max = 320.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1021,10 +1027,10 @@ private fun FileCard(item: ChatItem) {
         else -> Icons.Rounded.Description
     }
     val mime = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
-    Surface(shape = RoundedCornerShape(24.dp), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(cs.primaryContainer), contentAlignment = Alignment.Center) { Icon(icon, null, tint = cs.onPrimaryContainer) }
+                Box(Modifier.size(48.dp).clip(RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm)).background(cs.primaryContainer), contentAlignment = Alignment.Center) { Icon(icon, null, tint = cs.onPrimaryContainer) }
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(file.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -1121,7 +1127,8 @@ fun MentionReplyCard(item: ChatItem, reply: com.past9.phoneaos.remote.MentionRep
     val image = session?.mentions?.collectAsStateWithLifecycle()?.value?.firstOrNull { it.id == reply.project }?.image.orEmpty()
     val (toneBg, toneFg) = profileTones(reply.color)
     var replying by remember(item.id) { mutableStateOf(false) }
-    var draft by remember(item.id) { mutableStateOf("") }
+    val box = remember(item.id) { com.past9.phoneaos.ui.ComposerBox(mutableStateOf("")) }
+    val tools = com.past9.phoneaos.ui.LocalComposerTools.current
     var problem by remember(item.id) { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val long = item.text.length > 600
@@ -1144,22 +1151,15 @@ fun MentionReplyCard(item: ChatItem, reply: com.past9.phoneaos.remote.MentionRep
                 OutlinedButton(onClick = { replying = !replying }, modifier = Modifier.heightIn(min = 44.dp)) { Text("Reply") }
             }
             if (replying) {
-                Spacer(Modifier.height(10.dp))
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                        Box(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-                            if (draft.isEmpty()) Text("Reply to ${reply.name}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            BasicTextField(draft, { draft = it }, textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface), cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), maxLines = 5, modifier = Modifier.fillMaxWidth())
-                        }
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    FilledIconButton(onClick = {
-                        val s = session ?: return@FilledIconButton
-                        val text = draft.trim(); if (text.isEmpty()) return@FilledIconButton
-                        draft = ""; replying = false; problem = ""
-                        scope.launch { runCatching { s.call("chat.send", com.past9.phoneaos.remote.Mentions.replyArgs(reply.chat, text), 60_000) }.onFailure { problem = "Couldn't send that: ${it.message}"; draft = text; replying = true } }
-                    }, enabled = draft.isNotBlank() && session != null, modifier = Modifier.size(48.dp)) { Icon(Icons.AutoMirrored.Rounded.ArrowForward, "Send to ${reply.name}") }
-                }
+                Spacer(Modifier.height(6.dp))
+                // The same message box as every chat: photos, documents, camera, mic.
+                val acts = com.past9.phoneaos.ui.composerActionsFor(box, tools, working = false, send = { text, pics ->
+                    val s = session ?: return@composerActionsFor
+                    replying = false; problem = ""
+                    scope.launch { runCatching { s.replyTo(reply.chat, text, pics) }.onFailure { problem = "Couldn't send that: ${it.message}"; box.draft = text; replying = true } }
+                })
+                MessageComposer(box.draft, { box.draft = it }, false, acts, box.attachments, box.docs.keys.toList(), tools?.listening(box) == true,
+                    placeholder = "Reply to ${reply.name}", inset = false)
             }
             if (problem.isNotEmpty()) Text(problem, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
         }
@@ -1231,21 +1231,19 @@ private fun WorkingRow(status: AgentStatus) {
     }
 }
 
+/**
+ * THE message box: the main chat's, and every project or helper chat's on the phone (29 Oct 2026: one component, not a
+ * copy). Attach a photo or a document, the camera, the mic, '@' a project, send (swipe up for a voice reply where the
+ * chat has one). Each chat passes its own words, pictures and documents, so nothing leaks between chats.
+ */
 @Composable
-private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean, actions: ChatActions, attachments: List<String>, docs: List<String> = emptyList(), listening: Boolean = false) {
+fun MessageComposer(draft: String, onDraft: (String) -> Unit, working: Boolean, actions: com.past9.phoneaos.ui.ComposerActions, attachments: List<String>, docs: List<String> = emptyList(),
+                    listening: Boolean = false, placeholder: String? = null, inset: Boolean = true) {
     var attachMenu by remember { mutableStateOf(false) }
-    if (attachMenu) ModalBottomSheet(onDismissRequest = { attachMenu = false }) {
-        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
-            listOf(Triple(Icons.Rounded.Image, "Photo", "From your gallery") to actions.onAttach, Triple(Icons.Rounded.Description, "Document", "PDF, Word, text, CSV, scans") to actions.onAttachDoc).forEach { (t, act) ->
-                Surface(onClick = { attachMenu = false; act() }, shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(t.first, null, tint = MaterialTheme.colorScheme.primary); Spacer(Modifier.width(14.dp))
-                        Column { Text(t.second, style = MaterialTheme.typography.titleMedium); Text(t.third, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                    }
-                }
-            }
-        }
-    }
+    if (attachMenu) com.past9.phoneaos.ui.ChoiceSheet(Icons.Rounded.AttachFile, "Attach", "Add to your message", listOf(
+        com.past9.phoneaos.ui.SheetChoice("photo", "Photo", "From your gallery", Icons.Rounded.Image),
+        com.past9.phoneaos.ui.SheetChoice("doc", "Document", "PDF, Word, text, CSV, scans", Icons.Rounded.Description)),
+        onPick = { c -> attachMenu = false; if (c.id == "photo") actions.onAttach() else actions.onAttachDoc() }, onDismiss = { attachMenu = false })
     // The box keeps its caret here, so the '@' word at the caret can be found and replaced (an outside change to the
     // draft, a dictation or a send, puts the caret at the end).
     // '@' offers the computer's projects (remote/Mentions.kt); only while linked to a computer, which routes the message.
@@ -1292,8 +1290,9 @@ private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean,
             if (dismissedAt >= 0 && M.atCaret(raw, at)?.first != dismissedAt) dismissedAt = -1
         }
     }
-    Surface(color = MaterialTheme.colorScheme.surface) {
-      Column(Modifier.navigationBarsPadding().imePadding()) {
+    // inset: the box sits at the bottom of a screen (system bars and keyboard); false inside a card.
+    Surface(color = if (inset) MaterialTheme.colorScheme.surface else androidx.compose.ui.graphics.Color.Transparent) {
+      Column(if (inset) Modifier.navigationBarsPadding().imePadding() else Modifier) {
         if (picks.isNotEmpty()) MentionList(picks) { p ->
             setChip(M.chipFromPick(words, caretInWords, p))
             android.util.Log.i("Mentions", "picked ${p.name}")
@@ -1315,7 +1314,7 @@ private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean,
             }
         }
         Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp), verticalAlignment = Alignment.Bottom) {
-            Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) {
+            Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp, end = 4.dp)) {
                     IconButton(onClick = { attachMenu = true }) { Icon(Icons.Rounded.AttachFile, "Attach a photo or document", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                     var camBounds by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
@@ -1327,7 +1326,7 @@ private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean,
                             Spacer(Modifier.height(6.dp))
                         }
                         Box(Modifier.fillMaxWidth()) {
-                            if (draft.isEmpty()) Text(if (session != null) "Ask anything, or @ a project" else "Ask for anything", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (draft.isEmpty()) Text(placeholder ?: if (session != null) "Ask anything, or @ a project" else "Ask for anything", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             BasicTextField(shown, onField, textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
                                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), maxLines = 6, modifier = Modifier.fillMaxWidth())
                         }
@@ -1342,7 +1341,7 @@ private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean,
             val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
             val density = androidx.compose.ui.platform.LocalDensity.current
             val threshold = with(density) { 56.dp.toPx() }
-            val voiceMode = canSend && lift > threshold
+            val voiceMode = canSend && lift > threshold && actions.onSendVoice != null
             LaunchedEffect(voiceMode) { if (voiceMode) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress) }
             // The button never moves (moving it clipped it against the composer); it grows a little and
             // turns into headphones once the swipe is far enough.
@@ -1360,9 +1359,9 @@ private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean,
                                 if (dy > 8f) c.consume()
                             }
                         } finally { lift = 0f }
-                        val wasVoice = canSend && dy > threshold
+                        val wasVoice = canSend && dy > threshold && actions.onSendVoice != null
                         when {
-                            wasVoice -> { actions.onSendVoice(draft); onDraft("") }
+                            wasVoice -> { (actions.onSendVoice ?: actions.onSend)(draft); onDraft("") }
                             dy < 24f && working && !canSend -> actions.onStop()
                             dy < 24f && canSend -> { actions.onSend(draft); onDraft("") }
                         }
@@ -1370,7 +1369,7 @@ private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean,
                 }) {
                 val bg = if (voiceMode) MaterialTheme.colorScheme.tertiary else if (canSend || working) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
                 val tint = if (voiceMode) MaterialTheme.colorScheme.onTertiary else if (canSend || working) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                Box(Modifier.size(56.dp).clip(if (working && !canSend) RoundedCornerShape(16.dp) else CircleShape).background(bg), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(56.dp).clip(if (working && !canSend) RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm) else CircleShape).background(bg), contentAlignment = Alignment.Center) {
                     when {
                         voiceMode -> Icon(Icons.Rounded.Headphones, "Send, reply with a voice note", tint = tint)
                         working && !canSend -> Icon(Icons.Rounded.Stop, "Stop", tint = tint)

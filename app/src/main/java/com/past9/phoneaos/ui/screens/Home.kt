@@ -155,7 +155,6 @@ fun HomeScreen(s: HomeState, actions: HomeActions, bottomPadding: Dp = 120.dp) {
                 }
             }
         }
-        if (s.miniApps.isNotEmpty()) item(key = "miniapps") { com.past9.phoneaos.miniapps.PinnedAppsRow(s.miniApps, actions.onMiniApp, actions.onMiniApps) }
         if (pending.isNotEmpty() || blockedMine.isNotEmpty()) {
             item { SectionHeader("Needs you", "Your agent can't go on without these", Modifier.padding(start = 4.dp, top = 6.dp)) }
             items(pending, key = { "q${it.id}" }) { q -> NeedsYouCard(q, actions) }
@@ -175,6 +174,8 @@ fun HomeScreen(s: HomeState, actions: HomeActions, bottomPadding: Dp = 120.dp) {
         }
     }
     val secondary: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
+        // His pinned mini-apps: one small row right before the to-dos (29 Oct 2026).
+        if (com.past9.phoneaos.miniapps.MiniAppRules.pinned(s.miniApps).isNotEmpty()) item(key = "miniapps") { com.past9.phoneaos.miniapps.PinnedAppsRow(s.miniApps, actions.onMiniApp, actions.onMiniApps) }
         item { SectionHeader("Your to-dos", if (myTodos.isEmpty()) "Nothing on your list" else "${myTodos.size} open, soonest first", Modifier.padding(start = 4.dp, top = 6.dp)) {
             TextButton(onClick = actions.onTasks) { Text("All") }
         } }
@@ -363,7 +364,7 @@ private fun comingUp(s: HomeState): List<Coming> {
 private fun ComingLine(icon: ImageVector, title: String, line: String, urgent: Boolean, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 56.dp).padding(horizontal = 18.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)).background(if (urgent) cs.tertiaryContainer else cs.secondaryContainer), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(36.dp).clip(RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm)).background(if (urgent) cs.tertiaryContainer else cs.secondaryContainer), contentAlignment = Alignment.Center) {
             Icon(icon, null, Modifier.size(20.dp), tint = if (urgent) cs.onTertiaryContainer else cs.onSecondaryContainer)
         }
         Spacer(Modifier.width(14.dp))
