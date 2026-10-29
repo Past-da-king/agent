@@ -69,6 +69,49 @@ object MiniAppRules {
 
     /** The theme message the bridge understands (shared/miniapp-kit.ts agent.js). */
     fun themeMessage(dark: Boolean, accent: String): JSONObject = JSONObject().put("op", "theme").put("dark", dark).put("accent", accent)
+
+    /**
+     * agent.openUrl (and a plain link click) on the phone: only an https address with a host and no user name or
+     * password, checked again here whatever the computer said. Android then opens it in the app it picks, so a Teams
+     * or Meet link opens that app. Null: it does not open.
+     */
+    fun openableUrl(raw: String?): String? {
+        val text = raw?.trim().orEmpty()
+        if (text.isEmpty() || text.length > 4096) return null
+        val m = Regex("^https://([^/?#\\s]+)(?:[/?#]\\S*)?$", RegexOption.IGNORE_CASE).matchEntire(text) ?: return null
+        val authority = m.groupValues[1]
+        if ('@' in authority || authority.startsWith(":") || authority.startsWith(".")) return null
+        return text
+    }
+
+    /**
+     * The link an "open" request should open once the computer answered: the checked address it handed back (it
+     * checked, rate-limited and logged it). A computer from before agent.openUrl answers "Unknown request open": then
+     * the phone's own check and limit decide. Null: nothing opens, and the computer's answer goes to the app as it is.
+     */
+    fun linkToOpen(request: JSONObject, reply: JSONObject?): String? {
+        if (request.optString("op") != "open" || reply == null) return null
+        if (reply.optBoolean("ok")) return openableUrl(reply.optJSONObject("result")?.optString("open"))
+        return if (reply.optString("error").startsWith("Unknown request open")) openableUrl(request.optString("url")) else null
+    }
+
+    /** The answer the app gets once the phone tried to open the link: null error = opened. */
+    fun openedReply(reply: JSONObject, error: String?): JSONObject {
+        val out = JSONObject().put("op", "reply").put("id", reply.optInt("id")).put("ok", error == null)
+        return if (error == null) out.put("result", "Opened.") else out.put("error", error)
+    }
+}
+
+/** At most 4 links in 30 s from the open apps on this phone (the computer has its own limit per app). */
+class OpenLimiter(private val now: () -> Long = { System.currentTimeMillis() }, private val max: Int = 4, private val perMs: Long = 30_000) {
+    private val times = ArrayDeque<Long>()
+    @Synchronized fun take(): Boolean {
+        val t = now()
+        while (times.isNotEmpty() && t - times.first() >= perMs) times.removeFirst()
+        if (times.size >= max) return false
+        times.addLast(t)
+        return true
+    }
 }
 
 object MiniAppsHub {

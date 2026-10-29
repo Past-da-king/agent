@@ -308,8 +308,29 @@ private class Bridge(private val web: WebView, private val session: String) {
             val reply = runCatching { s.call("miniapps.call", listOf(session, message), 120_000) }.getOrElse { e ->
                 if (message.optInt("id") > 0) JSONObject().put("op", "reply").put("id", message.optInt("id")).put("ok", false).put("error", e.message ?: "Not done") else null
             }
-            val out = (reply as? JSONObject) ?: return@launch
-            web.post { web.evaluateJavascript("window.__agentReceive&&window.__agentReceive(${JSONObject.quote(out.toString())})", null) }
+            val answer = (reply as? JSONObject) ?: return@launch
+            val link = MiniAppRules.linkToOpen(message, answer)
+            web.post {
+                // agent.openUrl: the computer checked it; Android opens it in the app it picks (Teams, Meet, the browser).
+                val out = if (link == null) answer else MiniAppRules.openedReply(answer, if (opens.take()) openLink(web.context, link) else "Too many links: at most 4 in 30 s.")
+                web.evaluateJavascript("window.__agentReceive&&window.__agentReceive(${JSONObject.quote(out.toString())})", null)
+            }
+        }
+    }
+
+    companion object {
+        val opens = OpenLimiter()
+
+        /** Null when it opened, else why not. */
+        fun openLink(context: Context, url: String): String? = try {
+            val uri = android.net.Uri.parse(url)
+            context.startActivity(Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            android.util.Log.i("MiniApp", "opened a link on ${uri.host}")
+            null
+        } catch (e: android.content.ActivityNotFoundException) {
+            "No app on this phone opens that link."
+        } catch (e: Exception) {
+            e.message ?: "It did not open."
         }
     }
 }
