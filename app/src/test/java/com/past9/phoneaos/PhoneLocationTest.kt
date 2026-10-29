@@ -104,6 +104,17 @@ class PhoneLocationTest {
     }
 
     @Test
+    fun allTheTimeAndOnScreenComeFromWhatAndroidReallyEnforces() {
+        // His A35, 29 Oct: permission ACCESS_BACKGROUND_LOCATION said nothing useful; the app-op said "foreground".
+        assertEquals(false, PhoneLocation.backgroundFrom(android.app.AppOpsManager.MODE_FOREGROUND, true))
+        assertEquals(true, PhoneLocation.backgroundFrom(android.app.AppOpsManager.MODE_ALLOWED, false))
+        assertEquals(true, PhoneLocation.backgroundFrom(null, true))
+        // The wake-up foreground service keeps the process at 125: that is not on screen.
+        assertEquals(false, PhoneLocation.onScreenImportance(android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE))
+        assertEquals(true, PhoneLocation.onScreenImportance(android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND))
+    }
+
+    @Test
     fun theAskNeverOverwritesTheWakeUpServicesNotification() {
         assertTrue(PhoneLocation.NOTE_ID != com.past9.phoneaos.wakeup.WakeChannelService.NOTE_ID)
         assertTrue(PhoneLocation.NOTE_ID != com.past9.phoneaos.wakeup.WakeUpService.NOTE_ID)

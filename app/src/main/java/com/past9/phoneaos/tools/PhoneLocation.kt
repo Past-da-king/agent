@@ -57,11 +57,29 @@ object PhoneLocation {
     fun onScreen(): Boolean = runCatching {
         val info = android.app.ActivityManager.RunningAppProcessInfo()
         android.app.ActivityManager.getMyMemoryState(info)
-        info.importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE
+        // FOREGROUND only: the wake-up channel's foreground service keeps the process at 125, which is not on screen.
+        onScreenImportance(info.importance)
     }.getOrDefault(false)
 
-    fun hasBackground(context: Context): Boolean = Build.VERSION.SDK_INT < 29 ||
-        androidx.core.content.ContextCompat.checkSelfPermission(context, BACKGROUND) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    fun onScreenImportance(importance: Int) = importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
+
+    /** The app-op is the truth: "foreground" means while-in-use only, "allow" means all the time (seen on his A35, 29 Oct). */
+    fun hasBackground(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < 29) return true
+        val mode = runCatching {
+            context.getSystemService(android.app.AppOpsManager::class.java)
+                .unsafeCheckOpNoThrow(android.app.AppOpsManager.OPSTR_FINE_LOCATION, android.os.Process.myUid(), context.packageName)
+        }.getOrNull()
+        return backgroundFrom(mode, androidx.core.content.ContextCompat.checkSelfPermission(context, BACKGROUND) == android.content.pm.PackageManager.PERMISSION_GRANTED)
+    }
+
+    fun backgroundFrom(opMode: Int?, permGranted: Boolean): Boolean = if (opMode == null) permGranted else opMode == android.app.AppOpsManager.MODE_ALLOWED
+
+    /** Android's own page for this app, where Location > Allow all the time is one tap. */
+    fun openAppSettings(context: Context) = runCatching {
+        context.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", context.packageName, null))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
 
     /**
      * A web page asked for navigator.geolocation (protocol: WebChromeClient.onGeolocationPermissionsShowPrompt).
@@ -166,9 +184,13 @@ class PhoneLocationTool(private val context: Context, private val askMs: Long = 
         val settings = runCatching { App.graph(context).settings }.getOrNull()
         if (!PhoneLocation.hasBackground(context) && settings?.extra(PhoneLocation.BG_ASKED_KEY) != "1" && PhoneLocation.onScreen()) {
             settings?.setExtra(PhoneLocation.BG_ASKED_KEY, "1")
+            android.util.Log.i("PhoneLocation", "asking for all-the-time location")
             withTimeoutOrNull(30_000) { PermissionBroker.request(context, arrayOf(PhoneLocation.BACKGROUND)) { PhoneLocation.askNote(context, "", background = true) } }
             NotificationManagerCompat.from(context).cancel(PhoneLocation.NOTE_ID)
+            // Android said yes without showing anything, yet the app-op is still while-in-use: open the app's settings page.
+            if (!PhoneLocation.hasBackground(context)) { android.util.Log.i("PhoneLocation", "opening app settings for all-the-time"); PhoneLocation.openAppSettings(context) }
         }
+        android.util.Log.i("PhoneLocation", "background=${PhoneLocation.hasBackground(context)} onScreen=${PhoneLocation.onScreen()}")
         if (!PhoneLocation.hasBackground(context) && !PhoneLocation.onScreen())
             error("BACKGROUND: the Agent app on the phone may use location only while it is open, and it is closed now. Ask him to open the app (then call again), or to set Location to 'Allow all the time' for Agent (Settings, Apps, Agent, Permissions, Location).")
         val lm = context.getSystemService(LocationManager::class.java)
