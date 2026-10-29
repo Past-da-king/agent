@@ -57,6 +57,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.contentDescription
 import com.past9.phoneaos.agent.AgentStatus
 import com.past9.phoneaos.data.ChatItem
 import com.past9.phoneaos.ui.AgentAvatar
@@ -1160,6 +1164,32 @@ fun MentionReplyCard(item: ChatItem, reply: com.past9.phoneaos.remote.MentionRep
     }
 }
 
+/** The invisible mark the message box keeps right after a project chip (Backspace on it takes the chip away). */
+internal const val CHIP_MARK = "\u200B"
+
+/** The field with the chip's mark first, and the caret and the keyboard's word kept after it. */
+internal fun afterMark(v: androidx.compose.ui.text.input.TextFieldValue): androidx.compose.ui.text.input.TextFieldValue {
+    if (!v.text.startsWith(CHIP_MARK)) { val t = CHIP_MARK + v.text.replace(CHIP_MARK, ""); return androidx.compose.ui.text.input.TextFieldValue(t, androidx.compose.ui.text.TextRange(t.length)) }
+    fun c(r: androidx.compose.ui.text.TextRange) = androidx.compose.ui.text.TextRange(r.start.coerceAtLeast(1), r.end.coerceAtLeast(1))
+    if (v.selection.min >= 1 && (v.composition?.min ?: 1) >= 1) return v
+    return v.copy(selection = c(v.selection), composition = v.composition?.let { c(it) })
+}
+
+/** The project a message goes to, in front of the words: its tile, name and colour; the x takes it away. */
+@Composable
+fun MentionChip(p: com.past9.phoneaos.remote.MentionProject, onRemove: () -> Unit) {
+    val accent = com.past9.phoneaos.ui.theme.accentOf(p.color)
+    Surface(shape = RoundedCornerShape(50), color = accent.lP.copy(alpha = 0.16f), border = androidx.compose.foundation.BorderStroke(1.dp, accent.lP.copy(alpha = 0.45f)),
+        modifier = Modifier.heightIn(min = 36.dp).widthIn(max = 180.dp).semantics { contentDescription = "Goes to ${p.name}" }) {
+        Row(Modifier.padding(start = 4.dp, end = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            com.past9.phoneaos.ui.ProjectIconTile(p.name, p.glyph, p.color, p.image, 26.dp)
+            Spacer(Modifier.width(6.dp))
+            Text(p.name, style = MaterialTheme.typography.labelLarge, color = accent.lP, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.Close, "Do not send to ${p.name}", Modifier.size(16.dp), tint = accent.lP) }
+        }
+    }
+}
+
 /** The '@' list above the message box: the computer's projects that fit what he typed. */
 @Composable
 private fun MentionList(items: List<com.past9.phoneaos.remote.MentionProject>, onPick: (com.past9.phoneaos.remote.MentionProject) -> Unit) {
@@ -1168,7 +1198,11 @@ private fun MentionList(items: List<com.past9.phoneaos.remote.MentionProject>, o
         Column(Modifier.padding(vertical = 6.dp).heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
             Text("Send to a project", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 16.dp, top = 6.dp, bottom = 4.dp))
             items.forEach { p ->
-                Surface(onClick = { onPick(p) }, color = androidx.compose.ui.graphics.Color.Transparent, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp)) {
+                // Picked the moment the finger goes down: a pick on release was lost on his phone (29 Oct 2026), and
+                // the message box keeps its focus and keyboard.
+                Surface(color = androidx.compose.ui.graphics.Color.Transparent, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp)
+                    .semantics { role = androidx.compose.ui.semantics.Role.Button; onClick(label = "Send to ${p.name}") { onPick(p); true } }
+                    .pointerInput(p.id) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false).consume(); onPick(p) } }) {
                     Row(Modifier.heightIn(min = 52.dp).padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         com.past9.phoneaos.ui.ProjectIconTile(p.name, p.glyph, p.color, p.image, 32.dp)
                         Spacer(Modifier.width(12.dp))
@@ -1209,22 +1243,55 @@ private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean,
     }
     // The box keeps its caret here, so the '@' word at the caret can be found and replaced (an outside change to the
     // draft, a dictation or a send, puts the caret at the end).
-    var field by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(draft, androidx.compose.ui.text.TextRange(draft.length))) }
-    val shown = if (field.text == draft) field else androidx.compose.ui.text.input.TextFieldValue(draft, androidx.compose.ui.text.TextRange(draft.length))
     // '@' offers the computer's projects (remote/Mentions.kt); only while linked to a computer, which routes the message.
     val session = com.past9.phoneaos.remote.RemoteHub.session.collectAsStateWithLifecycle().value
-    val typing = if (session == null) null else com.past9.phoneaos.remote.Mentions.atCaret(shown.text, shown.selection.start)
+    val known = session?.mentions?.collectAsStateWithLifecycle()?.value.orEmpty()
+    val M = com.past9.phoneaos.remote.Mentions
+    // The draft stays '@Name words' (what the computer routes); the box shows the project as a chip in front of the
+    // words. The field then starts with one invisible mark: Backspace right after the chip deletes it, and the chip goes.
+    val chip = if (session == null) null else M.chipOf(draft, known)
+    val words = chip?.second ?: draft
+    val lead = if (chip != null) CHIP_MARK else ""
+    val fieldText = lead + words
+    var field by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(fieldText, androidx.compose.ui.text.TextRange(fieldText.length))) }
+    val shown = if (field.text == fieldText) field else androidx.compose.ui.text.input.TextFieldValue(fieldText, androidx.compose.ui.text.TextRange(fieldText.length))
+    val caretInWords = (shown.selection.start - lead.length).coerceIn(0, words.length)
+    val typing = if (session == null) null else M.atCaret(words, caretInWords)
     var dismissedAt by remember { mutableIntStateOf(-1) }
     LaunchedEffect(typing != null, session) { if (typing != null) session?.refreshMentions() }
-    val known = session?.mentions?.collectAsStateWithLifecycle()?.value.orEmpty()
-    val picks = if (typing == null || typing.first == dismissedAt || com.past9.phoneaos.remote.Mentions.done(typing.second, known)) emptyList() else com.past9.phoneaos.remote.Mentions.rank(typing.second, known)
+    val picks = if (typing == null || typing.first == dismissedAt || M.done(typing.second, known)) emptyList() else M.rank(typing.second, known)
     if (picks.isNotEmpty()) androidx.activity.compose.BackHandler { dismissedAt = typing?.first ?: -1 }
+    val setChip: (com.past9.phoneaos.remote.Mentions.Chip) -> Unit = { c ->
+        field = androidx.compose.ui.text.input.TextFieldValue(CHIP_MARK + c.rest, androidx.compose.ui.text.TextRange(1 + c.caret))
+        onDraft(M.withChip(c.project, c.rest))
+    }
+    val onField: (androidx.compose.ui.text.input.TextFieldValue) -> Unit = { v ->
+        if (chip != null && !v.text.contains(CHIP_MARK)) {
+            // Backspace right after the chip: the whole chip goes in one press, the words stay.
+            field = androidx.compose.ui.text.input.TextFieldValue(v.text, androidx.compose.ui.text.TextRange(v.selection.start.coerceIn(0, v.text.length)))
+            onDraft(v.text)
+            android.util.Log.i("Mentions", "chip removed")
+        } else {
+            val raw = v.text.replace(CHIP_MARK, "")
+            val at = (v.selection.start - (if (chip != null) 1 else 0)).coerceIn(0, raw.length)
+            val made = if (session == null) null else M.chipFromTyping(raw, at, known)
+            if (made != null) {
+                setChip(made)
+                android.util.Log.i("Mentions", "chip from typing: ${made.project.name}")
+            } else {
+                // Nothing goes in front of the mark: the caret stays after it.
+                field = if (chip != null) afterMark(v) else v
+                val next = if (chip != null) M.withChip(chip.first, raw) else raw
+                if (next != draft) onDraft(next)
+            }
+            if (dismissedAt >= 0 && M.atCaret(raw, at)?.first != dismissedAt) dismissedAt = -1
+        }
+    }
     Surface(color = MaterialTheme.colorScheme.surface) {
       Column(Modifier.navigationBarsPadding().imePadding()) {
         if (picks.isNotEmpty()) MentionList(picks) { p ->
-            val (text, caret) = com.past9.phoneaos.remote.Mentions.insert(shown.text, shown.selection.start, p.name)
-            field = androidx.compose.ui.text.input.TextFieldValue(text, androidx.compose.ui.text.TextRange(caret))
-            onDraft(text)
+            setChip(M.chipFromPick(words, caretInWords, p))
+            android.util.Log.i("Mentions", "picked ${p.name}")
         }
         if (docs.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             docs.forEach { name ->
@@ -1248,10 +1315,16 @@ private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean,
                     IconButton(onClick = { attachMenu = true }) { Icon(Icons.Rounded.AttachFile, "Attach a photo or document", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                     var camBounds by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
                     IconButton(onClick = { actions.onCamera(camBounds) }, modifier = Modifier.onGloballyPositioned { camBounds = it.boundsInRoot() }) { Icon(Icons.Rounded.PhotoCamera, "Take a photo", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
-                    Box(Modifier.weight(1f).padding(vertical = 16.dp)) {
-                        if (draft.isEmpty()) Text(if (session != null) "Ask anything, or @ a project" else "Ask for anything", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        BasicTextField(shown, { v -> field = v; if (v.text != draft) onDraft(v.text); if (dismissedAt >= 0 && com.past9.phoneaos.remote.Mentions.atCaret(v.text, v.selection.start)?.first != dismissedAt) dismissedAt = -1 }, textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), maxLines = 6, modifier = Modifier.fillMaxWidth())
+                    Row(Modifier.weight(1f).padding(vertical = if (chip != null) 10.dp else 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (chip != null) {
+                            MentionChip(chip.first) { onDraft(words); field = androidx.compose.ui.text.input.TextFieldValue(words, androidx.compose.ui.text.TextRange(words.length)) }
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        Box(Modifier.weight(1f)) {
+                            if (draft.isEmpty()) Text(if (session != null) "Ask anything, or @ a project" else "Ask for anything", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            BasicTextField(shown, onField, textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), maxLines = 6, modifier = Modifier.fillMaxWidth())
+                        }
                     }
                     IconButton(onClick = actions.onMic) { Icon(if (listening) Icons.Rounded.Stop else Icons.Rounded.Mic, if (listening) "Stop listening" else "Speak", tint = if (listening) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) }
                 }

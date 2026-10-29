@@ -151,4 +151,39 @@ class MentionsTest {
         val sent = Mentions.noticeOf(JSONObject().put("mention", JSONObject().put("project", "a").put("name", "Acme").put("chat", "pc1").put("said", "fix the follow-ups")).toString())!!
         assertEquals("fix the follow-ups", sent.said)
     }
+
+    @Test
+    fun aPickedProjectIsAChipAndTheMessageStaysAtName() {
+        val acme = projects[0]
+        val picked = Mentions.chipFromPick("please @ac", 10, acme)
+        assertEquals("please ", picked.rest); assertEquals(7, picked.caret)
+        val message = Mentions.withChip(acme, picked.rest)
+        assertEquals("@Acme please ", message)
+        assertEquals("Acme" to "please ", Mentions.chipOf(message, projects)?.let { it.first.name to it.second })
+        assertEquals("Acme" to "", Mentions.chipOf("@Acme", projects)?.let { it.first.name to it.second })
+        assertNull(Mentions.chipOf("@Acmex hi", projects))
+        assertNull(Mentions.chipOf("hi @Acme", projects))
+    }
+
+    @Test
+    fun typingAWholeNameAndASpaceMakesTheChip() {
+        assertEquals("Acme", Mentions.chipFromTyping("@acme ", 6, projects)?.project?.name)
+        assertEquals("Nova Print", Mentions.chipFromTyping("@nova ", 6, projects)?.project?.name)
+        assertEquals("Agent Desktop App", Mentions.chipFromTyping("@agentdesktopapp ", 17, projects)?.project?.name)
+        val mid = Mentions.chipFromTyping("fix it @Acme ", 13, projects)!!
+        assertEquals("fix it ", mid.rest)
+        assertNull(Mentions.chipFromTyping("@acm ", 5, projects))
+        assertNull(Mentions.chipFromTyping("@acme", 5, projects))
+        assertEquals("Blue Ridge Platform", Mentions.exact("Blue-Ridge platform", projects)?.name)
+    }
+
+    @Test
+    fun theCaretNeverGoesInFrontOfTheChipMark() {
+        val mark = com.past9.phoneaos.ui.screens.CHIP_MARK
+        val v = androidx.compose.ui.text.input.TextFieldValue(mark + "hello", androidx.compose.ui.text.TextRange(0))
+        assertEquals(1, com.past9.phoneaos.ui.screens.afterMark(v).selection.start)
+        val typedInFront = androidx.compose.ui.text.input.TextFieldValue("x" + mark + "hello", androidx.compose.ui.text.TextRange(1))
+        val fixed = com.past9.phoneaos.ui.screens.afterMark(typedInFront)
+        assertEquals(mark + "xhello", fixed.text)
+    }
 }

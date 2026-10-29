@@ -108,6 +108,49 @@ object Mentions {
         return list.any { p -> (listOf(p.name) + p.aliases).any { it.lowercase() == said } }
     }
 
+    private fun bare(name: String) = name.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "")
+
+    /** The project a whole '@' word names exactly (name or other name, any case, spaces and punctuation ignored). */
+    fun exact(word: String, list: List<MentionProject>): MentionProject? {
+        val said = bare(word)
+        if (said.isEmpty()) return null
+        return list.firstOrNull { bare(it.name) == said } ?: list.firstOrNull { p -> p.aliases.any { bare(it) == said } }
+    }
+
+    /**
+     * The message box shows a picked project as a chip in front of the words; the message itself stays '@Name words'
+     * (what the computer routes). This splits it into the chip and the rest.
+     */
+    fun chipOf(text: String, list: List<MentionProject>): Pair<MentionProject, String>? {
+        if (!text.startsWith("@")) return null
+        val lower = text.substring(1).lowercase()
+        val hit = list.flatMap { p -> (listOf(p.name) + p.aliases).map { p to it } }.sortedByDescending { it.second.length }
+            .firstOrNull { (_, n) -> lower.startsWith(n.lowercase()) && (text.length == 1 + n.length || text[1 + n.length].isWhitespace()) } ?: return null
+        val rest = text.substring(1 + hit.second.length).let { if (it.isNotEmpty() && it[0].isWhitespace()) it.substring(1) else it }
+        return hit.first to rest
+    }
+
+    fun withChip(p: MentionProject, rest: String) = "@" + p.name + " " + rest
+
+    data class Chip(val project: MentionProject, val rest: String, val caret: Int)
+
+    /** A whole '@name' and a space becomes the chip at once ("@acme " -> [Acme]); null while it is not a whole name. */
+    fun chipFromTyping(text: String, caret: Int, list: List<MentionProject>): Chip? {
+        if (caret <= 0 || caret > text.length || !text[caret - 1].isWhitespace()) return null
+        val found = atCaret(text, caret - 1) ?: return null
+        val p = exact(found.second, list) ?: return null
+        val rest = (text.substring(0, found.first) + text.substring(caret)).trimStart()
+        return Chip(p, rest, found.first.coerceAtMost(rest.length))
+    }
+
+    /** Picking from the list: the chip, and the words without the '@...' being typed. */
+    fun chipFromPick(text: String, caret: Int, p: MentionProject): Chip {
+        val found = atCaret(text, caret) ?: return Chip(p, text, caret.coerceIn(0, text.length))
+        val after = text.substring(caret.coerceIn(0, text.length)).replace(Regex("^\\S*"), "")
+        val rest = (text.substring(0, found.first) + after).trimStart()
+        return Chip(p, rest, found.first.coerceAtMost(rest.length))
+    }
+
     /** The text with the picked name written in for the '@...' word at the caret, and where the caret goes. */
     fun insert(text: String, caret: Int, name: String): Pair<String, Int> {
         val found = atCaret(text, caret) ?: return text to caret
