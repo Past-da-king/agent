@@ -400,6 +400,9 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
                 }
                 turnRunning = true; publishStatus()
                 call("chat.send", if (attachments.length() > 0) listOf(clean, attachments) else listOf(clean), 60_000)
+                // A message the computer sent on to a project chat ('@Acme ...') starts no run here: read the real state,
+                // or the chat stays on "Working" with a Stop button (29 Oct 2026, seen on his phone).
+                runCatching { readRunState() }
             } catch (e: Exception) {
                 turnRunning = false; publishStatus()
                 notice("Couldn't send that to ${brainName()}: ${e.message}")

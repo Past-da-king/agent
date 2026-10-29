@@ -1320,12 +1320,13 @@ private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean,
                     IconButton(onClick = { attachMenu = true }) { Icon(Icons.Rounded.AttachFile, "Attach a photo or document", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                     var camBounds by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
                     IconButton(onClick = { actions.onCamera(camBounds) }, modifier = Modifier.onGloballyPositioned { camBounds = it.boundsInRoot() }) { Icon(Icons.Rounded.PhotoCamera, "Take a photo", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
-                    Row(Modifier.weight(1f).padding(vertical = if (chip != null) 10.dp else 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // The chip sits on its own line above the words, so the words keep the full width of the box.
+                    Column(Modifier.weight(1f).padding(vertical = if (chip != null) 8.dp else 16.dp)) {
                         if (chip != null) {
                             MentionChip(chip.first) { onDraft(words); field = androidx.compose.ui.text.input.TextFieldValue(words, androidx.compose.ui.text.TextRange(words.length)) }
-                            Spacer(Modifier.width(6.dp))
+                            Spacer(Modifier.height(6.dp))
                         }
-                        Box(Modifier.weight(1f)) {
+                        Box(Modifier.fillMaxWidth()) {
                             if (draft.isEmpty()) Text(if (session != null) "Ask anything, or @ a project" else "Ask for anything", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             BasicTextField(shown, onField, textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
                                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), maxLines = 6, modifier = Modifier.fillMaxWidth())
