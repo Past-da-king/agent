@@ -98,6 +98,19 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     private val _cards = MutableStateFlow<List<LiveCard>?>(null)
     val cards: StateFlow<List<LiveCard>?> = _cards
     @Volatile private var cardsSeq = -1L
+    /** The computer's newest list as it sent it; [cards] is this less what he swiped away. */
+    @Volatile private var cardsRaw: List<LiveCard>? = null
+    /** Cards he swiped away (row id -> when), so they leave at once and stay gone until they move again. */
+    private val swiped = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    /** The cards were last heard from the computer at this time; with no link for STALE_CARDS_MS they are dropped. */
+    @Volatile private var cardsStaleJob: kotlinx.coroutines.Job? = null
+
+    private fun publishCards(list: List<LiveCard>?) {
+        cardsRaw = list
+        // A swipe is forgotten once the computer no longer lists that card.
+        if (list != null) swiped.keys.retainAll(list.map { it.row }.toSet())
+        _cards.value = list?.let { LiveCards.visible(it, swiped) }
+    }
 
     @Volatile private var rpc: RpcClient? = null
 
@@ -227,6 +240,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         current = pick
         // A new connection (maybe another brain) numbers its lists afresh.
         cardsSeq = -1L
+        cardsStaleJob?.cancel(); cardsStaleJob = null
         if (_state.value !is LinkState.Retrying && _state.value !is LinkState.NoAgents) _state.value = LinkState.Connecting
         connectStartedAt = System.currentTimeMillis()
         val c = RpcClient(clientFor(pick.brain.fp), pick.url, link.pass, ::hello, object : RpcClient.Listener {
@@ -240,6 +254,13 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
             override fun onClosed(rpc: RpcClient, why: String, opened: Boolean, problem: LinkProblem) {
                 if (this@RemoteSession.rpc !== rpc) return
                 this@RemoteSession.rpc = null
+                // Cards from a computer the phone no longer hears are not shown for ever: with no link back within
+                // STALE_CARDS_MS they go, and the next link brings the list as it is then.
+                cardsStaleJob?.cancel()
+                cardsStaleJob = scope.launch {
+                    kotlinx.coroutines.delay(STALE_CARDS_MS)
+                    if (this@RemoteSession.rpc == null && _cards.value != null) publishCards(emptyList())
+                }
                 val now = System.currentTimeMillis()
                 // A link that stayed up a while was fine: try again at once. One that failed or fell over waits longer each time.
                 failures = if (opened && now - rpc.openedAt >= STABLE_MS) 0 else failures + 1
@@ -281,17 +302,34 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     suspend fun loadCards() {
         val v = try { call("helpers.cards", listOf(), 20_000) } catch (e: RpcException) {
             // An older computer has no cards to give: the chat keeps showing its helper rows as before.
-            if (e.message.orEmpty().contains("not available")) _cards.value = null
+            if (e.message.orEmpty().contains("not available")) publishCards(null)
             return
         }
         val (seq, list) = LiveCards.parse(v as? JSONObject) ?: return
-        cardsSeq = seq; _cards.value = list
+        cardsSeq = seq; publishCards(list)
     }
 
     private fun onCards(payload: Any?) {
         val (seq, list) = LiveCards.parse(payload as? JSONObject) ?: return
         if (seq <= cardsSeq) return
-        cardsSeq = seq; _cards.value = list
+        cardsSeq = seq; publishCards(list)
+    }
+
+    /**
+     * A swipe on a card (the desktop X): it leaves the list at once; the computer stops it if it still works and
+     * takes it off every device (helpers.dismiss). A computer too old for that stops a working card as before.
+     */
+    fun dismissCard(c: LiveCard) {
+        swiped[c.row] = maxOf(System.currentTimeMillis(), c.movedAt)
+        publishCards(cardsRaw)
+        scope.launch {
+            val done = runCatching { call("helpers.dismiss", listOf(c.id), 20_000) == true }
+            done.onFailure { e ->
+                if (e.message.orEmpty().contains("not available")) {
+                    if (c.working && !c.waiting) runCatching { if (c.isProject) call("chat.stop", listOf(c.projectChat)) else call("helpers.stop", listOf(c.id)) }
+                } else notice("Couldn't close ${c.label} on ${brainName()}: ${e.message}")
+            }
+        }
     }
 
     /** The card as the phone's helper card draws it. */
@@ -1072,6 +1110,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         const val EVT_CHAT = "agent:evt:chat.event"
         const val EVT_DEVICES = "agent:evt:devices.changed"
         const val EVT_CARDS = "agent:evt:helpers.cards"
+        /** How long the cards stay with no link to the computer that sent them. */
+        const val STALE_CARDS_MS = 90_000L
         const val EVT_COMMAND = "device.command"
     }
 }

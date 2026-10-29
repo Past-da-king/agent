@@ -475,7 +475,7 @@ private fun MiniAppsLine(apps: List<com.past9.phoneaos.miniapps.MiniAppInfo>, on
         Icon(Icons.Rounded.Dashboard, null, tint = cs.primary)
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
-            Text("Apps", style = MaterialTheme.typography.titleSmall)
+            Text("Mini apps", style = MaterialTheme.typography.titleSmall)
             Text(if (apps.isEmpty()) "Dashboards and trackers your agent makes for you" else (if (pinned > 0) "$pinned pinned · " else "") + apps.joinToString(" · ") { it.name },
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }

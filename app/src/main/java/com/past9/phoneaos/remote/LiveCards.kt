@@ -17,10 +17,22 @@ data class LiveCard(
     val line: String, val done: String, val depth: Int, val projectChat: String,
     val ownerKind: String, val ownerName: String, val ownerGlyph: String, val ownerColor: String, val ownerImage: String,
     val model: String, val startedAt: Long, val endedAt: Long, val brief: String, val result: String, val steps: List<LiveStep>,
+    /** For a helper working inside a project chat: that chat ('' otherwise). */
+    val parentChat: String = "",
+    /** The project it belongs to ('' for the main chat's own). */
+    val ownerId: String = "",
+    /** A project chat that is done and waits on him (its agent spoke last). */
+    val waiting: Boolean = false,
+    /** When its group last moved (older computers: its start or end). */
+    val activityAt: Long = 0L,
 ) {
     val working get() = state == "working"
     /** A project agent's own card (it stands for a project chat). */
     val isProject get() = projectChat.isNotBlank()
+    /** The chat a tap on "Go to chat" opens: a project chat's own, else the chat it works in, else the main thread. */
+    val homeChat get() = projectChat.ifBlank { parentChat.ifBlank { chat.ifBlank { "main" } } }
+    /** When it last moved, for a card he swiped away: it comes back only once it moves again. */
+    val movedAt get() = maxOf(activityAt, startedAt, endedAt)
 }
 
 object LiveCards {
@@ -45,7 +57,37 @@ object LiveCards {
             ownerColor = icon.optString("color").ifBlank { "iris" }, ownerImage = icon.optString("image"),
             model = c.optString("model"), startedAt = c.optLong("startedAt"), endedAt = if (c.isNull("endedAt")) 0L else c.optLong("endedAt"),
             brief = c.optString("brief"), result = c.optString("result"), steps = steps,
+            parentChat = c.optString("parentChat"), ownerId = owner.optString("id"), waiting = c.optBoolean("waiting"),
+            activityAt = c.optLong("activityAt"),
         )
+    }
+
+    /**
+     * The cards for the chat on screen: the main thread shows every card across all projects; a project chat only
+     * that project's (its own cards and the helpers working in its chats). [projectId] and [projectName] say which
+     * project holds [chat] when it is known.
+     */
+    fun forChat(cards: List<LiveCard>, chat: String, projectId: String = "", projectName: String = ""): List<LiveCard> {
+        if (chat.isBlank() || chat == "main") return cards
+        return cards.filter { c ->
+            c.projectChat == chat || c.parentChat == chat || c.chat == chat ||
+                (c.ownerKind == "project" && ((projectId.isNotBlank() && c.ownerId == projectId) || (projectId.isBlank() && projectName.isNotBlank() && c.ownerName == projectName)))
+        }
+    }
+
+    /** The cards he has not swiped away: one swiped at [hidden] comes back only once it moves again. */
+    fun visible(cards: List<LiveCard>, hidden: Map<String, Long>): List<LiveCard> {
+        if (hidden.isEmpty()) return cards
+        val gone = cards.filter { c -> (hidden[c.row] ?: -1L) >= c.movedAt }.map { it.row }.toSet()
+        // A project chat's card swiped away takes the helpers drawn under it along.
+        val out = ArrayList<LiveCard>()
+        var skipping = false
+        for (c in cards) {
+            if (c.depth == 0) skipping = c.row in gone
+            if (c.row in gone || (skipping && c.depth == 1 && !c.working)) continue
+            out += c
+        }
+        return out
     }
 
     /**

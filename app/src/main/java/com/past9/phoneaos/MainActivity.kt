@@ -172,7 +172,10 @@ class MainActivity : ComponentActivity() {
         val items by remember(dataDb) { dataDb.chat().all() }.collectAsStateWithLifecycle(emptyList())
         val status by (remote?.status ?: g.runtime.status).collectAsStateWithLifecycle()
         val liveCards = remote?.cards?.collectAsStateWithLifecycle()?.value
-        val liveUi = remote?.let { r -> liveCards?.let { list -> com.past9.phoneaos.remote.LiveCardsUi(list, r::cardView, r::stopCard) } }
+        // Opening a chat from a card: a project chat goes on top of the main thread (Back always lands there), "main"
+        // is the main thread itself.
+        var openFromCard by remember { mutableStateOf<Pair<String, String>?>(null) }
+        val liveUi = remote?.let { r -> liveCards?.let { list -> com.past9.phoneaos.remote.LiveCardsUi(list, r::cardView, r::stopCard, r::dismissCard) { chat, name -> openFromCard = chat to name } } }
         val goals by remember(dataDb) { dataDb.tasks().goals() }.collectAsStateWithLifecycle(emptyList())
         val tasks by remember(dataDb) { dataDb.tasks().tasks() }.collectAsStateWithLifecycle(emptyList())
         val memories by remember(dataDb) { dataDb.memory().all() }.collectAsStateWithLifecycle(emptyList())
@@ -181,6 +184,16 @@ class MainActivity : ComponentActivity() {
         val routines = allRoutines.filter { it.kind != com.past9.phoneaos.cards.CardScripts.KIND && it.kind != com.past9.phoneaos.triggers.Wakes.KIND }
         val browserLive by BrowserService.running.collectAsStateWithLifecycle()
         val nav = rememberNavController()
+        LaunchedEffect(openFromCard) {
+            val (chat, name) = openFromCard ?: return@LaunchedEffect
+            openFromCard = null
+            if (chat == "main" || chat.isBlank()) nav.navigate("chat") { popUpTo("chat") { inclusive = false }; launchSingleTop = true }
+            else nav.navigate("pchat/" + Uri.encode(chat) + "?name=" + Uri.encode(name)) {
+                // One project chat on top of the main thread at a time: Back from it is the main thread.
+                if (nav.currentDestination?.route?.startsWith("pchat/") == true) nav.currentBackStackEntry?.destination?.id?.let { popUpTo(it) { inclusive = true } }
+                launchSingleTop = true
+            }
+        }
         val notifRows by g.db.notifications().recent(200).collectAsStateWithLifecycle(emptyList())
         val backEntry by nav.currentBackStackEntryAsState()
         val route = backEntry?.destination?.route ?: "home"
@@ -503,7 +516,8 @@ class MainActivity : ComponentActivity() {
                         } ?: com.past9.phoneaos.ui.screens.MorningUi(preparing = preparingBrief, onBackToChat = { com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity) })))
                 }
                 composable("pchat/{chat}?name={name}") { e ->
-                    com.past9.phoneaos.ui.screens.ProjectChatScreen(e.arguments?.getString("chat").orEmpty(), e.arguments?.getString("name").orEmpty(), onBack = { nav.popBackStack() })
+                    com.past9.phoneaos.ui.screens.ProjectChatScreen(e.arguments?.getString("chat").orEmpty(), e.arguments?.getString("name").orEmpty(),
+                        onBack = { if (!nav.popBackStack("chat", inclusive = false)) { nav.popBackStack(); nav.navigate("chat") { launchSingleTop = true } } }, live = liveUi)
                 }
                 composable("report?path={path}") { e ->
                     // A button in a report's cards asks the agent, like in the chat.

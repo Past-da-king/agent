@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
+import androidx.compose.material.icons.automirrored.rounded.Chat
 import androidx.compose.material3.*
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.*
@@ -179,7 +180,9 @@ fun HelperCard(h: HelperView, onClick: () -> Unit, modifier: Modifier = Modifier
  * every step it took, and what it brought back. A running helper can be stopped from here.
  */
 @Composable
-fun HelperSheet(h: HelperView, onStop: ((Long) -> Unit)?, onDismiss: () -> Unit, now: Long = System.currentTimeMillis()) {
+fun HelperSheet(h: HelperView, onStop: ((Long) -> Unit)?, onDismiss: () -> Unit, now: Long = System.currentTimeMillis(),
+                /** Go to chat: the chat it works for (a linked computer's card: its project chat, or the main thread). */
+                onGoToChat: (() -> Unit)? = null) {
     val cs = MaterialTheme.colorScheme
     val look = lookOf(h.state)
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(topStart = com.past9.phoneaos.ui.theme.Radius.xl, topEnd = com.past9.phoneaos.ui.theme.Radius.xl)
@@ -198,8 +201,14 @@ fun HelperSheet(h: HelperView, onStop: ((Long) -> Unit)?, onDismiss: () -> Unit,
                     if (h.profile.isNotBlank()) ProfileTag(h.profile, h.profileColor, Modifier.padding(top = 6.dp))
                 }
             }
-            if (h.working && onStop != null) {
+            if (onGoToChat != null) {
                 Spacer(Modifier.height(16.dp))
+                Button(onClick = { onGoToChat() }, modifier = Modifier.fillMaxWidth().height(48.dp), shapes = ButtonDefaults.shapes()) {
+                    Icon(Icons.AutoMirrored.Rounded.Chat, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Go to chat")
+                }
+            }
+            if (h.working && onStop != null) {
+                Spacer(Modifier.height(if (onGoToChat != null) 8.dp else 16.dp))
                 OutlinedButton(onClick = { onStop(h.id); onDismiss() }, modifier = Modifier.fillMaxWidth().height(48.dp), shapes = ButtonDefaults.shapes(),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = cs.error)) {
                     Icon(Icons.Rounded.Stop, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Stop this helper")

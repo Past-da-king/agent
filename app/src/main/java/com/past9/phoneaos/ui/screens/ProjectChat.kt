@@ -38,9 +38,14 @@ import org.json.JSONObject
  * its run starting and ending), and sends what he types into it. Nothing is kept on the phone: it is a window.
  */
 @Composable
-fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit) {
+fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
+                      /** The computer's cards; only this project's show here (the main thread shows them all). */
+                      live: com.past9.phoneaos.remote.LiveCardsUi? = null) {
     val session = RemoteHub.session.collectAsStateWithLifecycle().value
     val project = session?.mentions?.collectAsStateWithLifecycle()?.value?.firstOrNull { it.name == name }
+    // System back goes to the main thread too, the same as the arrow.
+    androidx.activity.compose.BackHandler { onBack() }
+    val mine = remember(live, chat, project?.id, name) { live?.scoped(chat, project?.id.orEmpty(), name) }
     var rows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var loaded by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf("") }
@@ -130,6 +135,7 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit) {
                     else -> Text(row.optString("text"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.fillMaxWidth())
                 }
             }
+            if (mine != null && mine.cards.isNotEmpty()) item(key = "live-cards") { com.past9.phoneaos.remote.LiveCardList(mine) }
             if (working) item(key = "working") {
                 Row(verticalAlignment = Alignment.CenterVertically) { LoadingIndicator(Modifier.size(28.dp)); Spacer(Modifier.width(8.dp)); Text("Working…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }

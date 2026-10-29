@@ -7,13 +7,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -95,8 +98,30 @@ fun rememberAgentsFold(): AgentsFold {
     return remember { AgentsFold(ctx.getSharedPreferences("settings", Context.MODE_PRIVATE)) }
 }
 
-/** What the chat needs to draw the computer's helper cards: the cards, and how to draw and stop one. */
-class LiveCardsUi(val cards: List<LiveCard>, val view: (LiveCard) -> HelperView, val stop: (LiveCard) -> Unit)
+/**
+ * What the chat needs to draw the computer's helper cards: the cards, how to draw and stop one, how to swipe one away
+ * (stop it if it works, and take it off every device: RemoteSession.dismissCard), and how to open a chat (a project
+ * card goes straight to its project chat; a helper's sheet has Go to chat; "main" is the main thread).
+ */
+class LiveCardsUi(
+    val cards: List<LiveCard>,
+    val view: (LiveCard) -> HelperView,
+    val stop: (LiveCard) -> Unit,
+    val dismiss: (LiveCard) -> Unit = stop,
+    val openChat: (chat: String, name: String) -> Unit = { _, _ -> },
+) {
+    /** The same, with only the cards for [chat] (a project chat: that project's; the main thread: all). */
+    fun scoped(chat: String, projectId: String = "", projectName: String = "") =
+        LiveCardsUi(LiveCards.forChat(cards, chat, projectId, projectName), view, stop, dismiss, openChat)
+}
+
+/** What a tap on a card does: a project card opens its project chat; any other card opens its sheet. */
+sealed interface CardTap {
+    data class Chat(val chat: String, val name: String) : CardTap
+    data class Sheet(val row: String) : CardTap
+}
+
+fun tapOf(c: LiveCard): CardTap = if (c.isProject) CardTap.Chat(c.projectChat, c.ownerName.ifBlank { c.label }) else CardTap.Sheet(c.row)
 
 /**
  * The folded list: a small pill just above the message box with each place agents are working in (the project's
@@ -164,8 +189,16 @@ fun LiveCardList(ui: LiveCardsUi, modifier: Modifier = Modifier, onCollapse: (()
         val shown = live + listOfNotNull(newestDone) + if (showAll) folded else emptyList()
         shown.flatten().forEach { c ->
             val sub = c.depth == 1
-            HelperCard(ui.view(c), onClick = { openRow = c.row }, compact = true, iconSize = if (sub) 28.dp else 32.dp, now = now,
-                modifier = if (sub) Modifier.padding(start = 22.dp) else Modifier)
+            androidx.compose.runtime.key(c.row) {
+                SwipeCard(c, onSwiped = { ui.dismiss(c) }, modifier = if (sub) Modifier.padding(start = 22.dp) else Modifier) {
+                    HelperCard(ui.view(c), onClick = {
+                        when (val t = tapOf(c)) {
+                            is CardTap.Chat -> ui.openChat(t.chat, t.name)
+                            is CardTap.Sheet -> openRow = t.row
+                        }
+                    }, compact = true, iconSize = if (sub) 28.dp else 32.dp, now = now)
+                }
+            }
         }
         if (folded.isNotEmpty()) {
             val n = folded.sumOf { it.size }
@@ -176,5 +209,34 @@ fun LiveCardList(ui: LiveCardsUi, modifier: Modifier = Modifier, onCollapse: (()
     }
     val open = ui.cards.firstOrNull { it.row == openRow }
     if (openRow != null && open == null) openRow = null
-    if (open != null) HelperSheet(ui.view(open), onStop = { ui.stop(open) }, onDismiss = { openRow = null }, now = now)
+    if (open != null) HelperSheet(ui.view(open), onStop = { ui.stop(open) }, onDismiss = { openRow = null }, now = now,
+        onGoToChat = { openRow = null; ui.openChat(open.homeChat, if (open.homeChat == "main") "" else open.ownerName.ifBlank { open.label }) })
+}
+
+/**
+ * One card that swipes away, either way: a working one is stopped and leaves (the desktop X), a finished one just
+ * leaves. Behind it, what the swipe does, in the theme's colours.
+ */
+@Composable
+private fun SwipeCard(c: LiveCard, onSwiped: () -> Unit, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    val state = androidx.compose.material3.rememberSwipeToDismissBoxState()
+    val cs = MaterialTheme.colorScheme
+    val stops = c.working && !c.waiting
+    androidx.compose.material3.SwipeToDismissBox(
+        state = state,
+        modifier = modifier.semantics { contentDescription = if (stops) "${c.label}. Swipe to stop it" else "${c.label}. Swipe to close it" },
+        onDismiss = { onSwiped() },
+        backgroundContent = {
+            val toStart = state.dismissDirection == androidx.compose.material3.SwipeToDismissBoxValue.EndToStart
+            Surface(shape = MaterialTheme.shapes.large, color = if (stops) cs.errorContainer else cs.surfaceContainerHighest,
+                modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = if (toStart) Arrangement.End else Arrangement.Start) {
+                    Icon(if (stops) Icons.Rounded.Stop else Icons.Rounded.Close, null, Modifier.size(20.dp), tint = if (stops) cs.onErrorContainer else cs.onSurfaceVariant)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (stops) "Stop" else "Close", style = MaterialTheme.typography.labelLarge, color = if (stops) cs.onErrorContainer else cs.onSurfaceVariant)
+                }
+            }
+        },
+    ) { content() }
 }
