@@ -47,8 +47,12 @@ private fun AccountRef.line(appName: String) = label.takeIf { it.isNotBlank() &&
 // ---- the Profiles section on Connections ---------------------------------------------------------
 
 @Composable
-fun ProfilesSection(profiles: List<AgentProfile>, logos: Map<String, String>, onOpen: (String?) -> Unit) {
-    SectionHeader("Profiles", "Group accounts by part of your life. A helper given a profile can only use its accounts.", Modifier.padding(start = 4.dp, top = 16.dp, bottom = 2.dp))
+fun ProfilesSection(profiles: List<AgentProfile>, logos: Map<String, String>, readOnly: Boolean = false, onOpen: (String?) -> Unit) {
+    SectionHeader("Profiles", if (readOnly) "Made on your computer. Manage them there." else "Group accounts by part of your life. A helper given a profile can only use its accounts.", Modifier.padding(start = 4.dp, top = 16.dp, bottom = 2.dp))
+    if (readOnly) {
+        AppCard(padding = PaddingValues(vertical = 4.dp)) { profiles.forEach { p -> ProfileLine(p, logos, null) } }
+        return
+    }
     if (profiles.isEmpty()) {
         AppCard(onClick = { onOpen(null) }) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -82,8 +86,8 @@ fun ProfilesSection(profiles: List<AgentProfile>, logos: Map<String, String>, on
 }
 
 @Composable
-private fun ProfileLine(p: AgentProfile, logos: Map<String, String>, onClick: () -> Unit) {
-    Surface(onClick = onClick, color = androidx.compose.ui.graphics.Color.Transparent) {
+private fun ProfileLine(p: AgentProfile, logos: Map<String, String>, onClick: (() -> Unit)?) {
+    val body: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth().heightIn(min = 72.dp).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             ProfileBadge(p.name, p.color)
             Spacer(Modifier.width(14.dp))
@@ -93,10 +97,13 @@ private fun ProfileLine(p: AgentProfile, logos: Map<String, String>, onClick: ()
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             LogoStack(p.accounts.map { it.slug }.distinct(), logos)
-            Spacer(Modifier.width(4.dp))
-            Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (onClick != null) {
+                Spacer(Modifier.width(4.dp))
+                Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
+    if (onClick != null) Surface(onClick = onClick, color = androidx.compose.ui.graphics.Color.Transparent) { body() } else body()
 }
 
 /** A profile's colour as a container and the colour on it, tuned for this mode (light or dark). */

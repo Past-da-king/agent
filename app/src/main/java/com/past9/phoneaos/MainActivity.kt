@@ -393,6 +393,7 @@ class MainActivity : ComponentActivity() {
                 // His machines and the computer's learned apps: small lists, read when the screen opens.
                 runCatching { linked.meshDevices() }.onSuccess { conn = conn.copy(devices = it) }
                 runCatching { linked.learnedApps() }.onSuccess { conn = conn.copy(learned = it) }
+                runCatching { linked.computerProfiles() }.onSuccess { conn = conn.copy(remoteProfiles = it) }
                 return@launch
             }
             val has = g.settings.composioKey() != null

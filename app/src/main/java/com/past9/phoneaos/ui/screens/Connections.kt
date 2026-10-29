@@ -47,6 +47,8 @@ data class ConnectionsState(
     val machines: List<com.past9.phoneaos.machines.Machine> = emptyList(),
     /** Parts of the user's life, each a set of these accounts. */
     val profiles: List<com.past9.phoneaos.data.AgentProfile> = emptyList(),
+    /** Linked: the computer's profiles (read from it; managed there). */
+    val remoteProfiles: List<com.past9.phoneaos.data.AgentProfile> = emptyList(),
     /** Per account: what the agent may do there. */
     val rules: Map<String, com.past9.phoneaos.data.AccountRules> = emptyMap(),
     val browserProfiles: List<String> = listOf("Personal"),
@@ -164,7 +166,8 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
             }
             // Linked: his machines are the computers, servers and phones on the link, shown with their state.
             if (state.remote) item { LinkedMachines(state.devices, state.machines, onDevices = actions.onLinkedDevices, onAdd = { sheet = "list" }) }
-            if (state.hasKey) item { ProfilesSection(state.profiles, logos) { id -> sheet = "profile:" + (id ?: "new") } }
+            if (state.remote) { if (state.remoteProfiles.isNotEmpty()) item { ProfilesSection(state.remoteProfiles, logos, readOnly = true) { } } }
+            else if (state.hasKey) item { ProfilesSection(state.profiles, logos) { id -> sheet = "profile:" + (id ?: "new") } }
             item { SectionHeader("Your apps", if (state.remote) "Connected on your computer. Manage them there." else if (state.consumer) "Tap Connect and sign in. Your agent can use it straight away." else "Gmail, Calendar, Drive, Slack and 250+ more, through Composio with your own key", Modifier.padding(start = 4.dp, top = 16.dp)) }
             if (state.remote) {
                 if (state.error != null) item { Text(state.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(4.dp)) }
@@ -173,7 +176,7 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                 if (appsOpen && state.connected.isNotEmpty()) item {
                     AppCard(padding = PaddingValues(vertical = 4.dp)) {
                         accountRows(state.connected).forEach { (c, n) -> val tk = state.toolkits.firstOrNull { it.slug == c.toolkit }
-                            ConnectedLine(c, tk?.name ?: prettySlug(c.toolkit), actions, tk?.logo.orEmpty(), emptyList(), com.past9.phoneaos.data.AccountRules.DEFAULT, copies = n) { } }
+                            ConnectedLine(c, tk?.name ?: prettySlug(c.toolkit), actions, tk?.logo.orEmpty(), state.remoteProfiles.filter { it.has(c.id) }.map { it.name }, com.past9.phoneaos.data.AccountRules.DEFAULT, copies = n) { } }
                     }
                 }
                 if (appsOpen) item {

@@ -26,6 +26,15 @@ data class AgentProfile(val id: String, val name: String, val accounts: List<Acc
         fun from(o: JSONObject) = AgentProfile(o.optString("id"), o.optString("name"),
             o.optJSONArray("accounts")?.let { a -> (0 until a.length()).map { AccountRef.from(a.getJSONObject(it)) } }.orEmpty(), o.optString("browser"),
             o.optString("color").ifBlank { COLORS[Math.floorMod(o.optString("name").lowercase().hashCode(), COLORS.size)] })
+        /** profiles.list from a linked computer: its profiles as the phone draws them, General left out. */
+        fun fromComputer(raw: Any?): List<AgentProfile> {
+            val a = raw as? JSONArray ?: return emptyList()
+            return (0 until a.length()).mapNotNull { a.optJSONObject(it) }.filter { it.optString("id").isNotBlank() && !it.optBoolean("general") }.map { o ->
+                val acc = o.optJSONArray("accounts") ?: JSONArray()
+                val refs = (0 until acc.length()).mapNotNull { acc.optJSONObject(it) }.map { r -> AccountRef(r.optString("id"), r.optString("app").ifBlank { r.optString("slug") }, r.optString("label")) }
+                from(JSONObject().put("id", o.optString("id")).put("name", o.optString("name").ifBlank { "Profile" }).put("color", o.optString("color")).put("browser", o.optString("browser")).put("accounts", JSONArray(refs.map { it.toJson() })))
+            }
+        }
         /** The colours a profile can take, in the order new profiles get them. */
         val COLORS = listOf("ocean", "ember", "mint", "violet", "rose", "sunflower", "teal", "red", "sky", "forest", "magenta", "tangerine", "lime", "iris", "graphite")
         /** Jobs that need none of the user's accounts (web research, the phone's own tools) run here. */

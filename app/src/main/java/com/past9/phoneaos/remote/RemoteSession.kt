@@ -927,6 +927,10 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
             .map { it.optString("id") to it.optString("name").ifBlank { "Profile" } }
     }
 
+    /** The computer's profiles with their accounts (General left out: it holds none), for the Profiles section when linked. */
+    suspend fun computerProfiles(): List<com.past9.phoneaos.data.AgentProfile> =
+        com.past9.phoneaos.data.AgentProfile.fromComputer(call("profiles.list", listOf(), 20_000))
+
     /** Ask the computer to start connecting [app]; the sign-in link comes back to open in this phone's browser. */
     suspend fun connectApp(app: String, profileId: String): String {
         val v = call("apps.connectLink", listOf(app, profileId), 60_000) as? JSONObject ?: throw RpcException("The computer didn't answer.")
