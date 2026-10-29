@@ -49,6 +49,14 @@ class MentionsTest {
     }
 
     @Test
+    fun closesOnceTheWordIsAWholeNameAndASpace() {
+        assertTrue(Mentions.done("Acme ", projects))
+        assertTrue(Mentions.done("nova ", projects))
+        assertFalse(Mentions.done("Acme", projects))
+        assertFalse(Mentions.done("Agent ", projects))
+    }
+
+    @Test
     fun readsTheSentLineTheComputerWrites() {
         val meta = JSONObject().put("mention", JSONObject().put("project", "a").put("name", "Acme").put("chat", "pc123456").put("fresh", true)).toString()
         val n = Mentions.noticeOf(meta)!!

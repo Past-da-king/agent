@@ -75,6 +75,13 @@ object Mentions {
         return at to q
     }
 
+    /** The '@' word is a whole name already, followed by a space (just picked or typed out): the list has nothing to add. */
+    fun done(query: String, list: List<MentionProject>): Boolean {
+        if (query.isEmpty() || !query.last().isWhitespace()) return false
+        val said = query.trim().lowercase()
+        return list.any { p -> (listOf(p.name) + p.aliases).any { it.lowercase() == said } }
+    }
+
     /** The text with the picked name written in for the '@...' word at the caret, and where the caret goes. */
     fun insert(text: String, caret: Int, name: String): Pair<String, Int> {
         val found = atCaret(text, caret) ?: return text to caret

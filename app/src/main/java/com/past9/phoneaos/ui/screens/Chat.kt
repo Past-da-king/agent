@@ -1157,7 +1157,7 @@ private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean,
     var dismissedAt by remember { mutableIntStateOf(-1) }
     LaunchedEffect(typing != null, session) { if (typing != null) session?.refreshMentions() }
     val known = session?.mentions?.collectAsStateWithLifecycle()?.value.orEmpty()
-    val picks = if (typing == null || typing.first == dismissedAt) emptyList() else com.past9.phoneaos.remote.Mentions.rank(typing.second, known)
+    val picks = if (typing == null || typing.first == dismissedAt || com.past9.phoneaos.remote.Mentions.done(typing.second, known)) emptyList() else com.past9.phoneaos.remote.Mentions.rank(typing.second, known)
     if (picks.isNotEmpty()) androidx.activity.compose.BackHandler { dismissedAt = typing?.first ?: -1 }
     Surface(color = MaterialTheme.colorScheme.surface) {
       Column(Modifier.navigationBarsPadding().imePadding()) {
