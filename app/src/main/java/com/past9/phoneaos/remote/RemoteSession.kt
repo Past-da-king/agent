@@ -831,7 +831,13 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     val notes = object : RemoteRows.NoteAudio {
         override fun local(name: String): File = File(noteDir, name)
         override fun failed(name: String): String? = noteFailed[name]
+        override fun fetching(name: String): Boolean = name in noteFetching
+        override val onTap: Boolean get() = metered
     }
+
+    /** Ticks whenever a note starts, lands or fails, so an open voice bubble redraws from [notes] at once. */
+    private val _noteTick = kotlinx.coroutines.flow.MutableStateFlow(0)
+    val noteTick: kotlinx.coroutines.flow.StateFlow<Int> = _noteTick
 
     /**
      * A voice note's audio comes over the link with voice.noteAudio (the same call the desktop's own player uses), is
@@ -840,11 +846,18 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
      */
     private fun fetchNote(row: JSONObject) {
         if (row.optString("kind") != "voice_note") return
-        val meta = runCatching { JSONObject(row.optString("meta").ifBlank { "{}" }) }.getOrNull() ?: return
-        val name = RemoteRows.noteName(meta)
+        val raw = row.optString("meta").ifBlank { "{}" }
+        val meta = runCatching { JSONObject(raw) }.getOrNull() ?: return
+        fetchNoteAudio(RemoteRows.noteName(meta), raw, ids.localOrNull(row.optString("id")))
+    }
+
+    /** Gets one note by its name and points row [localId] (when known) at the phone's copy. */
+    private fun fetchNoteAudio(name: String, rawMeta: String, localId: Long?) {
         if (name.isEmpty() || notes.local(name).let { it.isFile && it.length() > 44 } || !noteFetching.add(name)) return
+        _noteTick.value++
         scope.launch {
             try {
+                android.util.Log.i("VoiceNote", "fetching $name (metered=$metered)")
                 val bytes = try {
                     RemoteRows.noteBytes(call("voice.noteAudio", listOf(name), 120_000)) ?: run { noteFailed[name] = NOTE_GONE; null }
                 } catch (e: Exception) {
@@ -856,23 +869,33 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
                     if (!tmp.renameTo(notes.local(name))) { tmp.delete(); noteFailed[name] = "Couldn't save the audio on this phone." }
                     else noteFailed.remove(name)
                 }
-                val lid = ids.localOrNull(row.optString("id")) ?: return@launch
-                db.chat().get(lid)?.let { db.chat().update(it.copy(meta = RemoteRows.voiceMeta(row.optString("meta"), notes).toString())) }
-            } finally { noteFetching.remove(name) }
+                android.util.Log.i("VoiceNote", "$name: ${bytes?.size ?: 0} bytes, ${noteFailed[name] ?: "saved"}")
+                val lid = localId ?: return@launch
+                db.chat().get(lid)?.let { item ->
+                    val rid = runCatching { JSONObject(item.meta).optString("rid") }.getOrDefault("")
+                    val m = RemoteRows.voiceMeta(rawMeta, notes).apply { if (rid.isNotBlank()) put("rid", rid) }
+                    db.chat().update(item.copy(meta = m.toString()))
+                }
+            } finally { noteFetching.remove(name); _noteTick.value++ }
         }
     }
 
-    /** He tapped "Try again" on a note whose audio did not come. */
-    fun retryNote(localId: Long) = scope.launch {
+    /**
+     * He tapped a computer voice note (play, or Try again): get it now, on Wi-Fi or mobile data alike. Needs only the
+     * phone's own row (its note name), never the computer's id, so it works after a restart too.
+     */
+    fun getNote(localId: Long) = scope.launch {
         val item = db.chat().get(localId) ?: return@launch
-        val name = runCatching { JSONObject(item.meta).optString("remoteNote") }.getOrDefault("")
+        val meta = runCatching { JSONObject(item.meta) }.getOrNull() ?: return@launch
+        val name = meta.optString("remoteNote").ifBlank { RemoteRows.noteName(meta) }
         if (name.isEmpty()) return@launch
         noteFailed.remove(name)
-        val rid = ids.remote(localId) ?: return@launch
-        val meta = JSONObject(item.meta).apply { remove("path"); remove("audio"); remove("audioError"); remove("remoteNote") }
-        db.chat().update(item.copy(meta = RemoteRows.voiceMeta(meta.toString(), notes).toString()))
-        fetchNote(JSONObject().put("id", rid).put("kind", "voice_note").put("meta", meta.toString()))
+        val raw = JSONObject(item.meta).apply { remove("path"); remove("audio"); remove("audioError"); remove("remoteNote") }.toString()
+        fetchNoteAudio(name, raw, localId)
     }
+
+    /** He tapped "Try again" on a note whose audio did not come. */
+    fun retryNote(localId: Long) = getNote(localId)
 
     /** Pictures in a chat row are paths on the computer: fetch each once through /v1/file and point the row at the copy. */
     private fun fetchMedia(row: JSONObject) {
@@ -883,9 +906,10 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
 
     /** He tapped a picture or a note that was left on the computer to save data. */
     fun fetchMediaFor(localId: Long) {
-        val rid = ids.remote(localId) ?: return
         scope.launch {
             val item = db.chat().get(localId) ?: return@launch
+            if (item.kind == "voice") { getNote(localId); return@launch }
+            val rid = ids.remote(localId) ?: runCatching { JSONObject(item.meta).optString("rid") }.getOrDefault("").ifBlank { return@launch }
             fetchNow(JSONObject().put("id", rid).put("kind", if (item.kind == "voice") "voice_note" else item.kind).put("meta", item.meta))
         }
     }

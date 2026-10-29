@@ -52,7 +52,7 @@ object RemoteRows {
         val created = o.optLong("createdAt", System.currentTimeMillis())
         val id = ids.local(o.getString("id"), created)
         val meta = o.optString("meta").ifBlank { "{}" }
-        if (o.optString("kind") == "voice_note") return ChatItem(id, "voice", o.optString("text"), voiceMeta(meta, notes).toString(), created)
+        if (o.optString("kind") == "voice_note") return ChatItem(id, "voice", o.optString("text"), voiceMeta(meta, notes).put("rid", o.getString("id")).toString(), created)
         if (o.optString("kind") == "question" || o.optString("kind") == "approval") return card(o, id, meta, created)
         return ChatItem(id, o.optString("kind", "notice"), o.optString("text"), withRid(meta, o.getString("id")), created)
     }
@@ -101,6 +101,46 @@ object RemoteRows {
         fun local(name: String): java.io.File
         /** Why a note could not be fetched, or null when it has not failed. */
         fun failed(name: String): String?
+        /** A fetch of this note is on its way now. */
+        fun fetching(name: String): Boolean = false
+        /** Notes come only when he taps them (mobile data): until then a note waits on the computer, ready to tap. */
+        val onTap: Boolean get() = false
+    }
+
+    /**
+     * What a voice note from the computer can do right now, read live (never from the row's stored "audio", which can
+     * be stale: 29 Oct 2026, a note stored "loading" on mobile data spun forever and could not be tapped).
+     */
+    sealed class NoteState {
+        data class Ready(val file: java.io.File) : NoteState()
+        object Fetching : NoteState()
+        /** On the computer: one tap gets it and plays it. */
+        object OnComputer : NoteState()
+        /** The last try failed: say why, with Try again (a tap tries again too). */
+        data class Failed(val why: String) : NoteState()
+        /** There is nothing to get. */
+        data class NoAudio(val why: String) : NoteState()
+    }
+
+    fun noteState(meta: JSONObject, notes: NoteAudio?): NoteState {
+        val name = meta.optString("remoteNote").ifBlank { noteName(meta) }
+        if (name.isEmpty()) return NoteState.NoAudio(meta.optString("audioError").ifBlank { "This note has no audio file on the computer." })
+        val local = notes?.local(name)
+        if (local != null && local.isFile && local.length() > 44) return NoteState.Ready(local)
+        val stored = meta.optString("path")
+        if (stored.isNotBlank() && java.io.File(stored).let { it.isFile && it.length() > 44 }) return NoteState.Ready(java.io.File(stored))
+        if (notes == null) return NoteState.NoAudio("Link this phone to your computer to hear this note.")
+        if (notes.fetching(name)) return NoteState.Fetching
+        notes.failed(name)?.let { return NoteState.Failed(it) }
+        return NoteState.OnComputer
+    }
+
+    /** About how big a computer note is to fetch (16-bit mono 24 kHz WAV, base64 on the link), for the tap label. */
+    fun noteSizeLabel(meta: JSONObject): String {
+        val ms = meta.optLong("durationMs", 0L)
+        if (ms <= 0L) return ""
+        val mb = ms / 1000.0 * 48_000 * 4 / 3 / 1_000_000
+        return if (mb < 0.1) "under 0.1 MB" else String.format(java.util.Locale.US, "%.1f MB", mb)
     }
 
     /** A note name on the computer (desktop voice service: only plain names in its voice-notes folder), or "". */
@@ -122,6 +162,7 @@ object RemoteRows {
             local != null && local.isFile && local.length() > 44 -> m.put("path", local.absolutePath).put("audio", "ready")
             name.isEmpty() -> m.put("path", "").put("audio", "unavailable").put("audioError", "This note has no audio file on the computer.")
             failed != null -> m.put("path", "").put("audio", "unavailable").put("audioError", failed)
+            notes != null && notes.onTap && !notes.fetching(name) -> m.put("path", "").put("audio", "remote")
             else -> m.put("path", "").put("audio", "loading")
         }
         return m

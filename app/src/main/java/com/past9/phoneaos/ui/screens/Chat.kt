@@ -474,13 +474,41 @@ private fun Welcome(userName: String, modifier: Modifier, onSend: (String) -> Un
 private fun VoiceBubble(item: ChatItem) {
     val cs = MaterialTheme.colorScheme
     val meta = JSONObject(item.meta)
-    val path = meta.optString("path")
     var playing by remember { mutableStateOf(false) }
     var playError by remember { mutableStateOf<String?>(null) }
+    // A note from the computer is read LIVE from the link (on its way, here, on the computer, failed), never from the
+    // row's stored "audio": 29 Oct 2026, on mobile data a note stored "loading" spun forever and could not be tapped.
+    val remoteName = meta.optString("remoteNote")
+    val rs = com.past9.phoneaos.remote.RemoteHub.session.collectAsStateWithLifecycle().value
+    val tick = rs?.noteTick?.collectAsStateWithLifecycle()?.value ?: 0
+    val state = if (remoteName.isBlank()) null else remember(item.meta, rs, tick) { com.past9.phoneaos.remote.RemoteRows.noteState(meta, rs?.notes) }
+    val path = when (state) {
+        is com.past9.phoneaos.remote.RemoteRows.NoteState.Ready -> state.file.path
+        null -> meta.optString("path")
+        else -> ""
+    }
     val hasAudio = path.isNotBlank() && java.io.File(path).exists()
-    // A note from the computer whose audio is still on its way, or could not be had. Never quietly text instead.
-    val loading = !hasAudio && meta.optString("audio") == "loading"
-    val why = playError ?: if (hasAudio || loading) null else meta.optString("audioError").ifBlank { "No voice was set up when this note was made." }
+    val loading = state is com.past9.phoneaos.remote.RemoteRows.NoteState.Fetching
+    val onComputer = state is com.past9.phoneaos.remote.RemoteRows.NoteState.OnComputer
+    val failedWhy = (state as? com.past9.phoneaos.remote.RemoteRows.NoteState.Failed)?.why
+    // One tap: get it from the computer (Wi-Fi or mobile data), then it plays by itself the moment it lands.
+    var wantPlay by remember { mutableStateOf(false) }
+    val canGet = rs != null && (onComputer || failedWhy != null)
+    fun play(f: String) {
+        playError = null
+        runCatching { com.past9.phoneaos.voice.Tts.play(java.io.File(f)) { playing = false } }
+            .onSuccess { playing = true }.onFailure { playError = "Audio unavailable: this phone could not play the file." }
+    }
+    LaunchedEffect(hasAudio, wantPlay) { if (hasAudio && wantPlay) { wantPlay = false; play(path) } }
+    LaunchedEffect(failedWhy) { if (failedWhy != null) wantPlay = false }
+    val why = playError ?: when {
+        hasAudio || loading || onComputer -> null
+        failedWhy != null -> failedWhy
+        state is com.past9.phoneaos.remote.RemoteRows.NoteState.NoAudio -> state.why
+        else -> meta.optString("audioError").ifBlank { "No voice was set up when this note was made." }
+    }
+    val spinning = !hasAudio && (loading || wantPlay)
+    val tappable = hasAudio || canGet
     var showText by remember { mutableStateOf(false) }
     val t = rememberInfiniteTransition(label = "voice")
     val wave by t.animateFloat(0f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "wave")
@@ -489,30 +517,29 @@ private fun VoiceBubble(item: ChatItem) {
             Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 MorphIconButton(onClick = {
                     if (playing) { com.past9.phoneaos.voice.Tts.stop(); playing = false }
-                    else if (hasAudio) {
-                        playError = null
-                        runCatching { com.past9.phoneaos.voice.Tts.play(java.io.File(path)) { playing = false } }
-                            .onSuccess { playing = true }.onFailure { playError = "Audio unavailable: this phone could not play the file." }
-                    }
-                }, size = 48.dp, container = if (hasAudio) cs.primary else cs.surfaceContainerHigh, enabled = hasAudio) {
-                    if (loading) LoadingIndicator(Modifier.size(24.dp))
-                    else Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing) "Pause" else if (hasAudio) "Play" else "Audio unavailable", tint = if (hasAudio) cs.onPrimary else cs.onSurfaceVariant) }
+                    else if (hasAudio) play(path)
+                    else if (canGet) { playError = null; wantPlay = true; rs?.getNote(item.id) }
+                }, size = 48.dp, container = if (tappable) cs.primary else cs.surfaceContainerHigh, enabled = tappable && !spinning) {
+                    if (spinning) LoadingIndicator(Modifier.size(24.dp))
+                    else Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing) "Pause" else if (tappable) "Play" else "Audio unavailable", tint = if (tappable) cs.onPrimary else cs.onSurfaceVariant) }
                 Spacer(Modifier.width(10.dp))
                 if (hasAudio) Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
                     repeat(18) { i ->
                         val h = (8 + ((i * 37) % 17)) * (if (playing) 0.6f + 0.6f * ((wave + i * 0.13f) % 1f) else 1f)
                         Box(Modifier.width(3.dp).height(h.dp).clip(RoundedCornerShape(50)).background(cs.onPrimaryContainer.copy(alpha = if (playing) 0.9f else 0.5f)))
                     }
-                } else Text(if (loading) "Getting the audio…" else "Audio unavailable", style = MaterialTheme.typography.labelLarge, color = if (loading) cs.onPrimaryContainer else cs.error)
+                } else if (spinning) Text("Getting the audio…", style = MaterialTheme.typography.labelLarge, color = cs.onPrimaryContainer)
+                else if (onComputer) Text(com.past9.phoneaos.remote.RemoteRows.noteSizeLabel(meta).let { if (it.isBlank()) "Tap to play" else "Tap to play · $it" }, style = MaterialTheme.typography.labelLarge, color = cs.onPrimaryContainer)
+                else Text("Audio unavailable", style = MaterialTheme.typography.labelLarge, color = cs.error)
                 Spacer(Modifier.width(10.dp))
                 TextButton(onClick = { showText = !showText }) { Text(if (showText) "Hide" else "Read it", color = cs.onPrimaryContainer) }
             }
         }
-        if (why != null) Row(Modifier.padding(top = 6.dp, start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (why != null && !spinning) Row(Modifier.padding(top = 6.dp, start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.ErrorOutline, null, Modifier.size(16.dp), tint = cs.error); Spacer(Modifier.width(6.dp))
             Text(why, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f, fill = false))
-            if (meta.optString("remoteNote").isNotBlank() && playError == null)
-                TextButton(onClick = { com.past9.phoneaos.remote.RemoteHub.session.value?.retryNote(item.id) }) { Text("Try again") }
+            if (remoteName.isNotBlank() && playError == null && rs != null)
+                TextButton(onClick = { wantPlay = true; rs.retryNote(item.id) }) { Text("Try again") }
         }
         AnimatedVisibility(showText) { Markdown(item.text, Modifier.padding(top = 8.dp, start = 4.dp), style = MaterialTheme.typography.bodyMedium) }
     }
