@@ -118,6 +118,9 @@ object Rearm {
         runCatching { com.past9.phoneaos.triggers.Routines.rescheduleAll(context) }
         runCatching { Reminders.syncAll(context, force = true) }
         runCatching { Wakes.rearm(context) }
+        // Wake-ups: the booked ones ring from the saved snapshot even before the computer is reached again.
+        runCatching { com.past9.phoneaos.wakeup.WakeHub.evaluate(context) }
+        runCatching { com.past9.phoneaos.wakeup.WakeChannel.ensure(context) }
         runCatching { com.past9.phoneaos.triggers.Routines.catchUp(context) }
     }
 }

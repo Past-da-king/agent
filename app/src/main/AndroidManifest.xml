@@ -26,6 +26,12 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Wake-ups: ring through Do Not Disturb, full screen over the lock screen and over other apps, until he answers. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <queries>
         <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
@@ -526,6 +532,15 @@
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter><action android:name="android.service.notification.NotificationListenerService" /></intent-filter>
         </service>
+        <service android:name=".wakeup.WakeChannelService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Keeps a tiny link to the user's own computer open so an urgent wake-up they set up reaches the phone in seconds" />
+        </service>
+        <service android:name=".wakeup.WakeUpService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
+        <activity android:name=".wakeup.WakeUpActivity" android:exported="false" android:showWhenLocked="true" android:turnScreenOn="true"
+            android:launchMode="singleTask" android:taskAffinity="com.past9.phoneaos.wakeup" android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
+        <receiver android:name=".wakeup.WakeAlarmReceiver" android:exported="false" />
+        <receiver android:name=".wakeup.WakeActionReceiver" android:exported="false" />
         <receiver android:name=".system.AnswerReceiver" android:exported="false" />
         <receiver android:name=".remote.RemoteAnswerReceiver" android:exported="false" />
         <receiver android:name=".system.AlarmReceiver" android:exported="false" />

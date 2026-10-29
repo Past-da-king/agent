@@ -979,6 +979,8 @@ object RemoteHub {
         App.graph(app).runtime.remote = s
         _session.value = s
         s.start()
+        // Wake-ups reach the phone through their own tiny link while the app is off screen.
+        runCatching { com.past9.phoneaos.wakeup.WakeChannel.ensure(app) }
     }
 
     /** Just paired: keep the pass and brains, start using them. */
@@ -1012,6 +1014,7 @@ object RemoteHub {
         _session.value?.close()
         _session.value = null
         App.graph(app).runtime.remote = null
+        runCatching { com.past9.phoneaos.wakeup.WakeChannel.stop(app) }
     }
 
     fun onForeground() { _session.value?.onForeground() }
