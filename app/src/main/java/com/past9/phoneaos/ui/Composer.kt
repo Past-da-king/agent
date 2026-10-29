@@ -39,6 +39,21 @@ class ComposerBox(draftState: MutableState<String>) {
     fun clear() { attachments.clear(); docs.clear(); docPaths.clear() }
 }
 
+/**
+ * The reply boxes under answer cards, kept outside the chat list: a card that scrolls out of view (the keyboard
+ * opening moves the list), a trip into the project chat and back, or the photo picker coming back must not throw
+ * away what he typed or the photo he picked. One per card; gone once the reply is sent.
+ */
+object ReplyDrafts {
+    private val boxes = mutableMapOf<String, ComposerBox>()
+    private val open = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
+    fun box(id: String): ComposerBox = synchronized(boxes) { boxes.getOrPut(id) { ComposerBox(androidx.compose.runtime.mutableStateOf("")) } }
+    fun isOpen(id: String): Boolean = open[id] == true
+    fun setOpen(id: String, on: Boolean) { if (on) open[id] = true else open.remove(id) }
+    /** After a reply went out: an empty box, closed. */
+    fun sent(id: String) { synchronized(boxes) { boxes.remove(id) }; open.remove(id) }
+}
+
 @Composable
 fun rememberComposerBox(): ComposerBox {
     val draft = rememberSaveable { mutableStateOf("") }

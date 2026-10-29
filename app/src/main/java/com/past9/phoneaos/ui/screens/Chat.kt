@@ -1126,8 +1126,11 @@ fun MentionReplyCard(item: ChatItem, reply: com.past9.phoneaos.remote.MentionRep
     val session = com.past9.phoneaos.remote.RemoteHub.session.collectAsStateWithLifecycle().value
     val image = session?.mentions?.collectAsStateWithLifecycle()?.value?.firstOrNull { it.id == reply.project }?.image.orEmpty()
     val (toneBg, toneFg) = profileTones(reply.color)
-    var replying by remember(item.id) { mutableStateOf(false) }
-    val box = remember(item.id) { com.past9.phoneaos.ui.ComposerBox(mutableStateOf("")) }
+    // Kept outside the list item (ReplyDrafts): scrolling, the keyboard or the picker must not lose the reply.
+    val drafts = com.past9.phoneaos.ui.ReplyDrafts
+    val draftKey = item.id.toString()
+    val replying = drafts.isOpen(draftKey)
+    val box = drafts.box(draftKey)
     val tools = com.past9.phoneaos.ui.LocalComposerTools.current
     var problem by remember(item.id) { mutableStateOf("") }
     val scope = rememberCoroutineScope()
@@ -1148,15 +1151,15 @@ fun MentionReplyCard(item: ChatItem, reply: com.past9.phoneaos.remote.MentionRep
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilledTonalButton(onClick = onOpen, modifier = Modifier.heightIn(min = 44.dp)) { Text("Open ${reply.name} chat", maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                OutlinedButton(onClick = { replying = !replying }, modifier = Modifier.heightIn(min = 44.dp)) { Text("Reply") }
+                OutlinedButton(onClick = { drafts.setOpen(draftKey, !replying) }, modifier = Modifier.heightIn(min = 44.dp)) { Text("Reply") }
             }
             if (replying) {
                 Spacer(Modifier.height(6.dp))
                 // The same message box as every chat: photos, documents, camera, mic.
                 val acts = com.past9.phoneaos.ui.composerActionsFor(box, tools, working = false, send = { text, pics ->
                     val s = session ?: return@composerActionsFor
-                    replying = false; problem = ""
-                    scope.launch { runCatching { s.replyTo(reply.chat, text, pics) }.onFailure { problem = "Couldn't send that: ${it.message}"; box.draft = text; replying = true } }
+                    drafts.setOpen(draftKey, false); problem = ""
+                    scope.launch { runCatching { s.replyTo(reply.chat, text, pics) }.onSuccess { drafts.sent(draftKey) }.onFailure { problem = "Couldn't send that: ${it.message}"; box.draft = text; drafts.setOpen(draftKey, true) } }
                 })
                 MessageComposer(box.draft, { box.draft = it }, false, acts, box.attachments, box.docs.keys.toList(), tools?.listening(box) == true,
                     placeholder = "Reply to ${reply.name}", inset = false, dictationOwner = box)
