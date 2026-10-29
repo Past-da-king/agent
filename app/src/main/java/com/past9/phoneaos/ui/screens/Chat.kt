@@ -1119,18 +1119,20 @@ fun MentionSent(sent: com.past9.phoneaos.remote.MentionNotice, onOpen: () -> Uni
 fun MentionReplyCard(item: ChatItem, reply: com.past9.phoneaos.remote.MentionReply, onOpen: () -> Unit) {
     val session = com.past9.phoneaos.remote.RemoteHub.session.collectAsStateWithLifecycle().value
     val image = session?.mentions?.collectAsStateWithLifecycle()?.value?.firstOrNull { it.id == reply.project }?.image.orEmpty()
-    val accent = com.past9.phoneaos.ui.theme.accentOf(reply.color)
+    val (toneBg, toneFg) = profileTones(reply.color)
     var replying by remember(item.id) { mutableStateOf(false) }
     var draft by remember(item.id) { mutableStateOf("") }
     var problem by remember(item.id) { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val long = item.text.length > 600
-    Surface(shape = RoundedCornerShape(24.dp), color = accent.lP.copy(alpha = 0.10f), border = androidx.compose.foundation.BorderStroke(1.dp, accent.lP.copy(alpha = 0.35f)), modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 com.past9.phoneaos.ui.ProjectIconTile(reply.name, reply.glyph, reply.color, image, 28.dp)
                 Spacer(Modifier.width(10.dp))
-                Text(reply.name, style = MaterialTheme.typography.titleSmall, color = accent.lP, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                Surface(shape = RoundedCornerShape(50), color = toneBg, modifier = Modifier.weight(1f, fill = false)) {
+                    Text(reply.name, style = MaterialTheme.typography.labelLarge, color = toneFg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+                }
                 Spacer(Modifier.width(6.dp))
                 Text("replied", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -1178,14 +1180,17 @@ internal fun afterMark(v: androidx.compose.ui.text.input.TextFieldValue): androi
 /** The project a message goes to, in front of the words: its tile, name and colour; the x takes it away. */
 @Composable
 fun MentionChip(p: com.past9.phoneaos.remote.MentionProject, onRemove: () -> Unit) {
-    val accent = com.past9.phoneaos.ui.theme.accentOf(p.color)
-    Surface(shape = RoundedCornerShape(50), color = accent.lP.copy(alpha = 0.16f), border = androidx.compose.foundation.BorderStroke(1.dp, accent.lP.copy(alpha = 0.45f)),
-        modifier = Modifier.heightIn(min = 36.dp).widthIn(max = 180.dp).semantics { contentDescription = "Goes to ${p.name}" }) {
-        Row(Modifier.padding(start = 4.dp, end = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-            com.past9.phoneaos.ui.ProjectIconTile(p.name, p.glyph, p.color, p.image, 26.dp)
-            Spacer(Modifier.width(6.dp))
-            Text(p.name, style = MaterialTheme.typography.labelLarge, color = accent.lP, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-            IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.Close, "Do not send to ${p.name}", Modifier.size(16.dp), tint = accent.lP) }
+    // The app's own tones for that colour (container and on-container, tuned for light and dark), as a profile tag.
+    val (bg, fg) = profileTones(p.color)
+    Surface(shape = RoundedCornerShape(50), color = bg,
+        modifier = Modifier.height(32.dp).widthIn(max = 200.dp).semantics { contentDescription = "Goes to ${p.name}" }) {
+        Row(Modifier.padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            com.past9.phoneaos.ui.ProjectIconTile(p.name, p.glyph, p.color, p.image, 24.dp)
+            Spacer(Modifier.width(8.dp))
+            Text(p.name, style = MaterialTheme.typography.labelLarge, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Box(Modifier.size(32.dp).clip(CircleShape).clickable(onClickLabel = "Do not send to ${p.name}", onClick = onRemove), contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.Close, "Do not send to ${p.name}", Modifier.size(18.dp), tint = fg)
+            }
         }
     }
 }
@@ -1193,21 +1198,21 @@ fun MentionChip(p: com.past9.phoneaos.remote.MentionProject, onRemove: () -> Uni
 /** The '@' list above the message box: the computer's projects that fit what he typed. */
 @Composable
 private fun MentionList(items: List<com.past9.phoneaos.remote.MentionProject>, onPick: (com.past9.phoneaos.remote.MentionProject) -> Unit) {
-    Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, tonalElevation = 2.dp, shadowElevation = 6.dp,
+    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh,
         modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp)) {
-        Column(Modifier.padding(vertical = 6.dp).heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
-            Text("Send to a project", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 16.dp, top = 6.dp, bottom = 4.dp))
+        Column(Modifier.padding(vertical = 8.dp).heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
+            Text("SEND TO A PROJECT", style = Eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 20.dp, top = 4.dp, bottom = 6.dp))
             items.forEach { p ->
                 // Picked the moment the finger goes down: a pick on release was lost on his phone (29 Oct 2026), and
                 // the message box keeps its focus and keyboard.
-                Surface(color = androidx.compose.ui.graphics.Color.Transparent, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp)
+                Surface(color = androidx.compose.ui.graphics.Color.Transparent, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
                     .semantics { role = androidx.compose.ui.semantics.Role.Button; onClick(label = "Send to ${p.name}") { onPick(p); true } }
                     .pointerInput(p.id) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false).consume(); onPick(p) } }) {
-                    Row(Modifier.heightIn(min = 52.dp).padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        com.past9.phoneaos.ui.ProjectIconTile(p.name, p.glyph, p.color, p.image, 32.dp)
-                        Spacer(Modifier.width(12.dp))
+                    Row(Modifier.heightIn(min = 56.dp).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        com.past9.phoneaos.ui.ProjectIconTile(p.name, p.glyph, p.color, p.image, 36.dp)
+                        Spacer(Modifier.width(14.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(p.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(p.name, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             if (p.aliases.isNotEmpty()) Text(p.aliases.joinToString(", "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
