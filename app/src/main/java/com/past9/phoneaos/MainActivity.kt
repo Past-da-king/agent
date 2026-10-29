@@ -311,7 +311,16 @@ class MainActivity : ComponentActivity() {
         var dictating by remember { mutableStateOf(false) }
         /** The message box the mic is writing into. */
         var dictBox by remember { mutableStateOf<com.past9.phoneaos.ui.ComposerBox?>(null) }
-        DisposableEffect(Unit) { onDispose { dictation?.cancel() } }
+        // The app's own long dictation (voice/DictationHub) lives outside this activity: leaving the app for good stops it
+        // (its words still land), a rotation does not.
+        DisposableEffect(Unit) { onDispose { dictation?.cancel(); if (!isChangingConfigurations) com.past9.phoneaos.voice.DictationHub.stop() } }
+        val hubUi by com.past9.phoneaos.voice.DictationHub.ui.collectAsStateWithLifecycle()
+        val hubActive = hubUi?.view?.ended == false
+        // The screen stays on while he dictates (the mic service also keeps it going if he locks the phone).
+        LaunchedEffect(hubActive) {
+            if (hubActive) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
         fun say(text: String) = com.past9.phoneaos.ui.AppNotice.say(text)
         fun online(): Boolean = runCatching {
             val cm = getSystemService(android.net.ConnectivityManager::class.java)
@@ -322,6 +331,13 @@ class MainActivity : ComponentActivity() {
             val base = box.draft
             fun join(t: String) = if (t.isBlank()) base else if (base.isBlank()) t else base.trimEnd() + " " + t
             val done: (String?) -> Unit = { err -> runOnUiThread { dictating = false; dictation = null; if (err != null) say(err) } }
+            // Since 0.15.17 the app records the mic itself, saves it as it goes, and only his tap ends it: the phone's
+            // recogniser is fed from that audio, and whatever it drops (mobile data, silence) is written down from the
+            // saved audio (voice/DictationEngine.kt). The older paths below are for phones that can do neither.
+            if (com.past9.phoneaos.voice.DictationHub.supported(this@MainActivity)) {
+                val owner: Any = if (box === mainBox) "main" else box
+                if (com.past9.phoneaos.voice.DictationHub.start(this@MainActivity, owner) { t -> box.draft = join(t) }) return
+            }
             if (com.past9.phoneaos.voice.SystemDictation.available(this@MainActivity)) {
                 val d = com.past9.phoneaos.voice.SystemDictation(this@MainActivity, onText = { t -> runOnUiThread { box.draft = join(t) } }, onEnd = done)
                 dictation = d; dictating = true; d.start(); return
@@ -335,8 +351,11 @@ class MainActivity : ComponentActivity() {
         }
         val dictPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) startDictation() else say("The mic needs the microphone permission.") }
         fun toggleMic(box: com.past9.phoneaos.ui.ComposerBox = mainBox) {
+            if (com.past9.phoneaos.voice.DictationHub.active) { com.past9.phoneaos.voice.DictationHub.stop(); return }
             val d = dictation
             if (d != null) { d.finish(); return }
+            // A dictation that kept unsent audio: a new one starts fresh (that audio stays on the phone).
+            com.past9.phoneaos.voice.DictationHub.dismiss()
             dictBox = box
             if (androidx.core.content.ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) startDictation()
             else dictPerm.launch(Manifest.permission.RECORD_AUDIO)
@@ -347,7 +366,8 @@ class MainActivity : ComponentActivity() {
                 override fun pickDocs(box: com.past9.phoneaos.ui.ComposerBox) { boxFor = box; docPicker.launch(arrayOf("*/*")) }
                 override fun camera(box: com.past9.phoneaos.ui.ComposerBox, origin: androidx.compose.ui.geometry.Rect, send: (String, String) -> Unit) { boxFor = box; cameraSend = if (box === mainBox) null else send; cameraOrigin = origin }
                 override fun mic(box: com.past9.phoneaos.ui.ComposerBox) = toggleMic(box)
-                override fun listening(box: com.past9.phoneaos.ui.ComposerBox): Boolean = dictating && (dictBox ?: mainBox) === box
+                override fun listening(box: com.past9.phoneaos.ui.ComposerBox): Boolean =
+                    (dictating || hubUi?.view?.ended == false) && (dictBox ?: mainBox) === box
             }
         }
         fun refreshConnections() = scope.launch {

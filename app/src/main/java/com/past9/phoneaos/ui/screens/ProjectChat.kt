@@ -105,7 +105,7 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit) {
                 val s = session ?: return@composerActionsFor
                 scope.launch { runCatching { s.sendTo(chat, text, pics) }.onFailure { problem = "Couldn't send that: ${it.message}"; box.draft = text }; load(s) }
             }, stop = { session?.let { s -> scope.launch { runCatching { s.call("chat.stop", listOf(chat), 15_000) } } } })
-            MessageComposer(box.draft, { box.draft = it }, working, acts, box.attachments, box.docs.keys.toList(), tools?.listening(box) == true, placeholder = "Message $name")
+            MessageComposer(box.draft, { box.draft = it }, working, acts, box.attachments, box.docs.keys.toList(), tools?.listening(box) == true, placeholder = "Message $name", dictationOwner = box)
         },
     ) { pad ->
         LazyColumn(state = list, modifier = Modifier.fillMaxSize().padding(pad), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {

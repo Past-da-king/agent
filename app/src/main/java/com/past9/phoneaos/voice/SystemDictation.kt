@@ -40,6 +40,7 @@ class SystemDictation(
     private var stopping = false
     private var ended = false
     private var busyRetries = 0
+    private var netRetries = 0
     /** Whether this stretch heard anything; a stretch of silence after words means he is done. */
     private var heardThisStretch = false
 
@@ -92,7 +93,7 @@ class SystemDictation(
             partial = ""
             if (r.isNotBlank()) { if (committed.isNotEmpty()) committed.append(' '); committed.append(r.trim()) }
             onText(text())
-            busyRetries = 0
+            busyRetries = 0; netRetries = 0
             if (stopping) end(null) else listen()
         }
 
@@ -100,10 +101,18 @@ class SystemDictation(
             if (ended) return
             when {
                 stopping -> end(null)
-                // Silence: after some words it means he has finished; with nothing at all, say so.
+                // Silence or a stretch it could not match: he may be thinking. Keep what it showed and listen again; only his
+                // tap ends it (29 Oct 2026: it used to end here, cutting him off mid-dictation).
                 error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
                     if (partial.isNotBlank()) { if (committed.isNotEmpty()) committed.append(' '); committed.append(partial.trim()); partial = ""; onText(text()) }
-                    end(if (committed.isEmpty() && !heardThisStretch) "Didn't catch anything. Tap the mic and speak." else null)
+                    main.postDelayed({ if (!ended) listen() }, 100)
+                }
+                // Lost its service (mobile data): keep what it showed and try again, backing off, until he taps stop.
+                error == SpeechRecognizer.ERROR_NETWORK || error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT || error == SpeechRecognizer.ERROR_SERVER ||
+                    error == SpeechRecognizer.ERROR_SERVER_DISCONNECTED -> {
+                    if (partial.isNotBlank()) { if (committed.isNotEmpty()) committed.append(' '); committed.append(partial.trim()); partial = ""; onText(text()) }
+                    netRetries++
+                    main.postDelayed({ if (!ended) listen() }, minOf(8_000L, 1_000L shl (netRetries - 1).coerceIn(0, 3)))
                 }
                 (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY || error == SpeechRecognizer.ERROR_CLIENT) && busyRetries < 3 -> { busyRetries++; runCatching { sr?.cancel() }; main.postDelayed({ if (!ended) listen() }, 400) }
                 else -> end(describe(error))

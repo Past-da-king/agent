@@ -533,6 +533,7 @@
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="The user's agent browses websites in the background on their behalf" />
         </service>
         <service android:name=".voice.CallService" android:exported="false" android:foregroundServiceType="microphone|mediaPlayback" />
+        <service android:name=".voice.DictationService" android:exported="false" android:foregroundServiceType="microphone" />
         <service android:name=".system.WorkService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="The user's agent finishes a task they asked for after they leave the app" />
         </service>

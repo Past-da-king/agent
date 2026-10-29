@@ -317,7 +317,7 @@ fun ChatScreen(
                     scope.launch { kotlinx.coroutines.delay(120); stick = true; list.animateScrollToItem(rows.size) }
                 })
             }
-            MessageComposer(draft, onDraft, status.working, actions.composer(), attachments, docs, listening) } } },
+            MessageComposer(draft, onDraft, status.working, actions.composer(), attachments, docs, listening, dictationOwner = "main") } } },
     ) { pad ->
         if (items.isEmpty() || morning != null) Welcome(userName, Modifier.padding(pad), actions.onSend, morning, hasChat = items.isNotEmpty())
         else LazyColumn(
@@ -1159,7 +1159,7 @@ fun MentionReplyCard(item: ChatItem, reply: com.past9.phoneaos.remote.MentionRep
                     scope.launch { runCatching { s.replyTo(reply.chat, text, pics) }.onFailure { problem = "Couldn't send that: ${it.message}"; box.draft = text; replying = true } }
                 })
                 MessageComposer(box.draft, { box.draft = it }, false, acts, box.attachments, box.docs.keys.toList(), tools?.listening(box) == true,
-                    placeholder = "Reply to ${reply.name}", inset = false)
+                    placeholder = "Reply to ${reply.name}", inset = false, dictationOwner = box)
             }
             if (problem.isNotEmpty()) Text(problem, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
         }
@@ -1238,7 +1238,7 @@ private fun WorkingRow(status: AgentStatus) {
  */
 @Composable
 fun MessageComposer(draft: String, onDraft: (String) -> Unit, working: Boolean, actions: com.past9.phoneaos.ui.ComposerActions, attachments: List<String>, docs: List<String> = emptyList(),
-                    listening: Boolean = false, placeholder: String? = null, inset: Boolean = true) {
+                    listening: Boolean = false, placeholder: String? = null, inset: Boolean = true, dictationOwner: Any? = null) {
     var attachMenu by remember { mutableStateOf(false) }
     if (attachMenu) com.past9.phoneaos.ui.ChoiceSheet(Icons.Rounded.AttachFile, "Attach", "Add to your message", listOf(
         com.past9.phoneaos.ui.SheetChoice("photo", "Photo", "From your gallery", Icons.Rounded.Image),
@@ -1313,6 +1313,8 @@ fun MessageComposer(draft: String, onDraft: (String) -> Unit, working: Boolean, 
                 }
             }
         }
+        // While he dictates into this box: listening, reconnecting, paused, writing down the rest, or Retry.
+        com.past9.phoneaos.ui.DictationStatus(dictationOwner)
         Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp), verticalAlignment = Alignment.Bottom) {
             Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp, end = 4.dp)) {
