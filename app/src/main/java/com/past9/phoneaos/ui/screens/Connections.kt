@@ -140,7 +140,8 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
         else -> MachineSheet(state.machines.firstOrNull { it.id == sh }, state.machines, actions.machine.copy(onDelete = { actions.machine.onDelete(it); sheet = "list" }),
             onDismiss = { sheet = "list" }, onDone = { sheet = "list" })
     } }
-    val activeCount = state.connected.count { it.status == "ACTIVE" }
+    // Each account once (the computer can list one account per profile it is in).
+    val activeCount = accountRows(state.connected).size
     SubScreen("Connections", if (state.hasKey) (if (activeCount == 1) "1 app connected" else "$activeCount apps connected") else "Connect your apps", actions.onBack,
         actions = { if (state.hasKey) IconButton(onClick = actions.onRefresh) { Icon(Icons.Rounded.Refresh, "Refresh") } }) { pad ->
         LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = com.past9.phoneaos.ui.sidePad(16.dp), end = com.past9.phoneaos.ui.sidePad(16.dp), bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {

@@ -39,7 +39,7 @@ data class MeshDevice(val id: String, val name: String, val kind: String, val ro
             val what = when (kind) { "phone" -> "Phone"; "tablet" -> "Tablet"; "server" -> "Server"; else -> "Computer" }
             val does = if ("brain" in roles) "answers for you" else if ("hands" in roles) "its tools can be used" else "a window onto your agent"
             val line = when (state) {
-                State.ANSWERING -> "$what · answering this phone now"
+                State.ANSWERING -> "$what · $does"
                 State.SELF -> "$what · this one"
                 State.ONLINE -> "$what · $does"
                 State.AWAY -> "$what · " + (if (seen > 0) "last seen ${com.past9.phoneaos.ui.relativeTime(seen, now)}" else "not seen yet")
