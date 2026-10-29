@@ -72,6 +72,7 @@ object MiniAppsHub {
     val pendingOpen = MutableStateFlow<String?>(null)
     private var started = false
     private var reload: Job? = null
+    private var stateJob: Job? = null
 
     fun session(): RemoteSession? = RemoteHub.session.value
 
@@ -81,8 +82,10 @@ object MiniAppsHub {
         started = true
         scope.launch {
             RemoteHub.session.collectLatest { s ->
+                stateJob?.cancel()
                 if (s == null) { _apps.value = emptyList(); return@collectLatest }
-                refreshSoon(scope, 0)
+                // A call while the link is still connecting fails: read the list each time it is up (first time and every reconnect).
+                stateJob = scope.launch { s.state.collect { if (it is com.past9.phoneaos.remote.LinkState.Connected) refreshSoon(scope, 0) } }
                 s.events.collect { (name, payload) ->
                     when (name) {
                         RemoteSession.EVT_DATA -> if ((payload as? JSONObject)?.optString("entity") == "miniapp" || (payload as? JSONObject)?.optBoolean("reset") == true) refreshSoon(scope, 400)

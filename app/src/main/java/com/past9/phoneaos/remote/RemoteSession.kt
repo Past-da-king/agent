@@ -903,7 +903,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
                 val bytes = try {
                     RemoteRows.noteBytes(call("voice.noteAudio", listOf(name), 120_000)) ?: run { noteFailed[name] = NOTE_GONE; null }
                 } catch (e: Exception) {
-                    noteFailed[name] = "Couldn't get the audio from ${brainName()}: ${e.message ?: e::class.java.simpleName}"; null
+                    noteFailed[name] = noteError(e); null
                 }
                 if (bytes != null) {
                     val tmp = File(noteDir, "$name.part")
@@ -920,6 +920,14 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
                 }
             } finally { noteFetching.remove(name); _noteTick.value++ }
         }
+    }
+
+    /** Why a note did not come, in his words: a dropped or slow link is "couldn't reach", anything else keeps the reason. */
+    private fun noteError(e: Exception): String {
+        val why = e.message ?: e::class.java.simpleName
+        val link = e is java.io.IOException || e is kotlinx.coroutines.TimeoutCancellationException ||
+            listOf("pong", "timed out", "timeout", "closed", "not connected", "connection", "unreachable").any { why.contains(it, ignoreCase = true) }
+        return if (link) "Couldn't reach ${brainName()}. Check your connection and try again." else "Couldn't get the audio from ${brainName()}: $why"
     }
 
     /**

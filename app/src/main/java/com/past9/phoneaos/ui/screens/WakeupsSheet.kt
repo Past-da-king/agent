@@ -41,8 +41,10 @@ fun WakeupsSheet(onDismiss: () -> Unit) {
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(12.dp))
         val open = WakeChannel.isOpen
-        CheckRow(Icons.Rounded.Devices, "Reaches this phone", open,
-            when { linked == null -> "Link this phone to your computer first (Settings > Linked devices)"; open -> "Connected to ${WakeChannel.connectedTo.ifBlank { "your computer" }}"; else -> "Not connected right now. It keeps trying." }) { WakeChannel.ensure(context) }
+        val lacks = open && WakeChannel.lacksWakeups
+        val pc = WakeChannel.connectedTo.ifBlank { "your computer" }
+        CheckRow(Icons.Rounded.Devices, "Reaches this phone", open && !lacks,
+            when { linked == null -> "Link this phone to your computer first (Settings > Linked devices)"; lacks -> "$pc can't ring this phone yet: update the Agent app there"; open -> "Connected to $pc"; else -> "Not connected right now. It keeps trying." }) { WakeChannel.ensure(context) }
         checks.forEach { c -> CheckRow(Icons.Rounded.Shield, c.label, c.ok, if (c.ok) "On" else c.help) { WakePermissions.fix(context, c); tick++ } }
         Spacer(Modifier.height(12.dp))
         Text("Test a wake-up", style = MaterialTheme.typography.titleSmall)

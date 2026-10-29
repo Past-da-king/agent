@@ -40,11 +40,24 @@ object WakeChannel {
     @Volatile private var failures = 0
     @Volatile var connectedTo: String = ""
         private set
+    /** Which link the open channel belongs to (mesh, device, pass): a new link must not keep the old computer's channel. */
+    @Volatile private var openKey: String = ""
+    /** The computer it reached has no wake-ups yet (an older Agent app): it cannot ring this phone. */
+    @Volatile var lacksWakeups: Boolean = false
+        private set
+
+    private fun key(link: com.past9.phoneaos.remote.Link) = "${link.meshId}|${link.deviceId}|${link.pass.hashCode()}"
 
     /** Linked and on: keep the channel up (starts the service). Not linked: stop it. */
     fun ensure(context: Context) {
         val link = RemoteHub.link.value ?: run { RemoteHub.init(context) ; RemoteHub.link.value }
         if (link == null || !link.on) { stop(context); return }
+        if (openKey.isNotEmpty() && openKey != key(link)) {
+            Log.i(WakeHub.TAG, "link changed: the wake channel moves to the new computer")
+            loop?.cancel(); loop = null
+            rpc?.close(); rpc = null
+            openKey = ""; connectedTo = ""; lacksWakeups = false
+        }
         ForegroundGuard.start(context, WakeChannelService::class.java)
     }
 
@@ -64,11 +77,12 @@ object WakeChannel {
             while (true) {
                 val link = RemoteHub.link.value
                 if (link == null || !link.on) { delay(30_000); continue }
-                if (rpc?.isOpen == true) { delay(15_000); continue }
+                if (rpc?.isOpen == true && openKey == key(link)) { delay(15_000); continue }
+                if (rpc != null) { rpc?.close(); rpc = null }
                 var opened = false
                 for (brain in link.brains.sortedBy { it.priority }) {
                     for (url in brain.urls) {
-                        opened = tryOpen(app, url, brain.fp, link.pass)
+                        opened = tryOpen(app, url, brain.fp, link.pass, key(link))
                         if (opened) { connectedTo = brain.name; break }
                     }
                     if (opened) break
@@ -80,11 +94,12 @@ object WakeChannel {
         }
     }
 
-    private suspend fun tryOpen(app: Context, url: String, fp: String, pass: String): Boolean {
+    private suspend fun tryOpen(app: Context, url: String, fp: String, pass: String, linkKey: String): Boolean {
         val http = Pinning.client(sharedHttp, Pinning.PinnedTrust({ listOf(fp) }))
         val done = kotlinx.coroutines.CompletableDeferred<Boolean>()
         val client = RpcClient(http, url, pass, { hello(app) }, object : RpcClient.Listener {
             override fun onOpen(rpc: RpcClient) {
+                openKey = linkKey
                 done.complete(true)
                 scope.launch { onConnected(app, rpc) }
             }
@@ -107,7 +122,8 @@ object WakeChannel {
     private suspend fun onConnected(context: Context, rpc: RpcClient) {
         Log.i(WakeHub.TAG, "wake channel open")
         runCatching { WakeSnapshot.fromWire(rpc.call("wakeups.list", listOf(), 15_000) as? JSONObject, System.currentTimeMillis())?.let { WakeHub.apply(context, it) } }
-            .onFailure { Log.w(WakeHub.TAG, "wakeups.list: ${it.message}") }
+            .onSuccess { lacksWakeups = false }
+            .onFailure { lacksWakeups = (it.message ?: "").contains("not available", ignoreCase = true); Log.w(WakeHub.TAG, "wakeups.list: ${it.message}") }
         report(context)
         flush(context)
     }

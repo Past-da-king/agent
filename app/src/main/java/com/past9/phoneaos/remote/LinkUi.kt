@@ -74,6 +74,8 @@ private sealed interface LinkStep {
     data object Ready : LinkStep
     data class Busy(val to: String) : LinkStep
     data class Failed(val why: String) : LinkStep
+    /** A link code came from outside while this phone is linked to another computer: ask before replacing that link. */
+    data class Confirm(val offer: PairOffer, val current: String) : LinkStep
     /** Linked. [checkWords] is set on the typed-code path: the certificate was trusted on first use, so show it to compare. */
     data class Done(val name: String, val checkWords: String?) : LinkStep
 }
@@ -119,7 +121,13 @@ fun LinkScreen(onBack: () -> Unit, onLinked: () -> Unit, offerText: String? = nu
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     // A link code that came with the screen goes straight to linking: the camera is never started for it.
-    var step by remember { mutableStateOf<LinkStep>(if (offerText != null) LinkStep.Busy("your computer") else LinkStep.Ready) }
+    // ...unless it would replace the link to another computer: then it asks first (a link anyone sent could do that).
+    val confirmFirst = remember(offerText) {
+        offerText?.let { Pairing.parseQr(it) }?.let { o ->
+            RemoteHub.link.value?.takeIf { it.meshId.isNotBlank() && it.meshId != o.meshId }?.let { LinkStep.Confirm(o, it.nodeName.ifBlank { "your computer" }) }
+        }
+    }
+    var step by remember { mutableStateOf<LinkStep>(confirmFirst ?: if (offerText != null) LinkStep.Busy("your computer") else LinkStep.Ready) }
     var typing by remember { mutableStateOf(false) }
     var address by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
@@ -131,7 +139,7 @@ fun LinkScreen(onBack: () -> Unit, onLinked: () -> Unit, offerText: String? = nu
         step = LinkStep.Busy(offer.name)
         scope.launch { step = pair(context, offer, null, offer.code) }
     }
-    LaunchedEffect(offerText) { offerText?.let { scanned(it) } }
+    LaunchedEffect(offerText) { if (confirmFirst == null) offerText?.let { scanned(it) } }
     SubScreen("Use the agent on my computer", "Link this phone to a computer or server", onBack) { pad ->
         Column(Modifier.padding(pad).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             when (val s = step) {
@@ -155,6 +163,17 @@ fun LinkScreen(onBack: () -> Unit, onLinked: () -> Unit, offerText: String? = nu
                     if (s.checkWords != null) TextButton(onClick = { RemoteHub.unlink(context); step = LinkStep.Failed("Unlinked. Make a new code on your computer and try again.") }, modifier = Modifier.fillMaxWidth()) {
                         Text("It shows something else: unlink")
                     }
+                }
+                is LinkStep.Confirm -> {
+                    AppCard {
+                        Text("Link this phone to ${s.offer.name}?", style = MaterialTheme.typography.titleLarge)
+                        Spacer(Modifier.height(8.dp))
+                        Text("It uses ${s.current} now. Linking to ${s.offer.name} replaces that link. Go ahead only if you made this code on your own computer.",
+                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Button(onClick = { val o = s.offer; step = LinkStep.Busy(o.name); scope.launch { step = pair(context, o, null, o.code) } },
+                        modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("Link to ${s.offer.name}") }
+                    TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Keep ${s.current}") }
                 }
                 is LinkStep.Busy -> AppCard {
                     Row(verticalAlignment = Alignment.CenterVertically) {

@@ -62,8 +62,6 @@ class WakeUpActivity : ComponentActivity() {
 
 /** The ringing screen's view, shared by the activity and the overlay. Built in code: no layout inflation, no theme. */
 object WakeScreen {
-    private const val TAG_KEY = 0x7a11
-
     private class Holder(val root: LinearLayout, val sev: TextView, val title: TextView, val what: TextView, val meta: TextView, val ack: Button, val snooze: Button, val open: Button, val more: TextView) {
         var id: String = ""
         var link: String = ""
@@ -99,13 +97,13 @@ object WakeScreen {
         snooze.setOnClickListener { if (h.id.isNotEmpty()) onSnooze(h.id) }
         open.setOnClickListener { if (h.id.isNotEmpty()) onOpen(h.id, h.link) }
         val scroll = ScrollView(context).apply { isFillViewport = true; addView(root) }
-        scroll.setTag(TAG_KEY, h)
+        scroll.tag = h
         bind(scroll, top)
         return scroll
     }
 
     fun bind(view: View, top: Ringing) {
-        val h = view.getTag(TAG_KEY) as? Holder ?: return
+        val h = view.tag as? Holder ?: return
         val w = top.wake
         val colour = WakeRules.colour(w.severity).toInt()
         view.setBackgroundColor(colour)
