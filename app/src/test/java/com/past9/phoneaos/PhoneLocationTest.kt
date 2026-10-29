@@ -63,7 +63,7 @@ class PhoneLocationTest {
 
     @Test
     fun aFreshKnownPositionAnswersWithTheSuburbAndNoNewFix() = runBlocking {
-        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
         val lm = app.getSystemService(LocationManager::class.java)
         val slm = shadowOf(lm)
         slm.setLocationEnabled(true)
@@ -82,8 +82,25 @@ class PhoneLocationTest {
     }
 
     @Test
-    fun locationSwitchedOffSaysSo() = runBlocking {
+    fun closedAppWithoutAllTheTimeSaysSoAtOnceInsteadOfWaiting() = runBlocking {
         shadowOf(app).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+        shadowOf(app).denyPermissions(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        org.junit.Assume.assumeFalse(PhoneLocation.onScreen())
+        val t0 = System.currentTimeMillis()
+        val e = runCatching { PhoneLocationTool(app).run(JSONObject().put("max_age", 0), Ctx) }.exceptionOrNull()
+        assertTrue("$e", e?.message?.startsWith("BACKGROUND:") == true)
+        assertTrue(System.currentTimeMillis() - t0 < 5_000)
+    }
+
+    @Test
+    fun theAskNeverOverwritesTheWakeUpServicesNotification() {
+        assertTrue(PhoneLocation.NOTE_ID != com.past9.phoneaos.wakeup.WakeChannelService.NOTE_ID)
+        assertTrue(PhoneLocation.NOTE_ID != com.past9.phoneaos.wakeup.WakeUpService.NOTE_ID)
+    }
+
+    @Test
+    fun locationSwitchedOffSaysSo() = runBlocking {
+        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
         val slm = shadowOf(app.getSystemService(LocationManager::class.java))
         slm.setLocationEnabled(false)
         val e = runCatching { PhoneLocationTool(app).run(JSONObject(), Ctx) }.exceptionOrNull()

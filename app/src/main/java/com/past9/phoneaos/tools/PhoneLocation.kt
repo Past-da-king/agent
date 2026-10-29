@@ -46,7 +46,22 @@ object PhoneLocation {
     const val DEFAULT_TIMEOUT_S = 20
     /** Set once he granted it for the linked computer: location_get then leaves the permission in place. */
     const val KEEP_KEY = "location_keep"
-    const val NOTE_ID = 7_301
+    /** Its own id: 7301 is the wake-up channel's foreground notification, which the ask used to overwrite. */
+    const val NOTE_ID = 9_431
+    /** Background: an agent asks while the phone is locked in his pocket, and Android gives a backgrounded app no
+     *  location at all (not even the last known one) without "Allow all the time". Asked once, after the first yes. */
+    const val BACKGROUND = Manifest.permission.ACCESS_BACKGROUND_LOCATION
+    const val BG_ASKED_KEY = "location_bg_asked"
+
+    /** On screen (the app is open and visible): Android's "while using the app" covers it. */
+    fun onScreen(): Boolean = runCatching {
+        val info = android.app.ActivityManager.RunningAppProcessInfo()
+        android.app.ActivityManager.getMyMemoryState(info)
+        info.importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE
+    }.getOrDefault(false)
+
+    fun hasBackground(context: Context): Boolean = Build.VERSION.SDK_INT < 29 ||
+        androidx.core.content.ContextCompat.checkSelfPermission(context, BACKGROUND) == android.content.pm.PackageManager.PERMISSION_GRANTED
 
     /**
      * A web page asked for navigator.geolocation (protocol: WebChromeClient.onGeolocationPermissionsShowPrompt).
@@ -74,14 +89,16 @@ object PhoneLocation {
     }.toTypedArray()
 
     /** The app is in his pocket: a notification that opens it, where Android's own prompt comes up. */
-    fun askNote(context: Context, why: String) {
+    fun askNote(context: Context, why: String, background: Boolean = false) {
         val open = PendingIntent.getActivity(context, PhoneLocation.NOTE_ID, Intent(context, com.past9.phoneaos.MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val st = App.graph(context).settings.state.value
         val n = NotificationCompat.Builder(context, com.past9.phoneaos.system.AndroidPhone.CH_MESSAGES)
             .setSmallIcon(com.past9.phoneaos.system.Identity.statIcon(context, st.mascot))
-            .setContentTitle("Allow location?").setContentText("Your agent wants your location so it can $why. Tap, then Allow (asked once).")
-            .setStyle(NotificationCompat.BigTextStyle().bigText("Your agent wants your location so it can $why. Tap, then Allow. Android asks once."))
+            .setContentTitle(if (background) "Location while the phone is in your pocket?" else "Allow location?")
+            .setContentText(if (background) "Pick 'Allow all the time' so your agent can check where you are when the app is closed. Asked once." else "Your agent wants your location so it can $why. Tap, then Allow (asked once).")
+            .setStyle(NotificationCompat.BigTextStyle().bigText(if (background) "Your agent usually asks while the phone is locked in your pocket, and Android gives a closed app no location unless it may use it all the time. Tap, then pick 'Allow all the time'. Asked once; it only ever takes one position when an agent asks, never tracks."
+                else "Your agent wants your location so it can $why. Tap, then Allow. Android asks once."))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE).setAutoCancel(true).setContentIntent(open).build()
         runCatching { NotificationManagerCompat.from(context).notify(PhoneLocation.NOTE_ID, n) }
     }
@@ -140,6 +157,15 @@ class PhoneLocationTool(private val context: Context, private val lookup: (suspe
             if (!ok) error("DENIED: location permission is not allowed on the phone (he was asked and said no, or did not answer within 3 minutes). Ask him to allow Location for the Agent app, or ask for the address.")
         }
         runCatching { App.graph(context).settings.setExtra(PhoneLocation.KEEP_KEY, "1") }
+        // Once, right after the first yes (the app is open then): the same for when the app is closed.
+        val settings = runCatching { App.graph(context).settings }.getOrNull()
+        if (!PhoneLocation.hasBackground(context) && settings?.extra(PhoneLocation.BG_ASKED_KEY) != "1" && PhoneLocation.onScreen()) {
+            settings?.setExtra(PhoneLocation.BG_ASKED_KEY, "1")
+            withTimeoutOrNull(120_000) { PermissionBroker.request(context, arrayOf(PhoneLocation.BACKGROUND)) { PhoneLocation.askNote(context, "", background = true) } }
+            NotificationManagerCompat.from(context).cancel(PhoneLocation.NOTE_ID)
+        }
+        if (!PhoneLocation.hasBackground(context) && !PhoneLocation.onScreen())
+            error("BACKGROUND: the Agent app on the phone may use location only while it is open, and it is closed now. Ask him to open the app (then call again), or to set Location to 'Allow all the time' for Agent (Settings, Apps, Agent, Permissions, Location).")
         val lm = context.getSystemService(LocationManager::class.java)
         val providers = PhoneLocation.providers({ lm.isProviderEnabled(it) })
         if (providers.isEmpty() || (Build.VERSION.SDK_INT >= 28 && !lm.isLocationEnabled))
