@@ -70,7 +70,7 @@ class PhoneLocationTest {
         slm.setProviderEnabled(LocationManager.NETWORK_PROVIDER, true)
         slm.setProviderEnabled(LocationManager.GPS_PROVIDER, true)
         slm.simulateLocation(located(LocationManager.NETWORK_PROVIDER, 30_000))
-        val out = JSONObject(PhoneLocationTool(app) { _, _ -> place() }.run(JSONObject().put("max_age", 120), Ctx))
+        val out = JSONObject(PhoneLocationTool(app, lookup = { _, _ -> place() }).run(JSONObject().put("max_age", 120), Ctx))
         assertEquals(-29.7276, out.getDouble("lat"), 1e-4)
         assertEquals(31.0844, out.getDouble("lng"), 1e-4)
         assertEquals(12, out.getInt("accuracy_m"))
@@ -90,6 +90,17 @@ class PhoneLocationTest {
         val e = runCatching { PhoneLocationTool(app).run(JSONObject().put("max_age", 0), Ctx) }.exceptionOrNull()
         assertTrue("$e", e?.message?.startsWith("BACKGROUND:") == true)
         assertTrue(System.currentTimeMillis() - t0 < 5_000)
+    }
+
+    @Test
+    fun theFirstCallSaysItIsAskingInsteadOfOutlivingTheLinkDeadline() = runBlocking {
+        shadowOf(app).denyPermissions(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+        val t0 = System.currentTimeMillis()
+        val e = runCatching { PhoneLocationTool(app, askMs = 800).run(JSONObject(), Ctx) }.exceptionOrNull()
+        assertTrue("$e", e?.message?.startsWith("ASKING:") == true)
+        assertTrue(System.currentTimeMillis() - t0 < 10_000)
+        com.past9.phoneaos.system.PermissionBroker.pending.value?.let { com.past9.phoneaos.system.PermissionBroker.answer(it, false) }
+        Unit
     }
 
     @Test

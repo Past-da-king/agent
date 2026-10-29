@@ -136,7 +136,11 @@ object PhoneLocation {
         }
 }
 
-class PhoneLocationTool(private val context: Context, private val lookup: (suspend (Double, Double) -> Address?)? = null) : Tool {
+/**
+ * [askMs]: how long the first call waits for him to answer Android's prompts. The computer gives a lent tool 120 s, so
+ * the ask stops well before that and says so (ASKING:), instead of the call dying as "didn't finish in time".
+ */
+class PhoneLocationTool(private val context: Context, private val askMs: Long = 75_000, private val lookup: (suspend (Double, Double) -> Address?)? = null) : Tool {
     override val spec = ToolSpec("phone_location",
         "Where the person's phone is right now: lat, lng, accuracy in metres, when, provider, and the suburb and city (looked up on the phone). " +
             "Uses a recent known position if it is no older than max_age seconds (default ${PhoneLocation.DEFAULT_MAX_AGE_S}), otherwise takes one fix; never tracks. " +
@@ -152,7 +156,8 @@ class PhoneLocationTool(private val context: Context, private val lookup: (suspe
         val timeoutS = input.optInt("timeout", PhoneLocation.DEFAULT_TIMEOUT_S).coerceIn(5, 60)
         if (!PermissionBroker.granted(context, PhoneLocation.FOREGROUND)) {
             val why = input.optString("reason").removePrefix("so I can ").ifBlank { "answer you" }
-            val ok = PermissionBroker.request(context, PhoneLocation.FOREGROUND) { PhoneLocation.askNote(context, why) }
+            val ok = withTimeoutOrNull(askMs) { PermissionBroker.request(context, PhoneLocation.FOREGROUND) { PhoneLocation.askNote(context, why) } }
+            if (ok == null) error("ASKING: the phone is asking him to allow location now (a notification, then Android's prompt). Call phone_location again in a minute, once he has answered.")
             NotificationManagerCompat.from(context).cancel(PhoneLocation.NOTE_ID)
             if (!ok) error("DENIED: location permission is not allowed on the phone (he was asked and said no, or did not answer within 3 minutes). Ask him to allow Location for the Agent app, or ask for the address.")
         }
@@ -161,7 +166,7 @@ class PhoneLocationTool(private val context: Context, private val lookup: (suspe
         val settings = runCatching { App.graph(context).settings }.getOrNull()
         if (!PhoneLocation.hasBackground(context) && settings?.extra(PhoneLocation.BG_ASKED_KEY) != "1" && PhoneLocation.onScreen()) {
             settings?.setExtra(PhoneLocation.BG_ASKED_KEY, "1")
-            withTimeoutOrNull(120_000) { PermissionBroker.request(context, arrayOf(PhoneLocation.BACKGROUND)) { PhoneLocation.askNote(context, "", background = true) } }
+            withTimeoutOrNull(30_000) { PermissionBroker.request(context, arrayOf(PhoneLocation.BACKGROUND)) { PhoneLocation.askNote(context, "", background = true) } }
             NotificationManagerCompat.from(context).cancel(PhoneLocation.NOTE_ID)
         }
         if (!PhoneLocation.hasBackground(context) && !PhoneLocation.onScreen())
