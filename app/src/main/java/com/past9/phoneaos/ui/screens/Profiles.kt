@@ -177,7 +177,7 @@ fun ProfileSheet(profile: AgentProfile?, accounts: List<AccountRef>, logos: Map<
         Text("Helpers given this profile can use these and nothing else.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(10.dp))
         if (all.isEmpty()) Text("Connect an app below first, then add it here.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
-        Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
+        Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(vertical = 4.dp)) {
                 all.forEach { a ->
                     val on = a.id in chosen
@@ -278,7 +278,7 @@ fun AccountSheet(account: AccountRef, logo: String, rules: AccountRules, profile
 /** The account in one line: its logo, the email it signed in as (wrapping by character only if it must), and a note. */
 @Composable
 private fun AccountHeader(account: AccountRef, app: String, logo: String, note: String?) {
-    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             AppLogo(app, logo, 40.dp); Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {

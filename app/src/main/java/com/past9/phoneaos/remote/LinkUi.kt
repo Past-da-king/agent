@@ -190,7 +190,7 @@ fun LinkScreen(onBack: () -> Unit, onLinked: () -> Unit, offerText: String? = nu
                         Text(s.why, Modifier.padding(14.dp), color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodyMedium)
                     }
                     if (!typing) {
-                        Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(MaterialTheme.shapes.extraLarge).background(Color.Black), contentAlignment = Alignment.Center) {
+                        Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(MaterialTheme.shapes.extraLarge).background(com.past9.phoneaos.ui.theme.Media.qr), contentAlignment = Alignment.Center) {
                             if (camOk) QrScanner(Modifier.fillMaxSize()) { scanned(it) }
                             else Button(onClick = { askCam.launch(Manifest.permission.CAMERA) }) { Icon(Icons.Rounded.PhotoCamera, null); Spacer(Modifier.width(8.dp)); Text("Allow the camera") }
                         }
@@ -199,9 +199,9 @@ fun LinkScreen(onBack: () -> Unit, onLinked: () -> Unit, offerText: String? = nu
                         val url = Pairing.address(address)
                         val sc = Pairing.shortCode(code)
                         fun link() { if (url != null && sc != null) { step = LinkStep.Busy(url.removePrefix("https://")); scope.launch { step = pair(context, null, url, sc) } } }
-                        OutlinedTextField(address, { address = it }, label = { Text("Computer's address") }, placeholder = { Text("192.168.1.20 or my-pc.local") },
+                        com.past9.phoneaos.ui.AppTextField(address, { address = it }, label = { Text("Computer's address") }, placeholder = { Text("192.168.1.20 or my-pc.local") },
                             singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next))
-                        OutlinedTextField(code, { code = it.uppercase().take(9) }, label = { Text("Code") }, placeholder = { Text("ABCD-EFGH") },
+                        com.past9.phoneaos.ui.AppTextField(code, { code = it.uppercase().take(9) }, label = { Text("Code") }, placeholder = { Text("ABCD-EFGH") },
                             singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Go),
                             keyboardActions = KeyboardActions(onGo = { link() }))
                         if (address.isNotBlank() && url == null) Text(if (address.trim().startsWith("http://", true)) "Linking only works over https." else "That doesn't look like an address.",
@@ -332,7 +332,7 @@ fun LinkedDevicesScreen(onBack: () -> Unit) {
                             Text(b.name, style = MaterialTheme.typography.titleSmall)
                             Text(line, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Box(Modifier.size(10.dp).clip(CircleShape).background(when { answering -> Color(0xFF2E9E5B); h?.ready == true -> Color(0xFF8BC34A); else -> MaterialTheme.colorScheme.outlineVariant }))
+                        Box(Modifier.size(10.dp).clip(CircleShape).background(when { answering -> com.past9.phoneaos.ui.theme.Lights.live; h?.ready == true -> com.past9.phoneaos.ui.theme.Lights.ready; else -> MaterialTheme.colorScheme.outlineVariant }))
                     }
                 }
                 val trouble = (state as? LinkState.NoAgents)?.why ?: (state as? LinkState.Retrying)?.why
@@ -356,16 +356,7 @@ fun LinkedDevicesScreen(onBack: () -> Unit) {
             }
         }
     }
-    if (confirmUnlink) ModalBottomSheet(onDismissRequest = { confirmUnlink = false }) {
-        Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
-            Text("Unlink this phone?", style = MaterialTheme.typography.headlineSmall)
-            Spacer(Modifier.height(8.dp))
-            Text("This phone forgets ${l.nodeName.ifBlank { "the computer" }} and the copy of its data. Nothing on the computer changes, and this phone's own chat, memory and keys stay as they were.",
-                style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(20.dp))
-            Button(onClick = { confirmUnlink = false; RemoteHub.unlink(context); onBack() }, modifier = Modifier.fillMaxWidth().height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError)) { Text("Unlink") }
-            TextButton(onClick = { confirmUnlink = false }, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("Keep it linked") }
-        }
-    }
+    if (confirmUnlink) com.past9.phoneaos.ui.ConfirmSheet(androidx.compose.material.icons.Icons.Rounded.LinkOff, "Linked computer", "Unlink this phone?",
+        "This phone forgets ${l.nodeName.ifBlank { "the computer" }} and the copy of its data. Nothing on the computer changes, and this phone's own chat, memory and keys stay as they were.",
+        confirm = "Unlink", onConfirm = { confirmUnlink = false; RemoteHub.unlink(context); onBack() }, onDismiss = { confirmUnlink = false }, cancel = "Keep it linked", destructive = true)
 }

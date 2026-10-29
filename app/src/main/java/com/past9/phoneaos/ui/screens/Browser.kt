@@ -1,5 +1,7 @@
 package com.past9.phoneaos.ui.screens
 
+import androidx.compose.material.icons.rounded.*
+
 import android.widget.FrameLayout
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -81,16 +83,11 @@ fun BrowserScreen(engines: Map<String, BrowserEngine>, profiles: List<String>, a
     }
     if (adding) {
         var name by remember { mutableStateOf("") }
-        ModalBottomSheet(onDismissRequest = { adding = false }) {
-            Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
-                Text("New browser profile", style = MaterialTheme.typography.headlineSmall)
-                Spacer(Modifier.height(6.dp))
-                Text("A separate set of signed-in accounts, e.g. Work. Sign in once here; your agent can then use it.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(16.dp))
-                OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
-                Spacer(Modifier.height(16.dp))
-                Button(onClick = { actions.onAddProfile(name.trim()); adding = false }, enabled = name.isNotBlank(), modifier = Modifier.fillMaxWidth().height(56.dp), shapes = ButtonDefaults.shapes()) { Text("Add profile") }
-            }
+        com.past9.phoneaos.ui.AppSheet(androidx.compose.material.icons.Icons.Rounded.Language, "Browser", "New browser profile", { adding = false }, primary = "Add profile", primaryEnabled = name.isNotBlank(),
+            onPrimary = { actions.onAddProfile(name.trim()); adding = false }) {
+            Text("A separate set of signed-in accounts, e.g. Work. Sign in once here; your agent can then use it.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(16.dp))
+            com.past9.phoneaos.ui.SheetField(name, { name = it }, "Name", "Work", singleLine = true)
         }
     }
 }

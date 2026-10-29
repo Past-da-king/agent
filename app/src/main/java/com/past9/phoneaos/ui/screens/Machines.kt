@@ -107,7 +107,7 @@ fun MachinesSheet(machines: List<Machine>, actions: MachineActions, onDismiss: (
 @Composable
 private fun Hint(icon: ImageVector, title: String, line: String) {
     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(44.dp).clip(RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm)).background(MaterialTheme.colorScheme.surfaceContainerHigh), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = MaterialTheme.colorScheme.primary)
         }
         Spacer(Modifier.width(14.dp))
@@ -121,9 +121,9 @@ private fun Hint(icon: ImageVector, title: String, line: String) {
 @Composable
 private fun MachineTile(m: Machine, status: String?, checked: Boolean, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme; val extra = LocalExtra.current
-    Surface(onClick = onClick, shape = RoundedCornerShape(24.dp), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
+    Surface(onClick = onClick, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(cs.primaryContainer), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(48.dp).clip(RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm)).background(cs.primaryContainer), contentAlignment = Alignment.Center) {
                 Icon(machineIcon(m), null, tint = cs.onPrimaryContainer)
             }
             Spacer(Modifier.width(14.dp))
@@ -235,7 +235,7 @@ fun MachineSheet(existing: Machine?, others: List<Machine>, actions: MachineActi
             }
 
             Spacer(Modifier.height(24.dp))
-            Surface(onClick = { trusted = !trusted }, shape = RoundedCornerShape(24.dp), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
+            Surface(onClick = { trusted = !trusted }, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(if (trusted) Icons.Rounded.Bolt else Icons.Rounded.VerifiedUser, null, tint = if (trusted) cs.tertiary else cs.primary)
                     Spacer(Modifier.width(14.dp))
@@ -254,23 +254,22 @@ fun MachineSheet(existing: Machine?, others: List<Machine>, actions: MachineActi
             }
         }
     }
-    if (confirmDelete && existing != null) AlertDialog(onDismissRequest = { confirmDelete = false },
-        title = { Text("Remove ${existing.name}?") }, text = { Text("Your agent loses access, and its saved password or key is deleted from this phone.") },
-        confirmButton = { TextButton(onClick = { confirmDelete = false; actions.onDelete(existing.id) }) { Text("Remove", color = cs.error) } },
-        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } })
+    if (confirmDelete && existing != null) com.past9.phoneaos.ui.ConfirmSheet(androidx.compose.material.icons.Icons.Rounded.Dns, "Machine", "Remove ${existing.name}?",
+        "Your agent loses access, and its saved password or key is deleted from this phone.",
+        confirm = "Remove", onConfirm = { confirmDelete = false; actions.onDelete(existing.id) }, onDismiss = { confirmDelete = false }, cancel = "Keep it", destructive = true)
 }
 
 @Composable
 private fun PublicKeyCard(pub: String, onCopy: (String) -> Unit) {
     val cs = MaterialTheme.colorScheme
     var copied by remember { mutableStateOf(false) }
-    Surface(shape = RoundedCornerShape(24.dp), color = cs.primaryContainer, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg), color = cs.primaryContainer, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(18.dp)) {
             Text("ONE STEP ON THE MACHINE", style = Eyebrow, color = cs.onPrimaryContainer)
             Spacer(Modifier.height(6.dp))
             Text("Add this line to ~/.ssh/authorized_keys there, or send it to whoever runs it.", style = MaterialTheme.typography.bodyMedium, color = cs.onPrimaryContainer)
             Spacer(Modifier.height(12.dp))
-            Surface(shape = RoundedCornerShape(16.dp), color = cs.surfaceContainerLowest, modifier = Modifier.fillMaxWidth()) {
+            Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm), color = cs.surfaceContainerLowest, modifier = Modifier.fillMaxWidth()) {
                 Text(pub, Modifier.padding(14.dp), style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace), color = cs.onSurface, maxLines = 3, overflow = TextOverflow.Ellipsis)
             }
             Spacer(Modifier.height(12.dp))
@@ -284,7 +283,7 @@ private fun PublicKeyCard(pub: String, onCopy: (String) -> Unit) {
 @Composable
 private fun ResultCard(ok: Boolean, title: String, body: String) {
     val cs = MaterialTheme.colorScheme; val extra = LocalExtra.current
-    Surface(shape = RoundedCornerShape(24.dp), color = if (ok) extra.successContainer else cs.errorContainer, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg), color = if (ok) extra.successContainer else cs.errorContainer, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
             Icon(if (ok) Icons.Rounded.CheckCircle else Icons.Rounded.ErrorOutline, null, tint = if (ok) extra.success else cs.onErrorContainer)
             Spacer(Modifier.width(12.dp))

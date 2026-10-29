@@ -76,9 +76,9 @@ import java.io.File
 import kotlin.math.roundToInt
 
 /** The card's dark stage; the app's theme colours come in through the accents (send, caption). */
-private val Stage = Color(0xFF111216)
-private val OnStage = Color(0xFFF1F0F4)
-private val Glass = Color(0x73000000)
+private val Stage = com.past9.phoneaos.ui.theme.Media.stageRaised
+private val OnStage = com.past9.phoneaos.ui.theme.Media.onStage
+private val Glass = com.past9.phoneaos.ui.theme.Media.glass
 private val Emphasized = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 private val EmphasizedIn = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
 
@@ -140,7 +140,7 @@ fun CameraCard(origin: Rect, onClosed: () -> Unit, onSend: (path: String, captio
         val tx = margin; val ty = sh - bottomInset - margin - th
         val cornerFrom = minOf(origin.width, origin.height) / 2f; val cornerTo = with(density) { 30.dp.toPx() }
 
-        Box(Modifier.fillMaxSize().graphicsLayer { alpha = (progress.value * (1f - (dragY.value / th).coerceIn(0f, 1f))) * 0.45f }.background(Color.Black)
+        Box(Modifier.fillMaxSize().graphicsLayer { alpha = (progress.value * (1f - (dragY.value / th).coerceIn(0f, 1f))) * 0.45f }.background(com.past9.phoneaos.ui.theme.Media.dim)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { if (!reviewing) close() })
 
         Box(
@@ -271,7 +271,7 @@ private fun Live(
             }
         })
         // Freeze-frame, then the real photo.
-        if (reviewing) Box(Modifier.fillMaxSize().graphicsLayer { scaleX = shrink; scaleY = shrink }.clip(RoundedCornerShape(24.dp)).background(Stage)) {
+        if (reviewing) Box(Modifier.fillMaxSize().graphicsLayer { scaleX = shrink; scaleY = shrink }.clip(RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg)).background(Stage)) {
             if (photo != null) coil.compose.AsyncImage(File(photo), "The photo you took", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
             else frozen?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
         }
@@ -283,7 +283,7 @@ private fun Live(
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { CircleTool(Icons.Rounded.MoreHoriz, "More camera options", { menu = !menu }) }
             }
             AnimatedVisibility(menu, Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = 88.dp), enter = fadeIn(tween(140)) + scaleIn(tween(180), 0.9f, androidx.compose.ui.graphics.TransformOrigin(1f, 1f)), exit = fadeOut(tween(100)) + scaleOut(tween(120), 0.9f, androidx.compose.ui.graphics.TransformOrigin(1f, 1f))) {
-                Surface(shape = RoundedCornerShape(20.dp), color = Color(0xE61B1C22), contentColor = OnStage) {
+                Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md), color = com.past9.phoneaos.ui.theme.Media.glassStrong, contentColor = OnStage) {
                     Column(Modifier.padding(vertical = 6.dp).width(220.dp)) {
                         MenuRow(Icons.Rounded.FlipCameraAndroid, "Flip camera") { menu = false; front = !front }
                         if (hasFlash && !front) MenuRow(when (flash) { Flash.OFF -> Icons.Rounded.FlashOff; Flash.ON -> Icons.Rounded.FlashOn; Flash.AUTO -> Icons.Rounded.FlashAuto }, flash.label) { flash = flash.next() }
@@ -294,7 +294,7 @@ private fun Live(
         } else Review(photo != null, onRetake, onSend)
 
         failed?.let { msg ->
-            Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.align(Alignment.Center).padding(28.dp)) {
+            Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.align(Alignment.Center).padding(28.dp)) {
                 Column(Modifier.padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     AgentAvatar(working = false, size = 48.dp)
                     Spacer(Modifier.height(12.dp))
@@ -316,16 +316,16 @@ private fun Shutter(enabled: Boolean, onClick: () -> Unit) {
     val pressed by src.collectIsPressedAsState()
     val s by animateFloatAsState(if (pressed) 0.92f else 1f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium), label = "shutter")
     Box(
-        Modifier.size(72.dp).graphicsLayer { scaleX = s; scaleY = s; alpha = if (enabled) 1f else 0.6f }.clip(CircleShape).background(Color.White)
+        Modifier.size(72.dp).graphicsLayer { scaleX = s; scaleY = s; alpha = if (enabled) 1f else 0.6f }.clip(CircleShape).background(com.past9.phoneaos.ui.theme.Media.shutter)
             .clickable(interactionSource = src, indication = null, enabled = enabled, onClick = onClick).semantics { contentDescription = "Take photo" },
         contentAlignment = Alignment.Center
-    ) { Box(Modifier.size(62.dp).border(2.dp, Color(0x40000000), CircleShape)) }
+    ) { Box(Modifier.size(62.dp).border(2.dp, com.past9.phoneaos.ui.theme.Media.ring, CircleShape)) }
 }
 
 @Composable
 private fun CircleTool(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Surface(onClick = onClick, shape = CircleShape, color = Glass, modifier = modifier.size(48.dp)) {
-        Box(contentAlignment = Alignment.Center) { Icon(icon, label, tint = Color.White) }
+        Box(contentAlignment = Alignment.Center) { Icon(icon, label, tint = com.past9.phoneaos.ui.theme.Media.onGlass) }
     }
 }
 
@@ -341,7 +341,7 @@ private fun MenuRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label
 private fun BoxScope.Review(ready: Boolean, onRetake: () -> Unit, onSend: (String) -> Unit) {
     var caption by remember { mutableStateOf("") }
     Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Surface(shape = RoundedCornerShape(26.dp), color = Color(0xCC1B1C22), modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp)) {
+        Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg), color = com.past9.phoneaos.ui.theme.Media.glassMid, modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp)) {
             Box(Modifier.padding(horizontal = 18.dp, vertical = 13.dp)) {
                 if (caption.isEmpty()) Text("Add a caption (optional)", style = MaterialTheme.typography.bodyLarge, color = OnStage.copy(alpha = 0.6f))
                 BasicTextField(caption, { caption = it }, textStyle = MaterialTheme.typography.bodyLarge.copy(color = OnStage), cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), maxLines = 3, modifier = Modifier.fillMaxWidth())

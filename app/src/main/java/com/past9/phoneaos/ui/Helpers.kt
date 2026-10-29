@@ -126,8 +126,8 @@ fun ProjectIconTile(name: String, glyphName: String, color: String, image: Strin
             when {
                 bitmap != null -> androidx.compose.foundation.Image(bitmap, name, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
                 emoji != null -> Text(emoji, style = if (size < 32.dp) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleLarge)
-                glyph != null -> Icon(glyph, name, Modifier.size(size * 0.55f), tint = Color.White)
-                else -> Text(name.take(1).uppercase(), style = MaterialTheme.typography.titleMedium, color = Color.White)
+                glyph != null -> Icon(glyph, name, Modifier.size(size * 0.55f), tint = accent.lOnP)
+                else -> Text(name.take(1).uppercase(), style = MaterialTheme.typography.titleMedium, color = accent.lOnP)
             }
         }
         if (working) LoadingIndicator(Modifier.size(size * 0.45f).align(Alignment.BottomEnd).clip(CircleShape).background(MaterialTheme.colorScheme.surface), color = accent.lP)
@@ -182,7 +182,7 @@ fun HelperCard(h: HelperView, onClick: () -> Unit, modifier: Modifier = Modifier
 fun HelperSheet(h: HelperView, onStop: ((Long) -> Unit)?, onDismiss: () -> Unit, now: Long = System.currentTimeMillis()) {
     val cs = MaterialTheme.colorScheme
     val look = lookOf(h.state)
-    val shape = androidx.compose.foundation.shape.RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp)
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(topStart = com.past9.phoneaos.ui.theme.Radius.xl, topEnd = com.past9.phoneaos.ui.theme.Radius.xl)
     val body: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 40.dp).navigationBarsPadding()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -240,9 +240,7 @@ fun HelperSheet(h: HelperView, onStop: ((Long) -> Unit)?, onDismiss: () -> Unit,
         }
     }
     // Screenshot tests can't capture a popup window, so they render the sheet in place.
-    if (LocalSheetPreview.current) Surface(color = cs.surfaceContainerLow, shape = shape, modifier = Modifier.fillMaxSize().padding(top = 48.dp)) {
-        Column { Box(Modifier.align(Alignment.CenterHorizontally).padding(vertical = 22.dp).size(32.dp, 4.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(2.dp)).background(cs.onSurfaceVariant.copy(alpha = 0.4f))); body() }
-    } else ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = cs.surfaceContainerLow, shape = shape) { body() }
+    com.past9.phoneaos.ui.AgentSheet(onDismiss, shape) { body() }
 }
 
 @Composable

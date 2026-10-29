@@ -150,7 +150,7 @@ fun LiveCardList(ui: LiveCardsUi, modifier: Modifier = Modifier, onCollapse: (()
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         val canCollapse = onCollapse != null && working > 0
         val head = Modifier.fillMaxWidth()
-        Surface(onClick = { onCollapse?.invoke() }, enabled = canCollapse, shape = RoundedCornerShape(12.dp), color = cs.surface, modifier = head) {
+        Surface(onClick = { onCollapse?.invoke() }, enabled = canCollapse, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm), color = cs.surface, modifier = head) {
             Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("ON THE COMPUTER", style = Eyebrow, color = cs.primary)
                 Spacer(Modifier.weight(1f))

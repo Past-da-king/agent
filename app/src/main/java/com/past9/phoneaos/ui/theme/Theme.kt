@@ -66,10 +66,70 @@ val AppType = Typography(
 /** Eyebrow: the small label over each section. 11sp min, uppercase, tracked out. */
 val Eyebrow = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp, lineHeight = 16.sp)
 
+/**
+ * The corner radii, the same steps as the desktop and the mini-apps (tokens.css --r-sm/md/lg/xl), plus the phone's
+ * smallest (8). Any other literal radius fails DesignTokensTest; a pill is RoundedCornerShape(50) or CircleShape.
+ */
+object Radius {
+    val xs = 8.dp; val sm = 12.dp; val md = 20.dp; val lg = 28.dp; val xl = 36.dp
+}
+
 val AppShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp), small = RoundedCornerShape(12.dp), medium = RoundedCornerShape(20.dp),
-    large = RoundedCornerShape(28.dp), extraLarge = RoundedCornerShape(36.dp),
+    extraSmall = RoundedCornerShape(Radius.xs), small = RoundedCornerShape(Radius.sm), medium = RoundedCornerShape(Radius.md),
+    large = RoundedCornerShape(Radius.lg), extraLarge = RoundedCornerShape(Radius.xl),
 )
+
+/** A big number in a report card (OpenUI hero): display type, tabular figures. */
+val HeroNumber = TextStyle(fontSize = 34.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp, fontFeatureSettings = "tnum")
+val HeroUnit = TextStyle(fontSize = 16.sp)
+
+/**
+ * Surfaces that stay dark whatever the theme: the camera, the full-screen photo viewer, a terminal's output. Named
+ * here so no screen carries a colour of its own (DesignTokensTest).
+ */
+object Media {
+    /** The stage behind a photo or the camera. */
+    val stage = Color(0xFF0E0D12)
+    val stageRaised = Color(0xFF111216)
+    val onStage = Color(0xFFE9E7EE)
+    /** Glass over a photo: a control or a label that must read on any picture. */
+    val glass = Color(0x8C0E0D12)
+    val glassStrong = Color(0xE61B1C22)
+    val glassMid = Color(0xCC1B1C22)
+    val onGlass = Color(0xFFFFFFFF)
+    /** The dim behind the camera card as it opens. */
+    val dim = Color(0xFF000000)
+    /** The shutter, and the edge of its ring. */
+    val shutter = Color(0xFFFFFFFF)
+    val ring = Color(0x40000000)
+    /** A QR code's own background (scanners need black and white). */
+    val qr = Color(0xFF000000)
+    /** A terminal's output block, and its text. */
+    val terminal = Color(0xFF15161A)
+    val onTerminal = Color(0xFFD8F3DC)
+}
+
+/**
+ * Other companies' own marks, drawn only where their logo stands in (a sign-in choice, a logo tile). Their colours are
+ * theirs, not ours, and they live here so a screen never invents one.
+ */
+object BrandMarks {
+    val claude = Color(0xFFD97757); val openai = Color(0xFF10A37F); val opencode = Color(0xFF8E8C99); val google = Color(0xFF4285F4)
+    val gmail = Color(0xFFEA4335); val drive = Color(0xFF0F9D58); val slack = Color(0xFF611F69); val notion = Color(0xFF2B2A33)
+    /** The light tile a third-party logo sits on (logos are drawn for white). */
+    val logoTile = Color(0xFFF7F7F8)
+    val onMark = Color(0xFFFFFFFF)
+}
+
+/** Status lights and the end-call button: conventional colours that mean the same everywhere. */
+object Lights {
+    val live = Color(0xFF2E9E5B); val ready = Color(0xFF8BC34A)
+    val endCall = Color(0xFFD7141E); val onEndCall = Color(0xFFFFFFFF)
+}
+
+/** A good-news number and a star in a report (OpenUI): the success and amber tones, per theme. */
+fun goodTone(dark: Boolean) = if (dark) Color(0xFF7FD6A0) else Color(0xFF17703F)
+fun starTone(dark: Boolean) = if (dark) Color(0xFFF2A900) else Color(0xFFC77700)
 
 @Immutable data class Extra(val success: Color, val onSuccess: Color, val successContainer: Color)
 val LocalExtra = staticCompositionLocalOf { Extra(Color(0xFF1E6B3A), Color.White, Color(0xFFCFEBD7)) }

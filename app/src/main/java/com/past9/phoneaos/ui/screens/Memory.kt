@@ -86,7 +86,7 @@ fun MemoryScreen(memories: List<MemoryRow>, actions: MemoryActions, bottomPaddin
         fab = { ExtendedFloatingActionButton(onClick = { adding = true }, icon = { Icon(Icons.Rounded.Add, null) }, text = { Text("New page") }, modifier = Modifier.padding(bottom = (bottomPadding - 40.dp).coerceAtLeast(0.dp))) }) { pad ->
         LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = com.past9.phoneaos.ui.sidePad(16.dp), end = com.past9.phoneaos.ui.sidePad(16.dp), bottom = bottomPadding + 60.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
-                OutlinedTextField(query, { query = it }, placeholder = { Text("Search people, places, anything") }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true,
+                com.past9.phoneaos.ui.AppTextField(query, { query = it }, placeholder = { Text("Search people, places, anything") }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true,
                     modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge)
             }
             // What an import or export just did, or that it is working: a card in the list, never a pop-up.
@@ -131,7 +131,7 @@ private fun TransferSection(onImport: () -> Unit, onExport: () -> Unit, canExpor
 @Composable
 private fun TransferBusy(what: String) {
     val cs = MaterialTheme.colorScheme
-    Surface(shape = RoundedCornerShape(28.dp), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
             CircularWavyProgressIndicator(modifier = Modifier.size(40.dp))
             Spacer(Modifier.width(16.dp))
@@ -144,10 +144,10 @@ private fun TransferBusy(what: String) {
 @Composable
 internal fun TransferCard(n: TransferNote, onPick: (String) -> Unit) {
     val cs = MaterialTheme.colorScheme
-    Surface(shape = RoundedCornerShape(28.dp), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Box(Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(if (n.ok) cs.primaryContainer else cs.errorContainer), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(48.dp).clip(RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm)).background(if (n.ok) cs.primaryContainer else cs.errorContainer), contentAlignment = Alignment.Center) {
                     Icon(if (n.ok) Icons.Rounded.Check else Icons.Rounded.ErrorOutline, null, Modifier.size(26.dp), tint = if (n.ok) cs.onPrimaryContainer else cs.onErrorContainer)
                 }
                 Column(Modifier.weight(1f)) {
@@ -157,7 +157,7 @@ internal fun TransferCard(n: TransferNote, onPick: (String) -> Unit) {
             }
             if (n.rows.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 n.rows.forEach { (label, count) ->
-                    Surface(shape = RoundedCornerShape(18.dp), color = cs.surfaceContainerHighest) {
+                    Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md), color = cs.surfaceContainerHighest) {
                         Column(Modifier.widthIn(min = 92.dp).padding(horizontal = 16.dp, vertical = 12.dp)) {
                             Text(count.toString(), style = MaterialTheme.typography.titleLarge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontFeatureSettings = "tnum"), color = cs.onSurface)
                             Text(label, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)

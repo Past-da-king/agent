@@ -180,7 +180,7 @@ private fun Floater(shape: RoundedPolygon, size: Dp, color: Color, x: Dp, y: Dp,
 private fun Hello(next: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     Column(Modifier.fillMaxSize()) {
-        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(bottomStart = 48.dp, bottomEnd = 48.dp)).background(cs.primaryContainer)) {
+        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(bottomStart = com.past9.phoneaos.ui.theme.Radius.xl, bottomEnd = com.past9.phoneaos.ui.theme.Radius.xl)).background(cs.primaryContainer)) {
             val w = maxWidth; val h = maxHeight
             // One hue, several strengths: lively without turning muddy.
             Floater(MaterialShapes.Clover4Leaf, 64.dp, cs.primary.copy(alpha = 0.20f), w * 0.06f, h * 0.18f, 0, true)
@@ -249,7 +249,7 @@ private fun NameStep(user: String, agent: String, onUser: (String) -> Unit, onAg
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AgentAvatar(working = false, size = 44.dp)
                 Spacer(Modifier.width(12.dp))
-                Surface(shape = RoundedCornerShape(6.dp, 22.dp, 22.dp, 22.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.xs, com.past9.phoneaos.ui.theme.Radius.md, com.past9.phoneaos.ui.theme.Radius.md, com.past9.phoneaos.ui.theme.Radius.md), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
                     Text("Nice to meet you, ${user.trim()}.${if (agent.isNotBlank()) " I'm ${agent.trim()}." else ""}", Modifier.padding(horizontal = 16.dp, vertical = 12.dp), style = MaterialTheme.typography.bodyLarge)
                 }
             }
@@ -282,7 +282,7 @@ fun StylePicker(user: String, agent: String, accent: String, mascot: String, onA
                 }
                 Spacer(Modifier.height(14.dp))
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                    Surface(color = cs.primaryContainer, shape = RoundedCornerShape(22.dp, 22.dp, 6.dp, 22.dp)) {
+                    Surface(color = cs.primaryContainer, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md, com.past9.phoneaos.ui.theme.Radius.md, com.past9.phoneaos.ui.theme.Radius.xs, com.past9.phoneaos.ui.theme.Radius.md)) {
                         Text("Find me a quiet café near work", Modifier.padding(horizontal = 14.dp, vertical = 10.dp), color = cs.onPrimaryContainer)
                     }
                 }
@@ -337,10 +337,10 @@ fun StylePicker(user: String, agent: String, accent: String, mascot: String, onA
 
 /** A brand-neutral mark for each subscription: its colour and a shape, no logos. */
 private fun subMark(k: SubKind): Pair<Color, RoundedPolygon> = when (k) {
-    SubKind.CLAUDE -> Color(0xFFD97757) to MaterialShapes.Burst
-    SubKind.CODEX -> Color(0xFF10A37F) to MaterialShapes.Cookie6Sided
-    SubKind.OPENCODE -> Color(0xFF8E8C99) to MaterialShapes.Square
-    SubKind.ANTIGRAVITY -> Color(0xFF4285F4) to MaterialShapes.Circle
+    SubKind.CLAUDE -> com.past9.phoneaos.ui.theme.BrandMarks.claude to MaterialShapes.Burst
+    SubKind.CODEX -> com.past9.phoneaos.ui.theme.BrandMarks.openai to MaterialShapes.Cookie6Sided
+    SubKind.OPENCODE -> com.past9.phoneaos.ui.theme.BrandMarks.opencode to MaterialShapes.Square
+    SubKind.ANTIGRAVITY -> com.past9.phoneaos.ui.theme.BrandMarks.google to MaterialShapes.Circle
 }
 
 @Composable
@@ -488,7 +488,7 @@ fun KeyStep(provider: Provider, onProvider: (Provider) -> Unit, actions: Onboard
         }
         Spacer(Modifier.height(20.dp))
         if (custom) {
-            OutlinedTextField(baseUrl, { baseUrl = it.trim(); result = null }, label = { Text("Base URL") }, placeholder = { Text("https://api.example.com/v1") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium,
+            com.past9.phoneaos.ui.AppTextField(baseUrl, { baseUrl = it.trim(); result = null }, label = { Text("Base URL") }, placeholder = { Text("https://api.example.com/v1") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium,
                 isError = urlProblem != null && !plainHttp, supportingText = urlProblem?.takeIf { !plainHttp }?.let { ({ Text(it, color = MaterialTheme.colorScheme.error) }) })
             if (plainHttp) {
                 Spacer(Modifier.height(10.dp))
@@ -510,10 +510,10 @@ fun KeyStep(provider: Provider, onProvider: (Provider) -> Unit, actions: Onboard
                 }
             }
             Spacer(Modifier.height(10.dp))
-            OutlinedTextField(model, { model = it.trim(); result = null }, label = { Text("Model") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
+            com.past9.phoneaos.ui.AppTextField(model, { model = it.trim(); result = null }, label = { Text("Model") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
             Spacer(Modifier.height(10.dp))
         }
-        OutlinedTextField(key, { key = it.trim(); result = null }, label = { Text("${if (custom) "Service" else provider.label} API key") }, placeholder = { Text(provider.keyHint) }, singleLine = true,
+        com.past9.phoneaos.ui.AppTextField(key, { key = it.trim(); result = null }, label = { Text("${if (custom) "Service" else provider.label} API key") }, placeholder = { Text(provider.keyHint) }, singleLine = true,
             visualTransformation = if (show) VisualTransformation.None else PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium,
             trailingIcon = { IconButton(onClick = { show = !show }) { Icon(if (show) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, if (show) "Hide key" else "Show key") } },
             supportingText = when (result) {
@@ -603,9 +603,9 @@ fun AppsStep(actions: OnboardingActions, next: () -> Unit) {
         TextButton(onClick = next, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("Skip for now") }
     }) {
         Row(horizontalArrangement = Arrangement.spacedBy((-10).dp)) {
-            listOf("Gmail" to Color(0xFFEA4335), "Calendar" to Color(0xFF4285F4), "Drive" to Color(0xFF0F9D58), "Slack" to Color(0xFF611F69), "Notion" to Color(0xFF2B2A33), "+250" to cs.primary).forEach { (n, c) ->
+            listOf("Gmail" to com.past9.phoneaos.ui.theme.BrandMarks.gmail, "Calendar" to com.past9.phoneaos.ui.theme.BrandMarks.google, "Drive" to com.past9.phoneaos.ui.theme.BrandMarks.drive, "Slack" to com.past9.phoneaos.ui.theme.BrandMarks.slack, "Notion" to com.past9.phoneaos.ui.theme.BrandMarks.notion, "+250" to cs.primary).forEach { (n, c) ->
                 Box(Modifier.size(48.dp).border(3.dp, cs.surface, CircleShape).clip(CircleShape).background(c), contentAlignment = Alignment.Center) {
-                    Text(if (n.startsWith("+")) n else n.take(1), style = MaterialTheme.typography.labelLarge, color = Color.White)
+                    Text(if (n.startsWith("+")) n else n.take(1), style = MaterialTheme.typography.labelLarge, color = com.past9.phoneaos.ui.theme.BrandMarks.onMark)
                 }
             }
         }
@@ -637,7 +637,7 @@ fun ComposioKeyForm(save: suspend (String) -> String?, openUrl: (String) -> Unit
             }
         }
         Spacer(Modifier.height(16.dp))
-        OutlinedTextField(key, { key = it.trim(); error = null }, label = { Text("Composio API key") }, singleLine = true, visualTransformation = PasswordVisualTransformation(),
+        com.past9.phoneaos.ui.AppTextField(key, { key = it.trim(); error = null }, label = { Text("Composio API key") }, singleLine = true, visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium, isError = error != null, supportingText = error?.let { { Text(it) } })
         Spacer(Modifier.height(12.dp))
         BigButton(if (busy) "Checking…" else "Connect", enabled = key.length > 8 && !busy, icon = null) {

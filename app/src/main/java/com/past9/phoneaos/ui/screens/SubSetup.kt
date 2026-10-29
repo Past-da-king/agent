@@ -90,7 +90,7 @@ fun SubSetupScreen(kind: SubKind, signInHelp: String, info: RuntimeInfo, install
                     Spacer(Modifier.height(10.dp))
                     Text("In the browser: tap Authorize. ${kind.label} then shows a code. Copy it, come back here, and paste it below.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                     Spacer(Modifier.height(14.dp))
-                    OutlinedTextField(code, { code = it.trim() }, label = { Text("Code from ${kind.label}") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
+                    com.past9.phoneaos.ui.AppTextField(code, { code = it.trim() }, label = { Text("Code from ${kind.label}") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
                     Spacer(Modifier.height(12.dp))
                     Button(onClick = { onCode(code) }, enabled = code.length > 10, modifier = Modifier.fillMaxWidth().height(56.dp), shapes = ButtonDefaults.shapes()) { Text("Finish sign-in") }
                 }
@@ -127,7 +127,7 @@ fun SubSetupScreen(kind: SubKind, signInHelp: String, info: RuntimeInfo, install
                     AppCard {
                         Text(signInHelp, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                         Spacer(Modifier.height(10.dp))
-                        OutlinedTextField(token, { token = it.trim() }, label = { Text(if (kind == SubKind.CLAUDE) "Token (starts with sk-ant-)" else "auth.json contents") }, singleLine = true,
+                        com.past9.phoneaos.ui.AppTextField(token, { token = it.trim() }, label = { Text(if (kind == SubKind.CLAUDE) "Token (starts with sk-ant-)" else "auth.json contents") }, singleLine = true,
                             visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
                         Spacer(Modifier.height(10.dp))
                         OutlinedButton(onClick = { onSaveToken(token) }, enabled = token.length > 20, modifier = Modifier.fillMaxWidth().height(52.dp), shapes = ButtonDefaults.shapes()) { Text("Use this token") }

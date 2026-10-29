@@ -116,7 +116,7 @@ fun CardSheet(c: Card, dark: Boolean, accent: String, actions: CardSheetActions,
     val cs = MaterialTheme.colorScheme
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val shape = RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp)
+    val shape = RoundedCornerShape(topStart = com.past9.phoneaos.ui.theme.Radius.xl, topEnd = com.past9.phoneaos.ui.theme.Radius.xl)
     val latest by rememberUpdatedState(c)
     val body: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth().fillMaxHeight(0.94f)) {
@@ -174,10 +174,7 @@ fun CardSheet(c: Card, dark: Boolean, accent: String, actions: CardSheetActions,
             }
         }
     }
-    if (LocalSheetPreview.current) Surface(color = cs.surfaceContainerLow, shape = shape, modifier = Modifier.fillMaxSize().padding(top = 48.dp)) {
-        Column { Box(Modifier.align(Alignment.CenterHorizontally).padding(vertical = 22.dp).size(32.dp, 4.dp).clip(RoundedCornerShape(2.dp)).background(cs.onSurfaceVariant.copy(alpha = 0.4f))); body() }
-    } else ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = cs.surfaceContainerLow, shape = shape,
-        dragHandle = { BottomSheetDefaults.DragHandle() }) { body() }
+    com.past9.phoneaos.ui.AgentSheet(onDismiss, shape) { body() }
 }
 
 private fun kotlinx.coroutines.CoroutineScope.launchRun(wv: WebView, id: String, block: suspend () -> Pair<Boolean, String>) {

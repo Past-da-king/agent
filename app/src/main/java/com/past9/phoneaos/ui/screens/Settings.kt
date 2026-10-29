@@ -118,44 +118,18 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
         }
     }
     // Slide-up sheets, never pop-up dialogs.
-    if (pickSub) ModalBottomSheet(onDismissRequest = { pickSub = false }) {
-        Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
-            Text("Which subscription?", style = MaterialTheme.typography.headlineSmall)
-            Spacer(Modifier.height(12.dp))
-            com.past9.phoneaos.data.SubKind.entries.forEach { k ->
-                Surface(onClick = { pickSub = false; actions.onChooseSub(k) }, shape = MaterialTheme.shapes.large,
-                    color = if (s.mode == PowerMode.SUBSCRIPTION && s.subKind == k) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                    Column(Modifier.padding(16.dp)) {
-                        Text("${k.label} ${k.plan}", style = MaterialTheme.typography.titleMedium)
-                        Text(if (k == com.past9.phoneaos.data.SubKind.OPENCODE) "Paste your OpenCode key" else "Sign in with your ${k.label} account", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-        }
-    }
+    if (pickSub) com.past9.phoneaos.ui.ChoiceSheet(androidx.compose.material.icons.Icons.Rounded.Bolt, "What powers it", "Which subscription?",
+        com.past9.phoneaos.data.SubKind.entries.map { k -> com.past9.phoneaos.ui.SheetChoice(k.name, "${k.label} ${k.plan}", if (k == com.past9.phoneaos.data.SubKind.OPENCODE) "Paste your OpenCode key" else "Sign in with your ${k.label} account",
+            selected = s.mode == PowerMode.SUBSCRIPTION && s.subKind == k) },
+        onPick = { c -> pickSub = false; actions.onChooseSub(com.past9.phoneaos.data.SubKind.valueOf(c.id)) }, onDismiss = { pickSub = false })
     edit?.let { (label, save) ->
-        ModalBottomSheet(onDismissRequest = { edit = null }) {
-            Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
-                Text(label, style = MaterialTheme.typography.headlineSmall)
-                Spacer(Modifier.height(16.dp))
-                OutlinedTextField(editValue, { editValue = it }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
-                Spacer(Modifier.height(16.dp))
-                Button(onClick = { save(editValue); edit = null }, modifier = Modifier.fillMaxWidth().height(56.dp), shapes = ButtonDefaults.shapes()) { Text("Save") }
-            }
+        com.past9.phoneaos.ui.AppSheet(androidx.compose.material.icons.Icons.Rounded.Edit, "Settings", label, { edit = null }, primary = "Save", primaryEnabled = true, onPrimary = { save(editValue); edit = null }) {
+            com.past9.phoneaos.ui.SheetField(editValue, { editValue = it }, label, "", singleLine = true)
         }
     }
-    if (confirmReset) ModalBottomSheet(onDismissRequest = { confirmReset = false }) {
-        Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
-            Text("Reset everything?", style = MaterialTheme.typography.headlineSmall)
-            Spacer(Modifier.height(8.dp))
-            Text("This deletes your keys, memory, tasks, routines and the conversation from this phone. It can't be undone.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(20.dp))
-            Button(onClick = { confirmReset = false; actions.onResetAll() }, modifier = Modifier.fillMaxWidth().height(56.dp), shapes = ButtonDefaults.shapes(),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError)) { Text("Reset everything") }
-            TextButton(onClick = { confirmReset = false }, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("Keep my stuff") }
-        }
-    }
+    if (confirmReset) com.past9.phoneaos.ui.ConfirmSheet(androidx.compose.material.icons.Icons.Rounded.DeleteForever, "This phone", "Reset everything?",
+        "This deletes your keys, memory, tasks, routines and the conversation from this phone. It can't be undone.",
+        confirm = "Reset everything", onConfirm = { confirmReset = false; actions.onResetAll() }, onDismiss = { confirmReset = false }, cancel = "Keep my stuff", destructive = true)
 }
 
 @Composable

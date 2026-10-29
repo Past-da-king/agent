@@ -49,8 +49,8 @@ fun ImageStrip(images: List<ChatImage>, modifier: Modifier = Modifier) {
             itemsIndexed(images) { i, img ->
                 Box {
                     ChatImageView(img, Modifier.height(200.dp).widthIn(min = 120.dp, max = 300.dp), ContentScale.Crop) { open = img }
-                    Surface(Modifier.align(Alignment.TopEnd).padding(8.dp), shape = MaterialTheme.shapes.small, color = Color.Black.copy(alpha = 0.55f)) {
-                        Text("${i + 1}/${images.size}", Modifier.padding(horizontal = 8.dp, vertical = 2.dp), style = MaterialTheme.typography.labelMedium, color = Color.White)
+                    Surface(Modifier.align(Alignment.TopEnd).padding(8.dp), shape = MaterialTheme.shapes.small, color = com.past9.phoneaos.ui.theme.Media.glass) {
+                        Text("${i + 1}/${images.size}", Modifier.padding(horizontal = 8.dp, vertical = 2.dp), style = MaterialTheme.typography.labelMedium, color = com.past9.phoneaos.ui.theme.Media.onGlass)
                     }
                 }
             }
@@ -80,14 +80,14 @@ private fun ChatImageView(img: ChatImage, modifier: Modifier, scale: ContentScal
 private fun FullImage(img: ChatImage, onClose: () -> Unit) {
     var zoom by remember { mutableFloatStateOf(1f) }
     var pan by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
-    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(Modifier.fillMaxSize().background(Color(0xFF0E0D12))) {
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) { // design: full-screen photo viewer, not a centred pop-up
+        Box(Modifier.fillMaxSize().background(com.past9.phoneaos.ui.theme.Media.stage)) {
             SubcomposeAsyncImage(model = img.url, contentDescription = img.alt, contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize().pointerInput(Unit) {
                     detectTransformGestures { _, p, z, _ -> zoom = (zoom * z).coerceIn(1f, 5f); pan = if (zoom == 1f) androidx.compose.ui.geometry.Offset.Zero else pan + p }
                 }.graphicsLayer { scaleX = zoom; scaleY = zoom; translationX = pan.x; translationY = pan.y })
             FilledTonalIconButton(onClick = onClose, modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(12.dp)) { Icon(Icons.Rounded.Close, "Close") }
-            if (img.alt.isNotBlank()) Text(img.alt, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(20.dp), color = Color(0xFFE9E7EE), style = MaterialTheme.typography.bodyMedium)
+            if (img.alt.isNotBlank()) Text(img.alt, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(20.dp), color = com.past9.phoneaos.ui.theme.Media.onStage, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

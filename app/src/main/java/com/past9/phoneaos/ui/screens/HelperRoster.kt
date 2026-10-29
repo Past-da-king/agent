@@ -41,7 +41,7 @@ fun HelperRosterSheet(models: List<ModelInfo>?, error: String?, initial: List<He
     // Picked models in the order they were picked: the first is the default helper.
     val picked = remember { mutableStateListOf<HelperModel>().apply { addAll(initial) } }
     var q by remember { mutableStateOf("") }
-    val shape = RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp)
+    val shape = RoundedCornerShape(topStart = com.past9.phoneaos.ui.theme.Radius.xl, topEnd = com.past9.phoneaos.ui.theme.Radius.xl)
     // Models already on the roster stay listed even if the provider's list no longer has them.
     val all = remember(models, initial) {
         val known = models.orEmpty()
@@ -56,7 +56,7 @@ fun HelperRosterSheet(models: List<ModelInfo>?, error: String?, initial: List<He
                 Text("Pick up to $MAX_HELPERS models and tag what each is good for. Your agent sends every job to the helper that fits and writes a fuller brief for the smaller ones. The first you pick is the default.",
                     style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 Spacer(Modifier.height(12.dp))
-                if (all.size > 8) OutlinedTextField(q, { q = it }, placeholder = { Text("Search models") }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true,
+                if (all.size > 8) com.past9.phoneaos.ui.AppTextField(q, { q = it }, placeholder = { Text("Search models") }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true,
                     modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge)
             }
             when {
@@ -92,9 +92,7 @@ fun HelperRosterSheet(models: List<ModelInfo>?, error: String?, initial: List<He
             }
         }
     }
-    if (LocalSheetPreview.current) Surface(color = cs.surfaceContainerLow, shape = shape, modifier = Modifier.fillMaxSize().padding(top = 48.dp)) {
-        Column { Box(Modifier.align(Alignment.CenterHorizontally).padding(vertical = 22.dp).size(32.dp, 4.dp).clip(RoundedCornerShape(2.dp)).background(cs.onSurfaceVariant.copy(alpha = 0.4f))); body() }
-    } else ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = cs.surfaceContainerLow, shape = shape) { body() }
+    com.past9.phoneaos.ui.AgentSheet(onDismiss, shape) { body() }
 }
 
 /** One kept helper: its name and what it's good for. Read-only on purpose. */
@@ -151,7 +149,7 @@ private fun RosterRow(m: ModelInfo, picked: HelperModel?, index: Int, full: Bool
                         AssistChip(onClick = { adding = true }, label = { Text("Your own") }, leadingIcon = { Icon(Icons.Rounded.Add, null, Modifier.size(16.dp)) })
                     }
                     if (adding) Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(custom, { custom = it.take(24) }, placeholder = { Text("e.g. Job applications") }, singleLine = true,
+                        com.past9.phoneaos.ui.AppTextField(custom, { custom = it.take(24) }, placeholder = { Text("e.g. Job applications") }, singleLine = true,
                             modifier = Modifier.weight(1f), shape = MaterialTheme.shapes.large)
                         Spacer(Modifier.width(8.dp))
                         FilledTonalButton(onClick = { custom.trim().takeIf { it.isNotEmpty() && it !in tags }?.let { onTags(tags + it) }; custom = ""; adding = false }, shapes = ButtonDefaults.shapes()) { Text("Add") }

@@ -39,7 +39,7 @@ data class VoiceActions(
 fun VoiceSheet(s: AgentSettings, actions: VoiceActions, onDismiss: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val providers = listOf("system" to "Phone", "gemini" to "Google", "openai" to "OpenAI", "elevenlabs" to "ElevenLabs")
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    com.past9.phoneaos.ui.AgentSheet(onDismiss) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = com.past9.phoneaos.ui.sidePad(24.dp, com.past9.phoneaos.ui.Readable.FORM)).padding(bottom = 32.dp)) {
             Text("VOICE", style = Eyebrow, color = cs.primary)
             Text("How ${s.agentName} sounds", style = MaterialTheme.typography.headlineSmall)
@@ -57,7 +57,7 @@ fun VoiceSheet(s: AgentSettings, actions: VoiceActions, onDismiss: () -> Unit) {
                 Spacer(Modifier.height(16.dp))
                 var key by remember(s.ttsProvider) { mutableStateOf("") }
                 val has = actions.hasKey(s.ttsProvider)
-                OutlinedTextField(key, { key = it.trim() }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium,
+                com.past9.phoneaos.ui.AppTextField(key, { key = it.trim() }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium,
                     label = { Text(when (s.ttsProvider) { "gemini" -> "Google AI Studio key"; "openai" -> "OpenAI key"; else -> "ElevenLabs key" }) },
                     supportingText = { Text(if (has) "Key saved. Paste a new one to replace it." else "Needed for this voice.") },
                     trailingIcon = { if (key.length > 10) TextButton(onClick = { actions.setKey(s.ttsProvider, key); key = "" }) { Text("Save") } })
@@ -178,7 +178,7 @@ fun CallScreen(name: String, st: CallState, onMute: () -> Unit, onEnd: () -> Uni
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
                 FilledTonalIconButton(onClick = onMute, modifier = Modifier.size(64.dp)) { Icon(if (st.muted) Icons.Rounded.MicOff else Icons.Rounded.Mic, if (st.muted) "Unmute" else "Mute") }
-                if (st.active || st.phase == "connecting") FilledIconButton(onClick = onEnd, modifier = Modifier.size(80.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xFFD7141E), contentColor = Color.White)) {
+                if (st.active || st.phase == "connecting") FilledIconButton(onClick = onEnd, modifier = Modifier.size(80.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = com.past9.phoneaos.ui.theme.Lights.endCall, contentColor = com.past9.phoneaos.ui.theme.Lights.onEndCall)) {
                     Icon(Icons.Rounded.CallEnd, "End call", Modifier.size(34.dp))
                 } else FilledIconButton(onClick = onStart, modifier = Modifier.size(80.dp)) { Icon(Icons.Rounded.Call, "Call again", Modifier.size(34.dp)) }
             }

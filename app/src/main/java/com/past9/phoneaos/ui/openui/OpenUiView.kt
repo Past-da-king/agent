@@ -119,7 +119,7 @@ private fun Comp(n: Node) {
         "MarkDownRenderer" -> n.str("textMarkdown")?.let { com.past9.phoneaos.ui.Markdown(it) }
         "Callout" -> CalloutComp(n)
         "Separator" -> HorizontalDivider(color = cs.outlineVariant.copy(alpha = 0.6f))
-        "ImageBlock", "Image" -> n.str("src")?.let { Picture(it, n.str("alt"), Modifier.fillMaxWidth().aspectRatio(16f / 10f).clip(RoundedCornerShape(20.dp))) }
+        "ImageBlock", "Image" -> n.str("src")?.let { Picture(it, n.str("alt"), Modifier.fillMaxWidth().aspectRatio(16f / 10f).clip(RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md))) }
         "InlineHeader" -> Column {
             n.str("heading")?.let { Text(it, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)) }
             n.str("description")?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant) }
@@ -177,7 +177,7 @@ private fun CardComp(n: Node) {
             "Buttons" -> k.nodes("buttons").forEach { append(it.str("label")).append(' ') }
             "ListBlock", "Steps" -> k.nodes("items").forEach { append(it.str("title")).append(' ') } } }
     }
-    Surface(shape = RoundedCornerShape(28.dp), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
         Column {
             // A leading photo runs edge to edge; the card's own rounded corners clip it.
             lead?.str("src")?.let { Picture(it, lead.str("alt"), Modifier.fillMaxWidth().aspectRatio(16f / 10f)) }
@@ -206,8 +206,8 @@ private fun CardHeaderComp(n: Node) {
         IconChip(OpenUiIcons.forText("$title ${sub.orEmpty()}") ?: (if (hero != null) OpenUiIcons.forText("pay") else OpenUiIcons.forText(LocalCardHint.current)) ?: Icons.Rounded.Insights, 48.dp)
         Column(Modifier.weight(1f)) {
             if (hero != null) Text(buildAnnotatedString {
-                withStyle(SpanStyle(fontSize = 34.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp, fontFeatureSettings = "tnum")) { append(hero.first) }
-                if (hero.second.isNotEmpty()) withStyle(SpanStyle(fontSize = 16.sp, color = cs.onSurfaceVariant)) { append("  ${hero.second}") }
+                withStyle(com.past9.phoneaos.ui.theme.HeroNumber.toSpanStyle()) { append(hero.first) }
+                if (hero.second.isNotEmpty()) withStyle(com.past9.phoneaos.ui.theme.HeroUnit.toSpanStyle().copy(color = cs.onSurfaceVariant)) { append("  ${hero.second}") }
             }, lineHeight = 40.sp)
             else Text(title, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold))
             sub?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant) }
@@ -231,7 +231,7 @@ private fun CalloutComp(n: Node) {
     val (chip, onChip) = when (v) { "warning" -> cs.tertiaryContainer to cs.onTertiaryContainer; "error" -> cs.errorContainer to cs.onErrorContainer
         "success" -> cs.secondaryContainer to cs.onSecondaryContainer; else -> cs.primaryContainer to cs.onPrimaryContainer }
     val icon = OpenUiIcons.forText(when (v) { "warning" -> "warning"; "error" -> "error"; "success" -> "success"; else -> "info" }) ?: Icons.Rounded.Insights
-    Surface(shape = RoundedCornerShape(20.dp), color = cs.surfaceContainerHighest, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md), color = cs.surfaceContainerHighest, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             IconChip(icon, 36.dp, chip, onChip)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -244,7 +244,7 @@ private fun CalloutComp(n: Node) {
 
 // ---- Money and signs ----
 
-@Composable private fun goodColor() = if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) Color(0xFF7FD6A0) else Color(0xFF17703F)
+@Composable private fun goodColor() = com.past9.phoneaos.ui.theme.goodTone(MaterialTheme.colorScheme.surface.luminance() < 0.5f)
 
 /** Money out in the error colour, money in in green; anything else keeps [base]. */
 @Composable
@@ -291,7 +291,7 @@ private fun FactTiles(rows: List<Map<*, *>>, firstFacts: Boolean) {
             val big = moneyFirst && li == 0
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 line.forEach { r -> val label = r["left"]?.toString().orEmpty(); val value = fmt(r["right"])
-                    Surface(shape = RoundedCornerShape(20.dp), color = cs.surfaceContainerHighest, modifier = Modifier.weight(1f).fillMaxHeight()) {
+                    Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md), color = cs.surfaceContainerHighest, modifier = Modifier.weight(1f).fillMaxHeight()) {
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 OpenUiIcons.forText(label)?.let { Icon(it, null, Modifier.size(16.dp), tint = cs.primary) }
@@ -309,7 +309,7 @@ private fun FactTiles(rows: List<Map<*, *>>, firstFacts: Boolean) {
 @Composable
 private fun FactList(rows: List<Map<*, *>>) {
     val cs = MaterialTheme.colorScheme
-    Surface(shape = RoundedCornerShape(20.dp), color = cs.surfaceContainerHighest, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md), color = cs.surfaceContainerHighest, modifier = Modifier.fillMaxWidth()) {
         Column {
             rows.forEachIndexed { i, r ->
                 val left = r["left"]?.toString().orEmpty(); val value = fmt(r["right"])
@@ -341,7 +341,7 @@ private fun FactList(rows: List<Map<*, *>>) {
 // ---- Product: photo, name, price, stars, buttons ----
 
 /** Amber on dark, a deeper amber on light so the stars stay visible against a pale card. */
-@Composable private fun starGold() = if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) Color(0xFFF2A900) else Color(0xFFC77700)
+@Composable private fun starGold() = com.past9.phoneaos.ui.theme.starTone(MaterialTheme.colorScheme.surface.luminance() < 0.5f)
 
 /** Whole stars, a half and the empty ones, for a rating out of 5. */
 private fun starKinds(rating: Double): List<Int> = (1..5).map { i -> if (rating >= i - 0.25) 2 else if (rating >= i - 0.75) 1 else 0 }
@@ -369,7 +369,7 @@ private fun ProductComp(n: Node) {
     val rating = (n.props["rating"] as? Double)?.takeIf { it > 0 }
     val reviews = (n.props["reviews"] as? Double)?.takeIf { it > 0 }
     val price = n.str("price"); val was = n.str("was")?.takeIf { it != price }
-    Surface(shape = RoundedCornerShape(24.dp), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
         Column {
             Box {
                 val img = n.str("image")
@@ -477,12 +477,12 @@ private fun ListRow(i: Int, it: Node, numbered: Boolean, connectBelow: Boolean =
     val cs = MaterialTheme.colorScheme; val run = runner(it.props["action"], item = it.str("title"))
     val clickable = it.props["action"] != null
     val title = it.str("title") ?: ""
-    Surface(onClick = run, enabled = clickable, color = Color.Transparent, shape = RoundedCornerShape(16.dp)) {
+    Surface(onClick = run, enabled = clickable, color = Color.Transparent, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm)) {
         Row(Modifier.fillMaxWidth().padding(vertical = 6.dp).height(IntrinsicSize.Min), verticalAlignment = Alignment.Top) {
             val img = (it.props["image"] as? Map<*, *>)?.get("src") as? String
             val chipIcon = OpenUiIcons.forText(title)
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                if (img != null) Picture(img, null, Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)))
+                if (img != null) Picture(img, null, Modifier.size(56.dp).clip(RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm)))
                 else if (numbered) Box(Modifier.size(36.dp).clip(MaterialShapes.Cookie9Sided.toShape()).background(cs.primaryContainer), contentAlignment = Alignment.Center) {
                     Text("$i", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = cs.onPrimaryContainer) }
                 else if (chipIcon != null) IconChip(chipIcon, 36.dp, cs.surfaceContainerHighest, cs.primary, cookie = false)
@@ -526,7 +526,7 @@ private fun TableComp(cols: List<Node>) {
     val cs = MaterialTheme.colorScheme
     val data = cols.map { it.list("data") }; val rows = data.maxOf { it.size }
     val numeric = data.map { d -> d.isNotEmpty() && d.all { it is Double } }
-    Surface(shape = RoundedCornerShape(20.dp), color = cs.surfaceContainerHighest, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md), color = cs.surfaceContainerHighest, modifier = Modifier.fillMaxWidth()) {
         BoxWithConstraints { val minW = maxWidth
         Row(Modifier.horizontalScroll(rememberScrollState())) {
             cols.forEachIndexed { c, col ->

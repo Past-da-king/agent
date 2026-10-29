@@ -171,7 +171,7 @@ class ShareActivity : ComponentActivity() {
         LaunchedEffect(noteOpen) { if (noteOpen) { delay(60); runCatching { focus.requestFocus() }; keyboard?.show() } }
         Box(Modifier.fillMaxSize()) {
             AnimatedVisibility(visible, enter = fadeIn(tween(180)), exit = fadeOut(tween(120))) {
-                Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.42f))
+                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.42f))
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { dismiss() })
             }
             AnimatedVisibility(visible, modifier = Modifier.align(Alignment.BottomCenter), enter = slideInVertically(tween(260)) { it } + fadeIn(tween(120)),
@@ -180,7 +180,7 @@ class ShareActivity : ComponentActivity() {
                     Modifier.widthIn(max = 560.dp).fillMaxWidth().offset { androidx.compose.ui.unit.IntOffset(0, dragY.toInt()) }
                         .draggable(orientation = Orientation.Vertical, state = rememberDraggableState { dy -> dragY = (dragY + dy).coerceAtLeast(0f) },
                             onDragStopped = { if (dragY > 220f) dismiss() else dragY = 0f }),
-                    shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp), color = cs.surfaceContainerLow, tonalElevation = 3.dp,
+                    shape = RoundedCornerShape(topStart = com.past9.phoneaos.ui.theme.Radius.xl, topEnd = com.past9.phoneaos.ui.theme.Radius.xl), color = cs.surfaceContainerLow, tonalElevation = 3.dp,
                 ) {
                     Column(Modifier.navigationBarsPadding().imePadding().padding(horizontal = 20.dp).padding(top = 10.dp, bottom = 16.dp)) {
                         Box(Modifier.align(Alignment.CenterHorizontally).width(36.dp).height(4.dp).clip(CircleShape).background(cs.outlineVariant))
@@ -205,8 +205,8 @@ class ShareActivity : ComponentActivity() {
                                     Button({ startActivity(Intent(this@ShareActivity, MainActivity::class.java)); finish() }, Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text("Open the app") }
                                 } else {
                                     AnimatedVisibility(noteOpen) {
-                                        OutlinedTextField(note, { note = it }, Modifier.fillMaxWidth().padding(bottom = 12.dp).focusRequester(focus),
-                                            placeholder = { Text("Add a message") }, minLines = 1, maxLines = 5, shape = RoundedCornerShape(20.dp),
+                                        com.past9.phoneaos.ui.AppTextField(note, { note = it }, Modifier.fillMaxWidth().padding(bottom = 12.dp).focusRequester(focus),
+                                            placeholder = { Text("Add a message") }, minLines = 1, maxLines = 5, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md),
                                             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences), enabled = phase == Phase.EDIT)
                                     }
                                     problem?.let { Text(it, color = cs.error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 8.dp)) }
@@ -257,7 +257,7 @@ class ShareActivity : ComponentActivity() {
         val others = items.filter { it.kind != ShareKind.IMAGE }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (links.isNotEmpty()) links.take(2).forEach { LinkCard(it, input.subject) }
-            else if (text.isNotEmpty()) Surface(shape = RoundedCornerShape(20.dp), color = cs.surfaceContainerHigh) {
+            else if (text.isNotEmpty()) Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md), color = cs.surfaceContainerHigh) {
                 Row(Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
                     Icon(Icons.Rounded.TextSnippet, null, tint = cs.primary); Spacer(Modifier.width(12.dp))
                     Text(text, maxLines = 5, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface)
@@ -279,9 +279,9 @@ class ShareActivity : ComponentActivity() {
     @Composable
     private fun LinkCard(link: String, title: String?) {
         val cs = MaterialTheme.colorScheme
-        Surface(shape = RoundedCornerShape(20.dp), color = cs.surfaceContainerHigh) {
+        Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md), color = cs.surfaceContainerHigh) {
             Row(Modifier.padding(14.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(cs.primaryContainer), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Link, null, tint = cs.onPrimaryContainer) }
+                Box(Modifier.size(44.dp).clip(RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm)).background(cs.primaryContainer), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Link, null, tint = cs.onPrimaryContainer) }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(ShareLogic.domain(link), style = MaterialTheme.typography.titleSmall, color = cs.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -296,10 +296,10 @@ class ShareActivity : ComponentActivity() {
         val single = images.size == 1
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             images.take(4).forEachIndexed { n, p ->
-                Box(Modifier.then(if (single) Modifier.fillMaxWidth().height(200.dp) else Modifier.weight(1f).aspectRatio(1f)).clip(RoundedCornerShape(20.dp))) {
+                Box(Modifier.then(if (single) Modifier.fillMaxWidth().height(200.dp) else Modifier.weight(1f).aspectRatio(1f)).clip(RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md))) {
                     AsyncImage(File(p.path), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                    if (n == 3 && images.size > 4) Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f)), contentAlignment = Alignment.Center) {
-                        Text("+${images.size - 3}", style = MaterialTheme.typography.titleLarge, color = androidx.compose.ui.graphics.Color.White)
+                    if (n == 3 && images.size > 4) Box(Modifier.fillMaxSize().background(com.past9.phoneaos.ui.theme.Media.glass), contentAlignment = Alignment.Center) {
+                        Text("+${images.size - 3}", style = MaterialTheme.typography.titleLarge, color = com.past9.phoneaos.ui.theme.Media.onGlass)
                     }
                 }
             }
@@ -311,14 +311,14 @@ class ShareActivity : ComponentActivity() {
         val cs = MaterialTheme.colorScheme
         var thumb by remember(p.path) { mutableStateOf<Bitmap?>(null) }
         LaunchedEffect(p.path) { thumb = withContext(Dispatchers.IO) { ShareStore.videoThumb(p.path) } }
-        Box(Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(20.dp)).background(cs.surfaceContainerHighest), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md)).background(cs.surfaceContainerHighest), contentAlignment = Alignment.Center) {
             thumb?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
-            Box(Modifier.size(52.dp).clip(CircleShape).background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.PlayArrow, null, tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(30.dp))
+            Box(Modifier.size(52.dp).clip(CircleShape).background(com.past9.phoneaos.ui.theme.Media.glass), contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.PlayArrow, null, tint = com.past9.phoneaos.ui.theme.Media.onGlass, modifier = Modifier.size(30.dp))
             }
-            Surface(Modifier.align(Alignment.BottomEnd).padding(10.dp), shape = CircleShape, color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.6f)) {
+            Surface(Modifier.align(Alignment.BottomEnd).padding(10.dp), shape = CircleShape, color = com.past9.phoneaos.ui.theme.Media.glass.copy(alpha = 0.6f)) {
                 Text(listOfNotNull(if (p.durationMs > 0) ShareLogic.formatDuration(p.durationMs) else null, ShareLogic.formatSize(p.size)).joinToString("  "),
-                    Modifier.padding(horizontal = 10.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium, color = androidx.compose.ui.graphics.Color.White)
+                    Modifier.padding(horizontal = 10.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium, color = com.past9.phoneaos.ui.theme.Media.onGlass)
             }
         }
     }
@@ -327,7 +327,7 @@ class ShareActivity : ComponentActivity() {
     private fun AudioCard(p: Prepared) {
         val cs = MaterialTheme.colorScheme
         val playing = playingPath == p.path
-        Surface(shape = RoundedCornerShape(20.dp), color = cs.surfaceContainerHigh) {
+        Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md), color = cs.surfaceContainerHigh) {
             Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 FilledIconButton({ togglePlay(p.path) }, Modifier.size(48.dp)) { Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing) "Pause" else "Play") }
                 Spacer(Modifier.width(12.dp))
@@ -357,9 +357,9 @@ class ShareActivity : ComponentActivity() {
         val cs = MaterialTheme.colorScheme
         val icon: ImageVector = when (p.kind) { ShareKind.PDF -> Icons.Rounded.PictureAsPdf; ShareKind.VIDEO -> Icons.Rounded.Movie; ShareKind.AUDIO -> Icons.Rounded.GraphicEq
             ShareKind.TEXT -> Icons.Rounded.Description; else -> Icons.Rounded.InsertDriveFile }
-        Surface(shape = RoundedCornerShape(20.dp), color = cs.surfaceContainerHigh) {
+        Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md), color = cs.surfaceContainerHigh) {
             Row(Modifier.padding(14.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(cs.primaryContainer), contentAlignment = Alignment.Center) { Icon(icon, null, tint = cs.onPrimaryContainer) }
+                Box(Modifier.size(44.dp).clip(RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm)).background(cs.primaryContainer), contentAlignment = Alignment.Center) { Icon(icon, null, tint = cs.onPrimaryContainer) }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(p.name, style = MaterialTheme.typography.titleSmall, color = cs.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)

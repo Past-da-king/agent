@@ -63,7 +63,7 @@ fun NotificationsScreen(access: Boolean, apps: List<PhoneApp>, allowed: Set<Stri
             }
             item { SectionHeader("Apps", "Switch on the ones that matter", Modifier.padding(start = 4.dp, top = 6.dp)) }
             item {
-                OutlinedTextField(query, { query = it }, placeholder = { Text("Search apps") }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true,
+                com.past9.phoneaos.ui.AppTextField(query, { query = it }, placeholder = { Text("Search apps") }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true,
                     modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge)
             }
             val shown = apps.filter { query.isBlank() || it.label.contains(query, true) }.sortedWith(compareBy({ it.pkg !in allowed }, { it.label.lowercase() }))
