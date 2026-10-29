@@ -57,9 +57,13 @@ data class HomeState(
     val now: Long = System.currentTimeMillis(),
     /** Live cards the user put on Home. */
     val cards: List<com.past9.phoneaos.cards.Card> = emptyList(),
+    /** Mini-apps from the linked computer (pinned ones show as a row, in the sidebar's order). */
+    val miniApps: List<com.past9.phoneaos.miniapps.MiniAppInfo> = emptyList(),
 )
 
 data class HomeActions(
+    val onMiniApp: (String) -> Unit = {},
+    val onMiniApps: () -> Unit = {},
     val onProfile: () -> Unit = {},
     val onChat: () -> Unit = {},
     val onAnswer: (Long, String) -> Unit = { _, _ -> },
@@ -151,6 +155,7 @@ fun HomeScreen(s: HomeState, actions: HomeActions, bottomPadding: Dp = 120.dp) {
                 }
             }
         }
+        if (s.miniApps.isNotEmpty()) item(key = "miniapps") { com.past9.phoneaos.miniapps.PinnedAppsRow(s.miniApps, actions.onMiniApp, actions.onMiniApps) }
         if (pending.isNotEmpty() || blockedMine.isNotEmpty()) {
             item { SectionHeader("Needs you", "Your agent can't go on without these", Modifier.padding(start = 4.dp, top = 6.dp)) }
             items(pending, key = { "q${it.id}" }) { q -> NeedsYouCard(q, actions) }

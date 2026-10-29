@@ -587,7 +587,11 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         _status.value = AgentStatus(working = turnRunning, label = if (turnRunning) "Working" else "")
     }
 
+    /** Every event the computer sends this phone, for listeners outside the session (mini-apps: data.changed, miniapps.push). */
+    val events = kotlinx.coroutines.flow.MutableSharedFlow<Pair<String, Any?>>(extraBufferCapacity = 64)
+
     private fun onEvent(name: String, payload: Any?) {
+        events.tryEmit(name to payload)
         when (name) {
             EVT_DATA -> (payload as? JSONObject)?.let { p -> scope.launch { runCatching { applyChange(p) }; p.optLong("seq", -1L).takeIf { it >= 0 }?.let(::noteSeq) } }
             EVT_CHAT -> (payload as? JSONObject)?.let { e ->

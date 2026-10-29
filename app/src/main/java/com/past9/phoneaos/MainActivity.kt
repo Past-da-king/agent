@@ -65,6 +65,8 @@ class MainActivity : ComponentActivity() {
         val g = App.graph(this)
         // A phone linked to a computer picks its link up again (remote/RemoteSession.kt).
         com.past9.phoneaos.remote.RemoteHub.init(this)
+        // Mini-apps from the linked computer (miniapps/MiniApps.kt): listed slim, opened in a locked-down WebView.
+        com.past9.phoneaos.miniapps.MiniAppsHub.start(g.scope)
         setContent {
             val st by g.settings.state.collectAsStateWithLifecycle()
             AppTheme(accent = st.accent, mascot = st.mascot) {
@@ -105,6 +107,8 @@ class MainActivity : ComponentActivity() {
 
     private fun handle(i: Intent?) {
         if (i == null) return
+        // A home-screen shortcut to one mini-app.
+        i.getStringExtra("miniapp")?.let { com.past9.phoneaos.miniapps.MiniAppsHub.pendingOpen.value = it }
         // A link code (agent://pair?...) from the phone's own camera app, a shared QR, or adb.
         i.data?.takeIf { it.scheme == "agent" && it.host == "pair" }?.let { com.past9.phoneaos.remote.RemoteHub.pendingOffer.value = it.toString(); return }
         // adb hook for checking how notifications look: am start -n <pkg>/.MainActivity --es open testnotify
@@ -363,10 +367,12 @@ class MainActivity : ComponentActivity() {
         }
         fun go(r: String) { if (r == "home") nav.popBackStack("home", false) else nav.navigate(r) { popUpTo("home"); launchSingleTop = true } }
         val cards by g.cards.cards.collectAsStateWithLifecycle()
+        val miniApps by com.past9.phoneaos.miniapps.MiniAppsHub.apps.collectAsStateWithLifecycle()
+        LaunchedEffect(Unit) { com.past9.phoneaos.miniapps.MiniAppsHub.pendingOpen.collect { id -> if (id != null) { nav.navigate("miniapp/$id") { launchSingleTop = true }; com.past9.phoneaos.miniapps.MiniAppsHub.pendingOpen.value = null } } }
         var openCard by remember { mutableStateOf<String?>(null) }
         var refreshingCard by remember { mutableStateOf<String?>(null) }
         val home = HomeState(settings.agentName, settings.userName, status, items, goals, tasks, routines,
-            notifRows.count { it.postedAt > System.currentTimeMillis() - 86_400_000L }, settings.notifApps.size, browserLive, cards = cards.filter { it.pinned })
+            notifRows.count { it.postedAt > System.currentTimeMillis() - 86_400_000L }, settings.notifApps.size, browserLive, cards = cards.filter { it.pinned }, miniApps = miniApps)
         val barRoutes = setOf("home", "tasks", "memory", "routines", "connections")
         val barPad = 112.dp
 
@@ -393,6 +399,7 @@ class MainActivity : ComponentActivity() {
                             onTasks = { go("tasks") }, onGoal = { nav.navigate("profile") }, onRoutines = { go("routines") },
                             onSettings = { nav.navigate("settings") }, onCall = { startCall() }, onBrowser = { nav.navigate("browser") }, onNotifications = { nav.navigate("notifications") },
                             onCard = { openCard = it.id },
+                            onMiniApp = { nav.navigate("miniapp/$it") }, onMiniApps = { nav.navigate("miniapps") },
                         ), bottomPadding = barPad + 24.dp)
                     }
                 }
@@ -666,6 +673,13 @@ class MainActivity : ComponentActivity() {
                             StylePicker(settings.userName, settings.agentName, settings.accent, settings.mascot, g.settings::setAccent, g.settings::setMascot)
                         }
                     }
+                }
+                composable("miniapps") {
+                    com.past9.phoneaos.miniapps.MiniAppsScreen(miniApps, onBack = { nav.popBackStack() }, onOpen = { nav.navigate("miniapp/$it") },
+                        onPin = { id, on -> g.scope.launch { runCatching { com.past9.phoneaos.miniapps.MiniAppsHub.pin(id, on) } } })
+                }
+                composable("miniapp/{id}") { e ->
+                    com.past9.phoneaos.miniapps.MiniAppFrame(e.arguments?.getString("id").orEmpty(), miniApps, androidx.compose.foundation.isSystemInDarkTheme(), settings.accent, onBack = { nav.popBackStack() })
                 }
                 composable("browser") {
                     val engines by BrowserService.live.collectAsStateWithLifecycle()
