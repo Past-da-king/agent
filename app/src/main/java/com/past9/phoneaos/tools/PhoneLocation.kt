@@ -74,7 +74,9 @@ object PhoneLocation {
         return backgroundFrom(mode, androidx.core.content.ContextCompat.checkSelfPermission(context, BACKGROUND) == android.content.pm.PackageManager.PERMISSION_GRANTED)
     }
 
-    fun backgroundFrom(opMode: Int?, permGranted: Boolean): Boolean = if (opMode == null) permGranted else opMode == android.app.AppOpsManager.MODE_ALLOWED
+    /** Both must say yes: the permission flag (Android's real switch for a target-28 app) and the package app-op
+     *  (the op call reads the package mode, "allow", even while the uid mode is "foreground", seen on his A35). */
+    fun backgroundFrom(opMode: Int?, permGranted: Boolean): Boolean = permGranted && (opMode == null || opMode == android.app.AppOpsManager.MODE_ALLOWED)
 
     fun settingsInstead(askMs: Long, background: Boolean) = !background && askMs < 1_500
 
@@ -197,7 +199,7 @@ class PhoneLocationTool(private val context: Context, private val askMs: Long = 
                 android.util.Log.i("PhoneLocation", "opening app settings for all-the-time"); PhoneLocation.openAppSettings(context)
             }
         }
-        android.util.Log.i("PhoneLocation", "background=${PhoneLocation.hasBackground(context)} onScreen=${PhoneLocation.onScreen()}")
+        android.util.Log.i("PhoneLocation", "background=${PhoneLocation.hasBackground(context)} perm=${androidx.core.content.ContextCompat.checkSelfPermission(context, PhoneLocation.BACKGROUND)} onScreen=${PhoneLocation.onScreen()} asked=${settings?.extra(PhoneLocation.BG_ASKED_KEY)}")
         if (!PhoneLocation.hasBackground(context) && !PhoneLocation.onScreen())
             error("BACKGROUND: the Agent app on the phone may use location only while it is open, and it is closed now. Ask him to open the app (then call again), or to set Location to 'Allow all the time' for Agent (Settings, Apps, Agent, Permissions, Location).")
         val lm = context.getSystemService(LocationManager::class.java)
