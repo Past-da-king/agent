@@ -106,7 +106,7 @@ class DraftSafeTest {
     @Test fun theBoxKeepsItsWordsUntilTheSendIsAccepted() = runTest {
         val b = box("the whole message")
         val gate = CompletableDeferred<Unit>()
-        val acts = composerActionsFor(b, null, false, backgroundScope, send = { _, _ -> gate.await() })
+        val acts = composerActionsFor(b, null, false, backgroundScope, send = { _, _, _ -> gate.await() })
         acts.onSend(b.draft)
         runCurrent()
         assertEquals("still there while it goes", "the whole message", b.draft)
@@ -122,7 +122,7 @@ class DraftSafeTest {
     @Test fun aFailedSendKeepsEverything() = runTest {
         val b = box("the whole message"); b.attachments.add("/p.jpg")
         var told = ""
-        val acts = composerActionsFor(b, null, false, backgroundScope, send = { _, _ -> throw java.io.IOException("Not connected") }, onFailed = { told = it })
+        val acts = composerActionsFor(b, null, false, backgroundScope, send = { _, _, _ -> throw java.io.IOException("Not connected") }, onFailed = { told = it })
         acts.onSend(b.draft)
         runCurrent()
         assertEquals("the whole message", b.draft)
@@ -135,7 +135,7 @@ class DraftSafeTest {
         val b = box("once")
         var sends = 0
         val gate = CompletableDeferred<Unit>()
-        val acts = composerActionsFor(b, null, false, backgroundScope, send = { _, _ -> sends++; gate.await() })
+        val acts = composerActionsFor(b, null, false, backgroundScope, send = { _, _, _ -> sends++; gate.await() })
         acts.onSend(b.draft); runCurrent(); acts.onSend(b.draft); runCurrent()
         assertEquals(1, sends)
     }
@@ -143,7 +143,7 @@ class DraftSafeTest {
     @Test fun wordsThatArriveWhileItIsSendingStay() = runTest {
         val b = box("first part")
         val gate = CompletableDeferred<Unit>()
-        val acts = composerActionsFor(b, null, false, backgroundScope, send = { _, _ -> gate.await() })
+        val acts = composerActionsFor(b, null, false, backgroundScope, send = { _, _, _ -> gate.await() })
         acts.onSend(b.draft); runCurrent()
         b.draft = "first part and more"
         gate.complete(Unit); runCurrent()

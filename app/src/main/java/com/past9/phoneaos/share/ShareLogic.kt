@@ -138,6 +138,12 @@ object ShareLogic {
     fun compose(
         note: String?, text: String?, subject: String?,
         files: List<SharedFile>, imagePaths: List<String>, metered: Boolean,
+        /**
+         * True when the files are going to the computer WITH the message (a linked phone uploads every shared file
+         * first). A path on this phone means nothing to the computer, which is why a shared voice note used to arrive
+         * as a line of text about a file that was not there (30 Oct 2026).
+         */
+        attached: Boolean = false,
     ): ShareMessage {
         val links = links(text)
         val beside = textBesideLinks(text)
@@ -167,14 +173,25 @@ object ShareLogic {
         files.forEach { f ->
             val title = when (f.kind) { ShareKind.AUDIO -> "Voice note or audio"; ShareKind.VIDEO -> "Video"; ShareKind.PDF -> "PDF"; ShareKind.IMAGE -> "Image"; else -> "File" }
             b.append("\n").append(title).append(": ").append(f.name)
-            b.append("\n  Path on the phone: ").append(f.path)
             b.append("\n  Type: ").append(f.mime).append(", ").append(formatSize(f.size))
             if (f.durationMs > 0) b.append(", ").append(formatDuration(f.durationMs)).append(" long")
-            when (f.kind) {
-                ShareKind.AUDIO -> b.append("\n  You cannot hear audio directly. Use media_transcribe with this path to get what is said, then act on it.")
-                ShareKind.VIDEO -> b.append("\n  You cannot watch video directly. Use media_frames with this path to see a few frames, and media_transcribe to hear what is said.")
-                ShareKind.PDF -> b.append("\n  Read it with run_code or ask for it again with files_pick; the original is at the path above.")
-                else -> b.append("\n  The original file is at the path above; open it with run_code, or send it on with machine_upload or browser_upload.")
+            if (attached) {
+                // It went up with the message: the computer has the file itself, at a path of its own.
+                b.append("\n  Attached to this message: the file itself came with it. Open it with your file tools (the attachment list on this message has its path there).")
+                when (f.kind) {
+                    ShareKind.AUDIO -> b.append("\n  You cannot hear audio directly. Use media_transcribe on the attached path to get what is said, then act on it.")
+                    ShareKind.VIDEO -> b.append("\n  You cannot watch video directly. Use media_frames on the attached path for a few frames, and media_transcribe to hear what is said.")
+                    ShareKind.PDF -> b.append("\n  Read the attached file with run_code or your file tools.")
+                    else -> b.append("\n  Open the attached file with run_code, or send it on with machine_upload or browser_upload.")
+                }
+            } else {
+                b.append("\n  Path on the phone: ").append(f.path)
+                when (f.kind) {
+                    ShareKind.AUDIO -> b.append("\n  You cannot hear audio directly. Use media_transcribe with this path to get what is said, then act on it.")
+                    ShareKind.VIDEO -> b.append("\n  You cannot watch video directly. Use media_frames with this path to see a few frames, and media_transcribe to hear what is said.")
+                    ShareKind.PDF -> b.append("\n  Read it with run_code or ask for it again with files_pick; the original is at the path above.")
+                    else -> b.append("\n  The original file is at the path above; open it with run_code, or send it on with machine_upload or browser_upload.")
+                }
             }
             if (holdForWifi(f.size, f.kind == ShareKind.VIDEO, metered)) hold = true
         }

@@ -580,12 +580,12 @@ class AgentRuntime(
     /** Like [send], and returns only once the message was accepted; throws when it was not (the message box keeps its words). */
     suspend fun sendAccepted(text: String, images: List<String> = emptyList(), files: List<String> = emptyList(), voiceReply: Boolean = false) {
         val r = remote
-        if (r != null) r.sendAccepted(text, images)
+        if (r != null) r.sendAccepted(text, images, files)
         else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { send(text, images, files, voiceReply) }
     }
 
     fun send(text: String, images: List<String> = emptyList(), files: List<String> = emptyList(), voiceReply: Boolean = false, fromCall: String? = null, quiet: Boolean = false) {
-        remote?.let { it.send(text, images, quiet); return }
+        remote?.let { it.send(text, images, files, quiet); return }
         val clean = text.trim().ifEmpty { if (images.isNotEmpty() || files.isNotEmpty()) "What do you make of this?" else "" }; if (clean.isEmpty()) return
         // A question card is waiting and the user typed instead of tapping: the typed words ARE the answer.
         // Before, the message queued behind the open question and nothing happened.

@@ -70,8 +70,14 @@ class FilesPickTool(private val context: Context) : Tool {
             type.startsWith("text/") || type.contains("json") || type.contains("csv") || type.contains("xml") || name.endsWith(".md") ->
                 head + "\n" + (cr.openInputStream(uri)?.use { it.readBytes().decodeToString() } ?: "").take(30_000)
             type == "application/pdf" -> head + "\n" + pdfText(uri).let { t ->
-                // A scanned PDF has no text layer: show the model the pages as pictures instead.
-                if (t.startsWith("(This PDF has no readable text")) "Scanned PDF, here are its pages:\n" + pdfPages(uri).joinToString("\n") { "[[image:$it]]" } else t
+                // A scanned PDF has no text layer: show the model the pages as pictures instead, in the page's own shape.
+                if (t.startsWith("(This PDF has no readable text")) {
+                    val pics = pdfPictures(uri)
+                    pics.text + "\n" + pics.paths.joinToString("\n") { "[[image:$it]]" }
+                } else {
+                    val pages = pdfPageCount(uri)
+                    t + "\n" + com.past9.phoneaos.docs.PdfLayout.summary(pages, pages, 0)
+                }
             }
             type.startsWith("image/") -> {
                 val f = java.io.File(context.filesDir, "uploads/pick-${System.nanoTime()}.jpg").apply { parentFile?.mkdirs() }
@@ -98,22 +104,54 @@ class FilesPickTool(private val context: Context) : Tool {
         return chunk + if (text.isNotEmpty()) "\n" + text.joinToString("\n").take(30_000) else ""
     }
 
-    /** Render up to 3 pages of a PDF to JPEGs the model can look at. */
-    private fun pdfPages(uri: Uri): List<String> = runCatching {
+    /** What the page pictures are, and how many pages the file has (said to the model, never a silent few). */
+    private class PdfPictures(val paths: List<String>, val pagesInFile: Int, val pagesRead: Int) {
+        val text: String get() = com.past9.phoneaos.docs.PdfLayout.summary(pagesInFile, pagesRead, paths.size)
+    }
+
+    private fun pdfPageCount(uri: Uri): Int = runCatching {
+        context.contentResolver.openFileDescriptor(uri, "r")!!.use { fd -> android.graphics.pdf.PdfRenderer(fd).use { it.pageCount } }
+    }.getOrDefault(0)
+
+    /**
+     * Every page of a PDF as pictures the model can look at, in the page's OWN shape and at a width its words can be read
+     * at; a tall page (a webtoon strip, a long scan) is cut into slices instead of being squeezed into one small frame
+     * (30 Oct 2026: a 4 MB chapter came through as six 1081x1400 images, squashed and unreadable, with text only off the
+     * first two pages). The summary in [PdfPictures.text] says how many pages the file has and how many were read.
+     */
+    private fun pdfPictures(uri: Uri): PdfPictures = runCatching {
         context.contentResolver.openFileDescriptor(uri, "r")!!.use { fd ->
             android.graphics.pdf.PdfRenderer(fd).use { r ->
-                (0 until minOf(6, r.pageCount)).map { i ->
+                val total = r.pageCount
+                val read = minOf(com.past9.phoneaos.docs.PdfLayout.MAX_PAGES, total)
+                val out = ArrayList<String>()
+                for (i in 0 until read) {
+                    if (out.size >= com.past9.phoneaos.docs.PdfLayout.MAX_PICTURES) break
                     r.openPage(i).use { pg ->
-                        val scale = 1400f / maxOf(pg.width, pg.height)
-                        val bmp = android.graphics.Bitmap.createBitmap((pg.width * scale).toInt(), (pg.height * scale).toInt(), android.graphics.Bitmap.Config.ARGB_8888)
-                        bmp.eraseColor(android.graphics.Color.WHITE)
-                        pg.render(bmp, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                        java.io.File(context.filesDir, "uploads/pdf-${System.nanoTime()}-$i.jpg").apply { parentFile?.mkdirs(); outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, it) } }.path
+                        val plan = com.past9.phoneaos.docs.PdfLayout.plan(pg.width, pg.height)
+                        if (plan.slices.isNotEmpty() && plan.width > 0 && plan.height > 0) {
+                            val full = android.graphics.Bitmap.createBitmap(plan.width, plan.height, android.graphics.Bitmap.Config.ARGB_8888)
+                            full.eraseColor(android.graphics.Color.WHITE)
+                            // One scale for both sides: the page keeps its shape, so nothing is squashed.
+                            val m = android.graphics.Matrix().apply { setScale(plan.scale, plan.scale) }
+                            pg.render(full, null, m, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                            plan.slices.forEachIndexed { si, slice ->
+                                if (out.size < com.past9.phoneaos.docs.PdfLayout.MAX_PICTURES) {
+                                    val part = android.graphics.Bitmap.createBitmap(full, 0, slice.top, plan.width, slice.height)
+                                    val f = java.io.File(context.filesDir, "uploads/pdf-${System.nanoTime()}-$i-$si.jpg").apply { parentFile?.mkdirs() }
+                                    f.outputStream().use { part.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, it) }
+                                    part.recycle()
+                                    out += f.path
+                                }
+                            }
+                            full.recycle()
+                        }
                     }
                 }
+                PdfPictures(out, total, read)
             }
         }
-    }.getOrDefault(emptyList())
+    }.getOrDefault(PdfPictures(emptyList(), 0, 0))
 
     /** PDFs: pull the text layer out of the raw stream (works for most statements and invoices). */
     private fun pdfText(uri: Uri): String {

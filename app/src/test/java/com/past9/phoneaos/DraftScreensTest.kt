@@ -55,7 +55,7 @@ class DraftScreensTest(private val dark: Boolean) {
     @Test fun tappingSendLeavesTheWordsThereUntilTheyAreAccepted() {
         val box = ComposerBox(mutableStateOf("everything I just said"))
         val gate = CompletableDeferred<Unit>()
-        val acts = composerActionsFor(box, null, false, scope, send = { _, _ -> gate.await() })
+        val acts = composerActionsFor(box, null, false, scope, send = { _, _, _ -> gate.await() })
         rule.setContent { AppTheme(dark = dark) { MessageComposer(box.draft, { box.draft = it }, false, acts, box.attachments, emptyList(), sending = box.sending) } }
         rule.onNodeWithContentDescription(send, useUnmergedTree = true).performTouchInput { click() }
         rule.waitForIdle()
@@ -68,7 +68,7 @@ class DraftScreensTest(private val dark: Boolean) {
 
     @Test fun aFailedSendAndAScreenThatLeavesLoseNothing() {
         val box = ComposerBox(mutableStateOf("everything I just said"))
-        val acts = composerActionsFor(box, null, false, scope, send = { _, _ -> throw java.io.IOException("Not connected") })
+        val acts = composerActionsFor(box, null, false, scope, send = { _, _, _ -> throw java.io.IOException("Not connected") })
         var shown by mutableStateOf(true)
         rule.setContent { AppTheme(dark = dark) { if (shown) MessageComposer(box.draft, { box.draft = it }, false, acts, box.attachments, emptyList(), sending = box.sending) } }
         rule.onNodeWithContentDescription(send, useUnmergedTree = true).performTouchInput { click() }

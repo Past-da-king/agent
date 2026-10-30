@@ -75,6 +75,8 @@ class ShareActivity : ComponentActivity() {
     private val items = mutableStateListOf<Prepared>()
     private var copying by mutableStateOf(true)
     private var failed by mutableStateOf(0)
+    /** What could not be read, by name, so he knows which item and why it is missing. */
+    private val failedNames = mutableStateListOf<String>()
     private var phase by mutableStateOf(Phase.EDIT)
     private var problem by mutableStateOf<String?>(null)
     private var prep: Job? = null
@@ -99,7 +101,9 @@ class ShareActivity : ComponentActivity() {
         prep = lifecycleScope.launch(Dispatchers.IO) {
             input.streams.forEachIndexed { n, u ->
                 val p = runCatching { ShareStore.import(this@ShareActivity, u, n, stamp) }.getOrNull()
-                withContext(Dispatchers.Main) { if (p != null) items += p else failed++ }
+                withContext(Dispatchers.Main) {
+                    if (p != null) items += p else { failed++; failedNames += ShareLogic.safeName(android.net.Uri.parse(u).lastPathSegment ?: "that file") }
+                }
             }
             withContext(Dispatchers.Main) { copying = false }
         }
@@ -107,6 +111,29 @@ class ShareActivity : ComponentActivity() {
             AppTheme(accent = accent, mascot = mascot) {
                 Sheet(name = name, onboarded = onboarded)
             }
+        }
+    }
+
+    /**
+     * A second share while this sheet is still up (WhatsApp hands over a note and then the photo): the new item joins
+     * the same sheet instead of being lost. launchMode is standard, so this is only for a reused instance.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val more = ShareStore.parse(intent)
+        input = ShareInput(input.multiple || more.multiple, more.type ?: input.type, more.text ?: input.text, more.subject ?: input.subject, input.streams + more.streams)
+        failed = 0; failedNames.clear()
+        copying = true
+        val stamp = System.currentTimeMillis()
+        prep = lifecycleScope.launch(Dispatchers.IO) {
+            more.streams.forEachIndexed { n, u ->
+                val p = runCatching { ShareStore.import(this@ShareActivity, u, n, stamp) }.getOrNull()
+                withContext(Dispatchers.Main) {
+                    if (p != null) items += p else { failed++; failedNames += ShareLogic.safeName(android.net.Uri.parse(u).lastPathSegment ?: "that file") }
+                }
+            }
+            withContext(Dispatchers.Main) { copying = false }
         }
     }
 
@@ -141,14 +168,24 @@ class ShareActivity : ComponentActivity() {
                 if (files.isEmpty() && images.isEmpty() && input.text.isNullOrBlank() && note.isBlank()) {
                     phase = Phase.EDIT; problem = "Nothing could be read from what you shared."; return@launch
                 }
-                val msg = ShareLogic.compose(note, input.text, input.subject, files, images, metered)
                 val g = withContext(Dispatchers.Default) { App.graph(this@ShareActivity) }
+                // Linked to a computer: every shared file goes up WITH the message (a voice note, a PDF, a document),
+                // because a path on this phone means nothing there.
+                val linked = com.past9.phoneaos.remote.RemoteHub.session.value != null
+                val msg = ShareLogic.compose(note, input.text, input.subject, files, images, metered, attached = linked)
                 ShareLogic.holdNotice(files, metered)?.let { n -> g.db.chat().insert(ChatItem(kind = "notice", text = n)) }
-                g.runtime.send(msg.text, msg.images, msg.fileNames)
-                // Wait (briefly) until the message is really stored, so it can't be lost when this screen closes.
-                var tries = 0
-                while (tries++ < 40 && g.db.chat().userSince(since) == 0) delay(75)
-            }.onFailure { phase = Phase.EDIT; problem = "That did not send. Try again."; return@launch }
+                // Accepted or refused, and never silently: this throws when it did not get through.
+                g.runtime.sendAccepted(msg.text, msg.images, files.map { it.path })
+                if (!linked) {
+                    // Wait (briefly) until the message is really stored, so it can't be lost when this screen closes.
+                    var tries = 0
+                    while (tries++ < 40 && g.db.chat().userSince(since) == 0) delay(75)
+                }
+            }.onFailure { e ->
+                phase = Phase.EDIT
+                problem = "That did not send: " + (e.message.orEmpty().ifBlank { "the link to your computer dropped" }) + ". Nothing is lost, try again."
+                return@launch
+            }
             phase = Phase.SENT
             delay(850)
             finish()
@@ -272,7 +309,12 @@ class ShareActivity : ComponentActivity() {
                 }
             }
             if (copying && items.isEmpty() && input.streams.isNotEmpty()) LinearProgressIndicator(Modifier.fillMaxWidth().clip(CircleShape))
-            if (failed > 0) Text(if (failed == 1) "One item could not be read." else "$failed items could not be read.", style = MaterialTheme.typography.labelMedium, color = cs.error)
+            if (failed > 0) Text(
+                (if (failed == 1) "Could not read " else "$failed items could not be read: ") +
+                    (if (failedNames.isEmpty()) "one item." else failedNames.joinToString(", ") + ".") +
+                    " Share it again, or pick the file in the chat instead.",
+                style = MaterialTheme.typography.labelMedium, color = cs.error,
+            )
         }
     }
 

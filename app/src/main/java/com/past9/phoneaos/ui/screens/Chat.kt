@@ -110,6 +110,9 @@ data class ChatActions(
     val composerSend: ((String) -> Unit)? = null,
     val composerVoice: ((String) -> Unit)? = null,
     val sending: () -> Boolean = { false },
+    /** The last send that did not get through, shown above the box with Retry beside it (its words are still there). */
+    val composerFailed: String? = null,
+    val onComposerRetry: (() -> Unit)? = null,
     val onRecordings: (() -> Unit)? = null,
 ) {
     /** The message box's part: the same [com.past9.phoneaos.ui.ComposerActions] every chat's box takes. */
@@ -322,7 +325,8 @@ fun ChatScreen(
                     scope.launch { kotlinx.coroutines.delay(120); stick = true; list.animateScrollToItem(rows.size) }
                 })
             }
-            MessageComposer(draft, onDraft, status.working, actions.composer(), attachments, docs, listening, dictationOwner = "main", sending = actions.sending()) } } },
+            MessageComposer(draft, onDraft, status.working, actions.composer(), attachments, docs, listening, dictationOwner = "main",
+                sending = actions.sending(), failed = actions.composerFailed, onRetry = actions.onComposerRetry) } } },
     ) { pad ->
         if (items.isEmpty() || morning != null) Welcome(userName, Modifier.padding(pad), actions.onSend, morning, hasChat = items.isNotEmpty())
         else LazyColumn(
@@ -1161,14 +1165,15 @@ fun MentionReplyCard(item: ChatItem, reply: com.past9.phoneaos.remote.MentionRep
             if (replying) {
                 Spacer(Modifier.height(6.dp))
                 // The same message box as every chat: photos, documents, camera, mic.
-                val acts = com.past9.phoneaos.ui.composerActionsFor(box, tools, working = false, scope = com.past9.phoneaos.App.graph(androidx.compose.ui.platform.LocalContext.current).scope, send = { text, pics ->
+                val acts = com.past9.phoneaos.ui.composerActionsFor(box, tools, working = false, scope = com.past9.phoneaos.App.graph(androidx.compose.ui.platform.LocalContext.current).scope, send = { text, pics, files ->
                     val s = session ?: throw java.io.IOException("Not linked to a computer.")
                     problem = ""
-                    s.replyTo(reply.chat, text, pics)
+                    s.replyTo(reply.chat, text, pics, files)
                     drafts.sent(draftKey)
                 }, onFailed = { problem = "Couldn't send that: $it. Your words are still here." })
                 MessageComposer(box.draft, { box.draft = it }, false, acts, box.attachments, box.docs.keys.toList(), tools?.listening(box) == true,
-                    placeholder = "Reply to ${reply.name}", inset = false, dictationOwner = box, sending = box.sending)
+                    placeholder = "Reply to ${reply.name}", inset = false, dictationOwner = box, sending = box.sending,
+                    failed = box.failed, onRetry = box.retry)
             }
             if (problem.isNotEmpty()) Text(problem, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
         }
@@ -1247,7 +1252,8 @@ private fun WorkingRow(status: AgentStatus) {
  */
 @Composable
 fun MessageComposer(draft: String, onDraft: (String) -> Unit, working: Boolean, actions: com.past9.phoneaos.ui.ComposerActions, attachments: List<String>, docs: List<String> = emptyList(),
-                    listening: Boolean = false, placeholder: String? = null, inset: Boolean = true, dictationOwner: Any? = null, sending: Boolean = false) {
+                    listening: Boolean = false, placeholder: String? = null, inset: Boolean = true, dictationOwner: Any? = null, sending: Boolean = false,
+                    failed: String? = null, onRetry: (() -> Unit)? = null) {
     var attachMenu by remember { mutableStateOf(false) }
     if (attachMenu) com.past9.phoneaos.ui.ChoiceSheet(Icons.Rounded.AttachFile, "Attach", "Add to your message", listOfNotNull(
         com.past9.phoneaos.ui.SheetChoice("photo", "Photo", "From your gallery", Icons.Rounded.Image),
@@ -1307,6 +1313,14 @@ fun MessageComposer(draft: String, onDraft: (String) -> Unit, working: Boolean, 
             setChip(M.chipFromPick(words, caretInWords, p))
             android.util.Log.i("Mentions", "picked ${p.name}")
         }
+        // A send that did not get through: said plainly, with the words still in the box and one tap to try again.
+        if (!failed.isNullOrBlank()) Surface(color = MaterialTheme.colorScheme.errorContainer, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg),
+            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp)) {
+            Row(Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(failed, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.weight(1f))
+                if (onRetry != null) TextButton(onClick = onRetry) { Text("Retry", style = MaterialTheme.typography.labelLarge) }
+            }
+        }
         if (docs.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             docs.forEach { name ->
                 InputChip(selected = false, onClick = { actions.onRemoveDoc(name) }, label = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 180.dp)) },
@@ -1348,7 +1362,8 @@ fun MessageComposer(draft: String, onDraft: (String) -> Unit, working: Boolean, 
             }
             Spacer(Modifier.width(8.dp))
             // The words stay in the box until the send is accepted; the caller empties it then (ui/Composer.kt).
-            val canSend = !sending && (draft.isNotBlank() || attachments.isNotEmpty() || docs.isNotEmpty())
+            // His message going out is never a reason he cannot send the next one: only the Send button's own progress moves.
+            val canSend = draft.isNotBlank() || attachments.isNotEmpty() || docs.isNotEmpty()
             // Swipe up on Send = "answer me with a voice note" (for walking). A tap sends as usual.
             var lift by remember { mutableFloatStateOf(0f) }
             val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -1382,11 +1397,14 @@ fun MessageComposer(draft: String, onDraft: (String) -> Unit, working: Boolean, 
                 }) {
                 val bg = if (voiceMode) MaterialTheme.colorScheme.tertiary else if (canSend || working || sending) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
                 val tint = if (voiceMode) MaterialTheme.colorScheme.onTertiary else if (canSend || working || sending) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                Box(Modifier.size(56.dp).clip(if (working && !canSend && !sending) RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm) else CircleShape).background(bg), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(56.dp).clip(if (working && !canSend && sending.not()) RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm) else CircleShape).background(bg), contentAlignment = Alignment.Center) {
                     when {
-                        sending -> androidx.compose.material3.CircularProgressIndicator(Modifier.size(22.dp), color = tint, strokeWidth = 2.dp)
                         voiceMode -> Icon(Icons.Rounded.Headphones, "Send, reply with a voice note", tint = tint)
-                        working && !canSend -> Icon(Icons.Rounded.Stop, "Stop", tint = tint)
+                        // Words in the box: Send, always, even while the agent is busy or another message is on its way.
+                        canSend -> Icon(Icons.AutoMirrored.Rounded.ArrowForward, "Send (swipe up for a voice reply)", tint = tint)
+                        // Nothing to send: a send still on its way shows here, and Stop while the agent works.
+                        sending -> androidx.compose.material3.CircularProgressIndicator(Modifier.size(22.dp), color = tint, strokeWidth = 2.dp)
+                        working -> Icon(Icons.Rounded.Stop, "Stop", tint = tint)
                         else -> Icon(Icons.AutoMirrored.Rounded.ArrowForward, "Send (swipe up for a voice reply)", tint = tint)
                     }
                 }

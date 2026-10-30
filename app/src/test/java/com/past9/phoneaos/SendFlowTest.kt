@@ -22,12 +22,12 @@ class SendFlowTest {
         var legacy = 0
         var open = true
         fun flow(ack: Long = 50, giveUp: Long = 2_000) = SendFlow(
-            linkUp = { order.isNotEmpty() && open },
+            linkUp = { _ -> order.isNotEmpty() && open },
             prepare = {},
             attempt = { fresh -> val b = order.first(); asked += b + (if (fresh) "+fresh" else ""); behave.getValue(b)(fresh) },
             socketOpen = { open },
             leave = { left++; if (order.isNotEmpty()) order.removeAt(0) },
-            legacy = { legacy++ },
+            legacy = { legacy++; true },
             ackWaitMs = ack,
             prepareWaitMs = 50,
             linkWaitMs = 10,
@@ -60,9 +60,9 @@ class SendFlowTest {
         rig.open = true
         // The socket is seen closed the moment the call fails.
         val flow = SendFlow(
-            linkUp = { rig.order.isNotEmpty() }, prepare = {},
+            linkUp = { _ -> rig.order.isNotEmpty() }, prepare = {},
             attempt = { fresh -> val b = rig.order.first(); rig.asked += b; rig.behave.getValue(b)(fresh) },
-            socketOpen = { false }, leave = {}, legacy = {}, ackWaitMs = 50, prepareWaitMs = 50, linkWaitMs = 10, giveUpMs = 2_000, pauseMs = 5,
+            socketOpen = { false }, leave = {}, legacy = { true }, ackWaitMs = 50, prepareWaitMs = 50, linkWaitMs = 10, giveUpMs = 2_000, pauseMs = 5,
         )
         flow.run()
         assertEquals(listOf("pc", "server"), rig.asked)
@@ -73,6 +73,7 @@ class SendFlowTest {
         rig.flow().run()
         assertEquals(1, rig.legacy)
         assertEquals(listOf("pc"), rig.asked)
+        assertEquals("it was handed over, not left for the server", 0, rig.left)
     }
 
     @Test fun aRefusalFromAComputerThatAnswersIsNotRetriedElsewhere() = runBlocking {

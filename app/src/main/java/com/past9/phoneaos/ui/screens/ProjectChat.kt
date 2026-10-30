@@ -107,13 +107,14 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
         bottomBar = {
             // THE message box (the main chat's): photos, documents, camera, mic, '@' another project. Its sends carry
             // their pictures (sendTo uploads each first; before 0.15.11 this box was text only and sent none).
-            val acts = com.past9.phoneaos.ui.composerActionsFor(box, tools, working, appScope, send = { text, pics ->
+            val acts = com.past9.phoneaos.ui.composerActionsFor(box, tools, working, appScope, send = { text, pics, files ->
                 val s = session ?: throw java.io.IOException("Not linked to a computer.")
-                s.sendTo(chat, text, pics)
+                s.sendTo(chat, text, pics, files)
                 scope.launch { load(s) }
             }, stop = { session?.let { s -> scope.launch { runCatching { s.call("chat.stop", listOf(chat), 15_000) } } } },
                 onFailed = { problem = "Couldn't send that: $it. Your words are still in the box." })
-            MessageComposer(box.draft, { box.draft = it }, working, acts, box.attachments, box.docs.keys.toList(), tools?.listening(box) == true, placeholder = "Message $name", dictationOwner = box, sending = box.sending)
+            MessageComposer(box.draft, { box.draft = it }, working, acts, box.attachments, box.docs.keys.toList(), tools?.listening(box) == true, placeholder = "Message $name", dictationOwner = box, sending = box.sending,
+                failed = box.failed, onRetry = box.retry)
         },
     ) { pad ->
         LazyColumn(state = list, modifier = Modifier.fillMaxSize().padding(pad), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {

@@ -42,8 +42,11 @@ fun phoneFacts(context: Context): DeviceFacts {
 /** What the agent runtime hands over while the phone is linked: the computer runs the turns. */
 interface RemoteSink {
     fun send(text: String, images: List<String>, quiet: Boolean)
+    /** With files of any kind (a shared voice note, PDF or document): they must reach the computer with the message. */
+    fun send(text: String, images: List<String>, files: List<String>, quiet: Boolean) = send(text, images, quiet)
     /** Returns once the computer accepted it; throws when it did not. */
     suspend fun sendAccepted(text: String, images: List<String>) = send(text, images, false)
+    suspend fun sendAccepted(text: String, images: List<String>, files: List<String>) = sendAccepted(text, images)
     fun answer(itemId: Long, option: String)
     fun stop()
     fun stopHelper(id: Long): Boolean
@@ -108,10 +111,14 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     @Volatile private var cardsStaleJob: kotlinx.coroutines.Job? = null
 
     private fun publishCards(list: List<LiveCard>?) {
-        cardsRaw = list
+        // One rule for the whole app (LiveCards.reconcile): the computer's newest list wins outright, and a card whose
+        // brain is not answering is never counted as working.
+        val live = rpc?.isOpen == true
+        val next = LiveCards.reconcile(cardsRaw, list, live)
+        cardsRaw = next
         // A swipe is forgotten once the computer no longer lists that card.
-        if (list != null) swiped.keys.retainAll(list.map { it.row }.toSet())
-        _cards.value = list?.let { LiveCards.visible(it, swiped) }
+        if (next != null) swiped.keys.retainAll(next.map { it.row }.toSet())
+        _cards.value = next?.let { LiveCards.visible(it, swiped) }
     }
 
     @Volatile private var rpc: RpcClient? = null
@@ -401,6 +408,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     fun onForeground() {
         foreground = true
         pauseJob?.cancel(); pauseJob = null
+        // Back on screen: the working list and the Home count are re-read, so nothing that ended meanwhile is still shown.
+        if (rpc?.isOpen == true) scope.launch { runCatching { loadCards() } }
         if (_state.value is LinkState.Paused) _state.value = LinkState.Connecting
         // Back on screen: try now rather than at the end of a backoff wait.
         if (rpc?.isOpen != true && nextTryAt > System.currentTimeMillis()) retry()
@@ -461,21 +470,25 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
      * A message on its way, to whichever brain will take it: see [SendFlow]. Returns once a brain holds it, which on a
      * computer before 0.2.115 (the old chat.send) means once its turn has ended, as it always did.
      */
-    private suspend fun deliver(words: String, images: List<String>, chat: String? = null, replyIn: String? = null) {
+    private suspend fun deliver(words: String, images: List<String>, chat: String? = null, replyIn: String? = null, files: List<String> = emptyList()) {
         pendingSends.incrementAndGet()
-        try { deliverNow(words, images, chat, replyIn) } finally { pendingSends.decrementAndGet() }
+        try { deliverNow(words, images, chat, replyIn, files) } finally { pendingSends.decrementAndGet() }
     }
 
-    private suspend fun deliverNow(words: String, images: List<String>, chat: String?, replyIn: String?) {
+    private suspend fun deliverNow(words: String, images: List<String>, chat: String?, replyIn: String?, files: List<String> = emptyList()) {
         val sendId = java.util.UUID.randomUUID().toString()
         val sentAt = System.currentTimeMillis()
         var attachments = JSONArray()
         var uploadedTo: String? = null
+        // The same pictures and files go up once per brain, however many times the send has to be tried.
+        val uploadKey = (images + files).joinToString("|")
         SendFlow(
             linkUp = { ms -> awaitLink(ms); rpc?.isOpen == true },
             prepare = {
-                val here = current?.brain?.id
-                if (images.isNotEmpty() && uploadedTo != here) { attachments = uploadImages(images); uploadedTo = here }
+                val here = (current?.brain?.id ?: "") + "#" + uploadKey
+                if ((images.isNotEmpty() || files.isNotEmpty()) && uploadedTo != here) {
+                    attachments = uploadEvery(images, files); uploadedTo = here
+                }
             },
             attempt = { fresh ->
                 val body = JSONObject().put("sendId", sendId).put("sentAt", sentAt).put("fresh", fresh).put("text", words).put("attachments", attachments)
@@ -485,17 +498,25 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
             },
             socketOpen = { rpc?.isOpen == true },
             leave = ::leaveUnanswering,
-            legacy = {
-                val args: List<Any?> = when {
-                    replyIn != null -> Mentions.replyArgs(chat.orEmpty(), words, attachments)
-                    chat != null -> listOf(words, attachments, chat)
-                    attachments.length() > 0 -> listOf(words, attachments)
-                    else -> listOf(words)
-                }
-                call("chat.send", args, 60_000)
-            },
+            legacy = { handOver(words, attachments, chat, replyIn) },
         ).run()
         sayWhoIsStandingIn()
+    }
+
+    /**
+     * The old chat.send (a computer before 0.2.116), put on the wire once and NOT waited for: that call answers only
+     * when the whole turn has ended, and waiting for it is what kept his words in the box and the Send button spinning
+     * for minutes (30 Oct 2026). True: the frame went out, so this brain has the message.
+     */
+    private fun handOver(words: String, attachments: JSONArray, chat: String?, replyIn: String?): Boolean {
+        val args: List<Any?> = when {
+            replyIn != null -> Mentions.replyArgs(chat.orEmpty(), words, attachments)
+            chat != null -> listOf(words, attachments, chat)
+            attachments.length() > 0 -> listOf(words, attachments)
+            else -> listOf(words)
+        }
+        val r = rpc ?: return false
+        return r.cast("chat.send", args)
     }
 
     /** He is on a brain further down because the first isn't answering: the chat says so, once. */
@@ -515,12 +536,14 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         withTimeoutOrNull(ms) { while (rpc?.isOpen != true) kotlinx.coroutines.delay(250) }
     }
 
-    override suspend fun sendAccepted(text: String, images: List<String>) {
-        val clean = text.trim().ifEmpty { if (images.isNotEmpty()) "What do you make of this?" else "" }
+    override suspend fun sendAccepted(text: String, images: List<String>) = sendAccepted(text, images, emptyList())
+
+    override suspend fun sendAccepted(text: String, images: List<String>, files: List<String>) {
+        val clean = text.trim().ifEmpty { if (images.isNotEmpty() || files.isNotEmpty()) "What do you make of this?" else "" }
         if (clean.isEmpty()) return
         try {
             turnRunning = true; publishStatus()
-            deliver(clean, images)
+            deliver(clean, images, null, null, files)
             runCatching { readRunState() }
         } catch (e: kotlinx.coroutines.CancellationException) { throw e
         } catch (e: Exception) {
@@ -535,13 +558,15 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         scope.launch { runCatching { com.past9.phoneaos.voice.Dictations.push(app) { p -> call("recordings.fromDevice", listOf(p), 20_000) } } }
     }
 
-    override fun send(text: String, images: List<String>, quiet: Boolean) {
-        val clean = text.trim().ifEmpty { if (images.isNotEmpty()) "What do you make of this?" else "" }
+    override fun send(text: String, images: List<String>, quiet: Boolean) = send(text, images, emptyList(), quiet)
+
+    override fun send(text: String, images: List<String>, files: List<String>, quiet: Boolean) {
+        val clean = text.trim().ifEmpty { if (images.isNotEmpty() || files.isNotEmpty()) "What do you make of this?" else "" }
         if (clean.isEmpty()) return
         scope.launch {
             try {
                 turnRunning = true; publishStatus()
-                deliver(clean, images)
+                deliver(clean, images, null, null, files)
                 // A message the computer sent on to a project chat ('@Acme ...') starts no run here: read the real state,
                 // or the chat stays on "Working" with a Stop button (29 Oct 2026, seen on his phone).
                 runCatching { readRunState() }
@@ -803,10 +828,10 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
      * A message of his into one of the computer's chats (a project or helper chat), with its pictures. Until 0.15.11 this
      * always sent an empty attachment list, so a photo picked there never reached the computer (29 Oct 2026).
      */
-    suspend fun sendTo(chat: String, text: String, images: List<String> = emptyList()) {
-        val words = text.trim().ifEmpty { if (images.isNotEmpty()) "What do you make of this?" else "" }
+    suspend fun sendTo(chat: String, text: String, images: List<String> = emptyList(), files: List<String> = emptyList()) {
+        val words = text.trim().ifEmpty { if (images.isNotEmpty() || files.isNotEmpty()) "What do you make of this?" else "" }
         if (words.isEmpty()) return
-        deliver(words, images, chat)
+        deliver(words, images, chat, files = files)
     }
 
     /**
@@ -814,26 +839,58 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
      * {$b64}), so chat.send carries only their paths. Same on Wi-Fi and mobile data: pictures are already scaled to
      * 1568 px JPEG on the phone. A picture that fails to go throws, so the message is never sent without it.
      */
-    suspend fun uploadImages(images: List<String>): JSONArray {
+    suspend fun uploadImages(images: List<String>): JSONArray = uploadEvery(images, emptyList())
+
+    /**
+     * Pictures and files on their way to the computer before the message (files.savePasted, the bytes), so the message
+     * carries only their paths THERE. A shared voice note, PDF or document used to be listed by its path on the phone,
+     * which the computer cannot open, so it silently never arrived (30 Oct 2026). Every upload is also kept where the
+     * chat looks for a picture, so the bubble shows it at once instead of loading it back over the link.
+     */
+    private suspend fun uploadEvery(images: List<String>, files: List<String>): JSONArray {
         val attachments = JSONArray()
-        for (p in images) {
+        for (p in images + files) {
             val f = File(p)
-            if (!f.isFile) throw java.io.IOException("The photo ${f.name} is no longer on this phone.")
-            val mime = when { f.name.endsWith(".png", true) -> "image/png"; f.name.endsWith(".webp", true) -> "image/webp"; else -> "image/jpeg" }
+            if (!f.isFile) throw java.io.IOException("${f.name} is no longer on this phone.")
             val b64 = android.util.Base64.encodeToString(f.readBytes(), android.util.Base64.NO_WRAP)
-            val saved = call("files.savePasted", listOf(f.name, mime, JSONObject().put("\$b64", b64)), 120_000) as? JSONObject
-                ?: throw java.io.IOException("Your computer didn't keep the photo ${f.name}.")
+            val saved = call("files.savePasted", listOf(f.name, mimeOf(f.name), JSONObject().put("\$b64", b64)), 120_000) as? JSONObject
+                ?: throw java.io.IOException("Your computer didn't keep ${f.name}.")
             attachments.put(saved)
+            rememberLocal(saved.optString("path"), f)
         }
-        if (images.isNotEmpty()) android.util.Log.i("Attach", "uploaded ${attachments.length()} of ${images.size} pictures (metered=$metered)")
+        if (images.isNotEmpty() || files.isNotEmpty()) android.util.Log.i("Attach", "uploaded ${attachments.length()} of ${images.size + files.size} (metered=$metered)")
         return attachments
     }
 
+    /** What this kind of file is, so the computer reads it the right way. */
+    private fun mimeOf(name: String): String = when {
+        name.endsWith(".png", true) -> "image/png"; name.endsWith(".webp", true) -> "image/webp"
+        name.endsWith(".jpg", true) || name.endsWith(".jpeg", true) -> "image/jpeg"
+        name.endsWith(".opus", true) || name.endsWith(".ogg", true) || name.endsWith(".oga", true) -> "audio/ogg"
+        name.endsWith(".m4a", true) -> "audio/mp4"; name.endsWith(".mp3", true) -> "audio/mpeg"; name.endsWith(".amr", true) -> "audio/amr"
+        name.endsWith(".mp4", true) -> "video/mp4"; name.endsWith(".pdf", true) -> "application/pdf"
+        name.endsWith(".txt", true) -> "text/plain"; name.endsWith(".csv", true) -> "text/csv"
+        else -> "application/octet-stream"
+    }
+
+    /** The copy the chat draws: the very name the downloader would have used, so nothing is fetched back over the link. */
+    private fun rememberLocal(pathOnComputer: String, f: File) {
+        if (pathOnComputer.isBlank()) return
+        UploadedMedia.remember(pathOnComputer, f.absolutePath)
+        runCatching {
+            val dir = File(app.cacheDir, "linked-media").apply { mkdirs() }
+            val ext = pathOnComputer.substringAfterLast('.', "jpg").take(5).lowercase()
+            val copy = File(dir, Integer.toHexString(pathOnComputer.hashCode()) + "-" + pathOnComputer.length + "." + ext)
+            if (!copy.isFile || copy.length() == 0L) f.copyTo(copy, overwrite = true)
+            UploadedMedia.remember(pathOnComputer, copy.absolutePath)
+        }
+    }
+
     /** A reply on a project's answer card, with its pictures: into that project chat, its answer back to the main chat. */
-    suspend fun replyTo(chat: String, text: String, images: List<String> = emptyList()) {
-        val words = text.trim().ifEmpty { if (images.isNotEmpty()) "What do you make of this?" else "" }
+    suspend fun replyTo(chat: String, text: String, images: List<String> = emptyList(), files: List<String> = emptyList()) {
+        val words = text.trim().ifEmpty { if (images.isNotEmpty() || files.isNotEmpty()) "What do you make of this?" else "" }
         if (words.isEmpty()) return
-        deliver(words, images, chat, "main")
+        deliver(words, images, chat, "main", files)
     }
 
     /** His machines on the link, with their state, for Connections. */
@@ -911,7 +968,10 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
             lastSeq = -1L
             initialLoad(if (metered) FIRST_ROWS else CHAT_ROWS)
         }
-        if (!metered) runCatching { fullSync(initial = caught) } else if (helpersOpen) runCatching { loadCards() }
+        // The cards ARE the working list and the Home count: read on every link-up, mobile data or not (a few KB), so a
+        // helper that ended while the phone was away, or before the computer restarted, can never stay on screen.
+        runCatching { loadCards() }
+        if (!metered) runCatching { fullSync(initial = caught) }
     }
 
     /** What changed after [seq], applied row by row. False: too much changed or the number is not known: read afresh. */
@@ -945,7 +1005,6 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     private suspend fun fullSync(initial: Boolean) {
         if (initial) initialLoad(CHAT_ROWS)
         for (e in LISTS) runCatching { loadEntity(e) }
-        runCatching { loadCards() }
     }
 
     /** A list is read when its screen opens (mobile data) and the first time it is asked for on a connection. */
@@ -1189,6 +1248,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
             val dir = File(app.cacheDir, "linked-media").apply { mkdirs() }
             val local = HashMap<String, String>()
             for (p in paths) runCatching {
+                UploadedMedia.local(p)?.let { known -> local[p] = known; return@runCatching }
                 val ext = p.substringAfterLast('.', "jpg").take(5).lowercase()
                 val f = File(dir, Integer.toHexString(p.hashCode()) + "-" + p.length + "." + ext)
                 if (!f.exists() || f.length() == 0L) api.download(url, p, pass) { input, _ -> f.outputStream().use { input.copyTo(it) } }
@@ -1224,7 +1284,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         const val EVT_DEVICES = "agent:evt:devices.changed"
         const val EVT_CARDS = "agent:evt:helpers.cards"
         /** How long the cards stay with no link to the computer that sent them. */
-        const val STALE_CARDS_MS = 90_000L
+        const val STALE_CARDS_MS = 20_000L
         const val EVT_COMMAND = "device.command"
     }
 }

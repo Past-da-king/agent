@@ -177,8 +177,16 @@ class MainActivity : ComponentActivity() {
         }
         if (offerReliability) com.past9.phoneaos.ui.screens.ReliabilitySheet { offerReliability = false }
         val items by remember(dataDb) { dataDb.chat().all() }.collectAsStateWithLifecycle(emptyList())
-        val status by (remote?.status ?: g.runtime.status).collectAsStateWithLifecycle()
+        val remoteStatus by (remote?.status ?: g.runtime.status).collectAsStateWithLifecycle()
         val liveCards = remote?.cards?.collectAsStateWithLifecycle()?.value
+        // ONE working number for the whole app: the Home header, the agents pill and the Working list all count the same
+        // card list, so the header can never say Free while helpers are listed (30 Oct 2026: "8 working" beside "Free").
+        val status = if (remote != null && liveCards != null)
+            remoteStatus.copy(
+                working = com.past9.phoneaos.remote.LiveCards.anyWorking(liveCards),
+                helpers = com.past9.phoneaos.remote.LiveCards.workingCount(liveCards),
+            )
+        else remoteStatus
         // Opening a chat from a card: a project chat goes on top of the main thread (Back always lands there), "main"
         // is the main thread itself.
         var openFromCard by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -503,12 +511,12 @@ class MainActivity : ComponentActivity() {
                 }
                 composable("chat") {
                     suspend fun beforeSend() = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity) }
-                    val mainActs = com.past9.phoneaos.ui.composerActionsFor(mainBox, composerTools, status.working, g.scope, send = { text, pics ->
+                    val mainActs = com.past9.phoneaos.ui.composerActionsFor(mainBox, composerTools, status.working, g.scope, send = { text, pics, files ->
                         beforeSend()
-                        g.runtime.sendAccepted(text, pics, docs.keys.toList())
-                    }, stop = { g.runtime.stop() }, sendVoice = { text, pics ->
+                        g.runtime.sendAccepted(text, pics, files)
+                    }, stop = { g.runtime.stop() }, sendVoice = { text, pics, files ->
                         beforeSend()
-                        g.runtime.sendAccepted(text, pics, docs.keys.toList(), voiceReply = true)
+                        g.runtime.sendAccepted(text, pics, files, voiceReply = true)
                     })
                     ChatScreen(items, status, settings.agentName, settings.userName, browserLive, draft, { draft = it },
                         listening = composerTools.listening(mainBox), live = liveUi,
@@ -516,15 +524,16 @@ class MainActivity : ComponentActivity() {
                         onRead = { id -> if (id > (g.settings.extra("chatRead")?.toLongOrNull() ?: 0L)) g.settings.setExtra("chatRead", id.toString()) },
                         actions = ChatActions(
                             composerSend = mainActs.onSend, composerVoice = mainActs.onSendVoice, sending = { mainBox.sending }, onRecordings = mainActs.onRecordings,
+                            composerFailed = mainBox.failed, onComposerRetry = mainBox.retry,
                             onCard = { openCard = it },
                             onAct = { g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity); g.runtime.sendQuiet(it) },
                             onSend = { g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity)
                                 val docText = docs.entries.joinToString("") { (n, d) -> "\n\n[Attached document: $n${docPaths[n]?.let { p -> ", file saved at $p (you can upload it with browser_upload)" }.orEmpty()}]\n${d.first.take(30_000)}" }
-                                g.runtime.send(it + docText, attachments.toList() + docs.values.flatMap { d -> d.second }.take(6), docs.keys.toList())
+                                g.runtime.send(it + docText, attachments.toList() + docs.values.flatMap { d -> d.second }.take(12), docPaths.values.toList())
                                 attachments.clear(); docs.clear() },
                             onSendVoice = { g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity)
                                 val docText = docs.entries.joinToString("") { (n, d) -> "\n\n[Attached document: $n${docPaths[n]?.let { p -> ", file saved at $p (you can upload it with browser_upload)" }.orEmpty()}]\n${d.first.take(30_000)}" }
-                                g.runtime.send(it + docText, attachments.toList() + docs.values.flatMap { d -> d.second }.take(6), docs.keys.toList(), voiceReply = true)
+                                g.runtime.send(it + docText, attachments.toList() + docs.values.flatMap { d -> d.second }.take(12), docPaths.values.toList(), voiceReply = true)
                                 attachments.clear(); docs.clear() }, onStop = { g.runtime.stop() },
                             onAttachDoc = { composerTools.pickDocs(mainBox) }, onCamera = { composerTools.camera(mainBox, it) { _, _ -> } }, onRemoveDoc = { docs.remove(it); docPaths.remove(it) },
                             onAttach = { composerTools.pickPhotos(mainBox) },

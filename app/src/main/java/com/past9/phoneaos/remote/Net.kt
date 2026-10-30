@@ -219,13 +219,35 @@ class RpcClient(
         return try { withTimeout(timeoutMs) { d.await() } } finally { calls.remove(id) }
     }
 
+    /**
+     * Put a call on the wire and do NOT wait for its answer: an old computer answers chat.send only when the whole turn
+     * has ended, and waiting for that held his message box and Send button for minutes (30 Oct 2026). True: the frame
+     * went out. The answer, when it comes, is dropped; a failure is only logged.
+     */
+    fun cast(method: String, args: List<Any?>): Boolean {
+        val id = seq.incrementAndGet().toString()
+        val frame = JSONObject().put("type", "call").put("id", id).put("method", method).put("args", JSONArray(args.map { it ?: JSONObject.NULL }))
+        if (ws?.send(frame.toString()) != true) return false
+        unclaimed.add(id)
+        return true
+    }
+
+    /** Ids of casts still waiting for an answer, so their result is not mistaken for a lost call. */
+    private val unclaimed: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
     fun close() { ws?.close(1000, "bye"); end("closed by the phone", LinkProblem.Dropped) }
 
     internal fun handle(text: String) {
         val o = runCatching { JSONObject(text) }.getOrNull() ?: return
         when (o.optString("type")) {
             "result" -> {
-                val d = calls.remove(o.opt("id")?.toString() ?: return) ?: return
+                val rid = o.opt("id")?.toString() ?: return
+                // A cast (an old computer's chat.send) is never waited for: its answer ends here.
+                if (unclaimed.remove(rid)) {
+                    if (!o.optBoolean("ok")) android.util.Log.i("RemoteLink", "a handed-over call ended: ${o.optString("error")}")
+                    return
+                }
+                val d = calls.remove(rid) ?: return
                 if (o.optBoolean("ok")) d.complete(o.opt("value").takeUnless { it == JSONObject.NULL })
                 else d.completeExceptionally(RpcException(o.optString("error").ifBlank { "The computer couldn't do that." }))
             }

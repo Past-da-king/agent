@@ -114,6 +114,33 @@ object LiveCards {
         return HelperView(item, steps)
     }
 
+    /**
+     * The whole list the phone may show, from the computer's newest answer (30 Oct 2026: the Working list showed 14
+     * helpers "working" for 6 h 10 min, none of them running anywhere, because the phone kept rows whose end never
+     * reached it after the computer restarted at 13:17).
+     *
+     * - [snapshot] is not null: the computer published its list, so it wins OUTRIGHT, however short. A computer that
+     *   restarted numbers its lists afresh, so a new, lower number is a real list, never an old one.
+     * - [snapshot] is null (a computer too old to publish cards): what is here stays only while that computer answers.
+     * - no brain answering: nothing is working, so nothing is left to draw.
+     */
+    fun reconcile(prev: List<LiveCard>?, snapshot: List<LiveCard>?, brainAlive: Boolean): List<LiveCard>? {
+        if (snapshot != null) return snapshot
+        if (prev == null) return null
+        return if (brainAlive) prev else emptyList()
+    }
+
+    /**
+     * How many agents are at work, from the ONE list the phone draws. The Home screen's header, the agents pill and the
+     * Working list all take their number from here, so they can never disagree (30 Oct 2026: the header said "Free"
+     * while 8 helpers were listed).
+     */
+    fun workingCount(cards: List<LiveCard>?, brainAlive: Boolean = true): Int =
+        if (!brainAlive || cards == null) 0 else cards.count { it.working }
+
+    /** Same rule as [workingCount]: is anything at work now? */
+    fun anyWorking(cards: List<LiveCard>?, brainAlive: Boolean = true): Boolean = workingCount(cards, brainAlive) > 0
+
     /** The line a card shows: what it is doing now, or once finished what it did. */
     fun line(c: LiveCard): String = if (c.working) c.line.ifBlank { if (c.queued) "Waiting its turn" else "Starting" } else c.done
 }
