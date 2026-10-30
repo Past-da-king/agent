@@ -96,6 +96,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onPause() {
+        super.onPause()
+        // Leaving the screen: what is in the message boxes and the dictation's words are on disk now.
+        com.past9.phoneaos.data.DraftStore.flush()
+        com.past9.phoneaos.voice.Dictations.of(this).flush()
+    }
+
     override fun onStop() {
         super.onStop()
         com.past9.phoneaos.handoff.Handoffs.offScreen()
@@ -199,11 +206,11 @@ class MainActivity : ComponentActivity() {
         val route = backEntry?.destination?.route ?: "home"
         val scope = rememberCoroutineScope()
         val ops = remember(remote) { com.past9.phoneaos.remote.DataOps(applicationContext, remote, g.scope) }
-        val draftState = rememberSaveable { mutableStateOf("") }
-        var draft by draftState
-        // The main chat's message box; a project or helper chat has its own (ui/Composer.kt). The pickers below fill
-        // the box that asked ([boxFor]), so a photo picked in a project chat goes with that chat's message.
-        val mainBox = remember { com.past9.phoneaos.ui.ComposerBox(draftState) }
+        // The main chat's message box; a project or helper chat has its own (ui/Composer.kt). Its words live on disk, not
+        // in this screen. The pickers below fill the box that asked ([boxFor]), so a photo picked in a project chat goes
+        // with that chat's message.
+        val mainBox = remember { com.past9.phoneaos.ui.ComposerBoxes.box("main") }
+        var draft by mainBox.state
         var boxFor by remember { mutableStateOf<com.past9.phoneaos.ui.ComposerBox?>(null) }
         val attachments = mainBox.attachments
         /** Where the camera button is, while the in-place camera card is open (it grows out of there). */
@@ -279,7 +286,7 @@ class MainActivity : ComponentActivity() {
         val incomingNow by incoming.collectAsStateWithLifecycle()
         LaunchedEffect(incomingNow) {
             val (text, open) = incomingNow
-            if (text != null) { draft = text; nav.navigate("chat") { launchSingleTop = true } }
+            if (text != null) { draft = com.past9.phoneaos.voice.Words.join(draft, text); nav.navigate("chat") { launchSingleTop = true } }
             // An unknown screen name (from a shortcut, an adb call or another app) is ignored; it must never take the app down.
             if (open != null) runCatching { nav.navigate(open) }
             if (text != null || open != null) incoming.value = null to null
@@ -328,6 +335,8 @@ class MainActivity : ComponentActivity() {
         // (its words still land), a rotation does not.
         DisposableEffect(Unit) { onDispose { dictation?.cancel(); if (!isChangingConfigurations) com.past9.phoneaos.voice.DictationHub.stop() } }
         val hubUi by com.past9.phoneaos.voice.DictationHub.ui.collectAsStateWithLifecycle()
+        // A dictation the last run of the app was cut off in: its audio and words are safe, say where.
+        LaunchedEffect(Unit) { if (com.past9.phoneaos.voice.DictationHub.takeInterrupted()) com.past9.phoneaos.ui.AppNotice.say("Your last dictation was cut off. It's saved in Settings, Recordings.") }
         val hubActive = hubUi?.view?.ended == false
         // The screen stays on while he dictates (the mic service also keeps it going if he locks the phone).
         LaunchedEffect(hubActive) {
@@ -341,25 +350,26 @@ class MainActivity : ComponentActivity() {
         }.getOrDefault(false)
         fun startDictation() {
             val box = dictBox ?: mainBox
-            val base = box.draft
-            fun join(t: String) = if (t.isBlank()) base else if (base.isBlank()) t else base.trimEnd() + " " + t
+            // Only ever adds: a shorter result is ignored, and what he typed or sent since is left alone (voice/Words.kt).
+            val writer = com.past9.phoneaos.voice.BoxWriter(box.draft) { android.util.Log.i("AosDictation", it) }
+            fun write(t: String) { writer.next(box.draft, t)?.let { box.draft = it } }
             val done: (String?) -> Unit = { err -> runOnUiThread { dictating = false; dictation = null; if (err != null) say(err) } }
             // Since 0.15.17 the app records the mic itself, saves it as it goes, and only his tap ends it: the phone's
             // recogniser is fed from that audio, and whatever it drops (mobile data, silence) is written down from the
             // saved audio (voice/DictationEngine.kt). The older paths below are for phones that can do neither.
             if (com.past9.phoneaos.voice.DictationHub.supported(this@MainActivity)) {
                 val owner: Any = if (box === mainBox) "main" else box
-                if (com.past9.phoneaos.voice.DictationHub.start(this@MainActivity, owner) { t -> box.draft = join(t) }) return
+                if (com.past9.phoneaos.voice.DictationHub.start(this@MainActivity, owner, box.key) { t -> write(t) }) return
             }
             if (com.past9.phoneaos.voice.SystemDictation.available(this@MainActivity)) {
-                val d = com.past9.phoneaos.voice.SystemDictation(this@MainActivity, onText = { t -> runOnUiThread { box.draft = join(t) } }, onEnd = done)
+                val d = com.past9.phoneaos.voice.SystemDictation(this@MainActivity, onText = { t -> runOnUiThread { write(t) } }, onEnd = done)
                 dictation = d; dictating = true; d.start(); return
             }
             val key = g.settings.voiceKey("gemini")
             if (key == null || !online()) { say("This phone has no speech recogniser, so the mic can't listen. Install Google's Speech Services, or add a Gemini key in Settings, Voice."); return }
             say("This phone has no speech recogniser, so your words go to Gemini to be written down.")
             val vocab = listOf(settings.agentName, settings.userName).filter { it.isNotBlank() && it != "Your agent" }
-            val d = com.past9.phoneaos.voice.Dictation(key, vocab, onText = { t -> runOnUiThread { box.draft = join(t) } }, onEnd = done)
+            val d = com.past9.phoneaos.voice.Dictation(key, vocab, onText = { t -> runOnUiThread { write(t) } }, onEnd = done)
             dictation = d; dictating = true; d.start()
         }
         val dictPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) startDictation() else say("The mic needs the microphone permission.") }
@@ -380,7 +390,8 @@ class MainActivity : ComponentActivity() {
                 override fun camera(box: com.past9.phoneaos.ui.ComposerBox, origin: androidx.compose.ui.geometry.Rect, send: (String, String) -> Unit) { boxFor = box; cameraSend = if (box === mainBox) null else send; cameraOrigin = origin }
                 override fun mic(box: com.past9.phoneaos.ui.ComposerBox) = toggleMic(box)
                 override fun listening(box: com.past9.phoneaos.ui.ComposerBox): Boolean =
-                    (dictating || hubUi?.view?.ended == false) && (dictBox ?: mainBox) === box
+                    (dictating && (dictBox ?: mainBox) === box) || (hubUi?.view?.ended == false && hubUi?.owner == (if (box === mainBox) "main" else box))
+                override fun recordings(box: com.past9.phoneaos.ui.ComposerBox) { nav.navigate("recordings?box=" + Uri.encode(box.key)) }
             }
         }
         fun refreshConnections() = scope.launch {
@@ -487,12 +498,24 @@ class MainActivity : ComponentActivity() {
                         onGrantAccess = { runCatching { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } },
                     ))
                 }
+                composable("recordings?box={box}") { e ->
+                    com.past9.phoneaos.ui.screens.RecordingsScreen(e.arguments?.getString("box")?.ifBlank { null } ?: "main", onBack = { nav.popBackStack() })
+                }
                 composable("chat") {
+                    suspend fun beforeSend() = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity) }
+                    val mainActs = com.past9.phoneaos.ui.composerActionsFor(mainBox, composerTools, status.working, g.scope, send = { text, pics ->
+                        beforeSend()
+                        g.runtime.sendAccepted(text, pics, docs.keys.toList())
+                    }, stop = { g.runtime.stop() }, sendVoice = { text, pics ->
+                        beforeSend()
+                        g.runtime.sendAccepted(text, pics, docs.keys.toList(), voiceReply = true)
+                    })
                     ChatScreen(items, status, settings.agentName, settings.userName, browserLive, draft, { draft = it },
                         listening = composerTools.listening(mainBox), live = liveUi,
                         readMark = { g.settings.extra("chatRead")?.toLongOrNull() ?: Long.MAX_VALUE },
                         onRead = { id -> if (id > (g.settings.extra("chatRead")?.toLongOrNull() ?: 0L)) g.settings.setExtra("chatRead", id.toString()) },
                         actions = ChatActions(
+                            composerSend = mainActs.onSend, composerVoice = mainActs.onSendVoice, sending = { mainBox.sending }, onRecordings = mainActs.onRecordings,
                             onCard = { openCard = it },
                             onAct = { g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity); g.runtime.sendQuiet(it) },
                             onSend = { g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity)
@@ -704,6 +727,7 @@ class MainActivity : ComponentActivity() {
                         onResetAll = { scope.launch { g.runtime.stop(); g.db.clearAllTables(); g.settings.resetAll() } },
                         onBattery = { runCatching { startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))) } },
                         onLinked = { nav.navigate("linked") },
+                        onRecordings = { nav.navigate("recordings?box=main") },
                         linkedLine = com.past9.phoneaos.remote.RemoteHub.link.collectAsStateWithLifecycle().value.let { l ->
                             when { l == null -> "Use the agent on your computer from this phone"; l.on -> "Using ${l.nodeName.ifBlank { "your computer" }}"; else -> "Linked to ${l.nodeName.ifBlank { "a computer" }}, using this phone's own agent" } },
                     ))

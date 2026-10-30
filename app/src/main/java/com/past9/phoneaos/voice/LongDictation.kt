@@ -273,6 +273,25 @@ object DictationHub {
     private var owner: Any? = null
     private var onText: ((String) -> Unit)? = null
     private val main = Handler(Looper.getMainLooper())
+    private var currentId: String? = null
+    private var currentStarted = 0L
+    private var currentChat = ""
+    private val interrupted = AtomicBoolean(false)
+
+    private fun noteState(v: DictationView): String = when (v.phase) {
+        DictationView.Phase.DONE -> "done"
+        DictationView.Phase.KEPT -> "kept"
+        DictationView.Phase.CANCELLED -> "cancelled"
+        else -> "recording"
+    }
+
+    /** The process just started: a dictation still marked as recording was cut off when the last one ended. */
+    fun onProcessStart(context: Context) {
+        if (Dictations.of(context).closeInterrupted().isNotEmpty()) interrupted.set(true)
+    }
+
+    /** Whether there is a cut-off dictation still to tell him about. Once. */
+    fun takeInterrupted(): Boolean = interrupted.getAndSet(false)
 
     val active: Boolean get() = _ui.value?.view?.let { !it.ended } == true
 
@@ -281,16 +300,21 @@ object DictationHub {
         (Build.VERSION.SDK_INT >= 33 && SystemDictation.available(context)) || PieceTranscriber.available(context)
 
     /** Start listening into [owner]'s box. [onText] gets the whole dictated text every time it changes. Main thread. */
-    fun start(context: Context, owner: Any?, onText: (String) -> Unit): Boolean {
+    fun start(context: Context, owner: Any?, chat: String = "", onText: (String) -> Unit): Boolean {
         if (active) return false
         release()
         val ctx = context.applicationContext
         appContext = ctx
         this.owner = owner; this.onText = onText
         val dir = File(ctx.filesDir, "dictation").apply { mkdirs() }
-        DictationTape.prune(dir, keep = 20)
+        val saved = Dictations.of(ctx)
+        saved.prune()
         val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US).format(java.util.Date())
         val tape = runCatching { DictationTape(File(dir, "$stamp.wav")) }.getOrNull() ?: return false
+        // The words beside the audio, as they arrive (voice/Recordings.kt).
+        val id = tape.file.name.removeSuffix(".wav"); val startedAt = System.currentTimeMillis()
+        saved.note(id, startedAt, 0, "", "recording", chat)
+        currentId = id; currentStarted = startedAt; currentChat = chat
         val s = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         scope = s
         val live = if (Build.VERSION.SDK_INT >= 33 && SystemDictation.available(ctx)) RecognizerLive(ctx) else null
@@ -298,7 +322,11 @@ object DictationHub {
         val transcribe: (suspend (ByteArray) -> String)? = if (PieceTranscriber.available(ctx) || com.past9.phoneaos.remote.RemoteHub.session.value != null)
             ({ pcm: ByteArray -> PieceTranscriber.transcribe(ctx, pcm) }) else null
         val e = DictationEngine(s, { android.os.SystemClock.elapsedRealtime() }, tape, live, transcribe,
-            onView = { v -> _ui.value = Ui(this.owner, v); this.onText?.invoke(v.text); if (v.ended) ended(v) },
+            onView = { v ->
+                _ui.value = Ui(this.owner, v); this.onText?.invoke(v.text)
+                saved.note(id, startedAt, v.elapsedMs, v.text, noteState(v), chat, flush = v.ended)
+                if (v.ended) ended(v)
+            },
             log = { Log.i(TAG, it) })
         engine = e
         mic = MicCapture(ctx, onPcm = { b, n -> tape.append(b, n); main.post { engine?.audio(b) } }, onSilenced = { on -> main.post { engine?.micSilenced(on) } }).also { it.start() }
@@ -323,6 +351,7 @@ object DictationHub {
     fun cancel() {
         mic?.stop(); mic = null
         engine?.cancel()
+        appContext?.let { c -> currentId?.let { id -> Dictations.of(c).note(id, currentStarted, _ui.value?.view?.elapsedMs ?: 0, _ui.value?.view?.text.orEmpty(), "cancelled", currentChat, flush = true) } }
         _ui.value = null
         release()
     }
@@ -340,6 +369,7 @@ object DictationHub {
 
     private fun ended(v: DictationView) {
         Log.i(TAG, "dictation ended: ${v.phase} ${v.text.length} chars, lost ${v.lostMs} ms")
+        com.past9.phoneaos.remote.RemoteHub.session.value?.pushDictations()
         appContext?.let { runCatching { DictationService.stop(it) } }
         mic?.stop(); mic = null
         netCallback?.let { cb -> runCatching { appContext?.getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(cb) } }; netCallback = null

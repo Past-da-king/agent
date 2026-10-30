@@ -134,11 +134,13 @@ class DictationEngineTest {
     inner class FakePc {
         var online = true
         var calls = 0
+        /** What the computer answers instead of the real words (an empty or a short write-down). */
+        var answer: ((ByteArray) -> String)? = null
         val transcribe: suspend (ByteArray) -> String = { pcm ->
             calls++
             delay(800)
             if (!online) throw java.io.IOException("Not connected.")
-            words(pcm).joinToString(" ")
+            answer?.invoke(pcm) ?: words(pcm).joinToString(" ")
         }
     }
 
@@ -266,6 +268,82 @@ class DictationEngineTest {
         r.engine.micSilenced(false)
         assertEquals(DictationView.Phase.LISTENING, r.engine.view().phase)
         assertFalse(r.engine.view().ended)
+    }
+
+    // ---- 30 Oct 2026: "if I keep quiet the thing will disappear": the words only ever go forward ----
+
+    /** A recogniser the test drives by hand: what Google's really did at the end of a stretch. */
+    private class HandLive : LiveWords {
+        var ev: LiveEvents? = null
+        override fun begin(events: LiveEvents): Boolean { ev = events; return true }
+        override fun feed(pcm: ByteArray) {}
+        override fun backlog(): Long = 0
+        override fun end() {}
+        override fun cancel() { ev = null }
+    }
+
+    private val said = (0 until 20).map { "w$it" }
+
+    @Test fun aShortFinalResultInTheQuietNeverReplacesWhatHeSaid() = runTest {
+        val live = HandLive(); val r = engine(live, FakePc())
+        speak(r, 0, 20, talk = 20, pause = 1)
+        live.ev!!.partial(said.joinToString(" "))
+        assertEquals(said, boxWords(r))
+        live.ev!!.endOfSpeech()
+        live.ev!!.result("w19")
+        runCurrent()
+        assertEquals(said, boxWords(r))
+    }
+
+    @Test fun aPartialThatStartsOverKeepsTheEarlierWords() = runTest {
+        val live = HandLive(); val r = engine(live, FakePc())
+        speak(r, 0, 20, talk = 20, pause = 1)
+        live.ev!!.partial(said.joinToString(" "))
+        live.ev!!.partial("next")
+        live.ev!!.partial("next bit")
+        assertEquals(said + listOf("next", "bit"), boxWords(r))
+        live.ev!!.result("next bit")
+        runCurrent()
+        assertEquals(said + listOf("next", "bit"), boxWords(r))
+    }
+
+    @Test fun aRecogniserCorrectingItselfStillWorks() = runTest {
+        val live = HandLive(); val r = engine(live, FakePc())
+        speak(r, 0, 20, talk = 20, pause = 1)
+        live.ev!!.partial("their is a long sentence here today")
+        live.ev!!.partial("there is a long sentence here today")
+        assertEquals("there is a long sentence here today", r.engine.text())
+        live.ev!!.result("There is a long sentence here today.")
+        runCurrent()
+        assertEquals("There is a long sentence here today.", r.engine.text())
+    }
+
+    @Test fun anEmptyWriteDownInTheQuietNeverWipesTheLiveWords() = runTest {
+        val live = HandLive(); val pc = FakePc().apply { answer = { "" } }; val r = engine(live, pc)
+        speak(r, 0, 20, talk = 20, pause = 1)
+        live.ev!!.partial(said.joinToString(" "))
+        live.ev!!.error(LiveError.NO_SPEECH)
+        advanceTimeBy(5_000); runCurrent()
+        assertTrue("it went to the computer", pc.calls > 0)
+        assertEquals(said, boxWords(r))
+    }
+
+    @Test fun aShortWriteDownNeverWipesTheLiveWords() = runTest {
+        val live = HandLive(); val pc = FakePc().apply { answer = { "thanks" } }; val r = engine(live, pc)
+        speak(r, 0, 20, talk = 20, pause = 1)
+        live.ev!!.partial(said.joinToString(" "))
+        live.ev!!.error(LiveError.NETWORK)
+        advanceTimeBy(5_000); runCurrent()
+        assertEquals(said, boxWords(r))
+    }
+
+    @Test fun aFullWriteDownStillReplacesTheLiveGuess() = runTest {
+        val live = HandLive(); val pc = FakePc(); val r = engine(live, pc)
+        speak(r, 0, 20, talk = 20, pause = 1)
+        live.ev!!.partial("w0 w1 w2 wrong wrong w5 w6 w7 w8 w9 w10 w11 w12 w13 w14")
+        live.ev!!.error(LiveError.NETWORK)
+        advanceTimeBy(5_000); runCurrent()
+        assertEquals(said, boxWords(r))
     }
 
     @Test fun tapeIsAValidWavWhileRecording() {

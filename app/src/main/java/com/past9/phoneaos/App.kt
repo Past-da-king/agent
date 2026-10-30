@@ -139,6 +139,9 @@ class App : Application(), coil.ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         CrashGuard.install(this)
+        // What is in the message boxes, and any dictation the last run was cut off in.
+        com.past9.phoneaos.data.DraftStore.init(java.io.File(filesDir, "drafts"))
+        com.past9.phoneaos.voice.DictationHub.onProcessStart(this)
         // A project's answer to an @-mention is told in a notification while he is away (remote/Mentions.kt).
         com.past9.phoneaos.remote.MentionReplies.start(this)
     }

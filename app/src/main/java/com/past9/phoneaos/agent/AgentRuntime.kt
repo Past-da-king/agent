@@ -577,6 +577,13 @@ class AgentRuntime(
     /** A tap on a button the agent drew: goes to the agent in the background, with no message from the user in the chat. */
     fun sendQuiet(text: String) = send(text, quiet = true)
 
+    /** Like [send], and returns only once the message was accepted; throws when it was not (the message box keeps its words). */
+    suspend fun sendAccepted(text: String, images: List<String> = emptyList(), files: List<String> = emptyList(), voiceReply: Boolean = false) {
+        val r = remote
+        if (r != null) r.sendAccepted(text, images)
+        else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { send(text, images, files, voiceReply) }
+    }
+
     fun send(text: String, images: List<String> = emptyList(), files: List<String> = emptyList(), voiceReply: Boolean = false, fromCall: String? = null, quiet: Boolean = false) {
         remote?.let { it.send(text, images, quiet); return }
         val clean = text.trim().ifEmpty { if (images.isNotEmpty() || files.isNotEmpty()) "What do you make of this?" else "" }; if (clean.isEmpty()) return

@@ -42,6 +42,8 @@ fun phoneFacts(context: Context): DeviceFacts {
 /** What the agent runtime hands over while the phone is linked: the computer runs the turns. */
 interface RemoteSink {
     fun send(text: String, images: List<String>, quiet: Boolean)
+    /** Returns once the computer accepted it; throws when it did not. */
+    suspend fun sendAccepted(text: String, images: List<String>) = send(text, images, false)
     fun answer(itemId: Long, option: String)
     fun stop()
     fun stopHelper(id: Long): Boolean
@@ -248,7 +250,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
                 if (this@RemoteSession.rpc !== rpc) return
                 _state.value = LinkState.Connected(pick.brain, pick.url)
                 syncJob?.cancel()
-                syncJob = scope.launch { connectSync(pick); runCatching { readRunState() } }
+                syncJob = scope.launch { connectSync(pick); runCatching { readRunState() }; pushDictations() }
             }
             override fun onEvent(rpc: RpcClient, name: String, payload: Any?) { if (this@RemoteSession.rpc === rpc) onEvent(name, payload) }
             override fun onClosed(rpc: RpcClient, why: String, opened: Boolean, problem: LinkProblem) {
@@ -421,6 +423,35 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     /** A line in the chat when something the person did couldn't reach the computer. */
     private fun notice(text: String) = scope.launch {
         db.chat().insert(ChatItem(id = ids.local("phone-notice-" + System.nanoTime(), System.currentTimeMillis()), kind = "notice", text = text))
+    }
+
+    /** The link may be between two sockets (the app just came back, the network moved): give it a moment. */
+    private suspend fun awaitLink(ms: Long = 20_000) {
+        if (rpc?.isOpen == true) return
+        retry()
+        withTimeoutOrNull(ms) { while (rpc?.isOpen != true) kotlinx.coroutines.delay(250) }
+    }
+
+    override suspend fun sendAccepted(text: String, images: List<String>) {
+        val clean = text.trim().ifEmpty { if (images.isNotEmpty()) "What do you make of this?" else "" }
+        if (clean.isEmpty()) return
+        try {
+            awaitLink()
+            val attachments = uploadImages(images)
+            turnRunning = true; publishStatus()
+            call("chat.send", if (attachments.length() > 0) listOf(clean, attachments) else listOf(clean), 60_000)
+            runCatching { readRunState() }
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e
+        } catch (e: Exception) {
+            turnRunning = false; publishStatus()
+            notice("Couldn't send that to ${brainName()}: ${e.message}. Your words are still in the message box.")
+            throw e
+        }
+    }
+
+    /** What the computer lacks of the dictations saved here: words only, never the audio. */
+    fun pushDictations() {
+        scope.launch { runCatching { com.past9.phoneaos.voice.Dictations.push(app) { p -> call("recordings.fromDevice", listOf(p), 20_000) } } }
     }
 
     override fun send(text: String, images: List<String>, quiet: Boolean) {
@@ -693,6 +724,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
      * always sent an empty attachment list, so a photo picked there never reached the computer (29 Oct 2026).
      */
     suspend fun sendTo(chat: String, text: String, images: List<String> = emptyList()) {
+        awaitLink()
         val attachments = uploadImages(images)
         val words = text.trim().ifEmpty { if (attachments.length() > 0) "What do you make of this?" else "" }
         if (words.isEmpty()) return
@@ -721,6 +753,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
 
     /** A reply on a project's answer card, with its pictures: into that project chat, its answer back to the main chat. */
     suspend fun replyTo(chat: String, text: String, images: List<String> = emptyList()) {
+        awaitLink()
         val attachments = uploadImages(images)
         val words = text.trim().ifEmpty { if (attachments.length() > 0) "What do you make of this?" else "" }
         if (words.isEmpty()) return

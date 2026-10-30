@@ -106,10 +106,15 @@ data class ChatActions(
     val onReport: (String) -> Unit = {},
     /** Open one of the computer's chats (a project chat an @-mention went to): its id and the project's name. */
     val onOpenChat: (String, String) -> Unit = { _, _ -> },
+    /** The message box's Send: its words leave the box only once the send was accepted (ui/Composer.kt). */
+    val composerSend: ((String) -> Unit)? = null,
+    val composerVoice: ((String) -> Unit)? = null,
+    val sending: () -> Boolean = { false },
+    val onRecordings: (() -> Unit)? = null,
 ) {
     /** The message box's part: the same [com.past9.phoneaos.ui.ComposerActions] every chat's box takes. */
-    fun composer() = com.past9.phoneaos.ui.ComposerActions(onSend = onSend, onSendVoice = onSendVoice, onStop = onStop, onAttach = onAttach, onAttachDoc = onAttachDoc,
-        onCamera = onCamera, onMic = onMic, onRemoveAttachment = onRemoveAttachment, onRemoveDoc = onRemoveDoc)
+    fun composer() = com.past9.phoneaos.ui.ComposerActions(onSend = composerSend ?: onSend, onSendVoice = composerVoice ?: onSendVoice, onStop = onStop, onAttach = onAttach, onAttachDoc = onAttachDoc,
+        onCamera = onCamera, onMic = onMic, onRemoveAttachment = onRemoveAttachment, onRemoveDoc = onRemoveDoc, onRecordings = onRecordings)
 }
 
 /**
@@ -317,7 +322,7 @@ fun ChatScreen(
                     scope.launch { kotlinx.coroutines.delay(120); stick = true; list.animateScrollToItem(rows.size) }
                 })
             }
-            MessageComposer(draft, onDraft, status.working, actions.composer(), attachments, docs, listening, dictationOwner = "main") } } },
+            MessageComposer(draft, onDraft, status.working, actions.composer(), attachments, docs, listening, dictationOwner = "main", sending = actions.sending()) } } },
     ) { pad ->
         if (items.isEmpty() || morning != null) Welcome(userName, Modifier.padding(pad), actions.onSend, morning, hasChat = items.isNotEmpty())
         else LazyColumn(
@@ -1156,13 +1161,14 @@ fun MentionReplyCard(item: ChatItem, reply: com.past9.phoneaos.remote.MentionRep
             if (replying) {
                 Spacer(Modifier.height(6.dp))
                 // The same message box as every chat: photos, documents, camera, mic.
-                val acts = com.past9.phoneaos.ui.composerActionsFor(box, tools, working = false, send = { text, pics ->
-                    val s = session ?: return@composerActionsFor
-                    drafts.setOpen(draftKey, false); problem = ""
-                    scope.launch { runCatching { s.replyTo(reply.chat, text, pics) }.onSuccess { drafts.sent(draftKey) }.onFailure { problem = "Couldn't send that: ${it.message}"; box.draft = text; drafts.setOpen(draftKey, true) } }
-                })
+                val acts = com.past9.phoneaos.ui.composerActionsFor(box, tools, working = false, scope = com.past9.phoneaos.App.graph(androidx.compose.ui.platform.LocalContext.current).scope, send = { text, pics ->
+                    val s = session ?: throw java.io.IOException("Not linked to a computer.")
+                    problem = ""
+                    s.replyTo(reply.chat, text, pics)
+                    drafts.sent(draftKey)
+                }, onFailed = { problem = "Couldn't send that: $it. Your words are still here." })
                 MessageComposer(box.draft, { box.draft = it }, false, acts, box.attachments, box.docs.keys.toList(), tools?.listening(box) == true,
-                    placeholder = "Reply to ${reply.name}", inset = false, dictationOwner = box)
+                    placeholder = "Reply to ${reply.name}", inset = false, dictationOwner = box, sending = box.sending)
             }
             if (problem.isNotEmpty()) Text(problem, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
         }
@@ -1241,12 +1247,13 @@ private fun WorkingRow(status: AgentStatus) {
  */
 @Composable
 fun MessageComposer(draft: String, onDraft: (String) -> Unit, working: Boolean, actions: com.past9.phoneaos.ui.ComposerActions, attachments: List<String>, docs: List<String> = emptyList(),
-                    listening: Boolean = false, placeholder: String? = null, inset: Boolean = true, dictationOwner: Any? = null) {
+                    listening: Boolean = false, placeholder: String? = null, inset: Boolean = true, dictationOwner: Any? = null, sending: Boolean = false) {
     var attachMenu by remember { mutableStateOf(false) }
-    if (attachMenu) com.past9.phoneaos.ui.ChoiceSheet(Icons.Rounded.AttachFile, "Attach", "Add to your message", listOf(
+    if (attachMenu) com.past9.phoneaos.ui.ChoiceSheet(Icons.Rounded.AttachFile, "Attach", "Add to your message", listOfNotNull(
         com.past9.phoneaos.ui.SheetChoice("photo", "Photo", "From your gallery", Icons.Rounded.Image),
-        com.past9.phoneaos.ui.SheetChoice("doc", "Document", "PDF, Word, text, CSV, scans", Icons.Rounded.Description)),
-        onPick = { c -> attachMenu = false; if (c.id == "photo") actions.onAttach() else actions.onAttachDoc() }, onDismiss = { attachMenu = false })
+        com.past9.phoneaos.ui.SheetChoice("doc", "Document", "PDF, Word, text, CSV, scans", Icons.Rounded.Description),
+        actions.onRecordings?.let { com.past9.phoneaos.ui.SheetChoice("rec", "Recordings", "What you dictated, saved on this phone", Icons.Rounded.Mic) }),
+        onPick = { c -> attachMenu = false; when (c.id) { "photo" -> actions.onAttach(); "doc" -> actions.onAttachDoc(); else -> actions.onRecordings?.invoke() } }, onDismiss = { attachMenu = false })
     // The box keeps its caret here, so the '@' word at the caret can be found and replaced (an outside change to the
     // draft, a dictation or a send, puts the caret at the end).
     // '@' offers the computer's projects (remote/Mentions.kt); only while linked to a computer, which routes the message.
@@ -1340,7 +1347,8 @@ fun MessageComposer(draft: String, onDraft: (String) -> Unit, working: Boolean, 
                 }
             }
             Spacer(Modifier.width(8.dp))
-            val canSend = draft.isNotBlank() || attachments.isNotEmpty() || docs.isNotEmpty()
+            // The words stay in the box until the send is accepted; the caller empties it then (ui/Composer.kt).
+            val canSend = !sending && (draft.isNotBlank() || attachments.isNotEmpty() || docs.isNotEmpty())
             // Swipe up on Send = "answer me with a voice note" (for walking). A tap sends as usual.
             var lift by remember { mutableFloatStateOf(0f) }
             val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -1366,16 +1374,17 @@ fun MessageComposer(draft: String, onDraft: (String) -> Unit, working: Boolean, 
                         } finally { lift = 0f }
                         val wasVoice = canSend && dy > threshold && actions.onSendVoice != null
                         when {
-                            wasVoice -> { (actions.onSendVoice ?: actions.onSend)(draft); onDraft("") }
-                            dy < 24f && working && !canSend -> actions.onStop()
-                            dy < 24f && canSend -> { actions.onSend(draft); onDraft("") }
+                            wasVoice -> (actions.onSendVoice ?: actions.onSend)(draft)
+                            dy < 24f && working && !canSend && !sending -> actions.onStop()
+                            dy < 24f && canSend -> actions.onSend(draft)
                         }
                     }
                 }) {
-                val bg = if (voiceMode) MaterialTheme.colorScheme.tertiary else if (canSend || working) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
-                val tint = if (voiceMode) MaterialTheme.colorScheme.onTertiary else if (canSend || working) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                Box(Modifier.size(56.dp).clip(if (working && !canSend) RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm) else CircleShape).background(bg), contentAlignment = Alignment.Center) {
+                val bg = if (voiceMode) MaterialTheme.colorScheme.tertiary else if (canSend || working || sending) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
+                val tint = if (voiceMode) MaterialTheme.colorScheme.onTertiary else if (canSend || working || sending) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                Box(Modifier.size(56.dp).clip(if (working && !canSend && !sending) RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm) else CircleShape).background(bg), contentAlignment = Alignment.Center) {
                     when {
+                        sending -> androidx.compose.material3.CircularProgressIndicator(Modifier.size(22.dp), color = tint, strokeWidth = 2.dp)
                         voiceMode -> Icon(Icons.Rounded.Headphones, "Send, reply with a voice note", tint = tint)
                         working && !canSend -> Icon(Icons.Rounded.Stop, "Stop", tint = tint)
                         else -> Icon(Icons.AutoMirrored.Rounded.ArrowForward, "Send (swipe up for a voice reply)", tint = tint)

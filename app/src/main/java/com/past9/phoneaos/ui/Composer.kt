@@ -6,19 +6,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Rect
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * What one message box holds before it is sent: the words, the photos and the documents. The main chat has one, and
  * every project or helper chat opened on the phone has its own, so a photo picked in one never lands in another
  * (29 Oct 2026: the project chat had none, and its sends carried no pictures at all).
  */
-class ComposerBox(draftState: MutableState<String>) {
-    var draft by draftState
+class ComposerBox(val state: MutableState<String>, val key: String = "") {
+    var draft by state
+    /** A send is on its way: the words stay in the box until the computer took them. */
+    var sending by mutableStateOf(false)
     /** Photos to send: paths on this phone, already scaled to 1568 px JPEG. */
     val attachments = mutableStateListOf<String>()
     /** Documents to send: name -> (text read out of it, pictures of its pages). */
@@ -37,6 +39,29 @@ class ComposerBox(draftState: MutableState<String>) {
     fun isEmpty() = draft.isBlank() && attachments.isEmpty() && docs.isEmpty()
 
     fun clear() { attachments.clear(); docs.clear(); docPaths.clear() }
+
+    /** The send of [words] and [pics] was accepted: only now do they leave the box. Words that came since stay. */
+    fun accepted(words: String, pics: List<String>) {
+        val d = draft
+        draft = when {
+            d.trim() == words.trim() -> ""
+            d.startsWith(words) -> d.substring(words.length).trimStart()
+            else -> d
+        }
+        attachments.removeAll(pics.toSet()); docs.clear(); docPaths.clear()
+    }
+}
+
+/**
+ * The message boxes, for the whole app: one per chat ("main", "chat:<id>", "reply:<card>"), outside every screen, their
+ * words on disk (data/DraftStore). A reload, a reconnect, a rotation or a dictation still running all see the same box.
+ */
+object ComposerBoxes {
+    private val boxes = HashMap<String, ComposerBox>()
+    fun box(key: String): ComposerBox = synchronized(boxes) { boxes.getOrPut(key) { ComposerBox(com.past9.phoneaos.data.DraftStore.cell(key), key) } }
+    /** Emptied for good: the words sent, the card gone. */
+    fun forget(key: String) { synchronized(boxes) { boxes.remove(key) }; com.past9.phoneaos.data.DraftStore.cell(key).value = "" }
+    internal fun dropForTest() = synchronized(boxes) { boxes.clear() }
 }
 
 /**
@@ -45,19 +70,14 @@ class ComposerBox(draftState: MutableState<String>) {
  * away what he typed or the photo he picked. One per card; gone once the reply is sent.
  */
 object ReplyDrafts {
-    private val boxes = mutableMapOf<String, ComposerBox>()
     private val open = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
-    fun box(id: String): ComposerBox = synchronized(boxes) { boxes.getOrPut(id) { ComposerBox(androidx.compose.runtime.mutableStateOf("")) } }
-    fun isOpen(id: String): Boolean = open[id] == true
-    fun setOpen(id: String, on: Boolean) { if (on) open[id] = true else open.remove(id) }
+    private fun key(id: String) = "reply:$id"
+    fun box(id: String): ComposerBox = ComposerBoxes.box(key(id))
+    /** Open when he opened it, and after a restart when it still holds words. */
+    fun isOpen(id: String): Boolean = open[id] ?: com.past9.phoneaos.data.DraftStore.has(key(id))
+    fun setOpen(id: String, on: Boolean) { open[id] = on }
     /** After a reply went out: an empty box, closed. */
-    fun sent(id: String) { synchronized(boxes) { boxes.remove(id) }; open.remove(id) }
-}
-
-@Composable
-fun rememberComposerBox(): ComposerBox {
-    val draft = rememberSaveable { mutableStateOf("") }
-    return remember { ComposerBox(draft) }
+    fun sent(id: String) { ComposerBoxes.forget(key(id)); open.remove(id) }
 }
 
 /** Everything a message box can do besides typing; one set for every chat on the phone (the main chat's). */
@@ -72,6 +92,8 @@ data class ComposerActions(
     val onMic: () -> Unit = {},
     val onRemoveAttachment: (String) -> Unit = {},
     val onRemoveDoc: (String) -> Unit = {},
+    /** The saved dictations, to copy or insert. Null: no such choice. */
+    val onRecordings: (() -> Unit)? = null,
 )
 
 /**
@@ -86,22 +108,37 @@ interface ComposerTools {
     /** Dictation into [box]'s words; a second tap stops it. */
     fun mic(box: ComposerBox)
     fun listening(box: ComposerBox): Boolean
+    /** The saved dictations; Insert goes into [box]. */
+    fun recordings(box: ComposerBox)
 }
 
 val LocalComposerTools = staticCompositionLocalOf<ComposerTools?> { null }
 
-/** The full set of actions for [box], sending with [send] (words with the documents' text, and every picture). */
-fun composerActionsFor(box: ComposerBox, tools: ComposerTools?, working: Boolean, send: (String, List<String>) -> Unit, stop: () -> Unit = {}): ComposerActions {
-    fun go(words: String) {
+/**
+ * The full set of actions for [box], sending with [send] (words with the documents' text, and every picture).
+ * [send] returns once the message was accepted and throws when it was not: only then does the box empty, and on a
+ * failure everything stays for another try. [scope] outlives the screen (a send goes on after he leaves the chat).
+ */
+fun composerActionsFor(box: ComposerBox, tools: ComposerTools?, working: Boolean, scope: CoroutineScope, send: suspend (String, List<String>) -> Unit,
+                       stop: () -> Unit = {}, sendVoice: (suspend (String, List<String>) -> Unit)? = null, onFailed: (String) -> Unit = {}): ComposerActions {
+    fun go(words: String, via: suspend (String, List<String>) -> Unit) {
+        if (box.sending) return
         val text = words + box.docText(); val pics = box.images()
         if (text.isBlank() && pics.isEmpty()) return
-        send(text, pics); box.clear()
+        box.sending = true
+        scope.launch {
+            try { via(text, pics); box.accepted(words, pics) }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { onFailed(e.message.orEmpty()) }
+            finally { box.sending = false }
+        }
     }
     return ComposerActions(
-        onSend = ::go, onSendVoice = null, onStop = stop,
+        onSend = { go(it, send) }, onSendVoice = sendVoice?.let { v -> { w: String -> go(w, v) } }, onStop = stop,
         onAttach = { tools?.pickPhotos(box) }, onAttachDoc = { tools?.pickDocs(box) },
-        onCamera = { r -> tools?.camera(box, r) { path, caption -> send(caption, listOf(path)) } },
+        onCamera = { r -> tools?.camera(box, r) { path, caption -> scope.launch { try { send(caption, listOf(path)) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { onFailed(e.message.orEmpty()) } } } },
         onMic = { tools?.mic(box) },
         onRemoveAttachment = { box.attachments.remove(it) }, onRemoveDoc = { box.docs.remove(it); box.docPaths.remove(it) },
+        onRecordings = tools?.let { t -> { t.recordings(box) } },
     )
 }

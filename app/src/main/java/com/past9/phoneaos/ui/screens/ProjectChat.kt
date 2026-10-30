@@ -50,7 +50,8 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
     var loaded by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf("") }
     var working by remember { mutableStateOf(false) }
-    val box = com.past9.phoneaos.ui.rememberComposerBox()
+    val box = remember(chat) { com.past9.phoneaos.ui.ComposerBoxes.box("chat:$chat") }
+    val appScope = com.past9.phoneaos.App.graph(androidx.compose.ui.platform.LocalContext.current).scope
     val tools = com.past9.phoneaos.ui.LocalComposerTools.current
     var more by remember { mutableStateOf(false) }
     var loadingOlder by remember { mutableStateOf(false) }
@@ -106,11 +107,13 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
         bottomBar = {
             // THE message box (the main chat's): photos, documents, camera, mic, '@' another project. Its sends carry
             // their pictures (sendTo uploads each first; before 0.15.11 this box was text only and sent none).
-            val acts = com.past9.phoneaos.ui.composerActionsFor(box, tools, working, send = { text, pics ->
-                val s = session ?: return@composerActionsFor
-                scope.launch { runCatching { s.sendTo(chat, text, pics) }.onFailure { problem = "Couldn't send that: ${it.message}"; box.draft = text }; load(s) }
-            }, stop = { session?.let { s -> scope.launch { runCatching { s.call("chat.stop", listOf(chat), 15_000) } } } })
-            MessageComposer(box.draft, { box.draft = it }, working, acts, box.attachments, box.docs.keys.toList(), tools?.listening(box) == true, placeholder = "Message $name", dictationOwner = box)
+            val acts = com.past9.phoneaos.ui.composerActionsFor(box, tools, working, appScope, send = { text, pics ->
+                val s = session ?: throw java.io.IOException("Not linked to a computer.")
+                s.sendTo(chat, text, pics)
+                scope.launch { load(s) }
+            }, stop = { session?.let { s -> scope.launch { runCatching { s.call("chat.stop", listOf(chat), 15_000) } } } },
+                onFailed = { problem = "Couldn't send that: $it. Your words are still in the box." })
+            MessageComposer(box.draft, { box.draft = it }, working, acts, box.attachments, box.docs.keys.toList(), tools?.listening(box) == true, placeholder = "Message $name", dictationOwner = box, sending = box.sending)
         },
     ) { pad ->
         LazyColumn(state = list, modifier = Modifier.fillMaxSize().padding(pad), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {

@@ -43,6 +43,8 @@ data class SettingsActions(
     val onBattery: () -> Unit = {},
     /** Settings > Linked devices: use the agent on a computer or server. */
     val onLinked: () -> Unit = {},
+    /** Settings > Recordings: the dictations kept on this phone. */
+    val onRecordings: () -> Unit = {},
     val linkedLine: String = "Use the agent on your computer from this phone",
 )
 
@@ -110,6 +112,7 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
             }
             SectionHeader("Your data", "It all lives on this phone", Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
+                Line(Icons.Rounded.Mic, "Recordings", "What you dictated: the words and the audio") { actions.onRecordings() }
                 Line(Icons.Rounded.ChatBubbleOutline, "Clear the conversation", "Memory, tasks and routines stay") { actions.onClearChat() }
                 Line(Icons.Rounded.RestartAlt, "Reset everything", "Deletes keys, memory, tasks and routines", danger = true) { confirmReset = true }
             }

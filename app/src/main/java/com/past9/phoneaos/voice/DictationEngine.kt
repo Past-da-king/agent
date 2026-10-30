@@ -148,7 +148,17 @@ class DictationEngine(
         if (finishing) return
         val seg = Seg(cursor, cursor, "", State.LIVE)
         val ev = object : LiveEvents {
-            override fun partial(text: String) { if (curEvents === this && text.isNotBlank()) { seg.text = text.trim(); show() } }
+            /** The recogniser's current guess, and what it said before it started over. The words only go forward. */
+            private var guess = ""
+            private var held = ""
+            override fun partial(text: String) {
+                if (curEvents !== this || text.isBlank()) return
+                val t = text.trim()
+                if (Words.startedOver(guess, t)) { held = Words.join(held, guess); log("partial started over: kept ${guess.length} chars") }
+                guess = t
+                seg.text = Words.join(held, t)
+                show()
+            }
             override fun endOfSpeech() {
                 if (curEvents !== this) return
                 // It heard the end of what he said. Stop feeding it; the next stretch starts here, a little back into
@@ -158,7 +168,9 @@ class DictationEngine(
             var endedAt = -1L
             override fun result(text: String) {
                 if (curEvents !== this) return
-                val t = text.trim().ifBlank { seg.text }
+                // A final result that holds less than he saw (its last sentence, a stray word) never replaces it.
+                val final = text.trim()
+                val t = if (final.isBlank() || Words.less(guess, final)) { if (final.isNotBlank()) log("short final ignored: ${final.length} of ${guess.length} chars"); seg.text } else Words.join(held, final)
                 val end = if (endedAt > 0) endedAt else cursor + fed
                 closeStretch(seg, end, t, if (t.isNotBlank()) State.HEARD else State.SILENT, null)
             }
@@ -276,7 +288,9 @@ class DictationEngine(
         if (finishing) pieces.indices.chunked(3).forEach { group -> group.map { i -> scope.async { one(i) } }.awaitAll() }
         else pieces.indices.forEach { one(it) }
         if (texts.any { it == null }) return false
-        seg.text = texts.filterNotNull().filter { it.isNotBlank() }.joinToString(" ")
+        // Written down from the saved audio: better words, unless it heard less than he already sees (an empty answer).
+        val written = texts.filterNotNull().filter { it.isNotBlank() }.joinToString(" ")
+        if (Words.less(seg.text, written)) log("write-down ignored: ${written.length} of ${seg.text.length} chars") else seg.text = written
         seg.state = State.FIXED
         log("wrote down ${DictationTape.ms(seg.end - seg.start)} ms in ${pieces.size} piece(s)")
         return true
