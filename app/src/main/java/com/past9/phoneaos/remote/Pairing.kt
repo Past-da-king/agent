@@ -1,5 +1,12 @@
 package com.past9.phoneaos.remote
 
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLDecoder
@@ -191,10 +198,36 @@ object BrainChooser {
     fun ordered(brains: List<BrainRef>): List<BrainRef> =
         brains.sortedWith(compareBy<BrainRef>({ it.priority }, { it.name.lowercase() }, { it.id }))
 
-    /** The first brain, by rank, with an address that answers ready. */
-    suspend fun firstReady(brains: List<BrainRef>, ready: suspend (BrainRef, String) -> Boolean): Pick? {
-        for (b in ordered(brains)) for (u in b.urls) if (runCatching { ready(b, u) }.getOrDefault(false)) return Pick(b, u)
+    /** How long one address gets before the next one is tried beside it. */
+    private const val ADDRESS_HEAD_START_MS = 500L
+
+    /** The first brain, by rank and not in [skip], with an address that answers ready. */
+    suspend fun firstReady(brains: List<BrainRef>, skip: Set<String> = emptySet(), ready: suspend (BrainRef, String) -> Boolean): Pick? {
+        for (b in ordered(brains)) {
+            if (b.id in skip) continue
+            val u = firstAddress(b.urls) { ready(b, it) } ?: continue
+            return Pick(b, u)
+        }
         return null
+    }
+
+    /**
+     * Each address in turn, the next one starting beside it after a head start: a computer can hold a connection open
+     * and answer nothing (frozen), and an address that does that must not make the good one wait its whole timeout.
+     * The checks are blocking calls that end by their own timeout, so they run outside this coroutine's children.
+     */
+    private suspend fun firstAddress(urls: List<String>, ok: suspend (String) -> Boolean): String? {
+        val win = CompletableDeferred<String?>()
+        val jobs = ArrayList<Job>()
+        val runner = CoroutineScope(Dispatchers.IO)
+        for (u in urls) {
+            if (win.isCompleted) break
+            val job = runner.launch { if (runCatching { ok(u) }.getOrDefault(false)) win.complete(u) }
+            jobs += job
+            withTimeoutOrNull(ADDRESS_HEAD_START_MS) { job.join() }
+        }
+        runner.launch { jobs.joinAll(); win.complete(null) }
+        return win.await()
     }
 
     fun decide(brains: List<BrainRef>, current: Pick?, currentOk: Boolean, best: Pick?, turnRunning: Boolean): Move {

@@ -162,6 +162,12 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     @Volatile private var nextTryAt = 0L
     @Volatile private var connectStartedAt = 0L
     private val trusts = ConcurrentHashMap<String, Pinning.PinnedTrust>()
+    /** Brains that left a message unanswered, until when they are passed over. */
+    private val notAnswering = ConcurrentHashMap<String, Long>()
+    /** Messages on their way to a brain now. */
+    private val pendingSends = java.util.concurrent.atomic.AtomicInteger()
+    /** The brain the chat was last told is standing in, so it says so once. */
+    @Volatile private var standIn: String? = null
 
     fun start() {
         if (loop?.isActive == true) return
@@ -206,21 +212,31 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     private suspend fun probeAndMove() {
         val brains = link.brains
         val seen = HashMap<String, Health?>()
-        val best = BrainChooser.firstReady(brains) { b, u ->
-            val h = RemoteApi(clientFor(b.fp)).health(u)
-            if (h != null || !seen.containsKey(b.id)) seen[b.id] = h
+        val now = System.currentTimeMillis()
+        val skip = notAnswering.filterValues { it > now }.keys.toSet()
+        val top = BrainChooser.ordered(brains).firstOrNull()?.id
+        val best = BrainChooser.firstReady(brains, skip) { b, u ->
+            // The first brain answers fast or not at all. One further down may be a loaded server behind a relay:
+            // give it longer, it is the one that answers when the first is gone.
+            val h = RemoteApi(clientFor(b.fp)).health(u, if (b.id == top) 3_000 else 6_000)
+            synchronized(seen) { if (h != null || !seen.containsKey(b.id)) seen[b.id] = h }
             h != null && h.ready && (h.meshId.isBlank() || link.meshId.isBlank() || h.meshId == link.meshId)
         }
-        // Brains after the chosen one were not asked this round: ask them too, so Settings shows every brain's state.
-        for (b in brains) if (!seen.containsKey(b.id)) seen[b.id] = b.urls.firstNotNullOfOrNull { u -> RemoteApi(clientFor(b.fp)).health(u, 2_000) }
-        _health.value = seen
+        // Brains after the chosen one were not asked this round: ask them too, so Settings shows every brain's state,
+        // beside the move and not before it.
+        scope.launch {
+            val all = synchronized(seen) { HashMap(seen) }
+            for (b in brains) if (!all.containsKey(b.id)) all[b.id] = if (b.id in skip) null else b.urls.firstNotNullOfOrNull { u -> RemoteApi(clientFor(b.fp)).health(u, 2_000) }
+            _health.value = all
+        }
         val cur = current
         val r = rpc
+        val curSeen = cur?.let { c -> synchronized(seen) { seen[c.brain.id] } }
         // A socket that is still opening is left to finish (it gets CONNECT_GRACE_MS); replacing it is what stormed.
         if (r != null && !r.isOpen && System.currentTimeMillis() - connectStartedAt < CONNECT_GRACE_MS) return
         // An open socket is the best sign the brain is there: one missed health check does not drop it, a brain
         // that says it is not ready does.
-        val curOk = cur != null && r?.isOpen == true && seen[cur.brain.id]?.ready != false
+        val curOk = cur != null && r?.isOpen == true && curSeen?.ready != false
         when (val m = BrainChooser.decide(brains, cur, curOk, best, turnRunning)) {
             is BrainChooser.Move.To -> connectTo(m.pick)
             BrainChooser.Move.NoneAvailable -> {
@@ -229,12 +245,25 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
                 _state.value = when {
                     certChanged != null -> LinkState.NoAgents(reasonFor(LinkProblem.CertChanged, certChanged.name.ifBlank { nameOf(null) }), rescan = true)
                     brains.size <= 1 -> LinkState.NoAgents(reasonFor(LinkProblem.Unreachable, brains.firstOrNull()?.name?.ifBlank { null } ?: nameOf(null)))
+                    // A message on its way: he hears that it is safe, and that the computers are the problem (an overloaded server is one).
+                    pendingSends.get() > 0 -> LinkState.NoAgents("None of your computers are answering right now. Still trying; your message is safe.")
                     else -> LinkState.NoAgents("None of your computers answered. Are the Agent apps open there, with Devices on, on the same network?")
                 }
                 _status.value = AgentStatus()
             }
             BrainChooser.Move.Stay -> {}
         }
+    }
+
+    /** A brain that didn't answer a message: left now, and not tried again for a little while. */
+    private fun leaveUnanswering() {
+        val cur = current ?: return
+        notAnswering[cur.brain.id] = System.currentTimeMillis() + SendFlow.SKIP_MS
+        android.util.Log.i("RemoteLink", "leaving ${cur.url}: no word back on a message")
+        detach(); current = null
+        nextTryAt = 0
+        _state.value = LinkState.Connecting
+        kick.trySend(Unit)
     }
 
     private fun connectTo(pick: Pick) {
@@ -290,8 +319,11 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     /** The brain list can change on the computer (a new brain, a new order): take it from GET /v1/devices. */
     private suspend fun refreshBrains(pick: Pick) {
         val fresh = RemoteApi(clientFor(pick.brain.fp)).brains(pick.url, link.pass) ?: return
-        if (fresh.isEmpty() || fresh.toSet() == link.brains.toSet()) return
-        link = link.copy(brains = fresh)
+        if (fresh.isEmpty()) return
+        // The name he sees is the computer that answers first now, not the one this phone first scanned.
+        val name = BrainChooser.ordered(fresh).first().name.ifBlank { link.nodeName }
+        if (fresh.toSet() == link.brains.toSet() && name == link.nodeName) return
+        link = link.copy(brains = fresh, nodeName = name)
         RemoteHub.save(app, link)
     }
 
@@ -417,12 +449,63 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         }
     }
 
-    /** Never a machine name in the conversation (notices, status): which computer answers lives in Settings > Linked devices. */
+    /** Never a machine name in errors and status: which computer answers lives in Settings > Linked devices. Only a stand-in says its name, once. */
     private fun brainName(): String = "your computer"
 
     /** A line in the chat when something the person did couldn't reach the computer. */
     private fun notice(text: String) = scope.launch {
         db.chat().insert(ChatItem(id = ids.local("phone-notice-" + System.nanoTime(), System.currentTimeMillis()), kind = "notice", text = text))
+    }
+
+    /**
+     * A message on its way, to whichever brain will take it: see [SendFlow]. Returns once a brain holds it, which on a
+     * computer before 0.2.115 (the old chat.send) means once its turn has ended, as it always did.
+     */
+    private suspend fun deliver(words: String, images: List<String>, chat: String? = null, replyIn: String? = null) {
+        pendingSends.incrementAndGet()
+        try { deliverNow(words, images, chat, replyIn) } finally { pendingSends.decrementAndGet() }
+    }
+
+    private suspend fun deliverNow(words: String, images: List<String>, chat: String?, replyIn: String?) {
+        val sendId = java.util.UUID.randomUUID().toString()
+        val sentAt = System.currentTimeMillis()
+        var attachments = JSONArray()
+        var uploadedTo: String? = null
+        SendFlow(
+            linkUp = { ms -> awaitLink(ms); rpc?.isOpen == true },
+            prepare = {
+                val here = current?.brain?.id
+                if (images.isNotEmpty() && uploadedTo != here) { attachments = uploadImages(images); uploadedTo = here }
+            },
+            attempt = { fresh ->
+                val body = JSONObject().put("sendId", sendId).put("sentAt", sentAt).put("fresh", fresh).put("text", words).put("attachments", attachments)
+                if (chat != null) body.put("chat", chat)
+                if (replyIn != null) body.put("replyIn", replyIn)
+                call("chat.sendOnce", listOf(body), SendFlow.ACK_WAIT_MS + 1_000) as? JSONObject
+            },
+            socketOpen = { rpc?.isOpen == true },
+            leave = ::leaveUnanswering,
+            legacy = {
+                val args: List<Any?> = when {
+                    replyIn != null -> Mentions.replyArgs(chat.orEmpty(), words, attachments)
+                    chat != null -> listOf(words, attachments, chat)
+                    attachments.length() > 0 -> listOf(words, attachments)
+                    else -> listOf(words)
+                }
+                call("chat.send", args, 60_000)
+            },
+        ).run()
+        sayWhoIsStandingIn()
+    }
+
+    /** He is on a brain further down because the first isn't answering: the chat says so, once. */
+    private fun sayWhoIsStandingIn() {
+        val cur = current?.brain ?: return
+        val top = BrainChooser.ordered(link.brains).firstOrNull()
+        if (top == null || cur.id == top.id) { standIn = null; return }
+        if (standIn == cur.id) return
+        standIn = cur.id
+        notice("Answered by ${cur.name.ifBlank { "your server" }}, your PC isn't responding")
     }
 
     /** The link may be between two sockets (the app just came back, the network moved): give it a moment. */
@@ -436,10 +519,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         val clean = text.trim().ifEmpty { if (images.isNotEmpty()) "What do you make of this?" else "" }
         if (clean.isEmpty()) return
         try {
-            awaitLink()
-            val attachments = uploadImages(images)
             turnRunning = true; publishStatus()
-            call("chat.send", if (attachments.length() > 0) listOf(clean, attachments) else listOf(clean), 60_000)
+            deliver(clean, images)
             runCatching { readRunState() }
         } catch (e: kotlinx.coroutines.CancellationException) { throw e
         } catch (e: Exception) {
@@ -459,9 +540,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         if (clean.isEmpty()) return
         scope.launch {
             try {
-                val attachments = uploadImages(images)
                 turnRunning = true; publishStatus()
-                call("chat.send", if (attachments.length() > 0) listOf(clean, attachments) else listOf(clean), 60_000)
+                deliver(clean, images)
                 // A message the computer sent on to a project chat ('@Acme ...') starts no run here: read the real state,
                 // or the chat stays on "Working" with a Stop button (29 Oct 2026, seen on his phone).
                 runCatching { readRunState() }
@@ -724,11 +804,9 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
      * always sent an empty attachment list, so a photo picked there never reached the computer (29 Oct 2026).
      */
     suspend fun sendTo(chat: String, text: String, images: List<String> = emptyList()) {
-        awaitLink()
-        val attachments = uploadImages(images)
-        val words = text.trim().ifEmpty { if (attachments.length() > 0) "What do you make of this?" else "" }
+        val words = text.trim().ifEmpty { if (images.isNotEmpty()) "What do you make of this?" else "" }
         if (words.isEmpty()) return
-        call("chat.send", listOf(words, attachments, chat), 60_000)
+        deliver(words, images, chat)
     }
 
     /**
@@ -753,11 +831,9 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
 
     /** A reply on a project's answer card, with its pictures: into that project chat, its answer back to the main chat. */
     suspend fun replyTo(chat: String, text: String, images: List<String> = emptyList()) {
-        awaitLink()
-        val attachments = uploadImages(images)
-        val words = text.trim().ifEmpty { if (attachments.length() > 0) "What do you make of this?" else "" }
+        val words = text.trim().ifEmpty { if (images.isNotEmpty()) "What do you make of this?" else "" }
         if (words.isEmpty()) return
-        call("chat.send", Mentions.replyArgs(chat, words, attachments), 60_000)
+        deliver(words, images, chat, "main")
     }
 
     /** His machines on the link, with their state, for Connections. */
