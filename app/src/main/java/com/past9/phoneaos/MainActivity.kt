@@ -181,10 +181,12 @@ class MainActivity : ComponentActivity() {
         val liveCards = remote?.cards?.collectAsStateWithLifecycle()?.value
         // ONE working number for the whole app: the Home header, the agents pill and the Working list all count the same
         // card list, so the header can never say Free while helpers are listed (30 Oct 2026: "8 working" beside "Free").
+        // Cards are only "working" while the computer that published them is answering: no brain, nothing at work.
+        val alive = remote?.brainAlive() ?: false
         val status = if (remote != null && liveCards != null)
             remoteStatus.copy(
-                working = com.past9.phoneaos.remote.LiveCards.anyWorking(liveCards),
-                helpers = com.past9.phoneaos.remote.LiveCards.workingCount(liveCards),
+                working = com.past9.phoneaos.remote.LiveCards.anyWorking(liveCards, alive),
+                helpers = com.past9.phoneaos.remote.LiveCards.workingCount(liveCards, alive),
             )
         else remoteStatus
         // Opening a chat from a card: a project chat goes on top of the main thread (Back always lands there), "main"

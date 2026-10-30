@@ -373,6 +373,9 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         }
     }
 
+    /** Is a brain answering this phone right now? A card with no brain behind it is not working (30 Oct 2026). */
+    fun brainAlive(): Boolean = rpc?.isOpen == true
+
     /** The card as the phone's helper card draws it. */
     fun cardView(c: LiveCard) = LiveCards.view(c, ids)
 
