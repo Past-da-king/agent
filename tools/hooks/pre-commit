@@ -1,0 +1,8 @@
+#!/bin/sh
+# Blocks a commit that adds a secret. Turn it on once per clone:  git config core.hooksPath tools/hooks
+# Needs gitleaks (https://github.com/gitleaks/gitleaks/releases) on PATH.
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "pre-commit: gitleaks not installed, secret scan skipped (install it: https://github.com/gitleaks/gitleaks)" >&2
+  exit 0
+fi
+exec gitleaks git --pre-commit --staged --redact --no-banner --config .gitleaks.toml

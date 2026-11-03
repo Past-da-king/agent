@@ -214,6 +214,19 @@ class SettingsStore(context: Context) {
         prefs.edit().putString("composio_apps", org.json.JSONObject(all as Map<*, *>).toString()).apply()
     }
 
+    /** The user's own PayPal REST app (client ID and secret). Sandbox only for now: live mode isn't offered in the app yet. */
+    fun paypal(): com.past9.phoneaos.paypal.PayPalCreds? {
+        val id = secrets.getString("paypal_id", null)?.takeIf { it.isNotBlank() } ?: return null
+        val secret = secrets.getString("paypal_secret", null)?.takeIf { it.isNotBlank() } ?: return null
+        return com.past9.phoneaos.paypal.PayPalCreds(id, secret, live = false)
+    }
+    fun setPayPal(clientId: String?, secret: String?) {
+        secrets.edit().apply {
+            if (clientId.isNullOrBlank() || secret.isNullOrBlank()) { remove("paypal_id"); remove("paypal_secret") }
+            else { putString("paypal_id", clientId.trim()); putString("paypal_secret", secret.trim()) }
+        }.apply(); _state.value = read()
+    }
+
     /** Stable per-install id: our Composio user id, so connections survive restarts. */
     fun installId(): String = prefs.getString("install_id", null) ?: ("phone-" + java.util.UUID.randomUUID().toString().take(12)).also {
         prefs.edit().putString("install_id", it).apply()
