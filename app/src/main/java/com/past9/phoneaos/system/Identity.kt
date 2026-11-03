@@ -49,7 +49,7 @@ object Identity {
 
     /**
      * Android won't rename an installed app, so the closest thing: a home-screen shortcut carrying
-     * the agent's own name and face (e.g. "Iris", red ghost) that opens straight into the app.
+     * the agent's own name and face (e.g. "Hina", red ghost) that opens straight into the app.
      */
     fun pinNamedShortcut(context: Context, name: String, mascot: String, accent: String): Boolean {
         if (!androidx.core.content.pm.ShortcutManagerCompat.isRequestPinShortcutSupported(context)) return false
@@ -73,8 +73,8 @@ object Identity {
      */
     fun asAgent(context: Context, b: androidx.core.app.NotificationCompat.Builder, title: String, body: String): androidx.core.app.NotificationCompat.Builder {
         val st = com.past9.phoneaos.App.graph(context).settings.state.value
-        val agent = publishAgentShortcut(context, st.agentName.ifBlank { context.getString(com.past9.phoneaos.R.string.svc_your_agent) }, st.mascot, st.accent)
-        val me = androidx.core.app.Person.Builder().setName(st.userName.ifBlank { context.getString(com.past9.phoneaos.R.string.svc_you) }).setKey("me").build()
+        val agent = publishAgentShortcut(context, st.agentName.ifBlank { "Your agent" }, st.mascot, st.accent)
+        val me = androidx.core.app.Person.Builder().setName(st.userName.ifBlank { "You" }).setKey("me").build()
         return b.setStyle(androidx.core.app.NotificationCompat.MessagingStyle(me).addMessage(if (title.isBlank()) body else "$title\n$body", System.currentTimeMillis(), agent))
             .setShortcutId("agent").setLargeIcon(avatar(context, st.mascot, st.accent, 192)).setCategory(androidx.core.app.NotificationCompat.CATEGORY_MESSAGE)
     }

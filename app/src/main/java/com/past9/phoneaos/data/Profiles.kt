@@ -13,7 +13,7 @@ data class AccountRef(val id: String, val slug: String, val label: String) {
 }
 
 /**
- * A part of the user's life ("Northwind work", "Personal"): the connected accounts that belong to it and,
+ * A part of the user's life ("Acme work", "Personal"): the connected accounts that belong to it and,
  * optionally, which browser profile is signed in for it. A helper handed a profile can only use those
  * accounts. One account can sit in any number of profiles.
  */
@@ -26,6 +26,15 @@ data class AgentProfile(val id: String, val name: String, val accounts: List<Acc
         fun from(o: JSONObject) = AgentProfile(o.optString("id"), o.optString("name"),
             o.optJSONArray("accounts")?.let { a -> (0 until a.length()).map { AccountRef.from(a.getJSONObject(it)) } }.orEmpty(), o.optString("browser"),
             o.optString("color").ifBlank { COLORS[Math.floorMod(o.optString("name").lowercase().hashCode(), COLORS.size)] })
+        /** profiles.list from a linked computer: its profiles as the phone draws them, General left out. */
+        fun fromComputer(raw: Any?): List<AgentProfile> {
+            val a = raw as? JSONArray ?: return emptyList()
+            return (0 until a.length()).mapNotNull { a.optJSONObject(it) }.filter { it.optString("id").isNotBlank() && !it.optBoolean("general") }.map { o ->
+                val acc = o.optJSONArray("accounts") ?: JSONArray()
+                val refs = (0 until acc.length()).mapNotNull { acc.optJSONObject(it) }.map { r -> AccountRef(r.optString("id"), r.optString("app").ifBlank { r.optString("slug") }, r.optString("label")) }
+                from(JSONObject().put("id", o.optString("id")).put("name", o.optString("name").ifBlank { "Profile" }).put("color", o.optString("color")).put("browser", o.optString("browser")).put("accounts", JSONArray(refs.map { it.toJson() })))
+            }
+        }
         /** The colours a profile can take, in the order new profiles get them. */
         val COLORS = listOf("ocean", "ember", "mint", "violet", "rose", "sunflower", "teal", "red", "sky", "forest", "magenta", "tangerine", "lime", "iris", "graphite")
         /** Jobs that need none of the user's accounts (web research, the phone's own tools) run here. */
@@ -88,28 +97,6 @@ class ProfileStore(context: Context) {
         val r = _rules.value - accountId; prefs.edit().putString("rules", JSONObject(r.mapValues { it.value.toJson() }).toString()).apply(); _rules.value = r
     }
     fun profilesWith(accountId: String) = _profiles.value.filter { it.has(accountId) }
-
-    /**
-     * Reconnecting an app (in Composio, or after its sign-in expired) makes a new account with a new id, and profiles
-     * still name the old one, so helpers in them are refused the app. Given an app's live accounts: a profile's account
-     * of that app that no longer exists is replaced by the app's one account no profile has yet, with its rules.
-     * With several such accounts it can't tell which is which, so nothing changes. Returns whether anything did.
-     */
-    fun followReconnected(slug: String, live: List<AccountRef>): Boolean {
-        if (live.isEmpty()) return false
-        val fresh = live.filter { a -> _profiles.value.none { it.has(a.id) } }.singleOrNull() ?: return false
-        var changed = false
-        val list = _profiles.value.map { p ->
-            val stale = p.accounts.filter { it.slug.equals(slug, true) && live.none { a -> a.id == it.id } }
-            if (stale.isEmpty()) p else {
-                changed = true
-                stale.firstNotNullOfOrNull { _rules.value[it.id] }?.takeIf { _rules.value[fresh.id] == null }?.let { setRules(fresh.id, it) }
-                p.copy(accounts = p.accounts.filter { it !in stale } + fresh)
-            }
-        }
-        if (changed) saveProfiles(list)
-        return changed
-    }
 
     fun rules(accountId: String?): AccountRules = accountId?.let { _rules.value[it] } ?: AccountRules.DEFAULT
     fun setRules(accountId: String, r: AccountRules) {

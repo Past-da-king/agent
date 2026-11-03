@@ -74,7 +74,7 @@ object ExactAlarms {
      * not later from a worker where it would be refused and the work killed half way.
      */
     fun holdProcess(context: Context) {
-        runCatching { context.startForegroundService(Intent(context, WorkService::class.java).putExtra(WorkService.EXTRA_KEEPALIVE, true)) }
+        ForegroundGuard.start(context, WorkService::class.java, Intent(context, WorkService::class.java).putExtra(WorkService.EXTRA_KEEPALIVE, true))
     }
 }
 
@@ -118,6 +118,9 @@ object Rearm {
         runCatching { com.past9.phoneaos.triggers.Routines.rescheduleAll(context) }
         runCatching { Reminders.syncAll(context, force = true) }
         runCatching { Wakes.rearm(context) }
+        // Wake-ups: the booked ones ring from the saved snapshot even before the computer is reached again.
+        runCatching { com.past9.phoneaos.wakeup.WakeHub.evaluate(context) }
+        runCatching { com.past9.phoneaos.wakeup.WakeChannel.ensure(context) }
         runCatching { com.past9.phoneaos.triggers.Routines.catchUp(context) }
     }
 }

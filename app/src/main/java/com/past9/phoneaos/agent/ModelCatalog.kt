@@ -104,5 +104,12 @@ object ModelCatalog {
                 ids.map { info(it, dev?.optJSONObject(it)) }.sortedByDescending { it.released }.take(8)
         }
         SubKind.OPENCODE -> emptyList()
+        SubKind.ANTIGRAVITY -> listOf(
+            ModelInfo("", "Antigravity default", true, "", "Whatever Antigravity picks for your account"),
+            ModelInfo("gemini-3.8-flash-high", "Gemini 3.8 Flash (High)", true, "", "Deep reasoning"),
+            ModelInfo("gemini-3.8-flash-medium", "Gemini 3.8 Flash (Medium)", true, "", "Balanced"),
+            ModelInfo("gemini-3.8-flash-low", "Gemini 3.8 Flash (Low)", true, "", "Fastest"),
+            ModelInfo("claude-sonnet-4-6", "Claude Sonnet 4.6", true, "", "Anthropic model via Antigravity"),
+        )
     }
 }

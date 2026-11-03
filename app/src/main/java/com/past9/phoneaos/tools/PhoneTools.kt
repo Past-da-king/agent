@@ -43,7 +43,9 @@ class LocationTool(private val context: Context) : Tool {
         val lm = context.getSystemService(LocationManager::class.java)
         val loc: Location? = withTimeoutOrNull(15_000) { current(lm) } ?: listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER)
             .mapNotNull { runCatching { lm.getLastKnownLocation(it) }.getOrNull() }.maxByOrNull { it.time }
-        if (Build.VERSION.SDK_INT >= 33) context.revokeSelfPermissionsOnKill(perms.toList())
+        // Handed back when the app closes, unless he allowed it for good for his linked computer (phone_location).
+        val keep = runCatching { com.past9.phoneaos.App.graph(context).settings.extra(PhoneLocation.KEEP_KEY) == "1" }.getOrDefault(false)
+        if (Build.VERSION.SDK_INT >= 33 && !keep) context.revokeSelfPermissionsOnKill(perms.toList())
         if (loc == null) { ctx.updateActivity(id, "Couldn't get a location fix"); return "No location fix (GPS off or indoors). Ask the user for the address." }
         val address = withContext(Dispatchers.IO) {
             runCatching { @Suppress("DEPRECATION") Geocoder(context).getFromLocation(loc.latitude, loc.longitude, 1)?.firstOrNull()?.getAddressLine(0) }.getOrNull()
@@ -96,7 +98,8 @@ class PhotosTool(private val context: Context) : Tool {
     override val spec = ToolSpec("photos_recent", "Look at the user's most recent photos or screenshots from their gallery (asks first). Use when they say 'my last photo', 'the screenshot I just took'.",
         schema(emptyList(), "count" to com.past9.phoneaos.agent.int("How many, 1 to 4 (default 1)"), "screenshots_only" to com.past9.phoneaos.agent.bool("Only screenshots")))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
-        val perm = if (Build.VERSION.SDK_INT >= 33) arrayOf(Manifest.permission.READ_MEDIA_IMAGES) else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        // This app targets SDK 28, so Android 13+ maps READ_EXTERNAL_STORAGE to photo access; asking for READ_MEDIA_IMAGES directly can silently fail.
+        val perm = arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         if (!PermissionBroker.granted(context, perm)) {
             val a = ctx.ask("Can I look at your latest photos?", listOf("Allow", "No"))
             if (a != "Allow") return "The user said no. Ask them to send the photo with the photo button instead."

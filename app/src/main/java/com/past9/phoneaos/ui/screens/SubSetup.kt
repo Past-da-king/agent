@@ -11,11 +11,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import com.past9.phoneaos.R
 import com.past9.phoneaos.data.SubKind
 import com.past9.phoneaos.ui.AppCard
 import com.past9.phoneaos.ui.SubScreen
@@ -36,108 +34,108 @@ fun SubSetupScreen(kind: SubKind, signInHelp: String, info: RuntimeInfo, install
     var showLog by remember { mutableStateOf(false) }
     // Install by itself the moment the screen opens: there is nothing for the user to decide.
     LaunchedEffect(info.available, installed) { if (info.available && !installed && !installing) onInstall() }
-    SubScreen("${kind.label} ${stringResource(kind.plan)}", null, onBack) { pad ->
+    SubScreen("${kind.label} ${kind.plan}", null, onBack) { pad ->
         Column(Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(horizontal = com.past9.phoneaos.ui.sidePad(16.dp, com.past9.phoneaos.ui.Readable.FORM)).padding(bottom = 48.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             if (!info.available) {
                 AppCard(container = cs.tertiaryContainer) {
-                    Text(stringResource(R.string.sub_not_included, kind.label), color = cs.onTertiaryContainer)
+                    Text("This build doesn't include ${kind.label} yet. Use an API key for now; nothing is lost when you switch.", color = cs.onTertiaryContainer)
                     Spacer(Modifier.height(12.dp))
-                    Button(onClick = onUseKey, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.sub_use_api_key)) }
+                    Button(onClick = onUseKey, shapes = ButtonDefaults.shapes()) { Text("Use an API key") }
                 }
                 return@Column
             }
             when {
                 // 1. Setting up
                 !installed -> AppCard {
-                    Text(stringResource(R.string.sub_setting_up), style = Eyebrow, color = cs.primary)
-                    Text(stringResource(R.string.sub_getting_ready, kind.label), style = MaterialTheme.typography.titleLarge)
+                    Text("SETTING UP", style = Eyebrow, color = cs.primary)
+                    Text("Getting ${kind.label} ready on your phone", style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.height(12.dp))
                     if (installing) LinearWavyProgressIndicator(Modifier.fillMaxWidth())
-                    else { Text(stringResource(R.string.sub_setup_stopped), color = cs.error); Spacer(Modifier.height(8.dp)); Button(onClick = onInstall, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.sub_try_again)) } }
+                    else { Text("Setup stopped.", color = cs.error); Spacer(Modifier.height(8.dp)); Button(onClick = onInstall, shapes = ButtonDefaults.shapes()) { Text("Try again") } }
                 }
                 // 4. Done
                 info.signedIn -> AppCard(container = LocalExtra.current.successContainer) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Rounded.CheckCircle, null, tint = LocalExtra.current.success)
                         Spacer(Modifier.width(10.dp))
-                        Text(stringResource(R.string.sub_signed_in, kind.label), style = MaterialTheme.typography.titleLarge, color = cs.onSurface)
+                        Text("You're signed in to ${kind.label}", style = MaterialTheme.typography.titleLarge, color = cs.onSurface)
                     }
                     Spacer(Modifier.height(8.dp))
-                    Text(stringResource(R.string.sub_runs_on_plan, kind.label), style = MaterialTheme.typography.bodyMedium)
+                    Text("Your agent now runs on your ${kind.label} plan.", style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(12.dp))
                     Surface(onClick = onModel, shape = MaterialTheme.shapes.large, color = cs.surface, modifier = Modifier.fillMaxWidth()) {
                         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text(stringResource(R.string.sub_model), style = Eyebrow, color = cs.primary)
-                                Text(modelLabel.ifBlank { stringResource(R.string.sub_default) }, style = MaterialTheme.typography.titleMedium)
+                                Text("MODEL", style = Eyebrow, color = cs.primary)
+                                Text(modelLabel.ifBlank { "Default" }, style = MaterialTheme.typography.titleMedium)
                             }
-                            Text(stringResource(R.string.sub_change), style = MaterialTheme.typography.labelLarge, color = cs.primary)
+                            Text("Change", style = MaterialTheme.typography.labelLarge, color = cs.primary)
                         }
                     }
                     Spacer(Modifier.height(14.dp))
-                    Button(onClick = onDone, modifier = Modifier.fillMaxWidth().height(52.dp), shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.sub_start_chatting)) }
-                    TextButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.sub_sign_out_other)) }
+                    Button(onClick = onDone, modifier = Modifier.fillMaxWidth().height(52.dp), shapes = ButtonDefaults.shapes()) { Text("Start chatting") }
+                    TextButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) { Text("Sign out to use another account") }
                 }
                 // 3a. Checking the code
                 verifying -> AppCard {
-                    Text(stringResource(R.string.sub_checking), style = Eyebrow, color = cs.primary)
-                    Text(stringResource(R.string.sub_signing_in), style = MaterialTheme.typography.titleLarge)
+                    Text("CHECKING", style = Eyebrow, color = cs.primary)
+                    Text("Signing you in…", style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.height(12.dp)); LinearWavyProgressIndicator(Modifier.fillMaxWidth())
                 }
                 // 3. Paste the code (Claude)
                 needsCode -> AppCard {
                     var code by remember { mutableStateOf("") }
-                    Text(stringResource(R.string.sub_almost_there), style = Eyebrow, color = cs.primary)
-                    Text(stringResource(R.string.sub_paste_code_title), style = MaterialTheme.typography.titleLarge)
+                    Text("ALMOST THERE", style = Eyebrow, color = cs.primary)
+                    Text("Paste the code from ${kind.label}", style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.height(10.dp))
-                    Text(stringResource(R.string.sub_paste_code_body), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    Text("In the browser: tap Authorize. ${kind.label} then shows a code. Copy it, come back here, and paste it below.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                     Spacer(Modifier.height(14.dp))
-                    OutlinedTextField(code, { code = it.trim() }, label = { Text(stringResource(R.string.sub_code_label)) }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
+                    com.past9.phoneaos.ui.AppTextField(code, { code = it.trim() }, label = { Text("Code from ${kind.label}") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
                     Spacer(Modifier.height(12.dp))
-                    Button(onClick = { onCode(code) }, enabled = code.length > 10, modifier = Modifier.fillMaxWidth().height(56.dp), shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.sub_finish_sign_in)) }
+                    Button(onClick = { onCode(code) }, enabled = code.length > 10, modifier = Modifier.fillMaxWidth().height(56.dp), shapes = ButtonDefaults.shapes()) { Text("Finish sign-in") }
                 }
                 // 2b. Waiting on the browser (ChatGPT/Codex comes back by itself)
                 signingIn -> AppCard {
-                    Text(stringResource(R.string.sub_in_browser), style = Eyebrow, color = cs.primary)
-                    Text(stringResource(R.string.sub_authorize_title), style = MaterialTheme.typography.titleLarge)
+                    Text("IN YOUR BROWSER", style = Eyebrow, color = cs.primary)
+                    Text("Tap Authorize, then come back", style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.height(6.dp))
-                    Text(stringResource(R.string.sub_no_code), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    Text("No code to copy. This screen finishes by itself once you've approved.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                     Spacer(Modifier.height(12.dp)); LinearWavyProgressIndicator(Modifier.fillMaxWidth())
                 }
                 // 2. Sign in
                 else -> AppCard {
-                    Text(stringResource(R.string.sub_one_step), style = Eyebrow, color = cs.primary)
-                    Text(stringResource(R.string.sub_sign_in_title, kind.label), style = MaterialTheme.typography.titleLarge)
+                    Text("ONE STEP", style = Eyebrow, color = cs.primary)
+                    Text("Sign in with your ${kind.label} account", style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.height(8.dp))
-                    Text(stringResource(R.string.sub_sign_in_body),
+                    Text("Your browser opens. Tap Authorize there, then come back here. That's it.",
                         style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                     Spacer(Modifier.height(14.dp))
-                    Button(onClick = onSignIn, modifier = Modifier.fillMaxWidth().height(56.dp), shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.sub_sign_in_button, kind.label)) }
+                    Button(onClick = onSignIn, modifier = Modifier.fillMaxWidth().height(56.dp), shapes = ButtonDefaults.shapes()) { Text("Sign in with ${kind.label}") }
                 }
             }
             if (signInError != null && !info.signedIn) AppCard(container = cs.errorContainer) {
                 Row(verticalAlignment = Alignment.Top) {
                     Icon(Icons.Rounded.ErrorOutline, null, tint = cs.onErrorContainer)
                     Spacer(Modifier.width(10.dp))
-                    Text(stringResource(R.string.sub_error, signInError), color = cs.onErrorContainer, style = MaterialTheme.typography.bodyMedium)
+                    Text("That didn't work. $signInError", color = cs.onErrorContainer, style = MaterialTheme.typography.bodyMedium)
                 }
             }
-            if (installed && !info.signedIn && !signingIn && !needsCode && !verifying) {
-                TextButton(onClick = { showToken = !showToken }) { Text(if (showToken) stringResource(R.string.sub_hide) else stringResource(R.string.sub_have_token)) }
+            if (installed && !info.signedIn && !signingIn && !needsCode && !verifying && kind != SubKind.ANTIGRAVITY) {
+                TextButton(onClick = { showToken = !showToken }) { Text(if (showToken) "Hide" else "Have a token instead?") }
                 AnimatedVisibility(showToken) {
                     var token by remember { mutableStateOf("") }
                     AppCard {
                         Text(signInHelp, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                         Spacer(Modifier.height(10.dp))
-                        OutlinedTextField(token, { token = it.trim() }, label = { Text(if (kind == SubKind.CLAUDE) stringResource(R.string.sub_token_label) else stringResource(R.string.sub_auth_json)) }, singleLine = true,
+                        com.past9.phoneaos.ui.AppTextField(token, { token = it.trim() }, label = { Text(if (kind == SubKind.CLAUDE) "Token (starts with sk-ant-)" else "auth.json contents") }, singleLine = true,
                             visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
                         Spacer(Modifier.height(10.dp))
-                        OutlinedButton(onClick = { onSaveToken(token) }, enabled = token.length > 20, modifier = Modifier.fillMaxWidth().height(52.dp), shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.sub_use_token)) }
+                        OutlinedButton(onClick = { onSaveToken(token) }, enabled = token.length > 20, modifier = Modifier.fillMaxWidth().height(52.dp), shapes = ButtonDefaults.shapes()) { Text("Use this token") }
                     }
                 }
             }
             if (log.isNotEmpty()) {
-                TextButton(onClick = { showLog = !showLog }) { Text(if (showLog) stringResource(R.string.sub_hide_details) else stringResource(R.string.sub_details)) }
+                TextButton(onClick = { showLog = !showLog }) { Text(if (showLog) "Hide details" else "Details") }
                 AnimatedVisibility(showLog) {
                     Text(log.takeLast(12).joinToString("\n"), style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace), color = cs.onSurfaceVariant)
                 }

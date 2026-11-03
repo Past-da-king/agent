@@ -190,7 +190,7 @@ class ScreensTest(private val dark: Boolean) {
         item("activity", "Opened Booking.com · uMhlanga, 9 to 11 Oct", JSONObject().put("tool", "browser").put("helper", first.id)),
         item("activity", "Read 24 results, sorted by price", JSONObject().put("tool", "browser").put("helper", first.id)),
         item("helper", "Check Uber and Bolt prices from King Shaka airport to uMhlanga Rocks on Friday around 18:00 and say which is cheaper.",
-            JSONObject().put("label", "Airport ride").put("state", "working").put("now", "Reading the web").put("startedAt", now - 60_000).put("model", "claude-haiku-4-5").put("profile", "Northwind work").put("profileColor", "ocean")),
+            JSONObject().put("label", "Airport ride").put("state", "working").put("now", "Reading the web").put("startedAt", now - 60_000).put("model", "claude-haiku-4-5").put("profile", "Acme work").put("profileColor", "ocean")),
         item("helper", "Look up the Sharks game times for the weekend of 10 Oct and whether tickets are left.",
             JSONObject().put("label", "Sharks tickets").put("state", "done").put("startedAt", now - 30 * 60_000).put("endedAt", now - 22 * 60_000)
                 .put("result", "**Sharks v Stormers**, Sat 10 Oct, 17:00 at Kings Park. Tickets from R 180 on Ticketmaster, about 40 left in the West stand.\n\nSource: ticketmaster.co.za, checked 14:05.")),
@@ -271,12 +271,12 @@ class ScreensTest(private val dark: Boolean) {
     @Test fun browserEmpty() { shot("70-browser-empty") { BrowserScreen(emptyMap(), listOf("Personal", "Work"), BrowserActions()) } }
 
     // ---- profiles, account rules, reply quotes and reports (0.10) ----
-    private val gmailWork = Connection("ca_w", "gmail", "ACTIVE", "sam@northwind.example")
+    private val gmailWork = Connection("ca_w", "gmail", "ACTIVE", "work@example.com")
     private val gmailHome = Connection("ca_h", "gmail", "ACTIVE", "sam.dlamini@gmail.com")
-    private val slackWork = Connection("ca_s", "slack", "ACTIVE", "Northwind")
-    private val outlookWork = Connection("ca_o", "outlook", "ACTIVE", "sam@northwind.example")
+    private val slackWork = Connection("ca_s", "slack", "ACTIVE", "Acme")
+    private val outlookWork = Connection("ca_o", "outlook", "ACTIVE", "sam@stratedge.example")
     private val teamsWork = Connection("ca_t", "microsoft_teams", "ACTIVE", "microsoft_teams")
-    private val workProfile = AgentProfile("p1", "Northwind work", listOf(slackWork, outlookWork, teamsWork, gmailWork).map { it.ref() }, "Work", color = "ocean")
+    private val workProfile = AgentProfile("p1", "Acme work", listOf(slackWork, outlookWork, teamsWork, gmailWork).map { it.ref() }, "Work", color = "ocean")
     private val homeProfile = AgentProfile("p2", "Personal", listOf(gmailHome).map { it.ref() }, color = "mint")
     private val kits = listOf(Toolkit("gmail", "Gmail", "Read, search, draft and send email", "", 40, false, true), Toolkit("slack", "Slack", "Messages, channels and threads", "", 60, false, true),
         Toolkit("outlook", "Outlook", "Mail and calendar", "", 40, false, true), Toolkit("microsoft_teams", "Microsoft Teams", "Chats and meetings", "", 30, false, true))
@@ -297,7 +297,7 @@ class ScreensTest(private val dark: Boolean) {
         val ask = item("user", "Can you check if we qualify for the Transnet cyber tender and what we'd need?")
         val items = listOf(ask,
             item("agent", "On it: three helpers are checking the RFP, our certificates and possible partners.", JSONObject().put("replyTo", ask.id)),
-            item("user", "Also remind me to call Lerato at 3"),
+            item("user", "Also remind me to call Thandi at 3"),
             item("agent", "Done, reminder set for 15:00.", JSONObject().put("replyTo", ask.id + 2)),
             item("report", "Not yet: two gaps, ISO 27001 and a 24/7 SOC. A partner closes both in about a month.",
                 JSONObject().put("title", "Transnet cyber tender readiness").put("path", "/nope").put("words", 1400).put("replyTo", ask.id).put("late", true)),

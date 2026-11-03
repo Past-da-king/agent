@@ -15,7 +15,7 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 
 /**
- * The agent's own little computer: Node 24 bundled in the app, a private workspace folder, no
+ * The agent's own little computer: Node 24 on the phone, a private workspace folder, no
  * access outside the app. It can calculate, transform data, build files (CSV, HTML, SVG, PNG via
  * canvas-free tricks) and fetch from the web. Images it makes are shown to the user and to itself.
  */
@@ -27,7 +27,11 @@ class RunCodeTool(private val context: Context) : Tool {
         schema(listOf("code", "purpose"), "code" to str("The JavaScript to run"), "purpose" to str("One line: what this does, shown to the user")))
 
     override suspend fun run(input: JSONObject, ctx: ToolContext): String = withContext(Dispatchers.IO) {
-        if (!rt.nodeAvailable) return@withContext "Code isn't available in this build."
+        if (!rt.nodeAvailable) {
+            ctx.activity("Downloading the code runtime (one time)", JSONObject().put("tool", "code"))
+            val err = runCatching { rt.ensureNode() }.exceptionOrNull()
+            if (err != null || !rt.nodeAvailable) return@withContext "The code runtime couldn't be downloaded (${err?.message ?: "unknown"}). Tell the user to check their connection and try again."
+        }
         val id = ctx.activity("Running code: ${input.optString("purpose").take(60)}", JSONObject().put("tool", "code"))
         val before = workspace.listFiles().orEmpty().associate { it.name to it.lastModified() }
         val script = File(workspace, ".run-${System.currentTimeMillis()}.mjs").apply { writeText(input.optString("code")) }

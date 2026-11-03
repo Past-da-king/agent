@@ -8,6 +8,7 @@ import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.foundation.verticalScroll
 import androidx.test.core.app.ApplicationProvider
 import com.past9.phoneaos.agent.AgentRuntime
 import com.past9.phoneaos.agent.PromptRole
@@ -44,7 +45,8 @@ class OpenUiButtonsAndPromptTest {
     private fun show(name: String) {
         rule.setContent { AppTheme(dark = true) { Surface(color = MaterialTheme.colorScheme.surface) {
             CompositionLocalProvider(LocalOpenUiSend provides { sent += it }, LocalUriHandler provides object : UriHandler { override fun openUri(uri: String) { opened += uri } }) {
-                OpenUiBlock(block(name))
+                // The chat scrolls, so a card gets its natural height (a bounded box lets a loading photo fill it and push the buttons off).
+                androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())) { OpenUiBlock(block(name)) }
             } } } }
     }
 

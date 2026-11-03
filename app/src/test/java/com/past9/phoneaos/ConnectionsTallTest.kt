@@ -34,18 +34,18 @@ class ConnectionsTallTest(private val dark: Boolean) {
         rule.mainClock.advanceTimeBy(900)
         rule.onRoot().captureRoboImage(File("build/screens/$name-${if (dark) "dark" else "light"}.png").path)
     }
-    private val gw = Connection("ca_w", "gmail", "ACTIVE", "sam@northwind.example")
+    private val gw = Connection("ca_w", "gmail", "ACTIVE", "work@example.com")
     private val gh = Connection("ca_h", "gmail", "ACTIVE", "sam.dlamini@gmail.com")
     private val g3 = Connection("ca_3", "gmail", "ACTIVE", "sam.business@gmail.com")
-    private val sl = Connection("ca_s", "slack", "ACTIVE", "Northwind")
-    private val ol = Connection("ca_o", "outlook", "ACTIVE", "sam@northwind.example")
+    private val sl = Connection("ca_s", "slack", "ACTIVE", "Acme")
+    private val ol = Connection("ca_o", "outlook", "ACTIVE", "sam@stratedge.example")
     private val tm = Connection("ca_t", "microsoft_teams", "ACTIVE", "microsoft_teams")
     private val gh1 = Connection("gh1", "github", "ACTIVE", "github"); private val gh2 = Connection("gh2", "github", "ACTIVE", "github")
     private val ig = Connection("ig1", "instagram", "ACTIVE", "instagram"); private val no = Connection("no1", "notion", "ACTIVE", "notion")
     private val kits = listOf("gmail" to "Gmail", "slack" to "Slack", "outlook" to "Outlook", "microsoft_teams" to "Microsoft Teams", "github" to "GitHub", "instagram" to "Instagram", "notion" to "Notion", "googlecalendar" to "Google Calendar")
         .map { (s, n) -> Toolkit(s, n, "", "", 30, false, true) }
     private val all = listOf(gw, gh, g3, sl, ol, tm, gh1, gh2, ig, no)
-    private val profiles = listOf(AgentProfile("p1", "Northwind work", listOf(sl, ol, tm, gw).map { it.ref() }, color = "ocean"),
+    private val profiles = listOf(AgentProfile("p1", "Acme work", listOf(sl, ol, tm, gw).map { it.ref() }, color = "ocean"),
         AgentProfile("p2", "Personal", listOf(gh, ig).map { it.ref() }, color = "mint"), AgentProfile("p3", "General", color = "graphite"))
     private fun state() = ConnectionsState(hasKey = true, consumer = true, toolkits = kits, connected = all, profiles = profiles,
         rules = mapOf("ca_h" to AccountRules(change = com.past9.phoneaos.data.Rule.ALLOW)))

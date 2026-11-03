@@ -12,7 +12,7 @@ import org.junit.Test
 class SlackWorkspacesTest {
     @Test fun aWorkspaceNameIsFoundWhereSlackKeepsIt() {
         assertEquals("Acme HQ", ComposioConnect.identity(JSONObject("""{"data":{"team":{"name":"Acme HQ","id":"T01"}}}""")))
-        assertEquals("northwind", ComposioConnect.identity(JSONObject("""{"user_info":{"team":{"domain":"northwind"}}}""")))
+        assertEquals("acme", ComposioConnect.identity(JSONObject("""{"user_info":{"team":{"domain":"acme"}}}""")))
         assertEquals("Harbor", ComposioConnect.identity(JSONObject("""{"data":{"team_name":"Harbor"}}""")))
         assertEquals("sam@example.com", ComposioConnect.identity(JSONObject("""{"user_info":{"email":"sam@example.com"}}""")))
         assertEquals("", ComposioConnect.identity(JSONObject("""{"id":"ca_x"}""")))

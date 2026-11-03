@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- An update sent from his computer (send_file) installs with one tap from the notification. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
@@ -23,8 +25,17 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- phone_location: an agent on a linked computer asks while the phone is in his pocket (asked once). -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <!-- Wake-ups: ring through Do Not Disturb, full screen over the lock screen and over other apps, until he answers. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <queries>
         <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
@@ -40,6 +51,7 @@
         android:theme="@style/Theme.App"
         android:supportsRtl="true"
         android:allowBackup="false"
+        android:requestLegacyExternalStorage="true"
         android:networkSecurityConfig="@xml/network_security_config">
 
         <!-- Files the agent hands over (from a machine, or ones it made) open in other apps. -->
@@ -56,6 +68,19 @@
             android:exported="true"
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
+            <!-- A link code scanned with the phone's own camera app (agent://pair?...) opens the link screen. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="agent" android:host="pair" />
+            </intent-filter>
+            <!-- A card in the chat, or the computer's miniapp_open: agent://miniapp/<id> opens that mini-app here. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="agent" android:host="miniapp" />
+            </intent-filter>
         </activity>
 
         <!-- Share sheet: links, text, photos, videos, voice notes and files from any app. A see-through sheet over the app you shared from; never opens the main app. -->
@@ -510,6 +535,7 @@
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="The user's agent browses websites in the background on their behalf" />
         </service>
         <service android:name=".voice.CallService" android:exported="false" android:foregroundServiceType="microphone|mediaPlayback" />
+        <service android:name=".voice.DictationService" android:exported="false" android:foregroundServiceType="microphone" />
         <service android:name=".system.WorkService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="The user's agent finishes a task they asked for after they leave the app" />
         </service>
@@ -517,7 +543,17 @@
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter><action android:name="android.service.notification.NotificationListenerService" /></intent-filter>
         </service>
+        <service android:name=".wakeup.WakeChannelService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Keeps a tiny link to the user's own computer open so an urgent wake-up they set up reaches the phone in seconds" />
+        </service>
+        <service android:name=".wakeup.WakeUpService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
+        <activity android:name=".wakeup.WakeUpActivity" android:exported="false" android:showWhenLocked="true" android:turnScreenOn="true"
+            android:launchMode="singleTask" android:taskAffinity="com.past9.phoneaos.wakeup" android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
+        <receiver android:name=".wakeup.WakeAlarmReceiver" android:exported="false" />
+        <receiver android:name=".wakeup.WakeActionReceiver" android:exported="false" />
         <receiver android:name=".system.AnswerReceiver" android:exported="false" />
+        <receiver android:name=".remote.RemoteAnswerReceiver" android:exported="false" />
         <receiver android:name=".system.AlarmReceiver" android:exported="false" />
         <receiver android:name=".triggers.ReminderActionReceiver" android:exported="false" />
         <receiver android:name=".system.BootReceiver" android:exported="false">

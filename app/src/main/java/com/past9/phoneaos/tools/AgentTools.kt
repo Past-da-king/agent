@@ -26,7 +26,7 @@ class DelegateTool(private val start: suspend (task: String, label: String, mode
         schema(listOf("tasks"), "tasks" to strList("1 to 5 self-contained briefs, one per helper"),
             "labels" to strList("A 2 to 4 word name per helper, same order (e.g. 'Uber to airport'). The user sees these."),
             "models" to strList("Optional: which helper model runs each brief, same order (an id or name from YOUR HELPERS). Leave out for the default."),
-            "profiles" to strList("Optional: the user's profile each helper works in, same order (e.g. 'Northwind work'). It can then only use that profile's connected accounts."),
+            "profiles" to strList("Optional: the user's profile each helper works in, same order (e.g. 'Acme work'). It can then only use that profile's connected accounts."),
             "together" to bool("These briefs are parts of ONE answer: hold every result until all are done and hand them to you as one message. Default false."),
             "agents" to strList("Optional: send a brief to one of YOUR PINNED AGENTS instead of a fresh helper, same order (its name; an empty string means a fresh helper). It keeps its whole earlier context, so the brief can be just the new job.")))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {

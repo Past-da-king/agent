@@ -1,5 +1,6 @@
 package com.past9.phoneaos.ui.screens
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.animation.AnimatedContent
@@ -55,10 +56,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.res.pluralStringResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.past9.phoneaos.R
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.contentDescription
 import com.past9.phoneaos.agent.AgentStatus
 import com.past9.phoneaos.data.ChatItem
 import com.past9.phoneaos.ui.AgentAvatar
@@ -96,11 +98,27 @@ data class ChatActions(
     /** Open a live card (by id) in its sheet. */
     val onCard: (String) -> Unit = {},
     val onCall: (() -> Unit)? = null,
+    /** False when this phone can't place a call right now: the button still shows, dimmed, and a tap says why. */
+    val callReady: Boolean = true,
     /** Non-null while a reply is being read aloud: tap to stop it. */
     val onStopSpeaking: (() -> Unit)? = null,
     /** Open a report (its file path) in the full-screen reader. */
     val onReport: (String) -> Unit = {},
-)
+    /** Open one of the computer's chats (a project chat an @-mention went to): its id and the project's name. */
+    val onOpenChat: (String, String) -> Unit = { _, _ -> },
+    /** The message box's Send: its words leave the box only once the send was accepted (ui/Composer.kt). */
+    val composerSend: ((String) -> Unit)? = null,
+    val composerVoice: ((String) -> Unit)? = null,
+    val sending: () -> Boolean = { false },
+    /** The last send that did not get through, shown above the box with Retry beside it (its words are still there). */
+    val composerFailed: String? = null,
+    val onComposerRetry: (() -> Unit)? = null,
+    val onRecordings: (() -> Unit)? = null,
+) {
+    /** The message box's part: the same [com.past9.phoneaos.ui.ComposerActions] every chat's box takes. */
+    fun composer() = com.past9.phoneaos.ui.ComposerActions(onSend = composerSend ?: onSend, onSendVoice = composerVoice ?: onSendVoice, onStop = onStop, onAttach = onAttach, onAttachDoc = onAttachDoc,
+        onCamera = onCamera, onMic = onMic, onRemoveAttachment = onRemoveAttachment, onRemoveDoc = onRemoveDoc, onRecordings = onRecordings)
+}
 
 /**
  * The user's message this reply answers, when that isn't obvious: the reply came later, from helpers' results,
@@ -147,7 +165,8 @@ fun withMarker(rows: List<Row_>, firstId: Long?, count: Int): List<Row_> {
     return if (at < 0) rows else rows.toMutableList().apply { add(at, Row_.NewMarker(count)) }
 }
 
-fun group(items: List<ChatItem>): List<Row_> {
+/** [hideHelpers]: a linked computer publishes its own helper cards (remote/LiveCards.kt), so its helper rows stay out of the thread. */
+fun group(items: List<ChatItem>, hideHelpers: Boolean = false): List<Row_> {
     val out = mutableListOf<Row_>(); val buf = mutableListOf<ChatItem>(); val call = mutableListOf<ChatItem>()
     /** Whether the running step buffer is a background routine's work, so a routine's steps never inflate the main agent's count. */
     var bufRoutine: Boolean? = null
@@ -163,6 +182,7 @@ fun group(items: List<ChatItem>): List<Row_> {
         when {
             it.kind == "activity" && m.has("helper") -> {} // shown inside its helper's card
             it.kind == "activity" && m.has("branch") -> {} // shown inside its branch's sheet
+            hideHelpers && it.kind == "helper" -> {} // shown as a live card at the foot of the chat
             // A helper only shows while it works: once it's done or stopped it leaves the chat; its result lives in the agent's reply.
             it.kind == "helper" && m.optString("state", "working").let { st -> st == "stopped" || (st != "working" && lastAgentAt > m.optLong("endedAt", Long.MAX_VALUE)) } -> {}
             it.kind == "activity" && m.optString("image").isEmpty() && m.optString("file").isEmpty() -> {
@@ -196,6 +216,8 @@ fun ChatScreen(
     readMark: () -> Long = { Long.MAX_VALUE },
     onRead: (Long) -> Unit = {},
     listening: Boolean = false,
+    /** A linked computer's helper and project agent cards; null when the phone runs its own agent or the computer has none to give. */
+    live: com.past9.phoneaos.remote.LiveCardsUi? = null,
 ) {
     val byId = remember(items) { items.associateBy { it.id } }
     val list = rememberLazyListState()
@@ -215,8 +237,12 @@ fun ChatScreen(
         val byUnread = markerId?.let { u -> items.indexOfFirst { it.id == u }.let { i -> if (i < 0) byWindow else (i - 8).coerceAtLeast(0) } } ?: byWindow
         minOf(byWindow, byUnread)
     }
-    val rows = remember(items, firstShown, markerId, markerCount) {
-        val g = withMarker(group(items.drop(firstShown)), markerId, markerCount)
+    val hideHelpers = live != null
+    // The "On the computer" list folds into a pill above the message box (his choice is kept; see remote/LiveCardsUi.kt).
+    val fold = com.past9.phoneaos.remote.rememberAgentsFold()
+    val agentsFolded = live != null && fold.folded(live.cards.count { it.working })
+    val rows = remember(items, firstShown, markerId, markerCount, hideHelpers) {
+        val g = withMarker(group(items.drop(firstShown), hideHelpers), markerId, markerCount)
         if (firstShown > 0) listOf<Row_>(Row_.Earlier) + g else g
     }
     /** Tap a quote: jump to the message it quotes (loading earlier history first if it is not on screen). */
@@ -251,6 +277,12 @@ fun ChatScreen(
         if (lastItem?.kind == "user") stick = true
         if (stick) { list.animateScrollToItem(rows.size - 1); seenId = lastId }
     }
+    // A card arriving or leaving at the foot of the chat stays in view while he follows the end.
+    val cardKey = live?.cards?.joinToString { it.row + it.state }.orEmpty()
+    LaunchedEffect(cardKey) {
+        if (phase != 2 || live == null || live.cards.isEmpty() || !stick || agentsFolded) return@LaunchedEffect
+        list.animateScrollToItem(rows.size)
+    }
     // Reading the latest counts as having read it; leaving and coming back re-lands him on what is new.
     val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     var resumed by remember { mutableStateOf(owner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) }
@@ -277,12 +309,24 @@ fun ChatScreen(
     val newSince = items.count { it.id > seenId && it.kind != "user" && it.kind != "activity" && !JSONObject(it.meta).has("helper") }
     val waitingOnYou = items.any { it.kind == "question" && !JSONObject(it.meta).has("answer") }
 
+    val rs = com.past9.phoneaos.remote.RemoteHub.session.collectAsStateWithLifecycle().value
+    val earlierMore = rs?.earlierMore?.collectAsStateWithLifecycle()?.value == true
+    val earlierLoading = rs?.earlierLoading?.collectAsStateWithLifecycle()?.value == true
     // A tap on a generated UI's button (OpenUI @ToAssistant) goes to the agent quietly; a follow-up suggestion is sent like a typed message.
     androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.openui.LocalOpenUiSend provides actions.onSend, com.past9.phoneaos.ui.openui.LocalOpenUiAct provides actions.onAct) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
-        topBar = { ChatTopBar(if (agentName == "Your agent") stringResource(R.string.chat_your_agent) else agentName, status, browserLive, waitingOnYou, openCount, actions, modelLabel) },
-        bottomBar = { Box(Modifier.fillMaxWidth().padding(horizontal = com.past9.phoneaos.ui.sidePad(0.dp, com.past9.phoneaos.ui.Readable.CHAT + 32.dp))) { Composer(draft, onDraft, status.working, actions, attachments, docs, listening) } },
+        topBar = { ChatTopBar(agentName, status, browserLive, waitingOnYou, openCount, actions, modelLabel) },
+        bottomBar = { Box(Modifier.fillMaxWidth().padding(horizontal = com.past9.phoneaos.ui.sidePad(0.dp, com.past9.phoneaos.ui.Readable.CHAT + 32.dp))) { Column {
+            if (live != null && agentsFolded && morning == null) Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(start = 16.dp, end = 16.dp, top = 6.dp)) {
+                com.past9.phoneaos.remote.AgentsPill(live, onOpen = {
+                    fold.set(true)
+                    // Open where he can see it: the list comes back at the foot of the chat.
+                    scope.launch { kotlinx.coroutines.delay(120); stick = true; list.animateScrollToItem(rows.size) }
+                })
+            }
+            MessageComposer(draft, onDraft, status.working, actions.composer(), attachments, docs, listening, dictationOwner = "main",
+                sending = actions.sending(), failed = actions.composerFailed, onRetry = actions.onComposerRetry) } } },
     ) { pad ->
         if (items.isEmpty() || morning != null) Welcome(userName, Modifier.padding(pad), actions.onSend, morning, hasChat = items.isNotEmpty())
         else LazyColumn(
@@ -290,12 +334,15 @@ fun ChatScreen(
             contentPadding = PaddingValues(start = com.past9.phoneaos.ui.sidePad(16.dp, com.past9.phoneaos.ui.Readable.CHAT), end = com.past9.phoneaos.ui.sidePad(16.dp, com.past9.phoneaos.ui.Readable.CHAT), top = 8.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            if (earlierMore) item(key = "remote-earlier") {
+                TextButton(onClick = { rs?.loadEarlier() }, enabled = !earlierLoading, modifier = Modifier.fillMaxWidth()) { Text(if (earlierLoading) "Loading..." else "Load earlier") }
+            }
             items(rows, key = { it.key }) { r ->
                 when (r) {
-                    is Row_.Earlier -> TextButton(onClick = { window += CHAT_PAGE }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.chat_earlier_messages)) }
+                    is Row_.Earlier -> TextButton(onClick = { window += CHAT_PAGE }, modifier = Modifier.fillMaxWidth()) { Text("Earlier messages") }
                     is Row_.NewMarker -> NewMarker(r.count)
                     is Row_.Steps -> StepsRow(r.items)
-                    is Row_.Call -> CallRow(r.items, if (agentName == "Your agent") stringResource(R.string.chat_your_agent) else agentName)
+                    is Row_.Call -> CallRow(r.items, agentName)
                     is Row_.Single -> when (r.item.kind) {
                         "user" -> UserBubble(r.item)
                         "agent" -> AgentMessage(r.item, quotedFor(r.item, items, byId), jumpTo)
@@ -308,13 +355,22 @@ fun ChatScreen(
                         }
                         "voice" -> VoiceBubble(r.item)
                         "card" -> { val id = JSONObject(r.item.meta).optString("card"); com.past9.phoneaos.ui.CardChatRow(LocalCards.current.firstOrNull { it.id == id }, r.item.text) { actions.onCard(id) } }
+                        // A video, picture or sound an agent showed on the computer, playing here (0.15.27).
+                        "media" -> com.past9.phoneaos.ui.MediaChatRow(r.item, rs)
                         "branch" -> BranchRow(r.item, items.filter { a -> JSONObject(a.meta).optLong("branch") == r.item.id && (a.kind == "activity" || a.kind == "agent") })
                         "helper" -> HelperRow(r.item, items.filter { a -> a.kind == "activity" && JSONObject(a.meta).optLong("helper") == r.item.id })
                         "activity" -> if (JSONObject(r.item.meta).has("file")) FileCard(r.item) else ImageActivity(r.item)
-                        else -> Notice(r.item)
+                        else -> { val sent = com.past9.phoneaos.remote.Mentions.noticeOf(r.item.meta)
+                            val answer = if (sent == null) com.past9.phoneaos.remote.Mentions.replyOf(r.item.meta) else null
+                            when {
+                                sent != null -> MentionSent(sent) { actions.onOpenChat(sent.chat, sent.name) }
+                                answer != null -> MentionReplyCard(r.item, answer) { actions.onOpenChat(answer.chat, answer.name) }
+                                else -> Notice(r.item)
+                            } }
                     }
                 }
             }
+            if (live != null && live.cards.isNotEmpty() && !agentsFolded) item(key = "live-cards") { com.past9.phoneaos.remote.LiveCardList(live, onCollapse = { fold.set(false) }) }
             if (status.working && !waitingOnYou) item(key = "working") { WorkingRow(status) }
         }
         // Reading older messages while new ones arrive: say so, and offer the way down.
@@ -323,7 +379,7 @@ fun ChatScreen(
                 ExtendedFloatingActionButton(
                     onClick = { scope.launch { stick = true; list.animateScrollToItem(rows.size); seenId = lastId } },
                     icon = { Icon(Icons.Rounded.KeyboardArrowDown, null) },
-                    text = { Text(if (newSince > 0) pluralStringResource(R.plurals.chat_new_count, newSince, newSince) else stringResource(R.string.chat_jump_to_latest)) },
+                    text = { Text(if (newSince > 0) "$newSince new" else "Jump to latest") },
                     modifier = Modifier.padding(bottom = 12.dp),
                 )
             }
@@ -337,7 +393,7 @@ fun ChatScreen(
 private fun NewMarker(count: Int) {
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         HorizontalDivider(Modifier.weight(1f), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f))
-        Text("  " + (if (count > 1) stringResource(R.string.chat_new_messages_count, count) else stringResource(R.string.chat_new_messages)) + "  ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+        Text(if (count > 1) "  $count new messages  " else "  New messages  ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         HorizontalDivider(Modifier.weight(1f), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f))
     }
 }
@@ -346,17 +402,17 @@ private fun NewMarker(count: Int) {
 private fun ChatTopBar(agentName: String, status: AgentStatus, browserLive: Boolean, needsYou: Boolean, openCount: Int, actions: ChatActions, modelLabel: String = "") {
     Surface(color = MaterialTheme.colorScheme.surface) {
         Row(Modifier.fillMaxWidth().statusBarsPadding().padding(start = com.past9.phoneaos.ui.sidePad(16.dp, com.past9.phoneaos.ui.Readable.CHAT) - 8.dp, end = com.past9.phoneaos.ui.sidePad(16.dp, com.past9.phoneaos.ui.Readable.CHAT) - 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = actions.onMenu) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.chat_back_to_home)) }
+            IconButton(onClick = actions.onMenu) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to home") }
             Row(Modifier.weight(1f).clip(MaterialTheme.shapes.medium).clickable(onClick = actions.onProfile).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             AgentAvatar(working = status.working, needsYou = needsYou, size = 36.dp)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(agentName, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 val line = when {
-                    needsYou -> stringResource(R.string.chat_waiting_for_you)
-                    status.working -> status.label + if (status.helpers > 0) " · " + pluralStringResource(R.plurals.chat_helpers_count, status.helpers, status.helpers) else ""
-                    status.helpers > 0 -> pluralStringResource(R.plurals.chat_helpers_working, status.helpers, status.helpers)
-                    else -> stringResource(R.string.chat_ready)
+                    needsYou -> "Waiting for you"
+                    status.working -> status.label + if (status.helpers > 0) " · ${status.helpers} helper${if (status.helpers > 1) "s" else ""}" else ""
+                    status.helpers > 0 -> "${status.helpers} helper${if (status.helpers > 1) "s" else ""} working · you can keep talking"
+                    else -> "Ready"
                 }
                 AnimatedContent(line, transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(150)) }, label = "status") {
                     Text(it, style = MaterialTheme.typography.bodySmall, color = if (needsYou) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant)
@@ -366,13 +422,16 @@ private fun ChatTopBar(agentName: String, status: AgentStatus, browserLive: Bool
             if (modelLabel.isNotBlank()) Surface(onClick = actions.onModel, shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.padding(end = 6.dp)) {
                 Row(Modifier.padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(modelLabel, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 110.dp))
-                    Icon(Icons.Rounded.ArrowDropDown, stringResource(R.string.chat_switch_model), Modifier.size(20.dp))
+                    Icon(Icons.Rounded.ArrowDropDown, "Switch model", Modifier.size(20.dp))
                 }
             }
-            if (actions.onStopSpeaking != null) FilledTonalIconButton(onClick = actions.onStopSpeaking) { Icon(Icons.Rounded.VolumeOff, stringResource(R.string.chat_stop_reading_aloud)) }
-            if (actions.onCall != null) IconButton(onClick = actions.onCall) { Icon(Icons.Rounded.Call, stringResource(R.string.chat_call_your_agent)) }
+            if (actions.onStopSpeaking != null) FilledTonalIconButton(onClick = actions.onStopSpeaking) { Icon(Icons.Rounded.VolumeOff, "Stop reading aloud") }
+            if (actions.onCall != null) IconButton(onClick = actions.onCall) {
+                Icon(Icons.Rounded.Call, if (actions.callReady) "Call your agent" else "Call your agent (needs setup)",
+                    tint = if (actions.callReady) LocalContentColor.current else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
+            }
             AnimatedVisibility(browserLive, enter = scaleIn(spring(0.6f, 800f)) + fadeIn(), exit = scaleOut() + fadeOut()) {
-                FilledTonalIconButton(onClick = actions.onBrowser) { Icon(Icons.Rounded.Language, stringResource(R.string.chat_watch_browser)) }
+                FilledTonalIconButton(onClick = actions.onBrowser) { Icon(Icons.Rounded.Language, "Watch the agent's browser") }
             }
         }
     }
@@ -395,14 +454,14 @@ private fun ideaIcon(kind: String) = when (kind) {
 
 @Composable
 private fun Welcome(userName: String, modifier: Modifier, onSend: (String) -> Unit, morning: MorningUi?, hasChat: Boolean) {
-    val greeting = morning?.greeting?.ifBlank { null } ?: if (userName.isNotBlank()) stringResource(R.string.chat_hi_name, userName) else stringResource(R.string.chat_hi_there)
-    val line = morning?.line?.ifBlank { null } ?: stringResource(R.string.chat_welcome_line)
-    val body = morning?.body?.ifBlank { null } ?: stringResource(R.string.chat_welcome_body)
+    val greeting = morning?.greeting?.ifBlank { null } ?: if (userName.isNotBlank()) "Hi $userName." else "Hi there."
+    val line = morning?.line?.ifBlank { null } ?: "What should I take off your plate?"
+    val body = morning?.body?.ifBlank { null } ?: "I can browse for you in the background, keep your tasks, remember what matters, and run things on a schedule."
     val ideas = morning?.ideas?.takeIf { it.isNotEmpty() }?.map { ideaIcon(it.first) to it.second } ?: listOf(
-        Icons.Rounded.TravelExplore to stringResource(R.string.chat_idea_contracts),
-        Icons.Rounded.EventNote to stringResource(R.string.chat_idea_week),
-        Icons.Rounded.Alarm to stringResource(R.string.chat_idea_news),
-        Icons.Rounded.Psychology to stringResource(R.string.chat_idea_flights),
+        Icons.Rounded.TravelExplore to "Compare three phone contracts under R500 a month",
+        Icons.Rounded.EventNote to "Plan my week: what's open and what's due",
+        Icons.Rounded.Alarm to "Every morning at 7, give me the news that matters to me",
+        Icons.Rounded.Psychology to "Remember that I prefer window seats and no red-eye flights",
     )
     // Centred like the first-day screen, but it scrolls when the agent writes longer lines.
     BoxWithConstraints(modifier.fillMaxSize()) {
@@ -414,7 +473,7 @@ private fun Welcome(userName: String, modifier: Modifier, onSend: (String) -> Un
         Spacer(Modifier.height(12.dp))
         Text(body, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(28.dp))
-        Text(if (morning?.preparing == true) stringResource(R.string.chat_try_thinking) else stringResource(R.string.chat_try), style = Eyebrow, color = MaterialTheme.colorScheme.primary)
+        Text(if (morning?.preparing == true) "TRY  ·  THINKING ABOUT YOUR DAY" else "TRY", style = Eyebrow, color = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(8.dp))
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ideas.forEach { (icon, text) ->
@@ -430,7 +489,7 @@ private fun Welcome(userName: String, modifier: Modifier, onSend: (String) -> Un
         if (morning != null && hasChat) {
             Spacer(Modifier.height(12.dp))
             TextButton(onClick = morning.onBackToChat, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                Icon(Icons.Rounded.History, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.chat_pick_up))
+                Icon(Icons.Rounded.History, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Pick up where we left off")
             }
         }
     }
@@ -441,30 +500,73 @@ private fun Welcome(userName: String, modifier: Modifier, onSend: (String) -> Un
 @Composable
 private fun VoiceBubble(item: ChatItem) {
     val cs = MaterialTheme.colorScheme
-    val path = JSONObject(item.meta).optString("path")
+    val meta = JSONObject(item.meta)
     var playing by remember { mutableStateOf(false) }
+    var playError by remember { mutableStateOf<String?>(null) }
+    // A note from the computer is read LIVE from the link (on its way, here, on the computer, failed), never from the
+    // row's stored "audio": 29 Oct 2026, on mobile data a note stored "loading" spun forever and could not be tapped.
+    val remoteName = meta.optString("remoteNote")
+    val rs = com.past9.phoneaos.remote.RemoteHub.session.collectAsStateWithLifecycle().value
+    val tick = rs?.noteTick?.collectAsStateWithLifecycle()?.value ?: 0
+    val state = if (remoteName.isBlank()) null else remember(item.meta, rs, tick) { com.past9.phoneaos.remote.RemoteRows.noteState(meta, rs?.notes) }
+    val path = when (state) {
+        is com.past9.phoneaos.remote.RemoteRows.NoteState.Ready -> state.file.path
+        null -> meta.optString("path")
+        else -> ""
+    }
     val hasAudio = path.isNotBlank() && java.io.File(path).exists()
-    var showText by remember { mutableStateOf(!hasAudio) }
+    val loading = state is com.past9.phoneaos.remote.RemoteRows.NoteState.Fetching
+    val onComputer = state is com.past9.phoneaos.remote.RemoteRows.NoteState.OnComputer
+    val failedWhy = (state as? com.past9.phoneaos.remote.RemoteRows.NoteState.Failed)?.why
+    // One tap: get it from the computer (Wi-Fi or mobile data), then it plays by itself the moment it lands.
+    var wantPlay by remember { mutableStateOf(false) }
+    val canGet = rs != null && (onComputer || failedWhy != null)
+    fun play(f: String) {
+        playError = null
+        runCatching { com.past9.phoneaos.voice.Tts.play(java.io.File(f)) { playing = false } }
+            .onSuccess { playing = true }.onFailure { playError = "Audio unavailable: this phone could not play the file." }
+    }
+    LaunchedEffect(hasAudio, wantPlay) { if (hasAudio && wantPlay) { wantPlay = false; play(path) } }
+    LaunchedEffect(failedWhy) { if (failedWhy != null) wantPlay = false }
+    val why = playError ?: when {
+        hasAudio || loading || onComputer -> null
+        failedWhy != null -> failedWhy
+        state is com.past9.phoneaos.remote.RemoteRows.NoteState.NoAudio -> state.why
+        else -> meta.optString("audioError").ifBlank { "No voice was set up when this note was made." }
+    }
+    val spinning = !hasAudio && (loading || wantPlay)
+    val tappable = hasAudio || canGet
+    var showText by remember { mutableStateOf(false) }
     val t = rememberInfiniteTransition(label = "voice")
     val wave by t.animateFloat(0f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "wave")
     Column(Modifier.fillMaxWidth().padding(end = 48.dp)) {
-        Surface(shape = RoundedCornerShape(28.dp), color = cs.primaryContainer) {
+        Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg), color = cs.primaryContainer) {
             Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 MorphIconButton(onClick = {
                     if (playing) { com.past9.phoneaos.voice.Tts.stop(); playing = false }
-                    else if (hasAudio) { com.past9.phoneaos.voice.Tts.play(java.io.File(path)) { playing = false }; playing = true }
-                }, size = 48.dp, container = if (hasAudio) cs.primary else cs.surfaceContainerHigh, enabled = hasAudio) {
-                    Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing) stringResource(R.string.chat_pause) else stringResource(R.string.chat_play), tint = if (hasAudio) cs.onPrimary else cs.onSurfaceVariant) }
+                    else if (hasAudio) play(path)
+                    else if (canGet) { playError = null; wantPlay = true; rs?.getNote(item.id) }
+                }, size = 48.dp, container = if (tappable) cs.primary else cs.surfaceContainerHigh, enabled = tappable && !spinning) {
+                    if (spinning) LoadingIndicator(Modifier.size(24.dp))
+                    else Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing) "Pause" else if (tappable) "Play" else "Audio unavailable", tint = if (tappable) cs.onPrimary else cs.onSurfaceVariant) }
                 Spacer(Modifier.width(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (hasAudio) Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
                     repeat(18) { i ->
                         val h = (8 + ((i * 37) % 17)) * (if (playing) 0.6f + 0.6f * ((wave + i * 0.13f) % 1f) else 1f)
                         Box(Modifier.width(3.dp).height(h.dp).clip(RoundedCornerShape(50)).background(cs.onPrimaryContainer.copy(alpha = if (playing) 0.9f else 0.5f)))
                     }
-                }
+                } else if (spinning) Text("Getting the audio…", style = MaterialTheme.typography.labelLarge, color = cs.onPrimaryContainer)
+                else if (onComputer) Text(com.past9.phoneaos.remote.RemoteRows.noteSizeLabel(meta).let { if (it.isBlank()) "Tap to play" else "Tap to play · $it" }, style = MaterialTheme.typography.labelLarge, color = cs.onPrimaryContainer)
+                else Text("Audio unavailable", style = MaterialTheme.typography.labelLarge, color = cs.error)
                 Spacer(Modifier.width(10.dp))
-                TextButton(onClick = { showText = !showText }) { Text(if (showText) stringResource(R.string.chat_hide) else stringResource(R.string.chat_read_it), color = cs.onPrimaryContainer) }
+                TextButton(onClick = { showText = !showText }) { Text(if (showText) "Hide" else "Read it", color = cs.onPrimaryContainer) }
             }
+        }
+        if (why != null && !spinning) Row(Modifier.padding(top = 6.dp, start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.ErrorOutline, null, Modifier.size(16.dp), tint = cs.error); Spacer(Modifier.width(6.dp))
+            Text(why, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f, fill = false))
+            if (remoteName.isNotBlank() && playError == null && rs != null)
+                TextButton(onClick = { wantPlay = true; rs.retryNote(item.id) }) { Text("Try again") }
         }
         AnimatedVisibility(showText) { Markdown(item.text, Modifier.padding(top = 8.dp, start = 4.dp), style = MaterialTheme.typography.bodyMedium) }
     }
@@ -473,9 +575,16 @@ private fun VoiceBubble(item: ChatItem) {
 @Composable
 private fun UserBubble(item: ChatItem) {
     val text = item.text
+    // Not his: a project, the main agent, a call or a helper wrote it (meta.via, as the computer marks it). It says who,
+    // in a neutral bubble, never his own colour (22 Oct 2026: other agents' messages showed as if he sent them).
+    val sender = com.past9.phoneaos.remote.Sender.of(item.meta)
+    if (sender != null) Row(Modifier.fillMaxWidth().padding(start = 48.dp, bottom = 4.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+        Icon(senderIcon(sender), null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant); Spacer(Modifier.width(6.dp))
+        Text(sender.line, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
     val images = JSONObject(item.meta).optJSONArray("images")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
     if (images.isNotEmpty()) Box(Modifier.fillMaxWidth().padding(start = 64.dp, bottom = 6.dp), contentAlignment = Alignment.CenterEnd) {
-        com.past9.phoneaos.ui.ImageStrip(images.map { com.past9.phoneaos.ui.ChatImage(java.io.File(it).toURI().toString(), stringResource(R.string.chat_your_photo)) })
+        com.past9.phoneaos.ui.ImageStrip(images.map { com.past9.phoneaos.ui.ChatImage(java.io.File(it).toURI().toString(), "Your photo") })
     }
     val files = JSONObject(item.meta).optJSONArray("files")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
     if (files.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(start = 48.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
@@ -489,10 +598,19 @@ private fun UserBubble(item: ChatItem) {
         }
     }
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-        Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(24.dp, 24.dp, 6.dp, 24.dp), modifier = Modifier.widthIn(max = 320.dp).padding(start = 48.dp)) {
-            Text(text.substringBefore("\n\n[Attached document:").substringBefore("\n\n[Shared with you").ifBlank { stringResource(R.string.chat_heres_a_document) }, Modifier.padding(horizontal = 16.dp, vertical = 11.dp), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+        Surface(color = if (sender == null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg, com.past9.phoneaos.ui.theme.Radius.lg, com.past9.phoneaos.ui.theme.Radius.xs, com.past9.phoneaos.ui.theme.Radius.lg), modifier = Modifier.widthIn(max = 320.dp).padding(start = 48.dp)) {
+            Text(text.substringBefore("\n\n[Attached document:").substringBefore("\n\n[Shared with you").ifBlank { "Here's a document." }, Modifier.padding(horizontal = 16.dp, vertical = 11.dp), style = MaterialTheme.typography.bodyLarge,
+                color = if (sender == null) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
         }
     }
+}
+
+private fun senderIcon(s: com.past9.phoneaos.remote.Sender): ImageVector = when (s.from) {
+    "call" -> Icons.Rounded.Call
+    "main" -> Icons.Rounded.Person
+    "routine" -> Icons.Rounded.Schedule
+    "helper", "worker", "system" -> Icons.Rounded.AutoAwesome
+    else -> Icons.Rounded.Folder
 }
 
 @Composable
@@ -504,10 +622,12 @@ private fun AgentMessage(item: ChatItem, quoted: ChatItem? = null, onQuote: (Lon
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 6.dp)) {
                 Icon(Icons.Rounded.Schedule, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(6.dp))
-                Text(stringResource(R.string.chat_routine_eyebrow, routine.uppercase()), style = Eyebrow, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("ROUTINE · ${routine.uppercase()}", style = Eyebrow, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         Markdown(com.past9.phoneaos.voice.Tts.stripEmoji(item.text))
+        // A reply that links a mini-app (agent://miniapp/<id>, from miniapp_open): a card that opens it on this phone.
+        com.past9.phoneaos.miniapps.MiniAppRules.linksIn(item.text).forEach { id -> Spacer(Modifier.height(8.dp)); com.past9.phoneaos.miniapps.MiniAppCard(id) }
     }
 }
 
@@ -515,15 +635,15 @@ private fun AgentMessage(item: ChatItem, quoted: ChatItem? = null, onQuote: (Lon
 @Composable
 fun ReplyQuote(quoted: ChatItem, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    Surface(onClick = onClick, shape = RoundedCornerShape(14.dp), color = cs.surfaceContainerLow, modifier = Modifier.widthIn(max = 340.dp)) {
+    Surface(onClick = onClick, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm), color = cs.surfaceContainerLow, modifier = Modifier.widthIn(max = 340.dp)) {
         Row(Modifier.height(IntrinsicSize.Min)) {
             Box(Modifier.width(4.dp).fillMaxHeight().background(cs.primary))
             Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.AutoMirrored.Rounded.Reply, null, Modifier.size(14.dp), tint = cs.primary); Spacer(Modifier.width(4.dp))
-                    Text(stringResource(R.string.chat_replying_to_you), style = MaterialTheme.typography.labelMedium, color = cs.primary)
+                    Text(com.past9.phoneaos.remote.Sender.of(quoted.meta)?.let { "Replying to " + it.line.removePrefix("From ") } ?: "Replying to you", style = MaterialTheme.typography.labelMedium, color = cs.primary)
                 }
-                Text(quoted.text.substringBefore("\n\n[Attached document:").trim().ifBlank { stringResource(R.string.chat_photo_or_document) }, style = MaterialTheme.typography.bodySmall,
+                Text(quoted.text.substringBefore("\n\n[Attached document:").trim().ifBlank { "A photo or document" }, style = MaterialTheme.typography.bodySmall,
                     color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
@@ -536,22 +656,22 @@ fun ReportCard(item: ChatItem, onOpen: () -> Unit) {
     val meta = JSONObject(item.meta)
     val cs = MaterialTheme.colorScheme
     val minutes = (meta.optInt("words") / 220).coerceAtLeast(1)
-    Surface(onClick = onOpen, shape = RoundedCornerShape(28.dp), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
+    Surface(onClick = onOpen, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(cs.primaryContainer), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(48.dp).clip(RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm)).background(cs.primaryContainer), contentAlignment = Alignment.Center) {
                     Icon(Icons.AutoMirrored.Rounded.Article, null, tint = cs.onPrimaryContainer)
                 }
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.chat_report_eyebrow, minutes), style = Eyebrow, color = cs.primary)
-                    Text(meta.optString("title").ifBlank { stringResource(R.string.chat_report) }, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text("REPORT · $minutes MIN READ", style = Eyebrow, color = cs.primary)
+                    Text(meta.optString("title").ifBlank { "Report" }, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
             if (item.text.isNotBlank()) Text(item.text, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 12.dp))
             Spacer(Modifier.height(14.dp))
             Button(onClick = onOpen, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shapes = ButtonDefaults.shapes()) {
-                Text(stringResource(R.string.chat_read_the_report)); Spacer(Modifier.width(8.dp)); Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, Modifier.size(18.dp))
+                Text("Read the report"); Spacer(Modifier.width(8.dp)); Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, Modifier.size(18.dp))
             }
         }
     }
@@ -569,23 +689,23 @@ fun iconFor(tool: String): ImageVector = when (tool) {
 private fun CallRow(items: List<ChatItem>, agentName: String) {
     var open by remember { mutableStateOf(false) }
     val cs = MaterialTheme.colorScheme
-    Surface(onClick = { open = !open }, shape = RoundedCornerShape(20.dp), color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+    Surface(onClick = { open = !open }, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md), color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp).animateContentSize()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(28.dp).clip(RoundedCornerShape(10.dp)).background(cs.primaryContainer), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(28.dp).clip(RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm)).background(cs.primaryContainer), contentAlignment = Alignment.Center) {
                     Icon(Icons.Rounded.Call, null, Modifier.size(16.dp), tint = cs.onPrimaryContainer)
                 }
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(pluralStringResource(R.plurals.chat_voice_call_messages, items.size, items.size), style = MaterialTheme.typography.labelLarge, color = cs.onSurface)
+                    Text("Voice call · ${items.size} message${if (items.size == 1) "" else "s"}", style = MaterialTheme.typography.labelLarge, color = cs.onSurface)
                     if (!open) Text(items.last().text, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, if (open) stringResource(R.string.chat_hide_call) else stringResource(R.string.chat_show_call), tint = cs.onSurfaceVariant)
+                Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, if (open) "Hide the call" else "Show the call", tint = cs.onSurfaceVariant)
             }
             if (open) Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items.forEach { i ->
                     val me = i.kind == "user"
-                    Text(if (me) stringResource(R.string.chat_you) else agentName, style = MaterialTheme.typography.labelMedium, color = if (me) cs.onSurfaceVariant else cs.primary)
+                    Text(if (me) "You" else agentName, style = MaterialTheme.typography.labelMedium, color = if (me) cs.onSurfaceVariant else cs.primary)
                     Text(i.text, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface)
                 }
             }
@@ -600,7 +720,7 @@ private fun StepsRow(items: List<ChatItem>) {
     val last = items.last()
     Column(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable { open = !open }.padding(vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(28.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.secondaryContainer), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(28.dp).clip(RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm)).background(MaterialTheme.colorScheme.secondaryContainer), contentAlignment = Alignment.Center) {
                 Icon(iconFor(JSONObject(last.meta).optString("tool")), null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
             }
             Spacer(Modifier.width(10.dp))
@@ -608,9 +728,9 @@ private fun StepsRow(items: List<ChatItem>) {
                 maxLines = if (open) 3 else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             if (items.size > 1) {
                 val routine = items.all { JSONObject(it.meta).optString("by") == "routine" }
-                Text(if (routine) pluralStringResource(R.plurals.chat_routine_steps_count, items.size, items.size) else pluralStringResource(R.plurals.chat_steps_count, items.size, items.size), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 8.dp))
+                Text(if (routine) "Routine · ${items.size} steps" else "${items.size} steps", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 8.dp))
             }
-            if (items.size > 1) Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, if (open) stringResource(R.string.chat_hide_steps) else stringResource(R.string.chat_show_steps), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (items.size > 1) Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, if (open) "Hide steps" else "Show steps", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         AnimatedVisibility(open && (items.size > 1 || JSONObject(last.meta).has("result")), enter = expandVertically(spring(0.8f, 380f)) + fadeIn(), exit = shrinkVertically() + fadeOut()) {
             Column(Modifier.padding(start = 38.dp, top = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -623,9 +743,9 @@ private fun StepsRow(items: List<ChatItem>) {
                     }
                     // A command on a machine: its last lines of output, terminal style.
                     JSONObject(a.meta).optString("result").takeIf { it.isNotBlank() && JSONObject(a.meta).optString("tool") == "machine" }?.let { out ->
-                        Surface(shape = RoundedCornerShape(12.dp), color = androidx.compose.ui.graphics.Color(0xFF15161A), modifier = Modifier.fillMaxWidth().padding(start = 22.dp)) {
+                        Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm), color = com.past9.phoneaos.ui.theme.Media.terminal, modifier = Modifier.fillMaxWidth().padding(start = 22.dp)) {
                             Text(out.trim().lines().takeLast(8).joinToString("\n"), Modifier.horizontalScroll(rememberScrollState()).padding(10.dp),
-                                style = MaterialTheme.typography.labelSmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace), color = androidx.compose.ui.graphics.Color(0xFFD8F3DC))
+                                style = MaterialTheme.typography.labelSmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace), color = com.past9.phoneaos.ui.theme.Media.onTerminal)
                         }
                     }
                 }
@@ -641,7 +761,11 @@ private fun ImageActivity(item: ChatItem) {
     AppCard(padding = PaddingValues(10.dp)) {
         Text(item.text, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = 6.dp, bottom = 8.dp, top = 2.dp))
         if (bmp != null) androidx.compose.foundation.Image(bmp, item.text, Modifier.fillMaxWidth().heightIn(max = 420.dp).clip(MaterialTheme.shapes.medium), contentScale = ContentScale.Crop, alignment = Alignment.TopCenter)
-        else Text(stringResource(R.string.chat_screenshot_gone), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(6.dp))
+        else {
+            Text("Screenshot no longer available", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(6.dp))
+            val rs = com.past9.phoneaos.remote.RemoteHub.session.value
+            if (rs != null && rs.metered) TextButton(onClick = { rs.fetchMediaFor(item.id) }) { Text("Load picture") }
+        }
     }
 }
 
@@ -669,17 +793,17 @@ fun BranchRow(item: ChatItem, steps: List<ChatItem>) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.CallSplit, null, Modifier.size(14.dp), tint = if (state == "failed") cs.error else cs.onSurfaceVariant)
             Spacer(Modifier.width(6.dp))
-            Text(stringResource(R.string.chat_branch_row, label, item.text.take(32) + if (item.text.length > 32) "..." else ""), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("Branch · $label · ${item.text.take(32)}${if (item.text.length > 32) "..." else ""}", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
-    if (open) ModalBottomSheet(onDismissRequest = { open = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = cs.surfaceContainerLow) {
+    if (open) com.past9.phoneaos.ui.AgentSheet({ open = false }) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 32.dp)) {
-            Text(stringResource(R.string.chat_branch_eyebrow), style = com.past9.phoneaos.ui.theme.Eyebrow, color = cs.onSurfaceVariant)
+            Text("BRANCH", style = com.past9.phoneaos.ui.theme.Eyebrow, color = cs.onSurfaceVariant)
             Text(item.text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp))
-            Text("${relationLabel(m.optString("relation"))} · $label", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp, bottom = 16.dp))
-            if (steps.isEmpty()) Text(stringResource(R.string.chat_branch_nothing), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+            Text("${m.optString("relation").replaceFirstChar { it.uppercase() }} · $label", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp, bottom = 16.dp))
+            if (steps.isEmpty()) Text("Nothing logged yet.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
             steps.forEach { a ->
-                Text(if (a.kind == "agent") stringResource(R.string.chat_branch_said, a.text) else a.text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 5.dp))
+                Text((if (a.kind == "agent") "Said: " else "") + a.text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 5.dp))
             }
             m.optString("error").takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.error, modifier = Modifier.padding(top = 10.dp)) }
         }
@@ -687,26 +811,15 @@ fun BranchRow(item: ChatItem, steps: List<ChatItem>) {
 }
 
 /** "working", "done", "merged"... */
-@Composable
 fun branchStateLabel(state: String, merged: Boolean) = when {
-    merged -> stringResource(R.string.chat_branch_merged)
-    state == "running" -> stringResource(R.string.chat_branch_working)
-    state == "done" -> stringResource(R.string.chat_branch_done)
-    state == "superseded" -> stringResource(R.string.chat_branch_superseded)
-    state == "interrupted" -> stringResource(R.string.chat_branch_interrupted)
-    state == "failed" -> stringResource(R.string.chat_branch_failed)
-    state == "stopped" -> stringResource(R.string.chat_branch_stopped)
+    merged -> "merged"
+    state == "running" -> "working"
+    state == "done" -> "done"
+    state == "superseded" -> "replaced by your correction"
+    state == "interrupted" -> "interrupted"
+    state == "failed" -> "failed"
+    state == "stopped" -> "stopped"
     else -> state
-}
-
-/** How a branch relates to the work it joined (Relation.word), for its sheet. */
-@Composable
-private fun relationLabel(word: String) = when (word) {
-    "supersede" -> stringResource(R.string.chat_branch_rel_supersede)
-    "related" -> stringResource(R.string.chat_branch_rel_related)
-    "parallel" -> stringResource(R.string.chat_branch_rel_parallel)
-    "ack" -> stringResource(R.string.chat_branch_rel_ack)
-    else -> word.replaceFirstChar { it.uppercase() }
 }
 
 /** The user's cards, so a card in the chat can show its live headline. */
@@ -721,12 +834,12 @@ fun QuestionCard(item: ChatItem, onAnswer: (Long, String) -> Unit, onBrowser: ()
     val opts = meta.optJSONArray("options")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList()
     if (answer.isEmpty()) {
         // Waiting on you: an OpenUI card with one button per answer, and always a No.
-        val why = meta.optString("why").takeIf { it.isNotBlank() }?.let { "${meta.optString("whyBy").ifBlank { stringResource(R.string.chat_your_agent) }}: $it" }
-        com.past9.phoneaos.ui.openui.AskCard(stringResource(R.string.chat_needs_you_title), why, item.text, opts, { o -> if (o == "Open browser") onBrowser() else onAnswer(item.id, o) })
+        val why = meta.optString("why").takeIf { it.isNotBlank() }?.let { "${meta.optString("whyBy").ifBlank { "Your agent" }}: $it" }
+        com.past9.phoneaos.ui.openui.AskCard("Needs you", why, item.text, opts, { o -> if (o == "Open browser") onBrowser() else onAnswer(item.id, o) })
         return
     }
     AppCard(container = MaterialTheme.colorScheme.surfaceContainerLow) {
-        Text(stringResource(R.string.chat_you_answered), style = Eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("YOU ANSWERED", style = Eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(6.dp))
         Text(item.text, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
         Spacer(Modifier.height(14.dp))
@@ -741,7 +854,7 @@ fun QuestionCard(item: ChatItem, onAnswer: (Long, String) -> Unit, onBrowser: ()
 @Composable
 private fun WhyLine(meta: JSONObject, color: androidx.compose.ui.graphics.Color) {
     val why = meta.optString("why").takeIf { it.isNotBlank() } ?: return
-    Text("${meta.optString("whyBy").ifBlank { stringResource(R.string.chat_your_agent) }}: $why", style = MaterialTheme.typography.bodyMedium, color = color.copy(alpha = 0.85f))
+    Text("${meta.optString("whyBy").ifBlank { "Your agent" }}: $why", style = MaterialTheme.typography.bodyMedium, color = color.copy(alpha = 0.85f))
     Spacer(Modifier.height(8.dp))
 }
 
@@ -772,7 +885,7 @@ fun ConnectCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
             Spacer(Modifier.width(12.dp))
             Text(req.name, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
             val ok = answer == "Connect"
-            StatusPill(if (ok) stringResource(R.string.chat_opened_sign_in) else if (answer == "Decline") stringResource(R.string.chat_declined) else stringResource(R.string.chat_answered), if (ok) cs.secondaryContainer else cs.surfaceContainerHigh, if (ok) cs.onSecondaryContainer else cs.onSurfaceVariant)
+            StatusPill(if (ok) "Opened sign-in" else if (answer == "Decline") "Declined" else "Answered", if (ok) cs.secondaryContainer else cs.surfaceContainerHigh, if (ok) cs.onSecondaryContainer else cs.onSurfaceVariant)
         }
         return
     }
@@ -782,7 +895,7 @@ fun ConnectCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
                 AppLogo(req.name, req.logo, 56.dp)
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.chat_connect_an_app), style = Eyebrow, color = cs.primary)
+                    Text("CONNECT AN APP", style = Eyebrow, color = cs.primary)
                     Spacer(Modifier.height(2.dp))
                     Text(req.name, style = MaterialTheme.typography.headlineSmall, color = cs.onSurface, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 }
@@ -790,18 +903,18 @@ fun ConnectCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
             Spacer(Modifier.height(14.dp))
             WhyLine(JSONObject(item.meta), cs.onSurfaceVariant)
             val why = req.reason.removePrefix("so I can ").removePrefix("So I can ").trim().trimEnd('.', '?')
-            Text(if (why.isNotBlank()) stringResource(R.string.chat_connect_why, why) else stringResource(R.string.chat_connect_needs, req.name), style = MaterialTheme.typography.bodyLarge, color = cs.onSurface)
+            Text(if (why.isNotBlank()) "So I can $why." else "This task needs ${req.name}.", style = MaterialTheme.typography.bodyLarge, color = cs.onSurface)
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.Top) {
                 Icon(Icons.Rounded.Lock, null, Modifier.size(16.dp).padding(top = 2.dp), tint = cs.onSurfaceVariant)
                 Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.chat_connect_privacy, req.name), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                Text("You sign in to ${req.name} yourself, through Composio. Disconnect any time in Connections.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
             Spacer(Modifier.height(18.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(onClick = { onAnswer(item.id, "Decline") }, modifier = Modifier.weight(1f).heightIn(min = 52.dp), shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.chat_decline)) }
+                OutlinedButton(onClick = { onAnswer(item.id, "Decline") }, modifier = Modifier.weight(1f).heightIn(min = 52.dp), shapes = ButtonDefaults.shapes()) { Text("Decline") }
                 Button(onClick = { onAnswer(item.id, "Connect") }, modifier = Modifier.weight(1.4f).heightIn(min = 52.dp), shapes = ButtonDefaults.shapes()) {
-                    Icon(Icons.Rounded.Link, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.chat_connect))
+                    Icon(Icons.Rounded.Link, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Connect")
                 }
             }
         }
@@ -826,13 +939,13 @@ fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
         val ok = answer == "Approve"
         Column(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable { open = !open }.padding(vertical = 4.dp).animateContentSize()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(28.dp).clip(RoundedCornerShape(10.dp)).background(if (ok) LocalExtra.current.successContainer else cs.surfaceContainerHigh), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(28.dp).clip(RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm)).background(if (ok) LocalExtra.current.successContainer else cs.surfaceContainerHigh), contentAlignment = Alignment.Center) {
                     Icon(if (ok) Icons.Rounded.Check else Icons.Rounded.Close, null, Modifier.size(16.dp), tint = if (ok) LocalExtra.current.success else cs.onSurfaceVariant)
                 }
                 Spacer(Modifier.width(10.dp))
                 Text(action, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                Text(if (ok) stringResource(R.string.chat_approved) else if (answer == "Decline") stringResource(R.string.chat_declined) else stringResource(R.string.chat_answered), style = MaterialTheme.typography.labelMedium, color = if (ok) LocalExtra.current.success else cs.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
-                Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, if (open) stringResource(R.string.chat_hide) else stringResource(R.string.chat_show_approved), tint = cs.onSurfaceVariant)
+                Text(if (ok) "Approved" else if (answer == "Decline") "Declined" else "Answered", style = MaterialTheme.typography.labelMedium, color = if (ok) LocalExtra.current.success else cs.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
+                Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, if (open) "Hide" else "Show what was approved", tint = cs.onSurfaceVariant)
             }
             if (open) Box(Modifier.padding(start = 38.dp, top = 8.dp)) { ApprovalDetails(details) }
         }
@@ -842,7 +955,7 @@ fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(if (details.startsWith("$ ")) Icons.Rounded.Terminal else Icons.Rounded.Shield, null, tint = cs.onTertiaryContainer, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.chat_approve_before), style = Eyebrow, color = cs.onTertiaryContainer)
+            Text("APPROVE BEFORE I DO THIS", style = Eyebrow, color = cs.onTertiaryContainer)
         }
         Spacer(Modifier.height(6.dp))
         WhyLine(JSONObject(item.meta), cs.onTertiaryContainer)
@@ -853,7 +966,7 @@ fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
         HoldToApprove { onAnswer(item.id, "Approve") }
         Spacer(Modifier.height(8.dp))
         TextButton(onClick = { onAnswer(item.id, "Decline") }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Text(stringResource(R.string.chat_decline), color = cs.onTertiaryContainer)
+            Text("Decline", color = cs.onTertiaryContainer)
         }
     }
 }
@@ -864,9 +977,9 @@ private fun ApprovalDetails(details: String) {
     val cs = MaterialTheme.colorScheme
     val json = remember(details) { runCatching { JSONObject(details) }.getOrNull() }
     when {
-        details.startsWith("$ ") -> Surface(shape = MaterialTheme.shapes.medium, color = androidx.compose.ui.graphics.Color(0xFF15161A), modifier = Modifier.fillMaxWidth()) {
+        details.startsWith("$ ") -> Surface(shape = MaterialTheme.shapes.medium, color = com.past9.phoneaos.ui.theme.Media.terminal, modifier = Modifier.fillMaxWidth()) {
             Text(details, Modifier.horizontalScroll(rememberScrollState()).padding(14.dp), style = MaterialTheme.typography.bodySmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace),
-                color = androidx.compose.ui.graphics.Color(0xFFD8F3DC))
+                color = com.past9.phoneaos.ui.theme.Media.onTerminal)
         }
         json != null -> Surface(shape = MaterialTheme.shapes.medium, color = cs.surfaceContainerLowest, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp).heightIn(max = 320.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -886,16 +999,13 @@ private fun ApprovalDetails(details: String) {
 }
 
 /** App-action JSON as label/value pairs a person can read: "to" -> "To", nested tool calls become headed groups. "#" marks a heading. */
-@Composable
 fun readableFields(o: JSONObject): List<Pair<String, String>> {
-    val none = stringResource(R.string.chat_field_none); val yes = stringResource(R.string.chat_field_yes); val no = stringResource(R.string.chat_field_no)
-    val actionWord = stringResource(R.string.chat_field_action); val accountWord = stringResource(R.string.chat_field_account)
     fun label(k: String) = k.replace('_', ' ').replace(Regex("([a-z])([A-Z])"), "$1 $2").lowercase().replaceFirstChar { it.uppercase() }
     fun value(v: Any?): String = when (v) {
-        null, JSONObject.NULL -> none
+        null, JSONObject.NULL -> "None"
         is org.json.JSONArray -> (0 until v.length()).joinToString(", ") { value(v.opt(it)) }
         is JSONObject -> v.keys().asSequence().joinToString(" · ") { "${label(it)}: ${value(v.opt(it))}" }
-        is Boolean -> if (v) yes else no
+        is Boolean -> if (v) "Yes" else "No"
         else -> v.toString()
     }
     val out = mutableListOf<Pair<String, String>>()
@@ -903,8 +1013,8 @@ fun readableFields(o: JSONObject): List<Pair<String, String>> {
     if (tools != null) {
         for (i in 0 until tools.length()) {
             val t = tools.optJSONObject(i) ?: continue
-            out += ("#" + label(t.optString("tool_slug").substringAfter('_')).ifBlank { actionWord } + (t.optString("tool_slug").substringBefore('_').takeIf { it.isNotBlank() }?.let { " · ${label(it)}" } ?: "")) to ""
-            t.optString("account").takeIf { it.isNotBlank() }?.let { out += accountWord to it }
+            out += ("#" + label(t.optString("tool_slug").substringAfter('_')).ifBlank { "Action" } + (t.optString("tool_slug").substringBefore('_').takeIf { it.isNotBlank() }?.let { " · ${label(it)}" } ?: "")) to ""
+            t.optString("account").takeIf { it.isNotBlank() }?.let { out += "Account" to it }
             t.optJSONObject("arguments")?.let { a -> a.keys().forEach { k -> out += label(k) to value(a.opt(k)) } }
         }
         return out
@@ -921,7 +1031,6 @@ private fun FileCard(item: ChatItem) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val cs = MaterialTheme.colorScheme
     var saved by remember { mutableStateOf<String?>(null) }
-    val savedMsg = stringResource(R.string.chat_saved_to_downloads)
     val ext = file.extension.lowercase()
     val icon = when (ext) {
         "pdf" -> Icons.Rounded.PictureAsPdf; "png", "jpg", "jpeg", "webp", "gif" -> Icons.Rounded.Image; "mp4", "mov", "mkv" -> Icons.Rounded.Movie
@@ -929,36 +1038,36 @@ private fun FileCard(item: ChatItem) {
         else -> Icons.Rounded.Description
     }
     val mime = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
-    Surface(shape = RoundedCornerShape(24.dp), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(cs.primaryContainer), contentAlignment = Alignment.Center) { Icon(icon, null, tint = cs.onPrimaryContainer) }
+                Box(Modifier.size(48.dp).clip(RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm)).background(cs.primaryContainer), contentAlignment = Alignment.Center) { Icon(icon, null, tint = cs.onPrimaryContainer) }
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(file.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(listOfNotNull(humanSize(file.length()), meta.optString("from").takeIf { it.isNotBlank() }?.let { stringResource(R.string.chat_file_from, it) }).joinToString(" · "),
+                    Text(listOfNotNull(humanSize(file.length()), meta.optString("from").takeIf { it.isNotBlank() }?.let { "from $it" }).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
             }
-            if (!file.exists()) { Text(stringResource(R.string.chat_file_gone), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 10.dp)); return@Column }
+            if (!file.exists()) { Text("This file is no longer on the phone.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 10.dp)); return@Column }
             Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(onClick = {
-                    saved = runCatching { saveToDownloads(ctx, file, mime) }.fold({ savedMsg }, { ctx.getString(R.string.chat_couldnt_save, it.message) })
+                    saved = runCatching { saveToDownloads(ctx, file, mime) }.fold({ "Saved to Downloads" }, { "Couldn't save: ${it.message}" })
                 }, modifier = Modifier.weight(1f).heightIn(min = 48.dp), shapes = ButtonDefaults.shapes()) {
-                    Icon(if (saved == savedMsg) Icons.Rounded.Check else Icons.Rounded.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(if (saved == savedMsg) stringResource(R.string.chat_saved) else stringResource(R.string.chat_save))
+                    Icon(if (saved == "Saved to Downloads") Icons.Rounded.Check else Icons.Rounded.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(if (saved == "Saved to Downloads") "Saved" else "Save")
                 }
                 Button(onClick = {
                     runCatching {
                         val uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", file)
                         ctx.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(uri, mime)
                             .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION), file.name).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-                    }.onFailure { saved = ctx.getString(R.string.chat_no_app_opens, ext) }
+                    }.onFailure { saved = "No app here opens .$ext files. Tap Save instead." }
                 }, modifier = Modifier.weight(1f).heightIn(min = 48.dp), shapes = ButtonDefaults.shapes()) {
-                    Icon(Icons.Rounded.OpenInNew, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.chat_open))
+                    Icon(Icons.Rounded.OpenInNew, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Open")
                 }
             }
-            saved?.takeIf { it != savedMsg }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.error, modifier = Modifier.padding(top = 8.dp)) }
+            saved?.takeIf { it != "Saved to Downloads" }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.error, modifier = Modifier.padding(top = 8.dp)) }
         }
     }
 }
@@ -985,7 +1094,7 @@ fun HoldToApprove(onDone: () -> Unit) {
             .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(); holding = true; waitForUpOrCancellation(); holding = false } },
     ) {
         Box(Modifier.fillMaxSize().drawBehind { drawRect(fill, size = size.copy(width = size.width * p)) }, contentAlignment = Alignment.Center) {
-            Text(if (holding) stringResource(R.string.chat_keep_holding) else stringResource(R.string.chat_hold_to_approve), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
+            Text(if (holding) "Keep holding…" else "Hold to approve", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
         }
     }
 }
@@ -999,70 +1108,270 @@ private fun Notice(item: ChatItem) {
     }
 }
 
+/** "Sent to Acme": an @-mention went to that project's chat on the computer; a tap opens it. */
+@Composable
+fun MentionSent(sent: com.past9.phoneaos.remote.MentionNotice, onOpen: () -> Unit) {
+    val project = com.past9.phoneaos.remote.RemoteHub.session.collectAsStateWithLifecycle().value?.mentions?.collectAsStateWithLifecycle()?.value?.firstOrNull { it.id == sent.project }
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Surface(onClick = onOpen, shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.heightIn(min = 40.dp)) {
+            Row(Modifier.padding(start = 8.dp, end = 14.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (project != null) com.past9.phoneaos.ui.ProjectIconTile(project.name, project.glyph, project.color, project.image, 24.dp)
+                else Icon(Icons.Rounded.ChatBubble, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(8.dp))
+                Text(buildString { append("Sent to "); append(sent.name); if (sent.fresh) append(" in a new chat"); if (sent.said.isNotBlank()) { append(": "); append(sent.said) } }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 240.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Open chat", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            }
+        }
+    }
+}
+
+/**
+ * A project's answer to what he sent it with '@' (the computer copies it here when that chat has answered): the
+ * project's tile and colour, the answer, a way into the chat, and a reply that goes back to that same project chat
+ * (its answer comes back here as another card).
+ */
+@Composable
+fun MentionReplyCard(item: ChatItem, reply: com.past9.phoneaos.remote.MentionReply, onOpen: () -> Unit) {
+    val session = com.past9.phoneaos.remote.RemoteHub.session.collectAsStateWithLifecycle().value
+    val image = session?.mentions?.collectAsStateWithLifecycle()?.value?.firstOrNull { it.id == reply.project }?.image.orEmpty()
+    val (toneBg, toneFg) = profileTones(reply.color)
+    // Kept outside the list item (ReplyDrafts): scrolling, the keyboard or the picker must not lose the reply.
+    val drafts = com.past9.phoneaos.ui.ReplyDrafts
+    val draftKey = item.id.toString()
+    val replying = drafts.isOpen(draftKey)
+    val box = drafts.box(draftKey)
+    val tools = com.past9.phoneaos.ui.LocalComposerTools.current
+    var problem by remember(item.id) { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val long = item.text.length > 600
+    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                com.past9.phoneaos.ui.ProjectIconTile(reply.name, reply.glyph, reply.color, image, 28.dp)
+                Spacer(Modifier.width(10.dp))
+                Surface(shape = RoundedCornerShape(50), color = toneBg, modifier = Modifier.weight(1f, fill = false)) {
+                    Text(reply.name, style = MaterialTheme.typography.labelLarge, color = toneFg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+                }
+                Spacer(Modifier.width(6.dp))
+                Text("replied", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Spacer(Modifier.height(8.dp))
+            Markdown(if (long) item.text.take(600).trimEnd() + "…" else item.text, style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilledTonalButton(onClick = onOpen, modifier = Modifier.heightIn(min = 44.dp)) { Text("Open ${reply.name} chat", maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                OutlinedButton(onClick = { drafts.setOpen(draftKey, !replying) }, modifier = Modifier.heightIn(min = 44.dp)) { Text("Reply") }
+            }
+            if (replying) {
+                Spacer(Modifier.height(6.dp))
+                // The same message box as every chat: photos, documents, camera, mic.
+                val acts = com.past9.phoneaos.ui.composerActionsFor(box, tools, working = false, scope = com.past9.phoneaos.App.graph(androidx.compose.ui.platform.LocalContext.current).scope, send = { text, pics, files ->
+                    val s = session ?: throw java.io.IOException("Not linked to a computer.")
+                    problem = ""
+                    s.replyTo(reply.chat, text, pics, files)
+                    drafts.sent(draftKey)
+                }, onFailed = { problem = "Couldn't send that: $it. Your words are still here." })
+                MessageComposer(box.draft, { box.draft = it }, false, acts, box.attachments, box.docs.keys.toList(), tools?.listening(box) == true,
+                    placeholder = "Reply to ${reply.name}", inset = false, dictationOwner = box, sending = box.sending,
+                    failed = box.failed, onRetry = box.retry)
+            }
+            if (problem.isNotEmpty()) Text(problem, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
+        }
+    }
+}
+
+/** The invisible mark the message box keeps right after a project chip (Backspace on it takes the chip away). */
+internal const val CHIP_MARK = "\u200B"
+
+/** The field with the chip's mark first, and the caret and the keyboard's word kept after it. */
+internal fun afterMark(v: androidx.compose.ui.text.input.TextFieldValue): androidx.compose.ui.text.input.TextFieldValue {
+    if (!v.text.startsWith(CHIP_MARK)) { val t = CHIP_MARK + v.text.replace(CHIP_MARK, ""); return androidx.compose.ui.text.input.TextFieldValue(t, androidx.compose.ui.text.TextRange(t.length)) }
+    fun c(r: androidx.compose.ui.text.TextRange) = androidx.compose.ui.text.TextRange(r.start.coerceAtLeast(1), r.end.coerceAtLeast(1))
+    if (v.selection.min >= 1 && (v.composition?.min ?: 1) >= 1) return v
+    return v.copy(selection = c(v.selection), composition = v.composition?.let { c(it) })
+}
+
+/** The project a message goes to, in front of the words: its tile, name and colour; the x takes it away. */
+@Composable
+fun MentionChip(p: com.past9.phoneaos.remote.MentionProject, onRemove: () -> Unit) {
+    // The app's own tones for that colour (container and on-container, tuned for light and dark), as a profile tag.
+    val (bg, fg) = profileTones(p.color)
+    Surface(shape = RoundedCornerShape(50), color = bg,
+        modifier = Modifier.height(32.dp).widthIn(max = 200.dp).semantics { contentDescription = "Goes to ${p.name}" }) {
+        Row(Modifier.padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            com.past9.phoneaos.ui.ProjectIconTile(p.name, p.glyph, p.color, p.image, 24.dp)
+            Spacer(Modifier.width(8.dp))
+            Text(p.name, style = MaterialTheme.typography.labelLarge, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Box(Modifier.size(32.dp).clip(CircleShape).clickable(onClickLabel = "Do not send to ${p.name}", onClick = onRemove), contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.Close, "Do not send to ${p.name}", Modifier.size(18.dp), tint = fg)
+            }
+        }
+    }
+}
+
+/** The '@' list above the message box: the computer's projects that fit what he typed. */
+@Composable
+private fun MentionList(items: List<com.past9.phoneaos.remote.MentionProject>, onPick: (com.past9.phoneaos.remote.MentionProject) -> Unit) {
+    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp)) {
+        Column(Modifier.padding(vertical = 8.dp).heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
+            Text("SEND TO A PROJECT", style = Eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 20.dp, top = 4.dp, bottom = 6.dp))
+            items.forEach { p ->
+                // Picked the moment the finger goes down: a pick on release was lost on his phone (29 Oct 2026), and
+                // the message box keeps its focus and keyboard.
+                Surface(color = androidx.compose.ui.graphics.Color.Transparent, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                    .semantics { role = androidx.compose.ui.semantics.Role.Button; onClick(label = "Send to ${p.name}") { onPick(p); true } }
+                    .pointerInput(p.id) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false).consume(); onPick(p) } }) {
+                    Row(Modifier.heightIn(min = 56.dp).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        com.past9.phoneaos.ui.ProjectIconTile(p.name, p.glyph, p.color, p.image, 36.dp)
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(p.name, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (p.aliases.isNotEmpty()) Text(p.aliases.joinToString(", "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun WorkingRow(status: AgentStatus) {
     Row(Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         LoadingIndicator(Modifier.size(32.dp))
         Spacer(Modifier.width(8.dp))
-        Text(status.label.ifBlank { stringResource(R.string.chat_working) } + "…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(status.label.ifBlank { "Working" } + "…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
+/**
+ * THE message box: the main chat's, and every project or helper chat's on the phone (29 Oct 2026: one component, not a
+ * copy). Attach a photo or a document, the camera, the mic, '@' a project, send (swipe up for a voice reply where the
+ * chat has one). Each chat passes its own words, pictures and documents, so nothing leaks between chats.
+ */
 @Composable
-private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean, actions: ChatActions, attachments: List<String>, docs: List<String> = emptyList(), listening: Boolean = false) {
+fun MessageComposer(draft: String, onDraft: (String) -> Unit, working: Boolean, actions: com.past9.phoneaos.ui.ComposerActions, attachments: List<String>, docs: List<String> = emptyList(),
+                    listening: Boolean = false, placeholder: String? = null, inset: Boolean = true, dictationOwner: Any? = null, sending: Boolean = false,
+                    failed: String? = null, onRetry: (() -> Unit)? = null) {
     var attachMenu by remember { mutableStateOf(false) }
-    if (attachMenu) ModalBottomSheet(onDismissRequest = { attachMenu = false }) {
-        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
-            listOf(Triple(Icons.Rounded.Image, stringResource(R.string.chat_attach_photo), stringResource(R.string.chat_attach_photo_sub)) to actions.onAttach, Triple(Icons.Rounded.Description, stringResource(R.string.chat_attach_document), stringResource(R.string.chat_attach_document_sub)) to actions.onAttachDoc).forEach { (t, act) ->
-                Surface(onClick = { attachMenu = false; act() }, shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(t.first, null, tint = MaterialTheme.colorScheme.primary); Spacer(Modifier.width(14.dp))
-                        Column { Text(t.second, style = MaterialTheme.typography.titleMedium); Text(t.third, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                    }
-                }
+    if (attachMenu) com.past9.phoneaos.ui.ChoiceSheet(Icons.Rounded.AttachFile, "Attach", "Add to your message", listOfNotNull(
+        com.past9.phoneaos.ui.SheetChoice("photo", "Photo", "From your gallery", Icons.Rounded.Image),
+        com.past9.phoneaos.ui.SheetChoice("doc", "Document", "PDF, Word, text, CSV, scans", Icons.Rounded.Description),
+        actions.onRecordings?.let { com.past9.phoneaos.ui.SheetChoice("rec", "Recordings", "What you dictated, saved on this phone", Icons.Rounded.Mic) }),
+        onPick = { c -> attachMenu = false; when (c.id) { "photo" -> actions.onAttach(); "doc" -> actions.onAttachDoc(); else -> actions.onRecordings?.invoke() } }, onDismiss = { attachMenu = false })
+    // The box keeps its caret here, so the '@' word at the caret can be found and replaced (an outside change to the
+    // draft, a dictation or a send, puts the caret at the end).
+    // '@' offers the computer's projects (remote/Mentions.kt); only while linked to a computer, which routes the message.
+    val session = com.past9.phoneaos.remote.RemoteHub.session.collectAsStateWithLifecycle().value
+    val known = session?.mentions?.collectAsStateWithLifecycle()?.value.orEmpty()
+    val M = com.past9.phoneaos.remote.Mentions
+    // The draft stays '@Name words' (what the computer routes); the box shows the project as a chip in front of the
+    // words. The field then starts with one invisible mark: Backspace right after the chip deletes it, and the chip goes.
+    val chip = if (session == null) null else M.chipOf(draft, known)
+    val words = chip?.second ?: draft
+    val lead = if (chip != null) CHIP_MARK else ""
+    val fieldText = lead + words
+    var field by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(fieldText, androidx.compose.ui.text.TextRange(fieldText.length))) }
+    val shown = if (field.text == fieldText) field else androidx.compose.ui.text.input.TextFieldValue(fieldText, androidx.compose.ui.text.TextRange(fieldText.length))
+    val caretInWords = (shown.selection.start - lead.length).coerceIn(0, words.length)
+    val typing = if (session == null) null else M.atCaret(words, caretInWords)
+    var dismissedAt by remember { mutableIntStateOf(-1) }
+    LaunchedEffect(typing != null, session) { if (typing != null) session?.refreshMentions() }
+    val picks = if (typing == null || typing.first == dismissedAt || M.done(typing.second, known)) emptyList() else M.rank(typing.second, known)
+    if (picks.isNotEmpty()) androidx.activity.compose.BackHandler { dismissedAt = typing?.first ?: -1 }
+    val setChip: (com.past9.phoneaos.remote.Mentions.Chip) -> Unit = { c ->
+        field = androidx.compose.ui.text.input.TextFieldValue(CHIP_MARK + c.rest, androidx.compose.ui.text.TextRange(1 + c.caret))
+        onDraft(M.withChip(c.project, c.rest))
+    }
+    val onField: (androidx.compose.ui.text.input.TextFieldValue) -> Unit = { v ->
+        if (chip != null && !v.text.contains(CHIP_MARK)) {
+            // Backspace right after the chip: the whole chip goes in one press, the words stay.
+            field = androidx.compose.ui.text.input.TextFieldValue(v.text, androidx.compose.ui.text.TextRange(v.selection.start.coerceIn(0, v.text.length)))
+            onDraft(v.text)
+            android.util.Log.i("Mentions", "chip removed")
+        } else {
+            val raw = v.text.replace(CHIP_MARK, "")
+            val at = (v.selection.start - (if (chip != null) 1 else 0)).coerceIn(0, raw.length)
+            val made = if (session == null) null else M.chipFromTyping(raw, at, known)
+            if (made != null) {
+                setChip(made)
+                android.util.Log.i("Mentions", "chip from typing: ${made.project.name}")
+            } else {
+                // Nothing goes in front of the mark: the caret stays after it.
+                field = if (chip != null) afterMark(v) else v
+                val next = if (chip != null) M.withChip(chip.first, raw) else raw
+                if (next != draft) onDraft(next)
             }
+            if (dismissedAt >= 0 && M.atCaret(raw, at)?.first != dismissedAt) dismissedAt = -1
         }
     }
-    Surface(color = MaterialTheme.colorScheme.surface) {
-      Column(Modifier.navigationBarsPadding().imePadding()) {
+    // inset: the box sits at the bottom of a screen (system bars and keyboard); false inside a card.
+    Surface(color = if (inset) MaterialTheme.colorScheme.surface else androidx.compose.ui.graphics.Color.Transparent) {
+      Column(if (inset) Modifier.navigationBarsPadding().imePadding() else Modifier) {
+        if (picks.isNotEmpty()) MentionList(picks) { p ->
+            setChip(M.chipFromPick(words, caretInWords, p))
+            android.util.Log.i("Mentions", "picked ${p.name}")
+        }
+        // A send that did not get through: said plainly, with the words still in the box and one tap to try again.
+        if (!failed.isNullOrBlank()) Surface(color = MaterialTheme.colorScheme.errorContainer, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg),
+            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp)) {
+            Row(Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(failed, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.weight(1f))
+                if (onRetry != null) TextButton(onClick = onRetry) { Text("Retry", style = MaterialTheme.typography.labelLarge) }
+            }
+        }
         if (docs.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             docs.forEach { name ->
                 InputChip(selected = false, onClick = { actions.onRemoveDoc(name) }, label = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 180.dp)) },
-                    leadingIcon = { Icon(Icons.Rounded.Description, null, Modifier.size(18.dp)) }, trailingIcon = { Icon(Icons.Rounded.Close, stringResource(R.string.chat_remove), Modifier.size(16.dp)) }, shape = RoundedCornerShape(50))
+                    leadingIcon = { Icon(Icons.Rounded.Description, null, Modifier.size(18.dp)) }, trailingIcon = { Icon(Icons.Rounded.Close, "Remove", Modifier.size(16.dp)) }, shape = RoundedCornerShape(50))
             }
         }
         if (attachments.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             attachments.forEach { path ->
                 Box {
-                    coil.compose.AsyncImage(java.io.File(path), stringResource(R.string.chat_photo_to_send), Modifier.size(72.dp).clip(MaterialTheme.shapes.medium), contentScale = ContentScale.Crop)
+                    coil.compose.AsyncImage(java.io.File(path), "Photo to send", Modifier.size(72.dp).clip(MaterialTheme.shapes.medium), contentScale = ContentScale.Crop)
                     Surface(onClick = { actions.onRemoveAttachment(path) }, shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.inverseSurface, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(24.dp)) {
-                        Icon(Icons.Rounded.Close, stringResource(R.string.chat_remove_photo), Modifier.padding(4.dp), tint = MaterialTheme.colorScheme.inverseOnSurface)
+                        Icon(Icons.Rounded.Close, "Remove photo", Modifier.padding(4.dp), tint = MaterialTheme.colorScheme.inverseOnSurface)
                     }
                 }
             }
         }
+        // While he dictates into this box: listening, reconnecting, paused, writing down the rest, or Retry.
+        com.past9.phoneaos.ui.DictationStatus(dictationOwner)
         Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp), verticalAlignment = Alignment.Bottom) {
-            Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) {
+            Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp, end = 4.dp)) {
-                    IconButton(onClick = { attachMenu = true }) { Icon(Icons.Rounded.AttachFile, stringResource(R.string.chat_attach), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    IconButton(onClick = { attachMenu = true }) { Icon(Icons.Rounded.AttachFile, "Attach a photo or document", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                     var camBounds by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
-                    IconButton(onClick = { actions.onCamera(camBounds) }, modifier = Modifier.onGloballyPositioned { camBounds = it.boundsInRoot() }) { Icon(Icons.Rounded.PhotoCamera, stringResource(R.string.chat_take_photo), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
-                    Box(Modifier.weight(1f).padding(vertical = 16.dp)) {
-                        if (draft.isEmpty()) Text(stringResource(R.string.chat_ask_for_anything), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        BasicTextField(draft, onDraft, textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), maxLines = 6, modifier = Modifier.fillMaxWidth())
+                    IconButton(onClick = { actions.onCamera(camBounds) }, modifier = Modifier.onGloballyPositioned { camBounds = it.boundsInRoot() }) { Icon(Icons.Rounded.PhotoCamera, "Take a photo", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    // The chip sits on its own line above the words, so the words keep the full width of the box.
+                    Column(Modifier.weight(1f).padding(vertical = if (chip != null) 8.dp else 16.dp)) {
+                        if (chip != null) {
+                            MentionChip(chip.first) { onDraft(words); field = androidx.compose.ui.text.input.TextFieldValue(words, androidx.compose.ui.text.TextRange(words.length)) }
+                            Spacer(Modifier.height(6.dp))
+                        }
+                        Box(Modifier.fillMaxWidth()) {
+                            if (draft.isEmpty()) Text(placeholder ?: if (session != null) "Ask anything, or @ a project" else "Ask for anything", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            BasicTextField(shown, onField, textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), maxLines = 6, modifier = Modifier.fillMaxWidth())
+                        }
                     }
-                    IconButton(onClick = actions.onMic) { Icon(if (listening) Icons.Rounded.Stop else Icons.Rounded.Mic, if (listening) stringResource(R.string.chat_stop_listening) else stringResource(R.string.chat_speak), tint = if (listening) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) }
+                    IconButton(onClick = actions.onMic) { Icon(if (listening) Icons.Rounded.Stop else Icons.Rounded.Mic, if (listening) "Stop listening" else "Speak", tint = if (listening) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
             }
             Spacer(Modifier.width(8.dp))
+            // The words stay in the box until the send is accepted; the caller empties it then (ui/Composer.kt).
+            // His message going out is never a reason he cannot send the next one: only the Send button's own progress moves.
             val canSend = draft.isNotBlank() || attachments.isNotEmpty() || docs.isNotEmpty()
             // Swipe up on Send = "answer me with a voice note" (for walking). A tap sends as usual.
             var lift by remember { mutableFloatStateOf(0f) }
             val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
             val density = androidx.compose.ui.platform.LocalDensity.current
             val threshold = with(density) { 56.dp.toPx() }
-            val voiceMode = canSend && lift > threshold
+            val voiceMode = canSend && lift > threshold && actions.onSendVoice != null
             LaunchedEffect(voiceMode) { if (voiceMode) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress) }
             // The button never moves (moving it clipped it against the composer); it grows a little and
             // turns into headphones once the swipe is far enough.
@@ -1080,21 +1389,25 @@ private fun Composer(draft: String, onDraft: (String) -> Unit, working: Boolean,
                                 if (dy > 8f) c.consume()
                             }
                         } finally { lift = 0f }
-                        val wasVoice = canSend && dy > threshold
+                        val wasVoice = canSend && dy > threshold && actions.onSendVoice != null
                         when {
-                            wasVoice -> { actions.onSendVoice(draft); onDraft("") }
-                            dy < 24f && working && !canSend -> actions.onStop()
-                            dy < 24f && canSend -> { actions.onSend(draft); onDraft("") }
+                            wasVoice -> (actions.onSendVoice ?: actions.onSend)(draft)
+                            dy < 24f && working && !canSend && !sending -> actions.onStop()
+                            dy < 24f && canSend -> actions.onSend(draft)
                         }
                     }
                 }) {
-                val bg = if (voiceMode) MaterialTheme.colorScheme.tertiary else if (canSend || working) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
-                val tint = if (voiceMode) MaterialTheme.colorScheme.onTertiary else if (canSend || working) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                Box(Modifier.size(56.dp).clip(if (working && !canSend) RoundedCornerShape(16.dp) else CircleShape).background(bg), contentAlignment = Alignment.Center) {
+                val bg = if (voiceMode) MaterialTheme.colorScheme.tertiary else if (canSend || working || sending) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
+                val tint = if (voiceMode) MaterialTheme.colorScheme.onTertiary else if (canSend || working || sending) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                Box(Modifier.size(56.dp).clip(if (working && !canSend && sending.not()) RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm) else CircleShape).background(bg), contentAlignment = Alignment.Center) {
                     when {
-                        voiceMode -> Icon(Icons.Rounded.Headphones, stringResource(R.string.chat_send_voice), tint = tint)
-                        working && !canSend -> Icon(Icons.Rounded.Stop, stringResource(R.string.chat_stop), tint = tint)
-                        else -> Icon(Icons.AutoMirrored.Rounded.ArrowForward, stringResource(R.string.chat_send), tint = tint)
+                        voiceMode -> Icon(Icons.Rounded.Headphones, "Send, reply with a voice note", tint = tint)
+                        // Words in the box: Send, always, even while the agent is busy or another message is on its way.
+                        canSend -> Icon(Icons.AutoMirrored.Rounded.ArrowForward, "Send (swipe up for a voice reply)", tint = tint)
+                        // Nothing to send: a send still on its way shows here, and Stop while the agent works.
+                        sending -> androidx.compose.material3.CircularProgressIndicator(Modifier.size(22.dp), color = tint, strokeWidth = 2.dp)
+                        working -> Icon(Icons.Rounded.Stop, "Stop", tint = tint)
+                        else -> Icon(Icons.AutoMirrored.Rounded.ArrowForward, "Send (swipe up for a voice reply)", tint = tint)
                     }
                 }
             }

@@ -26,8 +26,8 @@ class AndroidPhone(private val context: Context) : PhoneBridge {
 
     init {
         val nm = context.getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel(CH_MESSAGES, context.getString(R.string.svc_messages_channel), NotificationManager.IMPORTANCE_HIGH))
-        nm.createNotificationChannel(NotificationChannel(CH_WORK, context.getString(R.string.svc_work_channel), NotificationManager.IMPORTANCE_MIN))
+        nm.createNotificationChannel(NotificationChannel(CH_MESSAGES, "Messages from your agent", NotificationManager.IMPORTANCE_HIGH))
+        nm.createNotificationChannel(NotificationChannel(CH_WORK, "Agent working", NotificationManager.IMPORTANCE_MIN))
     }
 
     override fun notify(title: String, body: String, questionItemId: Long?, options: List<String>) {
@@ -36,7 +36,7 @@ class AndroidPhone(private val context: Context) : PhoneBridge {
         val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE)
         val st = App.graph(context).settings.state.value
         val agent = Identity.publishAgentShortcut(context, st.agentName, st.mascot, st.accent)
-        val me = androidx.core.app.Person.Builder().setName(st.userName.ifBlank { context.getString(R.string.svc_you) }).setKey("me").build()
+        val me = androidx.core.app.Person.Builder().setName(st.userName.ifBlank { "You" }).setKey("me").build()
         val style = NotificationCompat.MessagingStyle(me).setConversationTitle(null).addMessage("$title\n$shown", System.currentTimeMillis(), agent)
         val b = NotificationCompat.Builder(context, CH_MESSAGES).setSmallIcon(Identity.statIcon(context, st.mascot)).setContentTitle(title)
             .setColor(com.past9.phoneaos.ui.theme.accentOf(st.accent).lP.let { android.graphics.Color.rgb((it.red * 255).toInt(), (it.green * 255).toInt(), (it.blue * 255).toInt()) })
@@ -57,10 +57,11 @@ class AndroidPhone(private val context: Context) : PhoneBridge {
 
     override fun workStarted() {
         activeCount = active.incrementAndGet()
-        if (activeCount == 1) runCatching { context.startForegroundService(Intent(context, WorkService::class.java)) }
+        if (activeCount == 1) ForegroundGuard.start(context, WorkService::class.java)
     }
     override fun workFinished() {
-        if (active.decrementAndGet() <= 0) { active.set(0); activeCount = 0; context.stopService(Intent(context, WorkService::class.java)) } else activeCount = active.get()
+        // A quick turn can finish before the service is up: the guard stops it once it is, never before (that crashes).
+        if (active.decrementAndGet() <= 0) { active.set(0); activeCount = 0; ForegroundGuard.stop(context, WorkService::class.java) } else activeCount = active.get()
     }
 
     /** The "Agent is working: N helpers" line follows the count, and a safety-net check runs while any helper is working. */
@@ -101,9 +102,10 @@ class WorkService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onCreate() {
         super.onCreate()
-        val n = build(this)
-        if (Build.VERSION.SDK_INT >= 34) startForeground(42, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(42, n)
+        // Foreground first, through the guard: a throw while building the notification still reaches startForeground.
+        ForegroundGuard.enter(this, 42, if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0) { build(this) }
     }
+    override fun onDestroy() { ForegroundGuard.left(this); handler.removeCallbacksAndMessages(null); super.onDestroy() }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // intent == null: Android restarted us after killing the app. Creating the graph (in build) resumes the cut-off helpers;
         // if there turns out to be nothing to resume, don't hang around.
@@ -115,17 +117,17 @@ class WorkService : Service() {
 
     companion object {
         const val EXTRA_KEEPALIVE = "keepalive"
-        fun text(context: Context, helpers: Int) = if (helpers > 0) context.resources.getQuantityString(R.plurals.svc_work_helpers, helpers, helpers) else context.getString(R.string.svc_work_on_it)
+        fun text(helpers: Int) = if (helpers > 0) "Working: $helpers helper${if (helpers > 1) "s" else ""}" else "Working on it"
 
         fun build(context: Context): android.app.Notification {
             val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
             val st = App.graph(context).settings.state.value
-            val who = when (st.agentName) { "" -> "Agent"; "Your agent" -> context.getString(R.string.svc_your_agent); else -> st.agentName }
+            val who = st.agentName.ifBlank { "Agent" }
             val h = AndroidPhone.helperCount
             return Identity.asAgent(context, NotificationCompat.Builder(context, AndroidPhone.CH_WORK).setSmallIcon(Identity.statIcon(context, st.mascot))
-                .setContentTitle(if (h > 0) context.resources.getQuantityString(R.plurals.svc_work_title_helpers, h, who, h) else context.getString(R.string.svc_work_title, who))
-                .setContentText(context.getString(R.string.svc_work_text)).setOngoing(true).setContentIntent(open),
-                "", text(context, h)).build()
+                .setContentTitle(if (h > 0) "$who is working: $h helper${if (h > 1) "s" else ""}" else "$who is working")
+                .setContentText("You can leave the app. I will let you know.").setOngoing(true).setContentIntent(open),
+                "", text(h)).build()
         }
 
         /** Update the ongoing notification in place (the helper count changed). */

@@ -120,11 +120,21 @@ class BrowserEngine(private val context: Context, val profile: String = "Persona
                 return true
             }
             // Sites that ask for the location (store finders, delivery) get the phone's, once the app has it.
+            // Held: yes at once. Not held: Android asks him once (a notification opens the app when it is in the background)
+            // and the page always gets an answer; before 0.15.3 it waited three minutes with nothing on screen.
             override fun onGeolocationPermissionsShowPrompt(origin: String, callback: android.webkit.GeolocationPermissions.Callback) {
+                if (com.past9.phoneaos.system.PermissionBroker.granted(context, com.past9.phoneaos.tools.PhoneLocation.FOREGROUND)) { callback.invoke(origin, true, false); return }
                 com.past9.phoneaos.App.graph(context).scope.launch {
-                    val ok = com.past9.phoneaos.system.PermissionBroker.request(context, arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION)) {}
-                    main.post { callback.invoke(origin, ok, ok) }
+                    val ok = com.past9.phoneaos.tools.PhoneLocation.webAllowed(context, origin)
+                    main.post { callback.invoke(origin, ok, false) }
                 }
+            }
+            // Camera, microphone and protected media for pages: granted when the app itself holds the Android permission.
+            override fun onPermissionRequest(request: android.webkit.PermissionRequest) {
+                val grant = com.past9.phoneaos.tools.PhoneLocation.webResources(request.resources) {
+                    androidx.core.content.ContextCompat.checkSelfPermission(context, it) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                }
+                main.post { if (grant.isEmpty()) request.deny() else request.grant(grant) }
             }
             override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message): Boolean {
                 val child = newWebView()

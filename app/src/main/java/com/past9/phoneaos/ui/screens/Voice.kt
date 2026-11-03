@@ -23,8 +23,6 @@ import com.past9.phoneaos.ui.AgentAvatar
 import com.past9.phoneaos.ui.theme.Eyebrow
 import com.past9.phoneaos.voice.CallState
 import com.past9.phoneaos.voice.Tts
-import androidx.compose.ui.res.stringResource
-import com.past9.phoneaos.R
 
 data class VoiceActions(
     val setTts: (provider: String, voice: String) -> Unit = { _, _ -> },
@@ -40,12 +38,12 @@ data class VoiceActions(
 @Composable
 fun VoiceSheet(s: AgentSettings, actions: VoiceActions, onDismiss: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    val providers = listOf("system" to stringResource(R.string.voice_provider_phone), "gemini" to "Google", "openai" to "OpenAI", "elevenlabs" to "ElevenLabs")
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    val providers = listOf("system" to "Phone", "gemini" to "Google", "openai" to "OpenAI", "elevenlabs" to "ElevenLabs")
+    com.past9.phoneaos.ui.AgentSheet(onDismiss) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = com.past9.phoneaos.ui.sidePad(24.dp, com.past9.phoneaos.ui.Readable.FORM)).padding(bottom = 32.dp)) {
-            Text(stringResource(R.string.voice_eyebrow), style = Eyebrow, color = cs.primary)
-            Text(stringResource(R.string.voice_how_sounds, s.agentName), style = MaterialTheme.typography.headlineSmall)
-            Text(stringResource(R.string.voice_intro), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            Text("VOICE", style = Eyebrow, color = cs.primary)
+            Text("How ${s.agentName} sounds", style = MaterialTheme.typography.headlineSmall)
+            Text("Use any key you already have. The phone's own voice works with none.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             Spacer(Modifier.height(16.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
                 providers.forEachIndexed { i, (id, label) ->
@@ -59,12 +57,12 @@ fun VoiceSheet(s: AgentSettings, actions: VoiceActions, onDismiss: () -> Unit) {
                 Spacer(Modifier.height(16.dp))
                 var key by remember(s.ttsProvider) { mutableStateOf("") }
                 val has = actions.hasKey(s.ttsProvider)
-                OutlinedTextField(key, { key = it.trim() }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium,
-                    label = { Text(when (s.ttsProvider) { "gemini" -> stringResource(R.string.voice_key_google); "openai" -> stringResource(R.string.voice_key_openai); else -> stringResource(R.string.voice_key_eleven) }) },
-                    supportingText = { Text(if (has) stringResource(R.string.voice_key_saved) else stringResource(R.string.voice_key_needed)) },
-                    trailingIcon = { if (key.length > 10) TextButton(onClick = { actions.setKey(s.ttsProvider, key); key = "" }) { Text(stringResource(R.string.voice_save)) } })
+                com.past9.phoneaos.ui.AppTextField(key, { key = it.trim() }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium,
+                    label = { Text(when (s.ttsProvider) { "gemini" -> "Google AI Studio key"; "openai" -> "OpenAI key"; else -> "ElevenLabs key" }) },
+                    supportingText = { Text(if (has) "Key saved. Paste a new one to replace it." else "Needed for this voice.") },
+                    trailingIcon = { if (key.length > 10) TextButton(onClick = { actions.setKey(s.ttsProvider, key); key = "" }) { Text("Save") } })
                 Spacer(Modifier.height(8.dp))
-                Text(stringResource(R.string.voice_eyebrow), style = Eyebrow, color = cs.onSurfaceVariant)
+                Text("VOICE", style = Eyebrow, color = cs.onSurfaceVariant)
                 Spacer(Modifier.height(8.dp))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Tts.voices[s.ttsProvider].orEmpty().forEachIndexed { i, v ->
@@ -73,14 +71,14 @@ fun VoiceSheet(s: AgentSettings, actions: VoiceActions, onDismiss: () -> Unit) {
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = actions.preview, enabled = has, shapes = ButtonDefaults.shapes()) { Icon(Icons.Rounded.PlayArrow, null); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.voice_hear)) }
+                OutlinedButton(onClick = actions.preview, enabled = has, shapes = ButtonDefaults.shapes()) { Icon(Icons.Rounded.PlayArrow, null); Spacer(Modifier.width(6.dp)); Text("Hear it") }
             }
             Spacer(Modifier.height(20.dp))
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.voice_autoplay), style = MaterialTheme.typography.titleSmall)
-                    Text(stringResource(R.string.voice_autoplay_sub), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    Text("Auto-play with earphones in", style = MaterialTheme.typography.titleSmall)
+                    Text("Voice notes play by themselves when you're wearing earphones", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
                 Switch(s.autoPlayEarphones, actions.setAutoPlay)
             }
@@ -91,15 +89,14 @@ fun VoiceSheet(s: AgentSettings, actions: VoiceActions, onDismiss: () -> Unit) {
                         Icon(Icons.Rounded.Call, null, tint = cs.primary)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(stringResource(R.string.voice_live), style = MaterialTheme.typography.titleMedium)
-                            Text(stringResource(R.string.voice_live_sub, s.agentName), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                            Text("Live calls", style = MaterialTheme.typography.titleMedium)
+                            Text("Call ${s.agentName} and just talk. It hands real work to your main agent and tells you when something matters.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
-                        Switch(s.liveEnabled, actions.setLive, enabled = actions.hasKey("gemini"))
                     }
-                    if (!actions.hasKey("gemini")) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(stringResource(R.string.voice_live_needs), style = MaterialTheme.typography.bodySmall, color = cs.tertiary)
-                    }
+                    Spacer(Modifier.height(8.dp))
+                    // No switch: the phone button in the chat is always there, and works whenever a Google key is saved.
+                    if (actions.hasKey("gemini")) Text("Ready: tap the phone in the chat to call.", style = MaterialTheme.typography.bodySmall, color = cs.primary)
+                    else Text("Needs a Google (Gemini) key: pick Google above and save one. It runs on Gemini Live.", style = MaterialTheme.typography.bodySmall, color = cs.tertiary)
                 }
             }
         }
@@ -118,35 +115,50 @@ fun CallScreen(name: String, st: CallState, onMute: () -> Unit, onEnd: () -> Uni
         Column(Modifier.fillMaxSize().systemBarsPadding().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(24.dp))
             Text(name, style = MaterialTheme.typography.headlineMedium, color = cs.onPrimaryContainer)
-            Text(when (st.phase) { "connecting" -> stringResource(R.string.voice_connecting); "listening" -> if (st.muted) stringResource(R.string.voice_muted) else stringResource(R.string.voice_listening); "speaking" -> stringResource(R.string.voice_talking); "failed" -> stringResource(R.string.voice_failed); "ended" -> stringResource(R.string.voice_ended); else -> "" },
+            Text(when (st.phase) { "connecting" -> "Connecting…"; "listening" -> if (st.muted) "Muted" else "Listening"; "speaking" -> "Talking"; "failed" -> "Couldn't connect"; "ended" -> "Call ended"; else -> "" },
                 style = MaterialTheme.typography.titleMedium, color = cs.onPrimaryContainer.copy(alpha = 0.8f))
-            Spacer(Modifier.weight(1f))
-            AgentAvatar(working = st.phase == "speaking" || st.phase == "connecting", size = 200.dp, modifier = Modifier.graphicsLayer { val sc = 1f + 0.18f * level; scaleX = sc; scaleY = sc })
-            Spacer(Modifier.height(28.dp))
+            // A card waiting on him makes the call compact: a small avatar, the card scrolling in the middle, and the
+            // mute and end buttons always on screen (22 Oct 2026: a big approval card pushed Decline and End call off it).
+            val compact = question != null
+            Column(Modifier.weight(1f).fillMaxWidth().then(if (compact) Modifier.verticalScroll(rememberScrollState()) else Modifier),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = if (compact) Arrangement.Top else Arrangement.Center) {
+            Spacer(Modifier.height(if (compact) 8.dp else 0.dp))
+            AgentAvatar(working = st.phase == "speaking" || st.phase == "connecting", size = if (compact) 88.dp else if (st.reply.isNotBlank() || actions.isNotEmpty()) 150.dp else 200.dp, modifier = Modifier.graphicsLayer { val sc = 1f + 0.18f * level; scaleX = sc; scaleY = sc })
+            Spacer(Modifier.height(if (compact) 16.dp else 20.dp))
             if (st.delegated.isNotBlank()) Surface(shape = RoundedCornerShape(50), color = cs.surface.copy(alpha = 0.85f)) {
                 Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.Bolt, null, Modifier.size(16.dp), tint = cs.primary); Spacer(Modifier.width(6.dp))
-                    Text(stringResource(R.string.voice_working_on, st.delegated.take(60)), style = MaterialTheme.typography.labelLarge, color = cs.onSurface, maxLines = 1)
+                    Text("Working on: ${st.delegated.take(60)}", style = MaterialTheme.typography.labelLarge, color = cs.onSurface, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 }
             }
-            // The main agent needs the user: the same card as in the chat, on top of the call.
-            if (question != null) {
-                Spacer(Modifier.height(12.dp))
-                androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                    when {
-                        question.text.startsWith("APPROVAL|") -> ApprovalCard(question, onAnswer)
-                        question.text.startsWith(com.past9.phoneaos.tools.ConnectRequest.PREFIX) -> ConnectCard(question, onAnswer)
-                        else -> QuestionCard(question, onAnswer, onBrowser)
+            // The agent's latest reply to what the call handed it, so the outcome is on screen as well as said.
+            if (st.reply.isNotBlank() && !compact) {
+                Spacer(Modifier.height(10.dp))
+                Surface(shape = MaterialTheme.shapes.extraLarge, color = cs.surface.copy(alpha = 0.85f), modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                        Text("YOUR AGENT", style = Eyebrow, color = cs.primary)
+                        Text(st.reply, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface, maxLines = 4, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
                     }
                 }
+            }
+            // The agent needs him: the same card as in the chat, on top of the call. Answer by tapping, or out loud.
+            if (question != null) {
+                Spacer(Modifier.height(12.dp))
+                when {
+                    question.text.startsWith("APPROVAL|") -> CallApprovalCard(question, onAnswer)
+                    question.text.startsWith(com.past9.phoneaos.tools.ConnectRequest.PREFIX) -> ConnectCard(question, onAnswer)
+                    else -> QuestionCard(question, onAnswer, onBrowser)
+                }
+                Spacer(Modifier.height(8.dp))
+                Text("Or just say it", style = MaterialTheme.typography.labelMedium, color = cs.onPrimaryContainer.copy(alpha = 0.7f))
             } else
-            // What the main agent is doing while you talk.
+            // What the agent is doing while you talk.
             if (actions.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
                 Surface(shape = MaterialTheme.shapes.extraLarge, color = cs.surface.copy(alpha = 0.85f), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-                        Text(stringResource(R.string.voice_doing), style = Eyebrow, color = cs.primary)
-                        actions.takeLast(4).forEach { a ->
+                        Text("WHAT IT'S DOING", style = Eyebrow, color = cs.primary)
+                        actions.takeLast(2).forEach { a ->
                             Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Rounded.CheckCircle, null, Modifier.size(14.dp), tint = cs.primary); Spacer(Modifier.width(8.dp))
                                 Text(a, style = MaterialTheme.typography.bodySmall, color = cs.onSurface, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
@@ -155,19 +167,53 @@ fun CallScreen(name: String, st: CallState, onMute: () -> Unit, onEnd: () -> Uni
                     }
                 }
             }
-            Spacer(Modifier.height(12.dp))
-            st.lines.takeLast(3).forEach { (who, t) ->
-                Text(t, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, color = if (who == "user") cs.onPrimaryContainer.copy(alpha = 0.7f) else cs.onPrimaryContainer, maxLines = 3)
+            if (!compact) {
+                Spacer(Modifier.height(12.dp))
+                st.lines.takeLast(2).forEach { (who, t) ->
+                    Text(t, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, color = if (who == "user") cs.onPrimaryContainer.copy(alpha = 0.7f) else cs.onPrimaryContainer, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                }
             }
             if (st.error.isNotBlank()) Text(st.error, color = cs.error, textAlign = TextAlign.Center)
-            Spacer(Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
-                FilledTonalIconButton(onClick = onMute, modifier = Modifier.size(64.dp)) { Icon(if (st.muted) Icons.Rounded.MicOff else Icons.Rounded.Mic, if (st.muted) stringResource(R.string.voice_unmute) else stringResource(R.string.voice_mute)) }
-                if (st.active || st.phase == "connecting") FilledIconButton(onClick = onEnd, modifier = Modifier.size(80.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xFFD7141E), contentColor = Color.White)) {
-                    Icon(Icons.Rounded.CallEnd, stringResource(R.string.voice_end_call), Modifier.size(34.dp))
-                } else FilledIconButton(onClick = onStart, modifier = Modifier.size(80.dp)) { Icon(Icons.Rounded.Call, stringResource(R.string.voice_call_again), Modifier.size(34.dp)) }
+                FilledTonalIconButton(onClick = onMute, modifier = Modifier.size(64.dp)) { Icon(if (st.muted) Icons.Rounded.MicOff else Icons.Rounded.Mic, if (st.muted) "Unmute" else "Mute") }
+                if (st.active || st.phase == "connecting") FilledIconButton(onClick = onEnd, modifier = Modifier.size(80.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = com.past9.phoneaos.ui.theme.Lights.endCall, contentColor = com.past9.phoneaos.ui.theme.Lights.onEndCall)) {
+                    Icon(Icons.Rounded.CallEnd, "End call", Modifier.size(34.dp))
+                } else FilledIconButton(onClick = onStart, modifier = Modifier.size(80.dp)) { Icon(Icons.Rounded.Call, "Call again", Modifier.size(34.dp)) }
             }
             Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+/**
+ * An approval on the call screen: what it wants to do, the start of the details, and Decline beside Hold to approve,
+ * so both answers fit on screen with the call's own buttons (the chat's card, with its full details, is taller).
+ */
+@Composable
+private fun CallApprovalCard(item: com.past9.phoneaos.data.ChatItem, onAnswer: (Long, String) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val parts = item.text.split("|", limit = 3)
+    val action = parts.getOrElse(1) { "" }.trim().replaceFirstChar { it.uppercase() }
+    val details = parts.getOrElse(2) { "" }.trim()
+    val by = runCatching { org.json.JSONObject(item.meta).optString("whyBy") }.getOrDefault("")
+    com.past9.phoneaos.ui.AppCard(container = cs.tertiaryContainer) {
+        Text(if (by.isNotBlank()) "$by NEEDS YOUR OK".uppercase() else "NEEDS YOUR OK", style = Eyebrow, color = cs.onTertiaryContainer)
+        Spacer(Modifier.height(6.dp))
+        Text(action, style = MaterialTheme.typography.titleMedium, color = cs.onTertiaryContainer)
+        if (details.isNotBlank()) {
+            Spacer(Modifier.height(8.dp))
+            Surface(shape = MaterialTheme.shapes.medium, color = cs.surface.copy(alpha = 0.9f), modifier = Modifier.fillMaxWidth()) {
+                Text(details, style = MaterialTheme.typography.bodySmall, color = cs.onSurface, maxLines = 4, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = { onAnswer(item.id, "Decline") }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Decline", color = cs.onTertiaryContainer) }
+            Spacer(Modifier.width(8.dp))
+            Box(Modifier.weight(1f)) { HoldToApprove { onAnswer(item.id, "Approve") } }
         }
     }
 }

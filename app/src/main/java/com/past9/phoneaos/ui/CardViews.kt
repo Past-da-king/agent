@@ -19,11 +19,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.past9.phoneaos.R
 import com.past9.phoneaos.cards.Card
 import com.past9.phoneaos.cards.CardBridge
 import com.past9.phoneaos.cards.CardKit
@@ -68,12 +66,12 @@ fun CardTile(c: Card, onOpen: (Card) -> Unit, now: Long = System.currentTimeMill
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconTile(c, 36.dp)
                 Spacer(Modifier.weight(1f))
-                if (c.error.isNotBlank()) Icon(Icons.Rounded.ErrorOutline, stringResource(R.string.ui_card_didnt_refresh), Modifier.size(18.dp), tint = cs.error)
+                if (c.error.isNotBlank()) Icon(Icons.Rounded.ErrorOutline, "Didn't refresh", Modifier.size(18.dp), tint = cs.error)
             }
             Spacer(Modifier.height(6.dp))
             Text(c.title, style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(c.headline.ifBlank { stringResource(R.string.ui_open) }, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(stringResource(R.string.ui_card_updated, relativeTime(c.updatedAt, now)), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            Text(c.headline.ifBlank { "Open" }, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text("Updated ${relativeTime(c.updatedAt, now)}", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
         }
     }
 }
@@ -87,12 +85,12 @@ fun CardChatRow(c: Card?, title: String, onOpen: () -> Unit) {
             if (c != null) IconTile(c) else Box(Modifier.size(44.dp))
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.ui_card_eyebrow), style = Eyebrow, color = cs.primary)
+                Text("CARD", style = Eyebrow, color = cs.primary)
                 Text(c?.title ?: title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(c?.headline?.ifBlank { null } ?: if (c == null) stringResource(R.string.ui_card_deleted) else stringResource(R.string.ui_tap_to_open), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
+                Text(c?.headline?.ifBlank { null } ?: if (c == null) "This card was deleted" else "Tap to open", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            if (c != null) Icon(Icons.Rounded.ChevronRight, stringResource(R.string.ui_open_named, c.title), tint = cs.onSurfaceVariant)
+            if (c != null) Icon(Icons.Rounded.ChevronRight, "Open ${c.title}", tint = cs.onSurfaceVariant)
         }
     }
 }
@@ -118,7 +116,7 @@ fun CardSheet(c: Card, dark: Boolean, accent: String, actions: CardSheetActions,
     val cs = MaterialTheme.colorScheme
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val shape = RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp)
+    val shape = RoundedCornerShape(topStart = com.past9.phoneaos.ui.theme.Radius.xl, topEnd = com.past9.phoneaos.ui.theme.Radius.xl)
     val latest by rememberUpdatedState(c)
     val body: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth().fillMaxHeight(0.94f)) {
@@ -127,20 +125,20 @@ fun CardSheet(c: Card, dark: Boolean, accent: String, actions: CardSheetActions,
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(c.title, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(listOfNotNull(c.source.ifBlank { null }, stringResource(R.string.ui_card_updated_lower, relativeTime(c.updatedAt))).joinToString(" · "),
+                    Text(listOfNotNull(c.source.ifBlank { null }, "updated ${relativeTime(c.updatedAt)}").joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 if (c.script.isNotBlank()) {
                     if (refreshing) LoadingIndicator(Modifier.size(40.dp))
-                    else IconButton(onClick = { actions.onRefresh(c) }) { Icon(Icons.Rounded.Refresh, stringResource(R.string.ui_card_refresh_now)) }
+                    else IconButton(onClick = { actions.onRefresh(c) }) { Icon(Icons.Rounded.Refresh, "Refresh now") }
                 }
                 IconButton(onClick = { actions.onPin(c, !c.pinned) }) {
-                    Icon(if (c.pinned) Icons.Rounded.PushPin else Icons.Outlined.PushPin, if (c.pinned) stringResource(R.string.ui_card_unpin) else stringResource(R.string.ui_card_pin),
+                    Icon(if (c.pinned) Icons.Rounded.PushPin else Icons.Outlined.PushPin, if (c.pinned) "Take off Home" else "Put on Home",
                         tint = if (c.pinned) cs.primary else cs.onSurfaceVariant)
                 }
             }
             if (c.error.isNotBlank()) Surface(shape = MaterialTheme.shapes.medium, color = cs.errorContainer, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp)) {
-                Text(stringResource(R.string.ui_card_refresh_failed), Modifier.padding(12.dp),
+                Text("The last refresh didn't work, so this may be out of date. Ask your agent to fix it.", Modifier.padding(12.dp),
                     style = MaterialTheme.typography.bodySmall, color = cs.onErrorContainer)
             }
             if (c.isOpenUi) {
@@ -176,10 +174,7 @@ fun CardSheet(c: Card, dark: Boolean, accent: String, actions: CardSheetActions,
             }
         }
     }
-    if (LocalSheetPreview.current) Surface(color = cs.surfaceContainerLow, shape = shape, modifier = Modifier.fillMaxSize().padding(top = 48.dp)) {
-        Column { Box(Modifier.align(Alignment.CenterHorizontally).padding(vertical = 22.dp).size(32.dp, 4.dp).clip(RoundedCornerShape(2.dp)).background(cs.onSurfaceVariant.copy(alpha = 0.4f))); body() }
-    } else ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = cs.surfaceContainerLow, shape = shape,
-        dragHandle = { BottomSheetDefaults.DragHandle() }) { body() }
+    com.past9.phoneaos.ui.AgentSheet(onDismiss, shape) { body() }
 }
 
 private fun kotlinx.coroutines.CoroutineScope.launchRun(wv: WebView, id: String, block: suspend () -> Pair<Boolean, String>) {
