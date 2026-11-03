@@ -13,7 +13,7 @@ data class AccountRef(val id: String, val slug: String, val label: String) {
 }
 
 /**
- * A part of the user's life ("Strat Edge work", "Personal"): the connected accounts that belong to it and,
+ * A part of the user's life ("Acme work", "Personal"): the connected accounts that belong to it and,
  * optionally, which browser profile is signed in for it. A helper handed a profile can only use those
  * accounts. One account can sit in any number of profiles.
  */

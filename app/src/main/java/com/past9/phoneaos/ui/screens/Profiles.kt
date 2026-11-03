@@ -41,7 +41,7 @@ data class AccountProfileActions(
 
 fun Connection.ref() = AccountRef(id, toolkit, label)
 
-/** "work@strategyedge.co.za" for an account, or the app's name when Composio has no email for it. */
+/** "work@example.com" for an account, or the app's name when Composio has no email for it. */
 private fun AccountRef.line(appName: String) = label.takeIf { it.isNotBlank() && !it.equals(slug, true) } ?: appName
 
 // ---- the Profiles section on Connections ---------------------------------------------------------
@@ -173,7 +173,7 @@ fun ProfileSheet(profile: AgentProfile?, accounts: List<AccountRef>, logos: Map<
         },
         secondary = if (profile != null) ({ TextButton(onClick = { actions.onDelete(profile.id); onDismiss() }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) { Text("Delete profile", color = MaterialTheme.colorScheme.error) } }) else null,
     ) {
-        SheetField(name, { name = it }, "Name", "Strat Edge work", big = true, singleLine = true)
+        SheetField(name, { name = it }, "Name", "Acme work", big = true, singleLine = true)
         Spacer(Modifier.height(24.dp))
         Text("COLOUR", style = Eyebrow, color = MaterialTheme.colorScheme.primary)
         Text("Helpers working in this profile show in it, so you can tell them apart at a glance.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

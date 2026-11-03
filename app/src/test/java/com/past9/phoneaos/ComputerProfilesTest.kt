@@ -13,13 +13,13 @@ import org.robolectric.RobolectricTestRunner
 class ComputerProfilesTest {
     private val raw = JSONArray("""[
       {"id":"general","name":"General","color":"graphite","accounts":[],"general":true},
-      {"id":"p1","name":"Strat Edge Works","color":"ocean","accounts":[{"id":"slack_a","app":"slack","label":"Strat Edge Solutions"},{"id":"github_b","app":"github","label":"Past-da-king"}],"general":false},
-      {"id":"p2","name":"Personal-","color":"rose","accounts":[{"id":"gmail_c","app":"gmail","label":"me@gmail.com"}]}
+      {"id":"p1","name":"Acme Works","color":"ocean","accounts":[{"id":"slack_a","app":"slack","label":"Acme Inc"},{"id":"github_b","app":"github","label":"Past-da-king"}],"general":false},
+      {"id":"p2","name":"Personal","color":"rose","accounts":[{"id":"gmail_c","app":"gmail","label":"me@gmail.com"}]}
     ]""")
 
     @Test fun generalIsLeftOutAndAccountsKeepTheirApp() {
         val ps = AgentProfile.fromComputer(raw)
-        assertEquals(listOf("Strat Edge Works", "Personal-"), ps.map { it.name })
+        assertEquals(listOf("Acme Works", "Personal"), ps.map { it.name })
         assertEquals(listOf("slack", "github"), ps[0].accounts.map { it.slug })
         assertEquals("ocean", ps[0].color)
         assertTrue(ps[1].has("gmail_c"))

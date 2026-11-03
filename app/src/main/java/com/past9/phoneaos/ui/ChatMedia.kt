@@ -207,7 +207,7 @@ private fun PictureCard(file: File, caption: String) {
 private fun FullPicture(file: File, onClose: () -> Unit) {
     var zoom by remember { mutableStateOf(1f) }
     var pan by remember { mutableStateOf(Offset.Zero) }
-    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) { // design: full-screen picture viewer, not a centred pop-up
         Box(Modifier.fillMaxSize().background(com.past9.phoneaos.ui.theme.Media.stage)) {
             SubcomposeAsyncImage(
                 model = file, contentDescription = file.name, contentScale = ContentScale.Fit,
@@ -245,7 +245,7 @@ private fun VideoCard(url: String, caption: String) {
         ) { Icon(Icons.Rounded.Fullscreen, "Full screen") }
     }
     Caption(caption)
-    if (full) Dialog(
+    if (full) Dialog( // design: full-screen video, not a centred pop-up
         onDismissRequest = { resumeAt = (fullView?.currentPosition ?: 0).toLong(); full = false },
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {

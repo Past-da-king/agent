@@ -29,8 +29,8 @@ class PhoneDesignFixesTest {
 
     @Test
     fun generalAndNoProfileAreOneChoice() {
-        val c = profileChoices(listOf("p_gen" to "General", "p_se" to "Strat Edge Works", "p_g" to "Guavas", "p_se" to "Strat Edge Works"))
-        assertEquals(listOf("General", "Strat Edge Works", "Guavas"), c.map { it.title })
+        val c = profileChoices(listOf("p_gen" to "General", "p_se" to "Acme Works", "p_g" to "Acme", "p_se" to "Acme Works"))
+        assertEquals(listOf("General", "Acme Works", "Acme"), c.map { it.title })
         assertEquals("", c.first().id) // General = no profile
     }
 
@@ -56,12 +56,12 @@ class PhoneDesignFixesTest {
         val now = 1_800_000_000_000L
         val raw = JSONArray()
             .put(JSONObject().put("id", "dev_pc").put("name", "DESKTOP-EXAMPLE").put("kind", "desktop").put("roles", JSONArray(listOf("brain", "hands"))).put("lastSeen", now))
-            .put(JSONObject().put("id", "dev_srv").put("name", "impetix").put("kind", "server").put("roles", JSONArray(listOf("brain"))).put("lastSeen", now - 60_000))
-            .put(JSONObject().put("id", "dev_me").put("name", "Ayanda's A35").put("kind", "phone").put("roles", JSONArray(listOf("screen"))))
+            .put(JSONObject().put("id", "dev_srv").put("name", "home server").put("kind", "server").put("roles", JSONArray(listOf("brain"))).put("lastSeen", now - 60_000))
+            .put(JSONObject().put("id", "dev_me").put("name", "Pixel 7").put("kind", "phone").put("roles", JSONArray(listOf("screen"))))
             .put(JSONObject().put("id", "dev_old").put("name", "Old").put("kind", "phone").put("revoked", true))
             .put(JSONObject().put("id", "dev_lap").put("name", "Laptop").put("kind", "desktop").put("lastSeen", now - 86_400_000L))
         val d = MeshDevice.parse(raw, self = "dev_me", answering = "dev_pc", ready = emptySet(), now = now)
-        assertEquals(listOf("DESKTOP-EXAMPLE", "impetix", "Ayanda's A35", "Laptop"), d.map { it.name })
+        assertEquals(listOf("DESKTOP-EXAMPLE", "home server", "Pixel 7", "Laptop"), d.map { it.name })
         assertEquals(listOf(MeshDevice.State.ANSWERING, MeshDevice.State.ONLINE, MeshDevice.State.SELF, MeshDevice.State.AWAY), d.map { it.state })
         assertTrue(d.last().line.contains("last seen"))
     }

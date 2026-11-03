@@ -47,7 +47,7 @@ class ProfilesTest {
 
     private val work = AccountRef("ca_work", "gmail", "work@example.com")
     private val home = AccountRef("ca_home", "gmail", "me@gmail.com")
-    private val slack = AccountRef("ca_slack", "slack", "Strat Edge")
+    private val slack = AccountRef("ca_slack", "slack", "Acme")
     private fun guard(profile: AgentProfile? = null) = AppGuard({ store.rules(it) }, { slugs -> listOf(work, home, slack).filter { it.slug in slugs } }, { profile })
 
     @Test fun sendingFromAnAccountSetToAllowedDoesNotAsk() = runBlocking {
@@ -77,7 +77,7 @@ class ProfilesTest {
     }
 
     @Test fun aHelperInAProfileOnlyUsesThatProfilesAccounts() = runBlocking {
-        val p = store.create("Strat Edge work", listOf(work, slack))
+        val p = store.create("Acme work", listOf(work, slack))
         val c = Ctx("helper-7")
         // Its one Gmail is picked for it.
         val v = guard(p).check(c, listOf("GMAIL_FETCH_EMAILS"), null, "{}")
@@ -143,15 +143,15 @@ class ProfilesTest {
     }
 
     @Test fun aHelperGivenAProfileIsToldItsAccounts() = runBlocking {
-        val prof = ProfileStore(ctx).create("Strat Edge work", listOf(work, slack))
-        val p = ScriptedProvider(call("delegate", JSONObject().put("tasks", JSONArray(listOf("Reply to the latest client email"))).put("profiles", JSONArray(listOf("strat edge work")))),
+        val prof = ProfileStore(ctx).create("Acme work", listOf(work, slack))
+        val p = ScriptedProvider(call("delegate", JSONObject().put("tasks", JSONArray(listOf("Reply to the latest client email"))).put("profiles", JSONArray(listOf("acme work")))),
             say("On it."), say("Done."))
         val rt = runtime(p)
         rt.send("Reply to the client")
         idle(rt)
         val sys = p.seen.first { it.first.contains("You are a HELPER") }.first
-        assertTrue(sys.contains("YOUR PROFILE: Strat Edge work") && sys.contains("account ca_work") && !sys.contains("ca_home"))
-        assertEquals("Strat Edge work", JSONObject(db.chat().all().first().first { it.kind == "helper" }.meta).getString("profile"))
+        assertTrue(sys.contains("YOUR PROFILE: Acme work") && sys.contains("account ca_work") && !sys.contains("ca_home"))
+        assertEquals("Acme work", JSONObject(db.chat().all().first().first { it.kind == "helper" }.meta).getString("profile"))
         // The main agent sees the profiles it can hand out.
         assertTrue(rt.systemPrompt("x").contains("PROFILES: every helper works inside exactly one"))
         assertTrue(rt.systemPrompt("x").contains(prof.name))

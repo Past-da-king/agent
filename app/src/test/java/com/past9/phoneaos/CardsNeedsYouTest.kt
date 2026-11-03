@@ -33,12 +33,12 @@ class CardsNeedsYouTest {
 
     @Test
     fun aComputerApprovalBecomesThePhonesApprovalCard() {
-        val a = row("a1", "approval", "Change the worker: Strat Edge Slack", JSONObject().put("summary", "Change the worker: Strat Edge Slack")
+        val a = row("a1", "approval", "Change the worker: Acme Slack", JSONObject().put("summary", "Change the worker: Acme Slack")
             .put("details", "Runs: node main.mjs").put("decision", "").put("scope", "computer").put("helper", "h2").put("by", "/Another thing I need"))
         assertTrue(RemoteRows.isOpenCard(a))
         val item = RemoteRows.chat(a, RemoteIds())
         assertTrue(pending(item.kind, item.meta))
-        assertTrue(item.text.startsWith("APPROVAL|Change the worker: Strat Edge Slack|"))
+        assertTrue(item.text.startsWith("APPROVAL|Change the worker: Acme Slack|"))
         assertEquals("approval", JSONObject(item.meta).getString("remoteKind"))
     }
 

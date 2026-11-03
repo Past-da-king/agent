@@ -63,7 +63,7 @@ class DesignShotsTest(private val dark: Boolean) {
         rule.onRoot().captureRoboImage(File("build/design/$name-${if (dark) "dark" else "light"}.png").path)
     }
 
-    private val profiles = listOf("" to "General", "p1" to "Strat Edge Works", "p2" to "Guavas", "p3" to "Personal-", "p4" to "Meetings", "p5" to "impetix")
+    private val profiles = listOf("" to "General", "p1" to "Acme Works", "p2" to "Acme", "p3" to "Personal", "p4" to "Meetings", "p5" to "home server")
 
     @Test fun profileSheet() = shot("01-connections-add-which-profile") {
         ChoiceSheet(Icons.Rounded.Apps, "Fathom", "Which profile is it for?", profileChoices(profiles), onPick = {}, onDismiss = {}, line = "Its account goes into that part of your life. You can change it later.")
@@ -78,8 +78,8 @@ class DesignShotsTest(private val dark: Boolean) {
     private fun dev(id: String, name: String, kind: String, roles: List<String>, seen: Long) =
         JSONObject().put("id", id).put("name", name).put("kind", kind).put("roles", JSONArray(roles)).put("lastSeen", seen)
     private val devices = MeshDevice.parse(JSONArray().put(dev("dev_pc", "DESKTOP-EXAMPLE", "desktop", listOf("brain", "hands"), now))
-        .put(dev("dev_srv", "impetix", "server", listOf("brain", "hands"), now - 30_000)).put(dev("dev_pc2", "Second PC", "desktop", listOf("brain"), now - 7_200_000))
-        .put(dev("dev_me", "Ayanda's A35", "phone", listOf("screen", "brain", "hands"), now)), "dev_me", "dev_pc", emptySet(), now)
+        .put(dev("dev_srv", "home server", "server", listOf("brain", "hands"), now - 30_000)).put(dev("dev_pc2", "Second PC", "desktop", listOf("brain"), now - 7_200_000))
+        .put(dev("dev_me", "Pixel 7", "phone", listOf("screen", "brain", "hands"), now)), "dev_me", "dev_pc", emptySet(), now)
     private val learned = MeshDevice.learned(JSONArray()
         .put(JSONObject().put("id", "l1").put("name", "Takealot").put("startUrl", "https://www.takealot.com").put("tools", JSONArray().put(JSONObject().put("name", "search_products").put("readOnly", true))))
         .put(JSONObject().put("id", "l2").put("name", "TikTok Studio").put("startUrl", "https://www.tiktok.com/tiktokstudio").put("tools", JSONArray().put(JSONObject().put("name", "post_video").put("readOnly", false))))

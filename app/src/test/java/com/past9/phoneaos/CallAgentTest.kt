@@ -60,7 +60,7 @@ class CallAgentTest {
         assertTrue(props.has("target")); assertTrue(props.has("new_chat"))
         val alone = CallController.callTools(false).getJSONObject(0).getJSONArray("functionDeclarations").getJSONObject(0).getJSONObject("parameters").getJSONObject("properties")
         assertFalse(alone.has("target"))
-        assertTrue(CallController.systemPrompt("Hina", "Ayanda", true).contains("I'm on it in the Strat Edge Website project"))
+        assertTrue(CallController.systemPrompt("Hina", "Ayanda", true).contains("I'm on it in the Acme Website project"))
         assertTrue(CallController.systemPrompt("Hina", "Ayanda", true).contains("don't guess and don't send it to main"))
         val targets = org.json.JSONArray()
             .put(JSONObject().put("kind", "main").put("name", "Hina").put("running", false).put("doing", ""))

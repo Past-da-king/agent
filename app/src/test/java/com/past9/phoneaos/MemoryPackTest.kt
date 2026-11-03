@@ -21,25 +21,25 @@ class MemoryPackTest {
 
     @Test fun importsPagesKeepsOwnPagesAndReimportReplaces() = runBlocking {
         val db = AppDb.inMemory(ctx); val dao = db.memory()
-        dao.insert(MemoryRow(title = "Alex Meyer", body = "Ayanda told me Ben likes short updates.", source = "agent"))
+        dao.insert(MemoryRow(title = "Alex Meyer", body = "Ayanda told me Alex likes short updates.", source = "agent"))
         val pack = """[
-          {"title":"Alex Meyer","body":"CEO of Guavas.","kind":"person","tags":"guavas,ceo","pinned":false},
-          {"title":"Strat Edge","body":"Contract client, tasks in Microsoft To Do.","kind":"weird","tags":["client","strat-edge"],"pinned":true},
+          {"title":"Alex Meyer","body":"CEO of Acme.","kind":"person","tags":"contact,ceo","pinned":false},
+          {"title":"Acme","body":"Contract client, tasks in Microsoft To Do.","kind":"weird","tags":["client","acme"],"pinned":true},
           {"title":"","body":"no title, skipped"}
         ]"""
         assertEquals(2, MemoryPack.import(pack, dao))
-        val ben = dao.byTitle("ben van rooyen")!!
-        assertTrue(ben.body.startsWith("Ayanda told me Ben likes short updates."))
-        assertTrue(ben.body.contains("CEO of Guavas."))
+        val ben = dao.byTitle("alex meyer")!!
+        assertTrue(ben.body.startsWith("Ayanda told me Alex likes short updates."))
+        assertTrue(ben.body.contains("CEO of Acme."))
         assertEquals("agent", ben.source)
-        val se = dao.byTitle("Strat Edge")!!
-        assertEquals("fact", se.kind); assertEquals("client,strat-edge", se.topics); assertTrue(se.pinned); assertEquals("import", se.source)
+        val se = dao.byTitle("Acme")!!
+        assertEquals("fact", se.kind); assertEquals("client,acme", se.topics); assertTrue(se.pinned); assertEquals("import", se.source)
 
         // A second pack replaces imported text instead of stacking it.
-        MemoryPack.import("""[{"title":"Alex Meyer","body":"CEO of Guavas and Grow Factory."},{"title":"Strat Edge","body":"Updated."}]""", dao)
+        MemoryPack.import("""[{"title":"Alex Meyer","body":"CEO of Acme and Acme Labs."},{"title":"Acme","body":"Updated."}]""", dao)
         assertEquals(1, Regex("From A.O.S memory bank").findAll(dao.byTitle("Alex Meyer")!!.body).count())
-        assertTrue(dao.byTitle("Alex Meyer")!!.body.endsWith("CEO of Guavas and Grow Factory."))
-        assertEquals("Updated.", dao.byTitle("Strat Edge")!!.body)
+        assertTrue(dao.byTitle("Alex Meyer")!!.body.endsWith("CEO of Acme and Acme Labs."))
+        assertEquals("Updated.", dao.byTitle("Acme")!!.body)
         assertEquals(2, dao.list().size)
 
         // A pack never writes or touches a helper skill.
@@ -50,7 +50,7 @@ class MemoryPackTest {
         dao.delete(dao.byTitle("Send a WhatsApp")!!.id); dao.delete(dao.byTitle("Send a WhatsApp (A.O.S)")!!.id)
 
         // The agent can find it with its normal recall.
-        assertEquals("Strat Edge", Recall.rank("strat edge client", dao.list(), 3).first().title)
+        assertEquals("Acme", Recall.rank("acme client", dao.list(), 3).first().title)
     }
 
     @Test fun pendingFileIsImportedOnceThenRenamed() = runBlocking {

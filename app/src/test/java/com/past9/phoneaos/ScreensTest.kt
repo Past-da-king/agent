@@ -150,7 +150,7 @@ class ScreensTest(private val dark: Boolean) {
     }
     private val lab = com.past9.phoneaos.machines.Machine("a1", "Uni lab", "login.cs.example.edu", 22, "sdlamini001", about = "Linux 5.15 · 64 cores")
     private val vps = com.past9.phoneaos.machines.Machine("b2", "Build server", "203.0.113.20", 2222, "deploy", com.past9.phoneaos.machines.MachineAuth.NEW_KEY, trusted = true, about = "Linux 6.8 · 8 cores", hostKey = "SHA256:3xg0Qm1rT8wq1V8pJm8n0aWJxw2v1y0iYpK3b9c7D2E")
-    private val pc = com.past9.phoneaos.machines.Machine("c3", "Home PC", "100.64.0.10", 22, "sam", about = "Windows 11 · 12 cores")
+    private val pc = com.past9.phoneaos.machines.Machine("c3", "Home PC", "100.64.0.10", 22, "you", about = "Windows 11 · 8 cores")
     @Test fun machinesSheetEmpty() { sheet("56-machines-empty") { MachinesSheet(emptyList(), MachineActions(), {}, {}, checkOnOpen = false) } }
     @Test fun machinesSheet() { sheet("57-machines") { MachinesSheet(listOf(vps, lab, pc), MachineActions(), {}, {}, checkOnOpen = false, initialStatus = mapOf("b2" to "", "a1" to "", "c3" to "Couldn't reach Home PC")) } }
     @Test fun machineNew() { sheet("53-machine-new") { MachineSheet(null, listOf(lab), MachineActions(), {}, {}) } }
@@ -190,7 +190,7 @@ class ScreensTest(private val dark: Boolean) {
         item("activity", "Opened Booking.com · uMhlanga, 9 to 11 Oct", JSONObject().put("tool", "browser").put("helper", first.id)),
         item("activity", "Read 24 results, sorted by price", JSONObject().put("tool", "browser").put("helper", first.id)),
         item("helper", "Check Uber and Bolt prices from King Shaka airport to uMhlanga Rocks on Friday around 18:00 and say which is cheaper.",
-            JSONObject().put("label", "Airport ride").put("state", "working").put("now", "Reading the web").put("startedAt", now - 60_000).put("model", "claude-haiku-4-5").put("profile", "Strat Edge work").put("profileColor", "ocean")),
+            JSONObject().put("label", "Airport ride").put("state", "working").put("now", "Reading the web").put("startedAt", now - 60_000).put("model", "claude-haiku-4-5").put("profile", "Acme work").put("profileColor", "ocean")),
         item("helper", "Look up the Sharks game times for the weekend of 10 Oct and whether tickets are left.",
             JSONObject().put("label", "Sharks tickets").put("state", "done").put("startedAt", now - 30 * 60_000).put("endedAt", now - 22 * 60_000)
                 .put("result", "**Sharks v Stormers**, Sat 10 Oct, 17:00 at Kings Park. Tickets from R 180 on Ticketmaster, about 40 left in the West stand.\n\nSource: ticketmaster.co.za, checked 14:05.")),
@@ -273,10 +273,10 @@ class ScreensTest(private val dark: Boolean) {
     // ---- profiles, account rules, reply quotes and reports (0.10) ----
     private val gmailWork = Connection("ca_w", "gmail", "ACTIVE", "work@example.com")
     private val gmailHome = Connection("ca_h", "gmail", "ACTIVE", "sam.dlamini@gmail.com")
-    private val slackWork = Connection("ca_s", "slack", "ACTIVE", "Strat Edge")
+    private val slackWork = Connection("ca_s", "slack", "ACTIVE", "Acme")
     private val outlookWork = Connection("ca_o", "outlook", "ACTIVE", "sam@stratedge.example")
     private val teamsWork = Connection("ca_t", "microsoft_teams", "ACTIVE", "microsoft_teams")
-    private val workProfile = AgentProfile("p1", "Strat Edge work", listOf(slackWork, outlookWork, teamsWork, gmailWork).map { it.ref() }, "Work", color = "ocean")
+    private val workProfile = AgentProfile("p1", "Acme work", listOf(slackWork, outlookWork, teamsWork, gmailWork).map { it.ref() }, "Work", color = "ocean")
     private val homeProfile = AgentProfile("p2", "Personal", listOf(gmailHome).map { it.ref() }, color = "mint")
     private val kits = listOf(Toolkit("gmail", "Gmail", "Read, search, draft and send email", "", 40, false, true), Toolkit("slack", "Slack", "Messages, channels and threads", "", 60, false, true),
         Toolkit("outlook", "Outlook", "Mail and calendar", "", 40, false, true), Toolkit("microsoft_teams", "Microsoft Teams", "Chats and meetings", "", 30, false, true))

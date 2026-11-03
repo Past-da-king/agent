@@ -11,8 +11,8 @@ import org.junit.Test
 /** Slack, Notion and friends: one person, several workspaces. A second one must be allowed, not read as a copy of the first. */
 class SlackWorkspacesTest {
     @Test fun aWorkspaceNameIsFoundWhereSlackKeepsIt() {
-        assertEquals("Guavas HQ", ComposioConnect.identity(JSONObject("""{"data":{"team":{"name":"Guavas HQ","id":"T01"}}}""")))
-        assertEquals("strat-edge", ComposioConnect.identity(JSONObject("""{"user_info":{"team":{"domain":"strat-edge"}}}""")))
+        assertEquals("Acme HQ", ComposioConnect.identity(JSONObject("""{"data":{"team":{"name":"Acme HQ","id":"T01"}}}""")))
+        assertEquals("acme", ComposioConnect.identity(JSONObject("""{"user_info":{"team":{"domain":"acme"}}}""")))
         assertEquals("Harbor", ComposioConnect.identity(JSONObject("""{"data":{"team_name":"Harbor"}}""")))
         assertEquals("sam@example.com", ComposioConnect.identity(JSONObject("""{"user_info":{"email":"sam@example.com"}}""")))
         assertEquals("", ComposioConnect.identity(JSONObject("""{"id":"ca_x"}""")))
