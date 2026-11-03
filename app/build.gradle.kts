@@ -49,7 +49,20 @@ android {
       isMinifyEnabled = true
       isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfigs.findByName("release")?.let { signingConfig = it }
+      // A release build is never signed with whatever happens to be on the machine. If no key was given, it stops here
+      // rather than shipping a file that cannot install over the app people already have (3 Nov 2026: an APK signed
+      // with a different key broke every update, INSTALL_FAILED_UPDATE_INCOMPATIBLE).
+      val wanted = gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
+      val release = signingConfigs.findByName("release")
+      if (release != null) {
+        signingConfig = release
+      } else if (wanted) {
+        throw GradleException(
+          "No release key. Pass -PsigningProps=<file> with storeFile, storePassword, keyAlias and keyPassword.\n" +
+            "The published app is signed with certificate sha256 38d9d3377b0ae2229a0803a1ff84eb7a7d35c2db80334772c4b8072f27b0959a;\n" +
+            "an APK signed with any other key will not install over an existing copy. Check it with tools/check-apk-signature.sh."
+        )
+      }
     }
   }
   compileOptions {
