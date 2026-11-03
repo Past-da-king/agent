@@ -150,7 +150,7 @@ class ScreensTest(private val dark: Boolean) {
     }
     private val lab = com.past9.phoneaos.machines.Machine("a1", "Uni lab", "login.cs.example.edu", 22, "sdlamini001", about = "Linux 5.15 · 64 cores")
     private val vps = com.past9.phoneaos.machines.Machine("b2", "Build server", "203.0.113.20", 2222, "deploy", com.past9.phoneaos.machines.MachineAuth.NEW_KEY, trusted = true, about = "Linux 6.8 · 8 cores", hostKey = "SHA256:3xg0Qm1rT8wq1V8pJm8n0aWJxw2v1y0iYpK3b9c7D2E")
-    private val pc = com.past9.phoneaos.machines.Machine("c3", "Home PC", "100.64.0.10", 22, "sam", about = "Windows 11 · 12 cores")
+    private val pc = com.past9.phoneaos.machines.Machine("c3", "Home PC", "100.64.0.10", 22, "you", about = "Windows 11 · 8 cores")
     @Test fun machinesSheetEmpty() { sheet("56-machines-empty") { MachinesSheet(emptyList(), MachineActions(), {}, {}, checkOnOpen = false) } }
     @Test fun machinesSheet() { sheet("57-machines") { MachinesSheet(listOf(vps, lab, pc), MachineActions(), {}, {}, checkOnOpen = false, initialStatus = mapOf("b2" to "", "a1" to "", "c3" to "Couldn't reach Home PC")) } }
     @Test fun machineNew() { sheet("53-machine-new") { MachineSheet(null, listOf(lab), MachineActions(), {}, {}) } }
