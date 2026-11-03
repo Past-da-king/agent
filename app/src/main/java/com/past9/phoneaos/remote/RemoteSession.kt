@@ -1267,6 +1267,63 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     fun downloader(): Pair<RemoteApi, String>? = current?.let { RemoteApi(clientFor(it.brain.fp)) to it.url }
     val pass: String get() = link.pass
 
+    // ---- a file an agent showed on the computer (media.fetch, desktop 0.2.118 and later) -------------
+
+    /** The files an agent showed, as this phone holds them: one cache for the whole app run. */
+    val shownFiles: MediaFiles by lazy { MediaFiles(File(app.cacheDir, "shown-media")) }
+    private var shownServe: MediaServe? = null
+
+    /** Why the last ask for a shown file did not come, in words a row can show. */
+    @Volatile
+    var mediaProblem: String = ""
+        private set
+
+    /** What a chat row says a shown file is: its token, and enough to draw it before a byte is asked for. */
+    fun shownFromMeta(meta: JSONObject): ShownFile? {
+        val token = meta.optString("token").trim()
+        val size = meta.optLong("size", 0L)
+        if (token.isEmpty() || size <= 0L) return null
+        return ShownFile(
+            chat = meta.optString("chat").ifBlank { "main" },
+            token = token,
+            name = meta.optString("name").ifBlank { "file" },
+            mime = meta.optString("mime").ifBlank { "application/octet-stream" },
+            kind = meta.optString("kind").ifBlank { "video" },
+            size = size,
+        )
+    }
+
+    /** One chunk of a shown file, from the computer. Null when it could not come, and [mediaProblem] says why. */
+    private suspend fun shownChunk(info: ShownFile, offset: Long, length: Int): ByteArray? = try {
+        val ask = JSONObject().put("chat", info.chat).put("token", info.token).put("offset", offset).put("length", length)
+        val answer = call("media.fetch", listOf(ask), 90_000) as? JSONObject
+        val b64 = answer?.optJSONObject("bytes")?.optString("\$b64").orEmpty()
+        if (b64.isEmpty()) {
+            mediaProblem = answer?.optString("error").orEmpty().ifBlank { "The computer did not send that file." }
+            null
+        } else {
+            java.util.Base64.getDecoder().decode(b64)
+        }
+    } catch (e: Exception) {
+        mediaProblem = e.message?.takeIf { it.isNotBlank() } ?: "The computer did not answer."
+        null
+    }
+
+    /** The whole file on this phone: a picture has to be here before it can be drawn. */
+    suspend fun shownWhole(info: ShownFile): File? {
+        mediaProblem = ""
+        val held = shownFiles.note(info)
+        return if (shownFiles.whole(held) { offset, length -> shownChunk(info, offset, length) }) held.path else null
+    }
+
+    /** The address this phone's own player reads a video at, the server started on first use. */
+    suspend fun shownUrl(info: ShownFile): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        mediaProblem = ""
+        val serve = shownServe ?: MediaServe(shownFiles) { file, offset, length -> shownChunk(file, offset, length) }.start().also { shownServe = it }
+        shownFiles.note(info)
+        serve.url(info.token)
+    }
+
     companion object {
         /** The longest wait between tries. */
         const val MAX_BACKOFF_MS = 30_000L

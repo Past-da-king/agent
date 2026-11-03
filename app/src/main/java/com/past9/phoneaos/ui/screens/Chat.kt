@@ -355,6 +355,8 @@ fun ChatScreen(
                         }
                         "voice" -> VoiceBubble(r.item)
                         "card" -> { val id = JSONObject(r.item.meta).optString("card"); com.past9.phoneaos.ui.CardChatRow(LocalCards.current.firstOrNull { it.id == id }, r.item.text) { actions.onCard(id) } }
+                        // A video, picture or sound an agent showed on the computer, playing here (0.15.27).
+                        "media" -> com.past9.phoneaos.ui.MediaChatRow(r.item, rs)
                         "branch" -> BranchRow(r.item, items.filter { a -> JSONObject(a.meta).optLong("branch") == r.item.id && (a.kind == "activity" || a.kind == "agent") })
                         "helper" -> HelperRow(r.item, items.filter { a -> a.kind == "activity" && JSONObject(a.meta).optLong("helper") == r.item.id })
                         "activity" -> if (JSONObject(r.item.meta).has("file")) FileCard(r.item) else ImageActivity(r.item)
