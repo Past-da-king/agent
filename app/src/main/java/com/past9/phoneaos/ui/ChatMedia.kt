@@ -189,49 +189,21 @@ private fun Caption(text: String) {
 
 @Composable
 private fun PictureCard(file: File, caption: String) {
-    var open by remember(file.path) { mutableStateOf(false) }
     SubcomposeAsyncImage(
         model = file,
         contentDescription = file.name,
         contentScale = ContentScale.Fit,
-        modifier = Modifier.heightIn(max = 340.dp).clip(MaterialTheme.shapes.large).clickable { open = true },
+        modifier = Modifier.heightIn(max = 340.dp).clip(MaterialTheme.shapes.large).clickable { MediaViewer.show(Target(file.name, picture = file)) },
         loading = { Box(Modifier.size(220.dp, 160.dp).background(MaterialTheme.colorScheme.surfaceContainerHigh), contentAlignment = Alignment.Center) { LoadingIndicator(Modifier.size(32.dp)) } },
         error = { MediaLine(file.name, "This picture could not be drawn.") },
     )
     Caption(caption)
-    if (open) FullPicture(file) { open = false }
 }
 
-/** Full screen, pinch to zoom, drag to pan, close button and the back gesture. */
-@Composable
-private fun FullPicture(file: File, onClose: () -> Unit) {
-    var zoom by remember { mutableStateOf(1f) }
-    var pan by remember { mutableStateOf(Offset.Zero) }
-    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) { // design: full-screen picture viewer, not a centred pop-up
-        Box(Modifier.fillMaxSize().background(com.past9.phoneaos.ui.theme.Media.stage)) {
-            SubcomposeAsyncImage(
-                model = file, contentDescription = file.name, contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize().pointerInput(Unit) {
-                    detectTransformGestures { _, by, factor, _ ->
-                        zoom = (zoom * factor).coerceIn(1f, 5f)
-                        pan = if (zoom == 1f) Offset.Zero else pan + by
-                    }
-                }.graphicsLayer { scaleX = zoom; scaleY = zoom; translationX = pan.x; translationY = pan.y },
-            )
-            FilledTonalIconButton(onClick = onClose, modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(12.dp)) {
-                Icon(Icons.Rounded.Close, "Close")
-            }
-        }
-    }
-}
-
-/** A video with its own player: play, pause, scrub, and full screen. The bytes come from the computer as it plays. */
 @Composable
 private fun VideoCard(url: String, caption: String) {
     var view by remember(url) { mutableStateOf<VideoView?>(null) }
-    var fullView by remember(url) { mutableStateOf<VideoView?>(null) }
     var resumeAt by remember(url) { mutableLongStateOf(0L) }
-    var full by remember(url) { mutableStateOf(false) }
     var failed by remember(url) { mutableStateOf(false) }
     if (failed) {
         MediaLine("Video", "The computer stopped sending this video. Open it again in the chat.")
@@ -240,23 +212,11 @@ private fun VideoCard(url: String, caption: String) {
     Box(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large).background(com.past9.phoneaos.ui.theme.Media.stage)) {
         VideoStage(url, Modifier.fillMaxWidth().height(230.dp), resumeAt, false, { view = it }) { failed = true }
         FilledTonalIconButton(
-            onClick = { resumeAt = (view?.currentPosition ?: 0).toLong(); full = true },
+            onClick = { resumeAt = (view?.currentPosition ?: 0).toLong(); MediaViewer.show(Target("Video", video = url)) },
             modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
         ) { Icon(Icons.Rounded.Fullscreen, "Full screen") }
     }
     Caption(caption)
-    if (full) Dialog( // design: full-screen video, not a centred pop-up
-        onDismissRequest = { resumeAt = (fullView?.currentPosition ?: 0).toLong(); full = false },
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
-        Box(Modifier.fillMaxSize().background(com.past9.phoneaos.ui.theme.Media.stage)) {
-            VideoStage(url, Modifier.fillMaxSize(), resumeAt, true, { fullView = it }) { failed = true }
-            FilledTonalIconButton(
-                onClick = { resumeAt = (fullView?.currentPosition ?: 0).toLong(); full = false },
-                modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(12.dp),
-            ) { Icon(Icons.Rounded.Close, "Close") }
-        }
-    }
 }
 
 /**

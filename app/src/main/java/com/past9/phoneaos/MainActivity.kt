@@ -73,7 +73,13 @@ class MainActivity : ComponentActivity() {
             val st by g.settings.state.collectAsStateWithLifecycle()
             AppTheme(accent = st.accent, mascot = st.mascot) {
                 androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.screens.LocalStopHelper provides { id: Long -> g.runtime.stopHelper(id); Unit },
-                    com.past9.phoneaos.ui.screens.LocalCards provides App.graph(this).cards.cards.collectAsStateWithLifecycle().value) { Root(g) }
+                    com.past9.phoneaos.ui.screens.LocalCards provides App.graph(this).cards.cards.collectAsStateWithLifecycle().value) {
+                        // A picture or video opened from a card is drawn here, above every screen, never in a window of its own.
+                        androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
+                            Root(g)
+                            com.past9.phoneaos.ui.MediaViewerHost()
+                        }
+                    }
             }
         }
     }
