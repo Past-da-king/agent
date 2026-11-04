@@ -1299,13 +1299,14 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         val answer = call("media.fetch", listOf(ask), 90_000) as? JSONObject
         val b64 = answer?.optJSONObject("bytes")?.optString("\$b64").orEmpty()
         if (b64.isEmpty()) {
-            mediaProblem = answer?.optString("error").orEmpty().ifBlank { "The computer did not send that file." }
+            mediaProblem = oldComputer(answer?.optString("error").orEmpty())
+                .ifBlank { "The computer did not send that file." }
             null
         } else {
             java.util.Base64.getDecoder().decode(b64)
         }
     } catch (e: Exception) {
-        mediaProblem = e.message?.takeIf { it.isNotBlank() } ?: "The computer did not answer."
+        mediaProblem = oldComputer(e.message.orEmpty()).ifBlank { "The computer did not answer." }
         null
     }
 
@@ -1323,6 +1324,18 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         shownFiles.note(info)
         serve.url(info.token)
     }
+
+    /**
+     * "not available on this device" is what the device link answers when the computer has no such RPC at all, which
+     * means its Agent is older than this app: 0.2.118 drew the card but shipped no media.fetch. Say what to do about it
+     * instead of showing a phrase that reads like the file is missing.
+     */
+    private fun oldComputer(error: String): String =
+        if (error.contains("not available on this device", ignoreCase = true)) {
+            "This file is on your computer, and the Agent there is too old to send it. Update Agent on the computer (0.2.119 or newer) and it plays here."
+        } else {
+            error.trim()
+        }
 
     companion object {
         /** The longest wait between tries. */
