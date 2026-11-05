@@ -1540,8 +1540,26 @@ class AgentRuntime(
         override suspend fun notify(title: String, body: String) {}
     }
 
+    /**
+     * Clear the conversation. When this phone is paired the chat on screen is the computer's, mirrored row by row,
+     * so the phone asks the computer for a new chat first: clearing only the phone put the whole old conversation
+     * straight back at the next read, and the next turn still carried the old history (issue #14, 4 Nov 2026).
+     * The computer files the closed chat to memory on its own, in the background, so nothing here waits on a model.
+     */
     fun clearConversation() = scope.launch {
-        db.chat().clear(); db.chat().clearTurns("main"); db.chat().clearBranchTurns(); settings.setExtra("claude_session", null); settings.setExtra("conversation_id", null); settings.setExtra("branch_pending", null); unmerged.set(0)
+        val session = runCatching { com.past9.phoneaos.remote.RemoteHub.session.value }.getOrNull()
+        // A computer too old for memory.newChat answers nothing and this returns false: clear the phone regardless,
+        // and say plainly that the computer's copy is still there, instead of pretending the chat is gone.
+        val fresh = session == null || runCatching { session.newChat("main") }.getOrDefault(false)
+        clearLocalChat()
+        if (!fresh) db.chat().insert(ChatItem(kind = "notice", text = "This phone's chat is cleared. The computer's copy is not: its app is older than this one. Update the app on your computer and clear again to start a new chat there too."))
+    }
+
+    /** What the phone itself keeps: the rows, both threads' turns, and every id a turn picks up from. */
+    private suspend fun clearLocalChat() {
+        db.chat().clear(); db.chat().clearTurns("main"); db.chat().clearBranchTurns()
+        settings.setExtra("claude_session", null); settings.setExtra("conversation_id", null); settings.setExtra("branch_pending", null)
+        unmerged.set(0)
     }
 
     // ---- tool context -----------------------------------------------------------------------
