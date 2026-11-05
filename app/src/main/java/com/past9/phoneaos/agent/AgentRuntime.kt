@@ -57,6 +57,11 @@ interface PhoneBridge {
     fun openLink(url: String)
     fun workStarted()
     fun workFinished()
+    /**
+     * A turn in the chat has just ended and the last thing the agent said was [reply]. The phone tells the user with a
+     * notification, unless the chat is already on screen in front of them (issue #15).
+     */
+    fun replyPosted(reply: String) {}
     /** How many helpers are working now: the "Agent is working" notification shows it, and a safety-net check runs while there are any. */
     fun helpersChanged(count: Int) {}
 }
@@ -118,6 +123,8 @@ class AgentRuntime(
     private val lineSeq = java.util.concurrent.atomic.AtomicLong()
     private val mainLine = Line("main", lineSeq.incrementAndGet())
     private val mainTurn = Turn(mainLine)
+    /** The last thing the agent said in the main chat this turn: what the phone carries to the user if they are away. */
+    private var lastReply: String? = null
     private val mainBudget get() = mainLine.budget
     /** Lines whose turn is running (or queued) right now. A message sent while any is non-empty forks instead of waiting. */
     private val activeLines = ConcurrentHashMap<String, Line>()
@@ -959,6 +966,7 @@ class AgentRuntime(
     private suspend fun runTurn(userText: String, images: List<String> = emptyList(), fromUser: Boolean = true, replyTo: Long? = null) {
         if (fromUser) { mainBudget.used = 0; mainLine.calls.used = 0 }
         mainTurn.origin = replyTo; mainTurn.late = !fromUser
+        lastReply = null
         if (settings.state.value.mode == PowerMode.SUBSCRIPTION && subscription?.ready == true) return runSubscriptionTurn(userText, subscription!!, images)
         val provider = providerFactory(settings)
         if (provider == null) {
@@ -994,6 +1002,7 @@ class AgentRuntime(
             db.chat().insert(ChatItem(kind = "notice", text = friendlyError(e), meta = JSONObject().put("error", true).toString()))
         } finally {
             lineEnded(mainLine)
+            turnEnded()
             phone.workFinished()
         }
     }
@@ -1001,7 +1010,18 @@ class AgentRuntime(
     /** The main agent said something: into the chat, quoting what it answers. "HOLD" means it chose to say nothing yet. */
     private suspend fun say(text: String, turn: Turn = mainTurn) {
         if (isHold(text)) return
+        if (turn === mainTurn && text.isNotBlank()) lastReply = text
         db.chat().insert(ChatItem(kind = "agent", text = text, meta = JSONObject().apply { replyMeta(turn, this) }.toString()))
+    }
+
+    /**
+     * A turn on the main line is over: hand its last words to the phone, which tells the user if they were not watching.
+     * Called in the turn's own finally, so it happens whether the turn answered, failed or was stopped.
+     */
+    private fun turnEnded() {
+        val reply = lastReply ?: return
+        lastReply = null
+        phone.replyPosted(reply)
     }
 
     /** What a reply carries so the chat can quote what it answers (and mark it as a branch's). */
@@ -1060,6 +1080,7 @@ class AgentRuntime(
     private suspend fun runSubscriptionTurn(userText: String, engine: SubscriptionEngine, images: List<String> = emptyList()) {
         _status.value = _status.value.copy(working = true, label = "Thinking"); phone.workStarted()
         mainLine.job = kotlin.coroutines.coroutineContext[Job]; mainLine.supersededBy = null
+        lastReply = null
         try {
             var resume = settings.extra("claude_session")
             for (attempt in 1..2) {
@@ -1078,7 +1099,7 @@ class AgentRuntime(
             if (mainLine.supersededBy == null) db.chat().insert(ChatItem(kind = "notice", text = "Stopped."))
         } catch (e: Exception) {
             db.chat().insert(ChatItem(kind = "notice", text = friendlyError(e), meta = JSONObject().put("error", true).toString()))
-        } finally { lineEnded(mainLine); phone.workFinished() }
+        } finally { lineEnded(mainLine); turnEnded(); phone.workFinished() }
     }
 
     /** "API Error: 400 {...claude_code_version_too_old...}" -> a line the user can act on. */
