@@ -142,6 +142,8 @@ fun HomeScreen(s: HomeState, actions: HomeActions, bottomPadding: Dp = 120.dp) {
                         Spacer(Modifier.height(8.dp))
                         LinearWavyProgressIndicator(progress = { if (gt.isEmpty()) 0f else done / gt.size.toFloat() }, modifier = Modifier.fillMaxWidth(), color = cs.onPrimaryContainer, trackColor = cs.onPrimaryContainer.copy(alpha = 0.2f))
                     }
+                    // The running list's lines (all projects, the app's one fold): remote/RunningListUi.kt.
+                    com.past9.phoneaos.remote.HomeRunning(Modifier.padding(top = 14.dp))
                     if (actions.onCall != null) {
                         Spacer(Modifier.height(14.dp))
                         Button(onClick = actions.onCall, shapes = ButtonDefaults.shapes(), colors = ButtonDefaults.buttonColors(containerColor = cs.onPrimaryContainer, contentColor = cs.primaryContainer)) {

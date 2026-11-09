@@ -3,6 +3,10 @@ package com.past9.phoneaos
 import com.past9.phoneaos.remote.CardTap
 import com.past9.phoneaos.remote.LiveCard
 import com.past9.phoneaos.remote.LiveCards
+import com.past9.phoneaos.remote.RunCounts
+import com.past9.phoneaos.remote.RunningFold
+import com.past9.phoneaos.remote.RunningList
+import com.past9.phoneaos.remote.SwitchRow
 import com.past9.phoneaos.remote.tapOf
 import org.json.JSONArray
 import org.json.JSONObject
@@ -78,7 +82,125 @@ class RunningListTest {
         assertTrue("each card swipes", ui.contains("SwipeToDismissBox"))
         assertTrue("the sheet has Go to chat", File(src, "com/past9/phoneaos/ui/Helpers.kt").readText().contains("Text(\"Go to chat\")"))
         val pchat = File(src, "com/past9/phoneaos/ui/screens/ProjectChat.kt").readText()
-        assertTrue("a project chat lists only its project's cards", pchat.contains("live?.scoped(chat"))
+        assertTrue("a project chat shows the one running list, its own project first", pchat.contains("RunningBlock(live") && pchat.contains("current = chat"))
+        assertTrue("a project chat's title opens the switcher", pchat.contains("SwitcherTitle(chat"))
+        val chatKt = File(src, "com/past9/phoneaos/ui/screens/Chat.kt").readText()
+        assertTrue("the main chat shows the same list and its title opens the switcher", chatKt.contains("RunningBlock(live") && chatKt.contains("SwitcherTitle(\"main\""))
+        assertTrue("Home's main agent card shows it too", File(src, "com/past9/phoneaos/ui/screens/Home.kt").readText().contains("HomeRunning("))
+        val feed = File(src, "com/past9/phoneaos/remote/RunningListUi.kt").readText()
+        assertTrue("projects and chat states follow the link's events, never a timer", feed.contains("s.events.collectLatest") && feed.contains("\"chat.states\"") && feed.contains("listOf(\"project\")"))
         assertTrue("Connections names the line Mini apps", File(src, "com/past9/phoneaos/ui/screens/Connections.kt").readText().contains("Text(\"Mini apps\""))
+    }
+
+    // ---- 9 Nov 2026: ONE running list across all projects, one fold for the whole app, and the project switcher ----
+
+    private val projects = RunningList.projects(JSONArray(listOf(
+        JSONObject().put("id", "p1").put("name", "Garden").put("icon", JSONObject().put("glyph", "leaf").put("color", "mint")).put("chats", JSONArray(listOf("c1-old", "c1"))),
+        JSONObject().put("id", "p2").put("name", "Shop").put("icon", JSONObject().put("glyph", "cart").put("color", "ember")).put("chats", JSONArray(listOf("c2"))),
+        JSONObject().put("id", "p3").put("name", "Recipes").put("chats", JSONArray(listOf("c3"))),
+        JSONObject().put("id", "p4").put("name", "Hidden one").put("hidden", true).put("chats", JSONArray(listOf("c4"))),
+        JSONObject().put("id", "earlier-chats").put("name", "Earlier chats").put("chats", JSONArray(listOf("old1"))),
+        JSONObject().put("id", "p5").put("name", "Empty"),
+    )))
+
+    /** Three projects and the main chat. p3's helper names no owner: only the project's chats[] say where it belongs. */
+    private val across = parse(
+        card("m1"),
+        card("pa-c1", kind = "project-chat", projectChat = "c1", owner = "project", ownerId = "p1", ownerName = "Garden"),
+        card("h1", depth = 1, parentChat = "c1", chat = "c1", owner = "project", ownerId = "p1", ownerName = "Garden"),
+        card("pa-c2", kind = "project-chat", projectChat = "c2", owner = "project", ownerId = "p2", ownerName = "Shop"),
+        card("h2", depth = 1, parentChat = "c2", chat = "c2", owner = "project", ownerId = "p2", ownerName = "Shop", state = "done"),
+        card("h2b", depth = 1, parentChat = "c2", chat = "c2", owner = "project", ownerId = "p2", ownerName = "Shop", state = "failed"),
+        card("h3", chat = "c3"),
+        card("h3b", chat = "c3", state = "stopped"),
+        card("p1-again", owner = "project", ownerId = "p1", ownerName = "Garden"),
+    )
+
+    @Test
+    fun cardsFromThreeProjectsGroupByProjectWithTheCurrentOneFirst() {
+        val fromMain = RunningList.groups(across, projects)
+        assertEquals(listOf("main", "p1", "p2", "p3"), fromMain.map { it.key })
+        assertEquals(listOf("Main chat", "Garden", "Shop", "Recipes"), fromMain.map { it.name })
+        // In a project chat (known by one of its chat ids, or by the project's id) that project leads; the rest keep their order.
+        assertEquals(listOf("p2", "main", "p1", "p3"), RunningList.groups(across, projects, "c2").map { it.key })
+        assertEquals(listOf("p3", "main", "p1", "p2"), RunningList.groups(across, projects, "p3").map { it.key })
+        // A project's cards stay together even when the computer lists them apart, and sub-helpers stay under their parent.
+        val garden = fromMain.first { it.key == "p1" }
+        assertEquals(listOf(listOf("pa-c1", "h1"), listOf("p1-again")), garden.clusters.map { cl -> cl.map { it.id } })
+    }
+
+    @Test
+    fun countsIgnoreDoneFailedAndStopped() {
+        val g = RunningList.groups(across, projects).associate { it.key to it.working }
+        assertEquals(mapOf("main" to 1, "p1" to 3, "p2" to 1, "p3" to 1), g)
+        assertEquals(RunCounts(working = 6), RunningList.counts(across))
+        val ended = parse(card("a", state = "done"), card("b", state = "failed"), card("c", state = "stopped"), card("d", state = "working").put("endedAt", 50))
+        assertEquals(RunCounts(), RunningList.counts(ended))
+        assertEquals(0, RunningList.groups(ended, projects).sumOf { it.working })
+    }
+
+    private val mixed = parse(
+        card("w1"), card("w2", chat = "c3"),
+        card("q1").put("queued", true),
+        card("pa-c1", kind = "project-chat", projectChat = "c1", owner = "project", ownerId = "p1", ownerName = "Garden", state = "done", waiting = true),
+        card("old", state = "done"),
+    )
+
+    @Test
+    fun theHeaderSaysOnlyThePartsThatAreNotZero() {
+        assertEquals(RunCounts(2, 1, 1), RunningList.counts(mixed))
+        assertEquals("2 working, 1 waiting to start, 1 needs you", RunningList.header(RunningList.counts(mixed)))
+        assertEquals("Nothing running", RunningList.header(RunCounts()))
+        assertEquals("3 working", RunningList.header(RunCounts(3, 0, 0)))
+        assertEquals("1 working, 2 needs you", RunningList.header(RunCounts(1, 0, 2)))
+        assertEquals("4 waiting to start", RunningList.header(RunCounts(0, 4, 0)))
+        // chat.states can say a project chat waits on him before its card does.
+        val viaStates = parse(card("pa-c2", kind = "project-chat", projectChat = "c2", owner = "project", ownerId = "p2"))
+        assertEquals(RunCounts(0, 0, 1), RunningList.counts(viaStates, RunningList.states(JSONArray(listOf(JSONObject().put("chat", "c2").put("running", false).put("waiting", true))))))
+    }
+
+    @Test
+    fun oneTapFoldsItEverywhereAndACardThatNeedsHimStaysInView() {
+        val n = RunningList.counts(mixed)
+        val fold = RunningFold(null)
+        assertTrue("open until he folds it", !fold.collapsed(n))
+        fold.toggle(n)
+        assertTrue("one tap folds it", fold.collapsed(n))
+        val groups = RunningList.groups(mixed, projects)
+        assertEquals("folded: only the card that needs him", listOf("pa-c1"), RunningList.shown(groups, true).map { it.id })
+        assertEquals("open: everything at work or waiting on him, finished ones behind their own line", listOf("w1", "q1", "w2", "pa-c1"), RunningList.shown(groups, false).map { it.id })
+        assertEquals(1, RunningList.finishedCount(groups))
+        fold.toggle(n)
+        assertTrue("and one tap opens it again", !fold.collapsed(n))
+    }
+
+    @Test
+    fun itIsFoldedByItselfWhenNothingRuns() {
+        val idle = RunCounts(0, 0, 1)
+        assertTrue(RunningList.collapsed(false, idle))
+        assertTrue(RunningList.collapsed(false, RunCounts()))
+        assertTrue(!RunningList.collapsed(false, RunCounts(1, 0, 0)))
+        assertTrue(RunningList.collapsed(true, RunCounts(0, 1, 0)))
+        // A look at what just finished is only a peek: his kept choice for running work does not change.
+        val fold = RunningFold(null)
+        fold.toggle(idle)
+        assertTrue(!fold.collapsed(idle) && !fold.choice)
+        fold.toggle(idle)
+        assertTrue(fold.collapsed(idle) && !fold.choice)
+    }
+
+    @Test
+    fun theSwitcherListsTheMainChatThenHisProjectsSkippingHidden() {
+        val rows = RunningList.switcher(projects, across, "c1")
+        assertEquals(listOf("main", "p1", "p2", "p3", "p5", "earlier-chats"), rows.map { it.key })
+        assertEquals("Main chat", rows.first().name)
+        assertTrue("no hidden project", rows.none { it.name == "Hidden one" })
+        // A tap opens the project's newest chat (the last of chats[]); one with no chat has none to open.
+        assertEquals(listOf("main", "c1", "c2", "c3", "", "old1"), rows.map { it.chat })
+        assertEquals(listOf("p1"), rows.filter { it.current }.map { it.key })
+        assertEquals(listOf(1, 3, 1, 1, 0, 0), rows.map { it.running })
+        // No projects at all: just the main chat, marked.
+        assertEquals(listOf(SwitchRow("main", "Main chat", "main", null, 0, true)), RunningList.switcher(emptyList(), emptyList()))
+        assertEquals("2 min ago · Fixed the gate", com.past9.phoneaos.ui.switcherLine("## Fixed the gate\nand more", 1_000_000L, 1_000_000L + 125_000L))
     }
 }

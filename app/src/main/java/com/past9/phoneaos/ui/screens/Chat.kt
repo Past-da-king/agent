@@ -238,9 +238,6 @@ fun ChatScreen(
         minOf(byWindow, byUnread)
     }
     val hideHelpers = live != null
-    // The "On the computer" list folds into a pill above the message box (his choice is kept; see remote/LiveCardsUi.kt).
-    val fold = com.past9.phoneaos.remote.rememberAgentsFold()
-    val agentsFolded = live != null && fold.folded(live.cards.count { it.working })
     val rows = remember(items, firstShown, markerId, markerCount, hideHelpers) {
         val g = withMarker(group(items.drop(firstShown), hideHelpers), markerId, markerCount)
         if (firstShown > 0) listOf<Row_>(Row_.Earlier) + g else g
@@ -318,13 +315,11 @@ fun ChatScreen(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = { ChatTopBar(agentName, status, browserLive, waitingOnYou, openCount, actions, modelLabel) },
         bottomBar = { Box(Modifier.fillMaxWidth().padding(horizontal = com.past9.phoneaos.ui.sidePad(0.dp, com.past9.phoneaos.ui.Readable.CHAT + 32.dp))) { Column {
-            if (live != null && agentsFolded && morning == null) Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(start = 16.dp, end = 16.dp, top = 6.dp)) {
-                com.past9.phoneaos.remote.AgentsPill(live, onOpen = {
-                    fold.set(true)
-                    // Open where he can see it: the list comes back at the foot of the chat.
-                    scope.launch { kotlinx.coroutines.delay(120); stick = true; list.animateScrollToItem(rows.size) }
-                })
-            }
+            // The running list (all projects, one fold for the whole app; remote/RunningListUi.kt). Folded, its header and
+            // whoever needs him sit here above the message box; open, the list is at the foot of the chat.
+            if (live != null && morning == null) com.past9.phoneaos.remote.RunningBlock(live,
+                Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(start = 16.dp, end = 16.dp, top = 6.dp), only = true, maxHeight = 200.dp, opensUp = true,
+                onToggled = { scope.launch { kotlinx.coroutines.delay(120); stick = true; list.animateScrollToItem(rows.size) } })
             MessageComposer(draft, onDraft, status.working, actions.composer(), attachments, docs, listening, dictationOwner = "main",
                 sending = actions.sending(), failed = actions.composerFailed, onRetry = actions.onComposerRetry) } } },
     ) { pad ->
@@ -370,7 +365,7 @@ fun ChatScreen(
                     }
                 }
             }
-            if (live != null && live.cards.isNotEmpty() && !agentsFolded) item(key = "live-cards") { com.past9.phoneaos.remote.LiveCardList(live, onCollapse = { fold.set(false) }) }
+            if (live != null && live.cards.isNotEmpty()) item(key = "live-cards") { com.past9.phoneaos.remote.RunningBlock(live, only = false) }
             if (status.working && !waitingOnYou) item(key = "working") { WorkingRow(status) }
         }
         // Reading older messages while new ones arrive: say so, and offer the way down.
@@ -403,7 +398,9 @@ private fun ChatTopBar(agentName: String, status: AgentStatus, browserLive: Bool
     Surface(color = MaterialTheme.colorScheme.surface) {
         Row(Modifier.fillMaxWidth().statusBarsPadding().padding(start = com.past9.phoneaos.ui.sidePad(16.dp, com.past9.phoneaos.ui.Readable.CHAT) - 8.dp, end = com.past9.phoneaos.ui.sidePad(16.dp, com.past9.phoneaos.ui.Readable.CHAT) - 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = actions.onMenu) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to home") }
-            Row(Modifier.weight(1f).clip(MaterialTheme.shapes.medium).clickable(onClick = actions.onProfile).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            // The title opens the project switcher when a computer is linked (ui/ProjectSwitcher.kt); else the profile as before.
+            com.past9.phoneaos.ui.SwitcherTitle("main", actions.onOpenChat, Modifier.weight(1f), otherwise = actions.onProfile) {
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             AgentAvatar(working = status.working, needsYou = needsYou, size = 36.dp)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -417,6 +414,7 @@ private fun ChatTopBar(agentName: String, status: AgentStatus, browserLive: Bool
                 AnimatedContent(line, transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(150)) }, label = "status") {
                     Text(it, style = MaterialTheme.typography.bodySmall, color = if (needsYou) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+            }
             }
             }
             if (modelLabel.isNotBlank()) Surface(onClick = actions.onModel, shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.padding(end = 6.dp)) {
