@@ -65,6 +65,8 @@ class LiveSession(
         /** Loudness 0..1 of his voice (`mine`) or the model's, about ten times a second, for the orb. */
         data class Level(val mine: Boolean, val value: Float) : Event()
         data class ToolCall(val id: String, val name: String, val args: JSONObject) : Event()
+        /** The connection went and a new one is being opened on the same conversation. */
+        object Reconnecting : Event()
         data class Closed(val reason: String) : Event()
         data class Failed(val error: String) : Event()
     }
@@ -77,6 +79,10 @@ class LiveSession(
     private var ws: WebSocket? = null
     private var recorder: AudioRecord? = null
     private var track: AudioTrack? = null
+    /** The call's voice waiting to be played; null for dictation, which plays nothing. */
+    @Volatile private var speaker: PlaybackQueue? = null
+    private var focusAm: AudioManager? = null
+    private var focus: android.media.AudioFocusRequest? = null
     private val running = AtomicBoolean(false)
     private val ready = AtomicBoolean(false)
     private val micOpen = AtomicBoolean(false)
@@ -147,6 +153,7 @@ class LiveSession(
         ready.set(false)
         val old = ws; ws = null
         runCatching { old?.cancel() }
+        if (everReady) onEvent(Event.Reconnecting)
         Log.i(TAG, "reconnecting (try $retries, ${if (resumeHandle != null) "resuming" else "fresh"}) after $why")
         thread(name = "aos-live-reconnect", isDaemon = true) {
             Thread.sleep(400L * (1 shl (retries - 1)).coerceAtMost(8))
@@ -238,8 +245,9 @@ class LiveSession(
             if (dictation) Log.d(TAG, "serverContent keys: ${sc.keys().asSequence().toList()}")
             // The model was cut off mid-sentence: drop anything still queued or it talks over itself.
             if (sc.optBoolean("interrupted")) {
-                runCatching { track?.pause(); track?.flush(); track?.play() }
-                onEvent(Event.Speaking(false))
+                val q = speaker
+                if (q != null) q.interrupt()
+                else { runCatching { track?.pause(); track?.flush(); track?.play() }; onEvent(Event.Speaking(false)) }
             }
             sc.optJSONObject("inputTranscription")?.optString("text")?.takeIf { it.isNotBlank() }
                 ?.let { onEvent(Event.Transcript("in", it)) }
@@ -248,18 +256,20 @@ class LiveSession(
 
             val parts = sc.optJSONObject("modelTurn")?.optJSONArray("parts")
             if (parts != null) {
-                onEvent(Event.Speaking(true))
+                if (speaker == null) onEvent(Event.Speaking(true))
                 for (i in 0 until parts.length()) {
                     val data = parts.optJSONObject(i)?.optJSONObject("inlineData")?.optString("data")
                     if (!data.isNullOrEmpty()) {
                         val pcm = Base64.decode(data, Base64.DEFAULT)
-                        onEvent(Event.Level(false, loudness(pcm, pcm.size)))
-                        track?.write(pcm, 0, pcm.size)
+                        // Queued, never written from this thread: a blocked write here delayed every later frame,
+                        // the "interrupted" one included.
+                        speaker?.enqueue(pcm)
                     }
                 }
             }
             if (sc.optBoolean("turnComplete") || sc.optBoolean("generationComplete")) {
-                onEvent(Event.Speaking(false))
+                val q = speaker
+                if (q != null) q.turnComplete() else onEvent(Event.Speaking(false))
             }
         } catch (e: Exception) {
             Log.w(TAG, "bad frame: ${e.message}")
@@ -350,6 +360,7 @@ class LiveSession(
         // hands-free agent, not a phone held to the ear. It used to force the loudspeaker always,
         // which is why it talked out of the phone with earphones in — see AudioRoute.
         if (am != null) {
+            requestFocus(am)
             router = AudioRouter(am) { onEvent(Event.Route(it)) }.also { it.start() }
         }
         startPlayback()
@@ -379,6 +390,11 @@ class LiveSession(
                 .setTransferMode(AudioTrack.MODE_STREAM)
                 .build()
                 .apply { play() }
+            val out = track
+            speaker = PlaybackQueue(object : PlaybackQueue.Sink {
+                override fun write(pcm: ByteArray) { out?.write(pcm, 0, pcm.size) }
+                override fun flush() { runCatching { out?.pause(); out?.flush(); out?.play() } }
+            }, { on -> onEvent(Event.Speaking(on)) }, { v -> onEvent(Event.Level(false, v)) }).also { it.start() }
         } catch (e: Exception) {
             Log.w(TAG, "playback failed: ${e.message}")
             onEvent(Event.Failed("speaker unavailable: ${e.message}"))
@@ -411,7 +427,8 @@ class LiveSession(
                 val buf = ByteArray(CHUNK_BYTES)
                 while (running.get() && micOpen.get()) {
                     val n = rec.read(buf, 0, buf.size)
-                    if (n <= 0) continue
+                    // An error read returns at once: wait a moment so a dead microphone never spins a core.
+                    if (n <= 0) { runCatching { Thread.sleep(20) }; continue }
                     if (muted || !ready.get()) continue
                     onEvent(Event.Level(true, loudness(buf, n)))
                     val b64 = Base64.encodeToString(buf.copyOf(n), Base64.NO_WRAP)
@@ -436,6 +453,20 @@ class LiveSession(
     /** Set by openAudio so stop() can put the device back the way it found it. */
     private var router: AudioRouter? = null
 
+    /** Moves the sound to the next place it can go (earphones, loudspeaker, earpiece). The new route arrives as [Event.Route]. */
+    fun nextRoute() { router?.next() }
+
+    /** Other sound (music, a podcast) pauses for the call and comes back after it. */
+    private fun requestFocus(am: AudioManager) {
+        runCatching {
+            val req = android.media.AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                .build()
+            am.requestAudioFocus(req)
+            focusAm = am; focus = req
+        }
+    }
+
     /**
      * End the SPEECH but not the session.
      *
@@ -456,6 +487,10 @@ class LiveSession(
         if (!running.getAndSet(false)) return
         router?.stop()
         router = null
+        speaker?.close()
+        speaker = null
+        runCatching { focus?.let { focusAm?.abandonAudioFocusRequest(it) } }
+        focus = null; focusAm = null
         micOpen.set(false)
         ready.set(false)
         runCatching { recorder?.stop() }
@@ -464,8 +499,13 @@ class LiveSession(
         runCatching { track?.stop() }
         runCatching { track?.release() }
         track = null
-        runCatching { ws?.close(1000, "done") }
+        // A polite close first; if the socket is stuck (no network), it is cut a moment later so nothing lingers.
+        val socket = ws
         ws = null
+        runCatching { socket?.close(1000, "done") }
+        if (socket != null) thread(name = "aos-live-close", isDaemon = true) {
+            runCatching { Thread.sleep(1500); socket.cancel() }
+        }
     }
 
     companion object {

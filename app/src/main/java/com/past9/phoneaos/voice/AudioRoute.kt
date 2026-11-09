@@ -22,11 +22,11 @@ import android.util.Log
  */
 object AudioRoute {
 
-    enum class Kind { BLUETOOTH, WIRED, USB, HEARING_AID, SPEAKER }
+    enum class Kind { BLUETOOTH, WIRED, USB, HEARING_AID, SPEAKER, EARPIECE }
 
     /** What the screen shows: the kind picks the icon, the name is the device's own ("Galaxy Buds FE"). */
     data class Route(val kind: Kind, val name: String) {
-        val isHeadset: Boolean get() = kind != Kind.SPEAKER
+        val isHeadset: Boolean get() = kind != Kind.SPEAKER && kind != Kind.EARPIECE
     }
 
     val Speaker = Route(Kind.SPEAKER, "Phone speaker")
@@ -62,11 +62,22 @@ object AudioRoute {
         return -1
     }
 
+    /**
+     * Where a tap on the call's sound button goes next, as a device type to hold the sound on, or null for "the
+     * usual" (earphones when worn, else the loudspeaker): earphones, then loudspeaker, then earpiece, and round again.
+     */
+    fun nextChoice(current: Kind, hasHeadset: Boolean, hasEarpiece: Boolean): Int? = when (current) {
+        Kind.SPEAKER -> if (hasEarpiece) TYPE_BUILTIN_EARPIECE else null
+        Kind.EARPIECE -> if (hasHeadset) null else TYPE_BUILTIN_SPEAKER
+        else -> TYPE_BUILTIN_SPEAKER
+    }
+
     fun kindOf(type: Int): Kind = when (type) {
         TYPE_BLE_HEADSET, TYPE_BLUETOOTH_SCO -> Kind.BLUETOOTH
         TYPE_WIRED_HEADSET, TYPE_WIRED_HEADPHONES -> Kind.WIRED
         TYPE_USB_HEADSET -> Kind.USB
         TYPE_HEARING_AID -> Kind.HEARING_AID
+        TYPE_BUILTIN_EARPIECE -> Kind.EARPIECE
         else -> Kind.SPEAKER
     }
 
@@ -75,6 +86,7 @@ object AudioRoute {
         val kind = kindOf(type)
         val name = when (kind) {
             Kind.SPEAKER -> Speaker.name
+            Kind.EARPIECE -> "Phone earpiece"
             Kind.WIRED -> "Wired earphones"
             Kind.USB -> productName.trim().ifEmpty { "USB headset" }
             Kind.HEARING_AID -> productName.trim().ifEmpty { "Hearing aid" }
@@ -93,9 +105,27 @@ class AudioRouter(private val am: AudioManager, private val onRoute: (AudioRoute
     private val main = Handler(Looper.getMainLooper())
     private var started = false
     private var legacySco = false
+    /** A device type the user chose to hold the sound on, or null for the usual pick. */
+    @Volatile private var forced: Int? = null
+    @Volatile private var last: AudioRoute.Route = AudioRoute.Speaker
+
+    /** The user tapped the sound button: move to the next place the sound can go. */
+    fun next() {
+        main.post {
+            if (!started) return@post
+            val types = runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) am.availableCommunicationDevices.map { it.type }
+                else am.getDevices(AudioManager.GET_DEVICES_OUTPUTS).map { it.type }
+            }.getOrDefault(emptyList())
+            val best = AudioRoute.pick(types)
+            val hasHeadset = best >= 0 && AudioRoute.kindOf(types[best]) != AudioRoute.Kind.SPEAKER
+            forced = AudioRoute.nextChoice(last.kind, hasHeadset, types.contains(AudioRoute.TYPE_BUILTIN_EARPIECE))
+            apply()
+        }
+    }
 
     private val devices = object : AudioDeviceCallback() {
-        override fun onAudioDevicesAdded(added: Array<out AudioDeviceInfo>?) = apply()
+        override fun onAudioDevicesAdded(added: Array<out AudioDeviceInfo>?) { if (!added.isNullOrEmpty()) forced = null; apply() }
         override fun onAudioDevicesRemoved(removed: Array<out AudioDeviceInfo>?) = apply()
     }
 
@@ -145,6 +175,7 @@ class AudioRouter(private val am: AudioManager, private val onRoute: (AudioRoute
             runCatching { am.isSpeakerphoneOn = true }
             AudioRoute.Speaker
         }
+        last = route
         Log.i(TAG, "route -> ${route.kind} ${route.name}")
         onRoute(route)
     }
@@ -152,7 +183,8 @@ class AudioRouter(private val am: AudioManager, private val onRoute: (AudioRoute
     @androidx.annotation.RequiresApi(Build.VERSION_CODES.S)
     private fun modern(): AudioRoute.Route {
         val available = am.availableCommunicationDevices
-        val i = AudioRoute.pick(available.map { it.type })
+        val want = forced
+        val i = available.indexOfFirst { want != null && it.type == want }.takeIf { it >= 0 } ?: AudioRoute.pick(available.map { it.type })
         val target = available.getOrNull(i)
         // Already there: asking again would tear a Bluetooth voice link down and bring it back up,
         // which is an audible gap every time some unrelated device connects.
@@ -176,7 +208,8 @@ class AudioRouter(private val am: AudioManager, private val onRoute: (AudioRoute
     @Suppress("DEPRECATION")
     private fun legacy(): AudioRoute.Route {
         val outs = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
-        val i = AudioRoute.pick(outs.map { it.type })
+        val want = forced
+        val i = outs.indexOfFirst { want != null && it.type == want }.takeIf { it >= 0 } ?: AudioRoute.pick(outs.map { it.type })
         val target = outs.getOrNull(i)
         val kind = target?.let { AudioRoute.kindOf(it.type) } ?: AudioRoute.Kind.SPEAKER
         if (kind == AudioRoute.Kind.BLUETOOTH) {

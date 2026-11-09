@@ -7,26 +7,11 @@ import com.past9.phoneaos.data.AppDb
 import com.past9.phoneaos.data.SettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
-
-data class CallState(
-    val active: Boolean = false,
-    /** connecting | listening | speaking | ended | failed */
-    val phase: String = "",
-    val mine: Float = 0f,
-    val theirs: Float = 0f,
-    val lines: List<Pair<String, String>> = emptyList(),
-    val delegated: String = "",
-    /** The agent's latest reply since the call started, shown under "Working on". */
-    val reply: String = "",
-    val muted: Boolean = false,
-    val error: String = "",
-)
 
 /**
  * A live voice call with the agent. The voice (Gemini Live) IS the agent speaking: it chats, and starts anything
@@ -38,8 +23,14 @@ class CallController(
     /** The link while the phone uses a computer's agent, else null. */
     private val linked: () -> com.past9.phoneaos.remote.RemoteSession? = { com.past9.phoneaos.remote.RemoteHub.session.value },
 ) {
-    private val _state = MutableStateFlow(CallState())
-    val state: StateFlow<CallState> = _state
+    /** The call's phases and the one place it ends: see [CallCore]. */
+    private val core = CallCore { releaseAll() }
+    val state: StateFlow<CallState> = core.state
+    /** This call's number: events from an earlier call's session are ignored. */
+    @Volatile private var gen = 0
+    private var starting: Job? = null
+    private var guard: Job? = null
+    @Volatile private var serviceUp = false
     private var live: LiveSession? = null
     private var watcher: Job? = null
     /** The link this call started on: its chat is the computer's, and so are its questions and status. */
@@ -169,33 +160,55 @@ class CallController(
 
     private val tools get() = callTools(remote != null)
 
+    private fun hasMic() = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    /** False only when the phone clearly has no network; when it can't tell, the call is tried. */
+    private fun online(): Boolean = runCatching {
+        val cm = context.getSystemService(android.net.ConnectivityManager::class.java) ?: return true
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork ?: return false) ?: return false
+        caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }.getOrDefault(true)
+
+    /** Ends call [g] with [why] if it is still sitting in [phase] after [ms]: no state can stick. */
+    private fun watch(g: Int, phase: String, ms: Long, why: String) {
+        guard?.cancel()
+        guard = scope.launch { kotlinx.coroutines.delay(ms); core.timedOut(g, phase, why) }
+    }
+
+    /** Moves the sound to the next place it can go (earphones, loudspeaker, earpiece). */
+    fun nextRoute() { live?.nextRoute() }
+
     fun start() {
-        if (_state.value.active) return
+        // One call at a time: a second tap while it connects or is live changes nothing.
+        val g = core.begin() ?: return
+        gen = g
+        if (!hasMic()) { core.refuse(g, CallCore.NO_MIC, needsMic = true); return }
         remote = linked()
         val r = remote
         val key = settings.voiceKey("gemini")
-        if (r == null && key == null) { _state.value = CallState(phase = "failed", error = unavailableReason(false).orEmpty()); return }
+        if (r == null && key == null) { core.refuse(g, unavailableReason(false).orEmpty()); return }
+        if (!online()) { core.refuse(g, CallCore.NO_NETWORK); return }
         val s = settings.state.value
         val name = s.agentName.takeIf { it != "Your agent" } ?: "your agent"
         val system = systemPrompt(name, s.userName, r != null)
-        _state.value = CallState(active = true, phase = "connecting")
         // Pre-flight first (the key, or the computer's one-use token); the call service starts only once the call really
         // can, in begin(). A refusal is a message on the call screen, never a started-then-stopped service (that crashed
         // the app on 22 Oct 2026 when a computer on 0.2.47 refused the call). The call screen stays in front meanwhile,
         // which is what Android requires for the mic.
-        scope.launch {
-            if (r == null) { begin(LiveAuth.keyUrl(key!!), null, system, null, null); return@launch }
+        watch(g, CallCore.CONNECTING, CallCore.CONNECT_TIMEOUT_MS, CallCore.TIMED_OUT)
+        starting = scope.launch {
+            if (r == null) { begin(g, LiveAuth.keyUrl(key!!), null, system, null, null); return@launch }
             when (val t = linkedAuth(r)) {
-                is LiveAuth.Token.Ok -> begin(t.url, { (kotlinx.coroutines.runBlocking { linkedAuth(r) } as? LiveAuth.Token.Ok)?.url }, system, t.model, t.voice)
+                is LiveAuth.Token.Ok -> begin(g, t.url, { (kotlinx.coroutines.runBlocking { linkedAuth(r) } as? LiveAuth.Token.Ok)?.url }, system, t.model, t.voice)
                 // No key on the computer but one here: the call still goes, on this phone's key.
-                is LiveAuth.Token.No -> if (key != null) begin(LiveAuth.keyUrl(key), null, system, null, null)
-                    else { _state.value = CallState(phase = "failed", error = t.why); remote = null }
+                is LiveAuth.Token.No -> if (key != null) begin(g, LiveAuth.keyUrl(key), null, system, null, null)
+                    else core.refuse(g, t.why)
             }
         }
     }
 
     /** Gives the voice the last stretch of the chat and the user's pinned facts, so it picks up mid-thread. */
-    private suspend fun begin(url: String, renew: (() -> String?)?, base: String, model: String?, voice: String?) {
+    private suspend fun begin(g: Int, url: String, renew: (() -> String?)?, base: String, model: String?, voice: String?) {
         val s = settings.state.value
         val recent = db.chat().all().first().filter { it.kind == "user" || it.kind == "agent" }.takeLast(10)
             .joinToString("\n") { (if (it.kind != "user") "You: " else com.past9.phoneaos.remote.Sender.of(it.meta)?.let { s -> s.line + ": " } ?: "User: ") + it.text.take(400) }
@@ -208,14 +221,17 @@ class CallController(
             (if (who.isNotBlank()) "\n\n$who" else "") +
             (if (recent.isNotBlank()) "\n\nThe chat so far (this call continues it):\n$recent" else "") +
             (if (waiting != null) "\n\nWaiting on the user right now (bring it up early): ${cardPrompt(waiting)}" else "")
+        // Ended (or timed out, or replaced by a newer call) while the token was on its way: nothing to start.
+        if (!core.current(g)) return
         callStart = System.currentTimeMillis(); callLines.clear(); callTimes.clear()
-        // Ended while the token was on its way: nothing to start.
-        if (!_state.value.active) { remote = null; return }
+        serviceUp = true
         CallService.start(context)
         // A computer's token is locked to the Live model its key reaches, so the call uses that model.
         val phoneVoice = s.ttsVoice.takeIf { s.ttsProvider == "gemini" && it.isNotBlank() }
         live = LiveSession(url, model?.ifBlank { null } ?: "gemini-3.1-flash-live-preview", phoneVoice ?: voice?.ifBlank { null } ?: "Kore", system,
-            tools = tools, renew = renew) { e -> onEvent(e) }.also { it.start() }
+            tools = tools, renew = renew) { e -> if (g == gen) onEvent(e) }.also { it.start() }
+        // Ended in the instant between the check and the session: let go of it again.
+        if (!core.current(g)) { releaseAll(); return }
         // Read the main agent's new messages and questions into the call.
         // By id seen, not "newer than the last id": a linked computer's rows are numbered by ITS clock, and a helper's
         // card can land with an older number than the newest row.
@@ -229,7 +245,7 @@ class CallController(
                     if (JSONObject(i.meta).optBoolean("call")) return@forEach
                     when (i.kind) {
                         "agent" -> if (i.text.isNotBlank()) {
-                            _state.value = _state.value.copy(reply = i.text.take(400))
+                            core.patch { it.copy(reply = i.text.take(400)) }
                             tell("[An update on your own work, from your main chat. Tell the user the part that matters, briefly, in the first person] ${i.text.take(1200)}")
                         }
                         "question", "approval" -> if (!JSONObject(i.meta).has("answer")) { open[i.id] = isApproval(i); tell(cardPrompt(i)) }
@@ -257,7 +273,7 @@ class CallController(
                     if (key !in workingSeen && c.endedAt in 1 until (sentAt[key] ?: 0L)) return@forEach
                     sentTo.remove(key); workingSeen.remove(key)
                     val what = c.result.ifBlank { c.done }.ifBlank { c.line }
-                    _state.value = _state.value.copy(reply = "$name: ${what.take(360)}")
+                    core.patch { it.copy(reply = "$name: ${what.take(360)}") }
                     tell("[$name finished. Tell the user the part that matters, briefly, as your own work] ${what.take(1200)}")
                 }
             }
@@ -286,7 +302,7 @@ class CallController(
             if (LiveAuth.isOldComputer(e.message)) {
                 val routed = if (target.isBlank() || target.equals("main", true)) message else "For $target: $message"
                 runtime.send(routed, fromCall = task)
-                _state.value = _state.value.copy(delegated = task)
+                core.patch { it.copy(delegated = task) }
                 return JSONObject().put("status", "sent").put("sent_to", "your main chat").put("note", "Started in your main chat, which routes it" + (if (target.isNotBlank() && !target.equals("main", true)) " to $target" else "") + ". Tell the user you're on it.")
             }
             return JSONObject().put("status", "failed").put("error", "Couldn't reach the computer: ${e.message}. Tell the user and offer to try again.")
@@ -299,7 +315,7 @@ class CallController(
         }
         val kind = res.optString("kind"); val name = res.optString("name")
         val label = when (kind) { "main" -> "Main chat"; "helper" -> "Helper $name"; else -> name }
-        _state.value = _state.value.copy(delegated = if (kind == "main") task else "$label: $task")
+        core.patch { it.copy(delegated = if (kind == "main") task else "$label: $task") }
         when (kind) {
             "helper" -> { sentTo["h:" + res.optString("id")] = "Your helper $name"; sentAt["h:" + res.optString("id")] = System.currentTimeMillis() }
             "project", "chat" -> res.optString("chat").takeIf { it.isNotBlank() }?.let { sentTo["p:$it"] = "Your work in the $name project"; sentAt["p:$it"] = System.currentTimeMillis() }
@@ -317,7 +333,7 @@ class CallController(
     private var bufWho = ""; private val buf = StringBuilder()
 
     /** A speaker finished a stretch: put it in the chat as one bubble, like any message. */
-    private fun flush() {
+    @Synchronized private fun flush() {
         val text = buf.toString().trim(); val who = bufWho
         buf.clear(); bufWho = ""
         if (text.isBlank()) return
@@ -335,17 +351,28 @@ class CallController(
     private fun transcript(lastN: Int = 40) = callLines.takeLast(lastN).joinToString("\n") { (w, t) -> (if (w == "in") "User: " else "Voice: ") + t }
 
     private fun onEvent(e: LiveSession.Event) {
-        val st = _state.value
+        // Events come from the socket, the microphone and the speaker threads at once: every change goes through
+        // the core's atomic update, so a loudness tick can never write an old phase back over a new one.
+        val g = gen
         when (e) {
-            is LiveSession.Event.SetupComplete -> { live?.openAudio(context.getSystemService(AudioManager::class.java)); _state.value = st.copy(phase = "listening") }
-            is LiveSession.Event.Speaking -> { if (!e.on && bufWho == "out") flush(); _state.value = st.copy(phase = if (e.on) "speaking" else "listening") }
-            is LiveSession.Event.Level -> _state.value = if (e.mine) st.copy(mine = e.value) else st.copy(theirs = e.value)
-            is LiveSession.Event.Transcript -> {
-                if (bufWho.isNotEmpty() && bufWho != e.who) flush()
-                bufWho = e.who; buf.append(e.text)
-                _state.value = st.copy(lines = (st.lines + (e.who to e.text)).takeLast(6))
+            is LiveSession.Event.SetupComplete -> {
+                live?.openAudio(context.getSystemService(AudioManager::class.java))
+                // Muted while it was still connecting: the session starts muted too.
+                if (state.value.muted) live?.setMuted(true)
+                core.live(g)
             }
-            is LiveSession.Event.ToolCall -> { android.util.Log.i("CallAgent", "tool call ${e.name}: ${e.args.toString().take(400)}"); when (e.name) {
+            is LiveSession.Event.Speaking -> { if (!e.on) synchronized(this) { if (bufWho == "out") flush() }; core.speaking(g, e.on) }
+            is LiveSession.Event.Level -> core.level(g, e.mine, e.value)
+            is LiveSession.Event.Transcript -> {
+                synchronized(this) {
+                    if (bufWho.isNotEmpty() && bufWho != e.who) flush()
+                    bufWho = e.who; buf.append(e.text)
+                }
+                core.caption(g, e.who, e.text)
+            }
+            is LiveSession.Event.Route -> core.patch { it.copy(route = e.route.kind.name) }
+            is LiveSession.Event.Reconnecting -> { core.reconnecting(g); watch(g, CallCore.RECONNECTING, CallCore.RECONNECT_TIMEOUT_MS, CallCore.LOST) }
+            is LiveSession.Event.ToolCall -> { core.thinking(g); android.util.Log.i("CallAgent", "tool call ${e.name}: ${e.args.toString().take(400)}"); when (e.name) {
                 "start_work" -> {
                     val task = e.args.optString("task")
                     flush()
@@ -361,7 +388,7 @@ class CallController(
                         return
                     }
                     runtime.send(message, fromCall = task)
-                    _state.value = st.copy(delegated = task)
+                    core.patch { it.copy(delegated = task) }
                     // One thing at a time: if the main agent is blocked on a question, this waits in line behind it, so say so.
                     scope.launch {
                         val waiting = pendingQuestion()
@@ -404,8 +431,9 @@ class CallController(
                 }
                 else -> toolResult(e.id, e.name, JSONObject().put("error", "unknown tool"))
             } }
-            is LiveSession.Event.Failed -> { _state.value = st.copy(active = false, phase = "failed", error = e.error); cleanup() }
-            is LiveSession.Event.Closed -> { _state.value = st.copy(active = false, phase = "ended"); cleanup() }
+            // The session gave up (no network, a refused key, a dead microphone): say why, and let go of everything.
+            is LiveSession.Event.Failed -> core.dropped(g, CallCore.plainError(e.error))
+            is LiveSession.Event.Closed -> core.dropped(g, "")
             else -> {}
         }
     }
@@ -428,12 +456,23 @@ class CallController(
     /** Debug probe: as if the model called [name] (for a run without a Live session). */
     fun probeTool(name: String, args: JSONObject) { onEvent(LiveSession.Event.ToolCall("probe-" + System.currentTimeMillis(), name, args)) }
 
-    fun toggleMute() { val m = !_state.value.muted; live?.setMuted(m); _state.value = _state.value.copy(muted = m) }
+    fun toggleMute() { if (!state.value.active) return; val m = !state.value.muted; live?.setMuted(m); core.muted(m) }
 
-    fun end() { live?.stop(); _state.value = _state.value.copy(active = false, phase = "ended"); cleanup() }
+    /** End, back and the notification's End all come here. It never waits on the socket. */
+    fun end() { starting?.cancel(); starting = null; core.end() }
+
+    /**
+     * The one way out of a call, however it ended: the session (microphone, speaker, audio focus, Bluetooth, the
+     * socket), the foreground service and its notification, and the watchers. [CallCore] runs it exactly once per call.
+     */
+    private fun releaseAll() {
+        guard?.cancel(); guard = null
+        runCatching { live?.stop() }
+        cleanup()
+    }
 
     private fun cleanup() {
-        CallService.stop(context)
+        if (serviceUp) { serviceUp = false; CallService.stop(context) }
         flush()
         // The call becomes part of the conversation: the main agent remembers what was said.
         if (callLines.isNotEmpty() && remote == null) runtime.rememberCall(transcript(80))

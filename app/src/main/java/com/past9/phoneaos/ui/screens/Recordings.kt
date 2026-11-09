@@ -1,5 +1,6 @@
 package com.past9.phoneaos.ui.screens
 
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -80,7 +81,9 @@ fun RecordingsScreen(boxKey: String, onBack: () -> Unit) {
     var rows by remember { mutableStateOf(folder.list()) }
     var open by remember { mutableStateOf<String?>(null) }
     // A running one shows its words as they come.
-    LaunchedEffect(Unit) { while (true) { delay(1_500); rows = folder.list() } }
+    // Only while this screen is in front: the folder is not re-read every 1.5 s behind another app or a locked screen.
+    val life = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    LaunchedEffect(life) { life.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) { rows = folder.list(); while (true) { delay(1_500); rows = folder.list() } } }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
