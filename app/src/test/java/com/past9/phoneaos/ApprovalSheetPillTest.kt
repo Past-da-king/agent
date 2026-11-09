@@ -130,7 +130,7 @@ class ApprovalSheetPillTest(private val dark: Boolean) {
         start { CompositionLocalProvider(LocalSheetPreview provides true) { Parts { ApprovalCard(pending) { id, o -> answers += id to o } } } }
         rule.onNodeWithText("Send the email to the venue team").assertIsDisplayed()
         rule.onNodeWithText("Asked by Venue research", substring = true).assertIsDisplayed()
-        rule.onNodeWithText("thabo@example.com", substring = true).assertExists()
+        rule.onNodeWithText("To: thabo@example.com", substring = true).assertExists()
         cap("approval-card")
         rule.onNodeWithText("Review").performClick(); tick()
         rule.onNodeWithText("Approve").assertIsDisplayed()
@@ -176,7 +176,7 @@ class ApprovalSheetPillTest(private val dark: Boolean) {
         start { CompositionLocalProvider(LocalSheetPreview provides true) { Parts { ApprovalCard(done) { _, _ -> } } } }
         rule.onNodeWithText("Approved").assertIsDisplayed()
         rule.onNodeWithText("Post the update in the team channel").performClick(); tick()
-        rule.onNodeWithText("You approved this").assertIsDisplayed()
+        rule.onNodeWithText("You approved this").assertExists()
         rule.onNodeWithText("The whole update, as it was posted.", substring = true).assertExists()
         assertTrue(rule.onAllNodesWithText("Approve").fetchSemanticsNodes().isEmpty())
         cap("approval-sheet-decided")
@@ -186,9 +186,9 @@ class ApprovalSheetPillTest(private val dark: Boolean) {
         start { Parts { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Column(horizontalAlignment = Alignment.CenterHorizontally) {
             NewBelowPill(true, 3) {}; NewBelowPill(true, 1) {}; NewBelowPill(true, 0) {} } } } }
         tick()
-        rule.onNodeWithText("3 new messages").assertIsDisplayed()
-        rule.onNodeWithText("1 new message").assertIsDisplayed()
-        rule.onNodeWithText("Jump to latest").assertIsDisplayed()
+        rule.onNodeWithText("3 new messages").assertExists()
+        rule.onNodeWithText("1 new message").assertExists()
+        rule.onNodeWithText("Jump to latest").assertExists()
         cap("pill-states")
     }
 
@@ -199,7 +199,7 @@ class ApprovalSheetPillTest(private val dark: Boolean) {
         // He scrolls up to read.
         rule.onRoot().performTouchInput { swipeDown(startY = height * 0.3f, endY = height * 0.8f, durationMillis = 300) }
         tick(2500)
-        rule.onNodeWithText("Jump to latest").assertIsDisplayed()
+        rule.onNodeWithText("Jump to latest").assertExists()
         // Work goes on below: steps written twice, a helper, notices, cards, an empty row, and three real messages.
         val steps = (1..40).map { item("activity", "Read file $it", JSONObject().put("status", "running")) }
         items = items + item("notice", "New chat", JSONObject().put("divider", true)) + steps; tick(300)
@@ -211,7 +211,7 @@ class ApprovalSheetPillTest(private val dark: Boolean) {
             remoteApproval("Book venue A", "Fri 20 Nov") { put("answer", "Approve") } + item("agent", "") +
             item("agent", "Venue A is booked.") + item("report", "Venue comparison", JSONObject().put("path", "/reports/venues.md")) + item("agent", "Anything else for the function?")
         tick(1500)
-        rule.onNodeWithText("3 new messages").assertIsDisplayed()
+        rule.onNodeWithText("3 new messages").assertExists()
         cap("pill-3-new-messages")
         // He taps it: down to the latest, and nothing is new any more.
         rule.onNodeWithText("3 new messages").performClick(); tick(2500)

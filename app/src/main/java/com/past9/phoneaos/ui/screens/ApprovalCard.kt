@@ -217,7 +217,11 @@ fun ApprovalBody(details: String, full: Boolean) {
         }
         else -> Surface(shape = MaterialTheme.shapes.medium, color = cs.surfaceContainerLowest, modifier = Modifier.fillMaxWidth()) {
             if (full) Markdown(details, Modifier.padding(14.dp), style = MaterialTheme.typography.bodyMedium, color = cs.onSurface)
-            else Text(details, Modifier.padding(14.dp), style = MaterialTheme.typography.bodyMedium, color = cs.onSurface, maxLines = lines, overflow = TextOverflow.Ellipsis)
+            else Text(remember(details) { plainStart(details) }, Modifier.padding(14.dp), style = MaterialTheme.typography.bodyMedium, color = cs.onSurface, maxLines = lines, overflow = TextOverflow.Ellipsis)
         }
     }
 }
+
+/** The start of markdown as plain words for the card (no stars, hashes or backticks, no empty lines); the sheet draws it properly. */
+internal fun plainStart(details: String): String =
+    details.lineSequence().map { it.trim().replace(Regex("^#{1,6}\\s+"), "").replace("**", "").replace("__", "").replace("`", "") }.filter { it.isNotBlank() }.take(12).joinToString("\n")
