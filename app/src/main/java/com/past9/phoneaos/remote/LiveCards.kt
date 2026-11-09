@@ -100,6 +100,10 @@ object LiveCards {
             .put("label", c.label).put("state", c.state).put("now", if (c.working) c.line else "")
             .put("result", if (c.working) "" else c.result.ifBlank { c.done })
             .put("startedAt", c.startedAt).put("endedAt", c.endedAt).put("model", c.model)
+            // A card is live right now: it is only here because the computer answered a moment ago (reconcile drops the
+            // list when the brain stops answering), so its beat is now and the phone's quiet window (HelperLive) never
+            // hides a card the computer still lists.
+            .put("beat", System.currentTimeMillis())
         if (c.ownerKind == "project") {
             meta.put("projectName", c.ownerName).put("projectGlyph", c.ownerGlyph).put("projectColor", c.ownerColor).put("projectImage", c.ownerImage)
             // A project's helper that is not under its project agent's card says which project it works in.
@@ -137,6 +141,10 @@ object LiveCards {
      */
     fun workingCount(cards: List<LiveCard>?, brainAlive: Boolean = true): Int =
         if (!brainAlive || cards == null) 0 else cards.count { it.working }
+
+    // A card's "working" is the computer's own newest list, and that list only exists while the computer answers
+    // (reconcile, STALE_CARDS_MS): it is the same rule as the phone's rows (ui/HelperLive.kt), read at the source.
+    // A row in the phone's own copy is the one that could say working for ever, and HelperLive is what fixes it.
 
     /** Same rule as [workingCount]: is anything at work now? */
     fun anyWorking(cards: List<LiveCard>?, brainAlive: Boolean = true): Boolean = workingCount(cards, brainAlive) > 0

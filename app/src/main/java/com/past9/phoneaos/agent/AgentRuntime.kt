@@ -895,6 +895,13 @@ class AgentRuntime(
         h.job.cancel(); return true
     }
 
+    /** He swiped a helper row away: stopped if it still runs, and the row reads ended so no screen lists it again. */
+    fun dismissHelper(id: Long) {
+        remote?.let { it.dismissHelper(id); return }
+        helpers[id]?.job?.cancel()
+        scope.launch { db.chat().get(id)?.let { cur -> com.past9.phoneaos.ui.HelperLive.dismissed(cur)?.let { runCatching { db.chat().update(it) } } } }
+    }
+
     /** The question card the agent is waiting on right now, if any (newest first). */
     fun pendingQuestionId(): Long? = pending.keys.maxOrNull()
 
