@@ -31,11 +31,31 @@ data class HelperView(val item: ChatItem, val steps: List<ChatItem>) {
     private val meta = JSONObject(item.meta)
     val id get() = item.id
     val label: String get() = meta.optString("label").ifBlank { "Helper" }
-    /** working | done | failed | stopped */
-    val state: String get() = meta.optString("state").ifBlank { "working" }
-    val working get() = state == "working"
+    /** working | done | failed | stopped | lost | unknown */
+    // A row that does not say what it is doing is never counted as working (9 Nov 2026: defaulting to "working" made
+    // every state-less row a ghost helper).
+    val state: String get() = meta.optString("state").ifBlank { "unknown" }
+    /** The computer's id for this row (mirrored rows carry it), for matching it against the live cards. */
+    val rid: String get() = meta.optString("rid")
+    /**
+     * Is it at work right now? Not on the stored state alone (9 Nov 2026: the Profile page listed helpers that had
+     * died days before, because a mirrored row said working for ever). ONE rule, [HelperLive], shared by every count,
+     * every list, the card and the sheet, so the number and the rows under it can never disagree.
+     */
+    val working get() = HelperLive.isLive(this)
+    /** What the screens draw: a row that says working but is not live any more is drawn as lost, with the reason. */
+    val shownState: String get() = HelperLive.shownState(this)
+    /** Why a row that says working is not at work any more ("Lost: nothing from it for 9 days"). */
+    val lostBecause: String get() = HelperLive.lostBecause(this)
+    /** Waiting in the line for a free slot, not running yet (the computer writes queued: true). */
+    val queued: Boolean get() = meta.optBoolean("queued")
+    /** The device that owns this run: its id, and the name the desktop wrote for it (meta.runOn / runsOnName). */
+    val runOn: String get() = meta.optString("runOn")
+    val runsOn: String get() = meta.optString("runsOnName")
     /** The live step. A linked computer's helper rows call it summary. */
-    val now: String get() = meta.optString("now").ifBlank { if (working) meta.optString("summary") else "" }
+    // What it says it is doing right now: the stored state (not the live rule), so a row the rule refuses still says
+    // what it claimed; the card decides whether to show it.
+    val now: String get() = meta.optString("now").ifBlank { if (state == "working") meta.optString("summary") else "" }
     val result: String get() = meta.optString("result")
     val model: String get() = meta.optString("model").substringAfterLast('/')
     val startedAt: Long get() = meta.optLong("startedAt", item.createdAt)
@@ -80,6 +100,8 @@ private fun lookOf(state: String): StateLook {
         "working" -> StateLook(cs.primaryContainer, cs.onPrimaryContainer, "Working")
         "done" -> StateLook(extra.successContainer, extra.success, "Done")
         "stopped" -> StateLook(cs.surfaceContainerHighest, cs.onSurfaceVariant, "Stopped")
+        "lost" -> StateLook(cs.surfaceContainerHighest, cs.onSurfaceVariant, "Lost")
+        "unknown" -> StateLook(cs.surfaceContainerHighest, cs.onSurfaceVariant, "Not working")
         "interrupted" -> StateLook(cs.surfaceContainerHighest, cs.onSurfaceVariant, "Paused")
         else -> StateLook(cs.errorContainer, cs.onErrorContainer, "Didn't finish")
     }
@@ -96,6 +118,7 @@ fun HelperOrb(state: String, size: Dp = 40.dp, profileColor: String? = null) {
             "working" -> LoadingIndicator(Modifier.size(size * 0.8f), color = tones.second)
             "done" -> Icon(Icons.Rounded.Check, "Done", Modifier.size(size * 0.5f), tint = look.content)
             "stopped" -> Icon(Icons.Rounded.Stop, "Stopped", Modifier.size(size * 0.5f), tint = look.content)
+            "lost" -> Icon(Icons.Rounded.CloudOff, "Lost", Modifier.size(size * 0.5f), tint = look.content)
             else -> Icon(Icons.Rounded.PriorityHigh, "Didn't finish", Modifier.size(size * 0.5f), tint = look.content)
         }
     }
@@ -150,11 +173,11 @@ fun HelperCard(h: HelperView, onClick: () -> Unit, modifier: Modifier = Modifier
                /** The small card a linked computer's helpers use at the foot of the chat (the desktop side panel's size). */
                compact: Boolean = false, iconSize: Dp = 40.dp) {
     val cs = MaterialTheme.colorScheme
-    val look = lookOf(h.state)
+    val look = lookOf(h.shownState)
     val pad = if (compact) 10.dp else 14.dp
     Surface(onClick = onClick, shape = if (compact) MaterialTheme.shapes.large else MaterialTheme.shapes.extraLarge, color = cs.surfaceContainerLow, modifier = modifier.fillMaxWidth()) {
         Row(Modifier.padding(start = pad + if (compact) 2.dp else 0.dp, end = 10.dp, top = pad, bottom = pad), verticalAlignment = Alignment.CenterVertically) {
-            if (h.project.isNotBlank()) ProjectTile(h, iconSize) else HelperOrb(h.state, iconSize, profileColor = h.profileColor.takeIf { h.profile.isNotBlank() })
+            if (h.project.isNotBlank()) ProjectTile(h, iconSize) else HelperOrb(h.shownState, iconSize, profileColor = h.profileColor.takeIf { h.profile.isNotBlank() })
             Spacer(Modifier.width(if (compact) 12.dp else 14.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -165,6 +188,7 @@ fun HelperCard(h: HelperView, onClick: () -> Unit, modifier: Modifier = Modifier
                 if (h.profile.isNotBlank()) ProfileTag(h.profile, h.profileColor, Modifier.padding(top = 2.dp, bottom = 2.dp))
                 val line = when {
                     h.working -> (h.now.ifBlank { h.steps.lastOrNull()?.text ?: "Getting started" }) + "…"
+                    h.shownState == "lost" -> h.lostBecause
                     h.result.isNotBlank() -> plainFirstLine(h.result)
                     else -> plainFirstLine(h.item.text)
                 }
@@ -184,17 +208,17 @@ fun HelperSheet(h: HelperView, onStop: ((Long) -> Unit)?, onDismiss: () -> Unit,
                 /** Go to chat: the chat it works for (a linked computer's card: its project chat, or the main thread). */
                 onGoToChat: (() -> Unit)? = null) {
     val cs = MaterialTheme.colorScheme
-    val look = lookOf(h.state)
+    val look = lookOf(h.shownState)
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(topStart = com.past9.phoneaos.ui.theme.Radius.xl, topEnd = com.past9.phoneaos.ui.theme.Radius.xl)
     val body: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 40.dp).navigationBarsPadding()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (h.project.isNotBlank()) ProjectTile(h, 52.dp) else HelperOrb(h.state, 52.dp, profileColor = h.profileColor.takeIf { h.profile.isNotBlank() })
+                if (h.project.isNotBlank()) ProjectTile(h, 52.dp) else HelperOrb(h.shownState, 52.dp, profileColor = h.profileColor.takeIf { h.profile.isNotBlank() })
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
                     Text(if (h.project.isNotBlank()) "PROJECT" else "HELPER", style = Eyebrow, color = cs.primary)
                     Text(h.label, style = MaterialTheme.typography.headlineSmall)
-                    val took = if (h.working) "for ${spanLabel(now - h.startedAt)}" else if (h.endedAt > 0) "in ${spanLabel(h.endedAt - h.startedAt)}" else ""
+                    val took = if (h.working) "for ${spanLabel(now - h.startedAt)}" else if (h.endedAt > 0 && h.endedAt > h.startedAt) "in ${spanLabel(h.endedAt - h.startedAt)}" else ""
                     Text(listOf(look.word + if (took.isNotBlank()) " $took" else "", h.model.takeIf { it.isNotBlank() },
                         h.pushes.takeIf { it > 0 }?.let { "sent back ${if (it == 1) "once" else "$it times"}" }).filterNotNull().joinToString(" · "),
                         style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
@@ -227,10 +251,17 @@ fun HelperSheet(h: HelperView, onStop: ((Long) -> Unit)?, onDismiss: () -> Unit,
                 }
             }
 
+            if (h.shownState == "lost" && h.result.isBlank()) {
+                Section("WHAT HAPPENED", "It was started on a computer that stopped answering")
+                Surface(shape = MaterialTheme.shapes.large, color = look.container, modifier = Modifier.fillMaxWidth()) {
+                    Text(h.lostBecause, Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium, color = look.content)
+                }
+            }
+
             if (h.result.isNotBlank()) {
-                Section(if (h.state == "done") "WHAT IT BROUGHT BACK" else "WHAT HAPPENED", null)
-                Surface(shape = MaterialTheme.shapes.large, color = if (h.state == "done") cs.surfaceContainerHigh else look.container, modifier = Modifier.fillMaxWidth()) {
-                    Markdown(h.result, Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium, color = if (h.state == "done") cs.onSurface else look.content)
+                Section(if (h.shownState == "done") "WHAT IT BROUGHT BACK" else "WHAT HAPPENED", null)
+                Surface(shape = MaterialTheme.shapes.large, color = if (h.shownState == "done") cs.surfaceContainerHigh else look.container, modifier = Modifier.fillMaxWidth()) {
+                    Markdown(h.result, Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium, color = if (h.shownState == "done") cs.onSurface else look.content)
                 }
             }
 

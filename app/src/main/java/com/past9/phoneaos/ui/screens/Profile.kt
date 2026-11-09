@@ -14,6 +14,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -49,9 +51,14 @@ fun ProfileScreen(home: HomeState, memories: List<MemoryRow>, actions: ProfileAc
         .sortedByDescending { g -> home.tasks.any { it.goalId == g.id && it.status == "blocked" } }
     val achieved = home.goals.count { it.status == "achieved" }
     val helpers = remember(home.items) { HelperView.from(home.items) }
+    // ONE rule for the header and the list under it (9 Nov 2026: the header said "12 working for you right now" over
+    // ghosts that had died days before). HelperLive counts only rows that are really at work, and returns the same
+    // rows the list draws, so the number can never disagree with what he sees.
+    val running = remember(helpers) { com.past9.phoneaos.ui.HelperLive.running(helpers, home.now) }
     var openHelper by remember { mutableStateOf<Long?>(null) }
     val stop = LocalStopHelper.current
-    helpers.firstOrNull { it.id == openHelper && it.working }?.let { h -> HelperSheet(h, stop, onDismiss = { openHelper = null }, now = home.now) }
+    val dismiss = LocalDismissHelper.current
+    helpers.firstOrNull { it.id == openHelper }?.let { h -> HelperSheet(h, stop, onDismiss = { openHelper = null }, now = home.now) }
     val about = (memories.filter { it.pinned } + memories.filter { !it.pinned }.sortedByDescending { it.updatedAt }).distinctBy { it.id }.take(6)
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = com.past9.phoneaos.ui.sidePad(0.dp), end = com.past9.phoneaos.ui.sidePad(0.dp), bottom = 48.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
@@ -80,11 +87,23 @@ fun ProfileScreen(home: HomeState, memories: List<MemoryRow>, actions: ProfileAc
             }
         }
         item {
-            val running = helpers.filter { it.working }
             SectionHeader("Helpers", if (running.isEmpty()) "None working right now. I hand bigger jobs to helpers." else "${running.size} working for you right now. Tap one to see it.",
                 Modifier.padding(horizontal = 20.dp))
         }
-        items(helpers.filter { it.working }, key = { "h${it.id}" }) { h -> HelperCard(h, onClick = { openHelper = h.id }, modifier = Modifier.padding(horizontal = 16.dp), now = home.now) }
+        items(running, key = { "h${it.id}" }) { h ->
+            // Any card left here can be swiped away, either way: it is stopped if it still runs and it leaves every list.
+            if (dismiss == null) HelperCard(h, onClick = { openHelper = h.id }, modifier = Modifier.padding(horizontal = 16.dp), now = home.now)
+            else SwipeToDismissBox(state = rememberSwipeToDismissBoxState(), onDismiss = { dismiss(h.id) },
+                modifier = Modifier.padding(horizontal = 16.dp).animateItem().semantics { contentDescription = "${h.label}. Swipe to stop and dismiss it" },
+                backgroundContent = {
+                    Surface(shape = MaterialTheme.shapes.extraLarge, color = cs.errorContainer, modifier = Modifier.fillMaxSize()) {
+                        Row(Modifier.fillMaxSize().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Dismiss", style = MaterialTheme.typography.labelLarge, color = cs.onErrorContainer)
+                            Text("Dismiss", style = MaterialTheme.typography.labelLarge, color = cs.onErrorContainer)
+                        }
+                    }
+                }) { HelperCard(h, onClick = { openHelper = h.id }, now = home.now) }
+        }
         item { SectionHeader("What I think about you", "Things I keep in mind so you don't repeat yourself", Modifier.padding(horizontal = 20.dp)) { TextButton(onClick = actions.onMemory) { Text("All") } } }
         item {
             Surface(shape = MaterialTheme.shapes.extraLarge, color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
