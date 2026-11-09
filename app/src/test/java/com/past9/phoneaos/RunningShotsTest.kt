@@ -129,5 +129,8 @@ class RunningShotsTest(private val dark: Boolean) {
         assertTrue(RunningFold(prefs).collapsed(n))
         first.toggle(n)
         assertTrue(!RunningFold(prefs).collapsed(n))
+        // The groups he folded are kept the same way.
+        first.toggleGroup("p2")
+        assertEquals(setOf("p2"), RunningFold(prefs).groups)
     }
 }

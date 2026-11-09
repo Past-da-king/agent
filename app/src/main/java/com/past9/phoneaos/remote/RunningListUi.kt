@@ -46,6 +46,7 @@ import com.past9.phoneaos.ui.AgentAvatar
 import com.past9.phoneaos.ui.HelperCard
 import com.past9.phoneaos.ui.HelperSheet
 import com.past9.phoneaos.ui.ProjectIconTile
+import com.past9.phoneaos.ui.StatusPill
 import com.past9.phoneaos.ui.theme.Eyebrow
 import com.past9.phoneaos.ui.theme.Radius
 import kotlinx.coroutines.delay
@@ -63,6 +64,13 @@ class RunningFold(private val prefs: SharedPreferences?) {
     /** A look at what just finished while nothing runs. Not kept. */
     var peek by mutableStateOf(false)
         private set
+    /** The groups he folded (a project's id, "main", "other"), kept on the device like the fold itself. */
+    var groups by mutableStateOf<Set<String>>(prefs?.getStringSet(GROUPS, null)?.toSet() ?: emptySet())
+        private set
+    fun toggleGroup(key: String) {
+        groups = if (key in groups) groups - key else groups + key
+        prefs?.edit()?.putStringSet(GROUPS, groups)?.apply()
+    }
     fun collapsed(n: RunCounts) = RunningList.collapsed(choice, n, peek)
     fun set(collapsed: Boolean) {
         choice = collapsed
@@ -72,6 +80,7 @@ class RunningFold(private val prefs: SharedPreferences?) {
     fun toggle(n: RunCounts) { if (n.running == 0) peek = !peek else { peek = false; set(!choice) } }
     companion object {
         const val KEY = "running_collapsed"
+        const val GROUPS = "running_groups_folded"
         @Volatile private var shared: RunningFold? = null
         fun shared(ctx: Context): RunningFold = shared ?: synchronized(this) {
             shared ?: RunningFold(ctx.applicationContext.getSharedPreferences("settings", Context.MODE_PRIVATE)).also { shared = it }
@@ -149,21 +158,39 @@ fun RunningHeader(n: RunCounts, collapsed: Boolean, onToggle: () -> Unit, modifi
     }
 }
 
-/** A group's own line: the project (or the main chat) and how many are running there. */
+/** A group's own line: the project (or the main chat) and what is going on there. One tap folds or opens the group. */
 @Composable
-private fun GroupHead(g: RunGroup) {
+private fun GroupHead(g: RunGroup, folded: Boolean, onToggle: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 6.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (g.isMain) Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) { AgentAvatar(working = false, size = 20.dp) }
-        else {
-            val icon = g.cards.firstOrNull()
-            ProjectIconTile(g.name, g.project?.glyph ?: icon?.ownerGlyph.orEmpty(), g.project?.color ?: icon?.ownerColor ?: "iris", g.project?.image ?: icon?.ownerImage.orEmpty(), 22.dp)
-        }
-        Spacer(Modifier.width(8.dp))
-        Text(g.name, style = MaterialTheme.typography.labelLarge, color = cs.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        if (g.working > 0) {
+    val n = g.counts
+    val line = if (n.running == 0 && n.needsYou == 0) "" else RunningList.header(n)
+    Surface(onClick = onToggle, shape = RoundedCornerShape(Radius.sm), color = Color.Transparent, contentColor = cs.onSurface,
+        modifier = Modifier.fillMaxWidth().semantics { contentDescription = g.name + (if (line.isBlank()) "" else ", $line") + if (folded) ". Show" else ". Hide" }) {
+        Row(Modifier.padding(start = 4.dp, end = 6.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (g.isMain || g.key == RunningList.OTHER) Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) { AgentAvatar(working = false, size = 20.dp) }
+            else {
+                val icon = g.cards.firstOrNull()
+                ProjectIconTile(g.name, g.project?.glyph ?: icon?.ownerGlyph.orEmpty(), g.project?.color ?: icon?.ownerColor ?: "iris", g.project?.image ?: icon?.ownerImage.orEmpty(), 22.dp)
+            }
             Spacer(Modifier.width(8.dp))
-            Text("${g.working} running", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
+            Text(g.name, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            if (line.isNotBlank()) {
+                Spacer(Modifier.width(8.dp))
+                Text(line, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
+            }
+            Icon(if (folded) Icons.Rounded.KeyboardArrowDown else Icons.Rounded.KeyboardArrowUp, null, Modifier.padding(start = 4.dp).size(18.dp), tint = cs.onSurfaceVariant)
+        }
+    }
+}
+
+/** The line under a parent that holds the helpers it started: closed until he taps it, and not kept. */
+@Composable
+private fun UnderRow(n: Int, open: Boolean, onToggle: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Surface(onClick = onToggle, shape = RoundedCornerShape(Radius.sm), color = Color.Transparent, contentColor = cs.onSurfaceVariant, modifier = Modifier.padding(start = 22.dp)) {
+        Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(RunningList.under(n), style = MaterialTheme.typography.labelLarge)
+            Icon(if (open) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown, null, Modifier.padding(start = 4.dp).size(18.dp))
         }
     }
 }
@@ -194,11 +221,13 @@ fun RunningBlock(ui: LiveCardsUi, modifier: Modifier = Modifier, current: String
     val cs = MaterialTheme.colorScheme
     // With nothing running the open list is a look at what just finished.
     val finished = showFinished || counts.running == 0
-    @Composable fun card(c: LiveCard) {
-        val sub = c.depth == 1 && !collapsed
+    // Which parents show the helpers under them: closed by default, and not kept.
+    var openUnder by remember { mutableStateOf(emptySet<String>()) }
+    @Composable fun card(c: LiveCard, sub: Boolean) {
         key(c.row) {
             Column(if (sub) Modifier.padding(start = 22.dp) else Modifier) {
-                if (RunningList.needsYou(c, st)) Text("NEEDS YOU", style = Eyebrow, color = cs.tertiary, modifier = Modifier.padding(start = 6.dp, bottom = 2.dp))
+                // Whoever needs him says so, through any fold.
+                if (RunningList.needsYou(c, st)) StatusPill("Needs you", cs.tertiaryContainer, cs.onTertiaryContainer, Modifier.padding(start = 4.dp, bottom = 4.dp))
                 LiveSwipeCard(c, onSwiped = { ui.dismiss(c) }) {
                     HelperCard(ui.view(c), onClick = {
                         when (val t = tapOf(c)) {
@@ -215,11 +244,26 @@ fun RunningBlock(ui: LiveCardsUi, modifier: Modifier = Modifier, current: String
         val body = if (maxHeight != null) Modifier.heightIn(max = maxHeight).verticalScroll(rememberScrollState()) else Modifier
         if (collapsed) {
             val needing = RunningList.shown(groups, true, st)
-            if (needing.isNotEmpty()) Column(body.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) { needing.forEach { card(it) } }
+            if (needing.isNotEmpty()) Column(body.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) { needing.forEach { card(it, false) } }
         } else Column(body.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             groups.forEach { g ->
-                val cards = RunningList.shown(g, false, st, finished)
-                if (cards.isNotEmpty()) { GroupHead(g); cards.forEach { card(it) } }
+                if (RunningList.shown(g, false, st, finished).isNotEmpty()) {
+                    val gFolded = g.key in fold.groups
+                    GroupHead(g, gFolded) { fold.toggleGroup(g.key) }
+                    if (gFolded) RunningList.shown(g, true, st).forEach { card(it, false) }
+                    else g.clusters.forEach { cl ->
+                        if (finished || RunningList.active(cl, st)) {
+                            val head = cl.first()
+                            val subs = cl.drop(1)
+                            card(head, false)
+                            if (subs.isNotEmpty()) {
+                                val open = head.row in openUnder
+                                UnderRow(subs.size, open) { openUnder = if (open) openUnder - head.row else openUnder + head.row }
+                                subs.forEach { if (open || RunningList.needsYou(it, st)) card(it, true) }
+                            }
+                        }
+                    }
+                }
             }
             val more = RunningList.finishedCount(groups, st)
             if (more > 0 && counts.running > 0) TextButton(onClick = { showFinished = !showFinished }, modifier = Modifier.padding(start = 4.dp)) {
@@ -257,7 +301,7 @@ fun HomeRunning(modifier: Modifier = Modifier, cards: List<LiveCard>? = null, pr
             Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(g.name, style = MaterialTheme.typography.bodyMedium, color = cs.onPrimaryContainer, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
-                Text("${g.working} running", style = MaterialTheme.typography.labelMedium, color = cs.onPrimaryContainer.copy(alpha = 0.75f), maxLines = 1)
+                Text("${g.working} working", style = MaterialTheme.typography.labelMedium, color = cs.onPrimaryContainer.copy(alpha = 0.75f), maxLines = 1)
             }
         }
         RunningList.shown(groups, true, st).forEach { c ->

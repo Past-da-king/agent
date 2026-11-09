@@ -23,7 +23,7 @@ data class RunCounts(val working: Int = 0, val queued: Int = 0, val needsYou: In
 }
 
 /** One project's part of the running list (or the main chat's): a card with the helpers under it is one cluster. */
-data class RunGroup(val key: String, val name: String, val project: ProjectInfo?, val clusters: List<List<LiveCard>>, val working: Int) {
+data class RunGroup(val key: String, val name: String, val project: ProjectInfo?, val clusters: List<List<LiveCard>>, val working: Int, val counts: RunCounts = RunCounts()) {
     val isMain get() = key == RunningList.MAIN
     val cards get() = clusters.flatten()
 }
@@ -38,6 +38,8 @@ data class SwitchRow(val key: String, val name: String, val chat: String, val pr
  */
 object RunningList {
     const val MAIN = "main"
+    /** Chats that are in no project. */
+    const val OTHER = "other"
     /** The built-in project that holds old chats. */
     const val ARCHIVE = "earlier-chats"
 
@@ -89,7 +91,7 @@ object RunningList {
         val parts = ArrayList<String>()
         if (n.working > 0) parts += "${n.working} working"
         if (n.queued > 0) parts += "${n.queued} waiting to start"
-        if (n.needsYou > 0) parts += "${n.needsYou} needs you"
+        if (n.needsYou > 0) parts += if (n.needsYou == 1) "1 needs you" else "${n.needsYou} need you"
         return if (parts.isEmpty()) "Nothing running" else parts.joinToString(", ")
     }
 
@@ -111,8 +113,29 @@ object RunningList {
             byName[c.ownerName]?.let { return it.id }
         }
         for (chat in listOf(c.projectChat, c.parentChat, c.chat)) if (chat.isNotBlank()) byChat[chat]?.let { return it.id }
-        return if (c.ownerKind == "project" && c.ownerName.isNotBlank()) "n:" + c.ownerName else MAIN
+        if (c.ownerKind == "project" && c.ownerName.isNotBlank()) return "n:" + c.ownerName
+        return if (c.homeChat == MAIN) MAIN else OTHER
     }
+
+    /**
+     * A helper with the helpers it started under it. A computer that says who started whom (parentHelper, desktop
+     * 0.2.123 on) decides; an older one, or a card that names no parent, falls back to the order and depth it sends.
+     */
+    fun clusters(cards: List<LiveCard>): List<List<LiveCard>> {
+        if (cards.none { it.parentHelper.isNotBlank() }) return groupsOf(cards)
+        val out = ArrayList<MutableList<LiveCard>>()
+        val home = HashMap<String, MutableList<LiveCard>>()
+        for (c in cards) {
+            val under = if (c.parentHelper.isNotBlank()) home[c.parentHelper] else if (c.depth == 1) out.lastOrNull() else null
+            val cl = under ?: mutableListOf<LiveCard>().also { out += it }
+            cl += c
+            home[c.id] = cl
+        }
+        return out
+    }
+
+    /** What the line under a parent says about the helpers folded under it. */
+    fun under(n: Int): String = if (n == 1) "1 helper under it" else "$n helpers under it"
 
     /**
      * Every card, grouped by the project it belongs to (the owner the computer names, else the project whose chats
@@ -126,14 +149,14 @@ object RunningList {
         val byName = projects.associateBy { it.name }
         val by = LinkedHashMap<String, MutableList<List<LiveCard>>>()
         val names = HashMap<String, String>()
-        for (cluster in groupsOf(cards)) {
+        for (cluster in clusters(cards)) {
             val head = cluster.first()
             val key = keyOf(head, byChat, byName)
             by.getOrPut(key) { mutableListOf() } += cluster
-            if (key !in names) names[key] = if (key == MAIN) "Main chat" else byId[key]?.name ?: head.ownerName.ifBlank { "Project" }
+            if (key !in names) names[key] = when (key) { MAIN -> "Main chat"; OTHER -> "Other chats"; else -> byId[key]?.name ?: head.ownerName.ifBlank { "Project" } }
         }
         val here = currentKey(current, projects)
-        return by.map { (k, cl) -> RunGroup(k, names[k].orEmpty(), byId[k], cl, cl.sumOf { g -> g.count { live(it, states) } }) }
+        return by.map { (k, cl) -> RunGroup(k, names[k].orEmpty(), byId[k], cl, cl.sumOf { g -> g.count { live(it, states) } }, counts(cl.flatten(), states)) }
             .sortedByDescending { it.key == here }
     }
 
@@ -145,6 +168,9 @@ object RunningList {
         if (collapsed) return g.cards.filter { needsYou(it, states) }
         return g.clusters.filter { cl -> finished || cl.any { live(it, states) || needsYou(it, states) } }.flatten()
     }
+
+    /** Whether the open list shows a cluster without being asked for the finished ones. */
+    fun active(cluster: List<LiveCard>, states: Map<String, ChatState> = emptyMap()): Boolean = cluster.any { live(it, states) || needsYou(it, states) }
 
     /** The same across every group, in order. */
     fun shown(groups: List<RunGroup>, collapsed: Boolean, states: Map<String, ChatState> = emptyMap(), finished: Boolean = false): List<LiveCard> =

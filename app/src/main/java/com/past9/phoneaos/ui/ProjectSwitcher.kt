@@ -97,7 +97,7 @@ private fun SwitcherRow(r: SwitchRow, line: String, onClick: () -> Unit) {
     val sub = line.ifBlank { if (r.project == null) "Your agent's own chat" else if (r.chat.isBlank()) "No chat yet" else "" }
     Surface(onClick = onClick, shape = MaterialTheme.shapes.large, color = if (r.current) cs.primaryContainer else cs.surfaceContainerHigh,
         contentColor = if (r.current) cs.onPrimaryContainer else cs.onSurface,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).semantics { contentDescription = r.name + (if (r.current) ", you are here" else "") + (if (r.running > 0) ", ${r.running} running" else "") }) {
+        modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).semantics { contentDescription = r.name + (if (r.current) ", you are here" else "") + (if (r.running > 0) ", ${r.running} working" else "") }) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             val p = r.project
             if (p == null) Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) { AgentAvatar(working = r.running > 0, size = 34.dp) }
@@ -110,7 +110,7 @@ private fun SwitcherRow(r: SwitchRow, line: String, onClick: () -> Unit) {
             }
             if (r.running > 0) {
                 Spacer(Modifier.width(10.dp))
-                StatusPill("${r.running} running", if (r.current) cs.surface else cs.primaryContainer, if (r.current) cs.onSurface else cs.onPrimaryContainer)
+                StatusPill("${r.running} working", if (r.current) cs.surface else cs.primaryContainer, if (r.current) cs.onSurface else cs.onPrimaryContainer)
             }
             if (r.current) { Spacer(Modifier.width(8.dp)); Icon(Icons.Rounded.Check, "You are here", Modifier.size(22.dp)) }
         }

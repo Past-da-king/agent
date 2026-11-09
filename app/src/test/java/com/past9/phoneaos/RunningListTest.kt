@@ -152,7 +152,7 @@ class RunningListTest {
         assertEquals("2 working, 1 waiting to start, 1 needs you", RunningList.header(RunningList.counts(mixed)))
         assertEquals("Nothing running", RunningList.header(RunCounts()))
         assertEquals("3 working", RunningList.header(RunCounts(3, 0, 0)))
-        assertEquals("1 working, 2 needs you", RunningList.header(RunCounts(1, 0, 2)))
+        assertEquals("1 working, 2 need you", RunningList.header(RunCounts(1, 0, 2)))
         assertEquals("4 waiting to start", RunningList.header(RunCounts(0, 4, 0)))
         // chat.states can say a project chat waits on him before its card does.
         val viaStates = parse(card("pa-c2", kind = "project-chat", projectChat = "c2", owner = "project", ownerId = "p2"))
@@ -202,5 +202,28 @@ class RunningListTest {
         // No projects at all: just the main chat, marked.
         assertEquals(listOf(SwitchRow("main", "Main chat", "main", null, 0, true)), RunningList.switcher(emptyList(), emptyList()))
         assertEquals("2 min ago · Fixed the gate", com.past9.phoneaos.ui.switcherLine("## Fixed the gate\nand more", 1_000_000L, 1_000_000L + 125_000L))
+    }
+
+    @Test
+    fun helpersFoldUnderTheHelperThatStartedThemAndChatsInNoProjectAreOtherChats() {
+        val list = parse(
+            card("a"), card("x", chat = "loose-chat"),
+            card("a1").put("parentHelper", "a"),
+            card("x1", chat = "loose-chat").put("parentHelper", "x"),
+            card("a2", depth = 1).put("parentHelper", "a"),
+        )
+        assertEquals(listOf(listOf("a", "a1", "a2"), listOf("x", "x1")), RunningList.clusters(list).map { cl -> cl.map { it.id } })
+        val g = RunningList.groups(list, projects)
+        assertEquals(listOf("main", "other"), g.map { it.key })
+        assertEquals(listOf("Main chat", "Other chats"), g.map { it.name })
+        assertEquals(listOf("3 working", "2 working"), g.map { RunningList.header(it.counts) })
+        // A computer that does not say who started whom (0.2.122): the order and depth it sends decide, as before.
+        assertEquals(com.past9.phoneaos.remote.groupsOf(across).map { cl -> cl.map { it.id } }, RunningList.clusters(across).map { cl -> cl.map { it.id } })
+        assertEquals("1 helper under it", RunningList.under(1))
+        assertEquals("3 helpers under it", RunningList.under(3))
+        // A folded group is his choice too; without a device to keep it on it still holds while the app runs.
+        val fold = RunningFold(null)
+        fold.toggleGroup("p1"); assertEquals(setOf("p1"), fold.groups)
+        fold.toggleGroup("p1"); assertTrue(fold.groups.isEmpty())
     }
 }
