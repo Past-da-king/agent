@@ -175,20 +175,30 @@ class ApprovalSheetPillTest(private val dark: Boolean) {
         val done = remoteApproval("Post the update in the team channel", "The whole update, as it was posted.") { put("answer", "Approve") }
         start { CompositionLocalProvider(LocalSheetPreview provides true) { Parts { ApprovalCard(done) { _, _ -> } } } }
         rule.onNodeWithText("Approved").assertIsDisplayed()
-        rule.onNodeWithText("Post the update in the team channel").performClick(); tick()
-        rule.onNodeWithText("You approved this").assertExists()
+        rule.onNodeWithText("Approved").performClick(); tick()
+        cap("approval-decided-opened")
+        rule.onNodeWithText("You approved this", useUnmergedTree = true).assertExists()
         rule.onNodeWithText("The whole update, as it was posted.", substring = true).assertExists()
         assertTrue(rule.onAllNodesWithText("Approve").fetchSemanticsNodes().isEmpty())
         cap("approval-sheet-decided")
+    }
+
+    @Test fun theSheetAfterADecision() {
+        val a = Approval.of(remoteApproval("Delete the draft folder", "12 files in Drafts will be deleted.") { put("answer", "Decline") })
+        start { CompositionLocalProvider(LocalSheetPreview provides true) { ApprovalSheet(a, onDecide = {}, onDismiss = {}) } }
+        cap("approval-sheet-declined")
+        rule.onNodeWithText("You declined this", useUnmergedTree = true).assertExists()
+        rule.onNodeWithText("12 files in Drafts will be deleted.", substring = true, useUnmergedTree = true).assertExists()
+        assertTrue(rule.onAllNodesWithText("Approve").fetchSemanticsNodes().isEmpty())
     }
 
     @Test fun thePillLooks() {
         start { Parts { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Column(horizontalAlignment = Alignment.CenterHorizontally) {
             NewBelowPill(true, 3) {}; NewBelowPill(true, 1) {}; NewBelowPill(true, 0) {} } } } }
         tick()
-        rule.onNodeWithText("3 new messages").assertExists()
-        rule.onNodeWithText("1 new message").assertExists()
-        rule.onNodeWithText("Jump to latest").assertExists()
+        rule.onNodeWithText("3 new messages", useUnmergedTree = true).assertExists()
+        rule.onNodeWithText("1 new message", useUnmergedTree = true).assertExists()
+        rule.onNodeWithText("Jump to latest", useUnmergedTree = true).assertExists()
         cap("pill-states")
     }
 
@@ -199,7 +209,7 @@ class ApprovalSheetPillTest(private val dark: Boolean) {
         // He scrolls up to read.
         rule.onRoot().performTouchInput { swipeDown(startY = height * 0.3f, endY = height * 0.8f, durationMillis = 300) }
         tick(2500)
-        rule.onNodeWithText("Jump to latest").assertExists()
+        rule.onNodeWithText("Jump to latest", useUnmergedTree = true).assertExists()
         // Work goes on below: steps written twice, a helper, notices, cards, an empty row, and three real messages.
         val steps = (1..40).map { item("activity", "Read file $it", JSONObject().put("status", "running")) }
         items = items + item("notice", "New chat", JSONObject().put("divider", true)) + steps; tick(300)
@@ -211,10 +221,10 @@ class ApprovalSheetPillTest(private val dark: Boolean) {
             remoteApproval("Book venue A", "Fri 20 Nov") { put("answer", "Approve") } + item("agent", "") +
             item("agent", "Venue A is booked.") + item("report", "Venue comparison", JSONObject().put("path", "/reports/venues.md")) + item("agent", "Anything else for the function?")
         tick(1500)
-        rule.onNodeWithText("3 new messages").assertExists()
+        rule.onNodeWithText("3 new messages", useUnmergedTree = true).assertExists()
         cap("pill-3-new-messages")
         // He taps it: down to the latest, and nothing is new any more.
-        rule.onNodeWithText("3 new messages").performClick(); tick(2500)
-        assertTrue(rule.onAllNodesWithText("3 new messages").fetchSemanticsNodes().isEmpty())
+        rule.onNodeWithText("3 new messages", useUnmergedTree = true).performClick(); tick(2500)
+        assertTrue(rule.onAllNodesWithText("3 new messages", useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
     }
 }
