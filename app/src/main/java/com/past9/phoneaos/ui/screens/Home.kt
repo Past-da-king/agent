@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -77,6 +78,10 @@ data class HomeActions(
     /** Live voice call with the agent; null when live calls are off. */
     val onCall: (() -> Unit)? = null,
     val onCard: (com.past9.phoneaos.cards.Card) -> Unit = {},
+    /** Open what a Needs you card or a to-do is about (the chat at that card, a project chat, that task). */
+    val onNeed: (NeedTarget) -> Unit = {},
+    /** What he cleared and snoozed on Home, kept on the phone; null keeps it for this screen only. */
+    val needs: NeedStore? = null,
 )
 
 /** What the agent is doing right now, in one human line. */
@@ -93,12 +98,26 @@ fun nowLine(s: HomeState): String {
 private fun dayKey(ms: Long) = java.time.Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()).toLocalDate()
 
 @Composable
-fun HomeScreen(s: HomeState, actions: HomeActions, bottomPadding: Dp = 120.dp) {
+fun HomeScreen(s: HomeState, actions: HomeActions, bottomPadding: Dp = 120.dp,
+               /** Cards already found gone (card key to what to say), for previews; a tap fills this in. */
+               startGone: Map<String, String> = emptyMap(), startSheet: String? = null) {
     val cs = MaterialTheme.colorScheme
     val today = dayKey(s.now)
     val pending = s.items.filter { it.kind == "question" && !JSONObject(it.meta).has("answer") }
-    val myTodos = s.tasks.filter { it.owner == "user" && it.status != "done" }.sortedWith(compareBy({ it.dueAt ?: Long.MAX_VALUE }, { it.createdAt }))
-    val blockedMine = s.tasks.filter { it.status == "blocked" && it.blocker.isNotBlank() && it.owner == "agent" }
+    // Needs you and the to-dos come from the live rows every time: an answered card or a ticked task is simply not
+    // here any more. What he cleared or snoozed is filtered out by card.
+    val store = actions.needs ?: remember { NeedStore() }
+    val hidden by store.hidden.collectAsState()
+    val needs = Needs.visible(Needs.needs(s.items, s.tasks), hidden, s.now)
+    val todoNeeds = Needs.visible(Needs.todos(s.tasks), hidden, s.now)
+    val myTodos = todoNeeds.mapNotNull { n -> s.tasks.firstOrNull { it.id == n.taskId } }
+    LaunchedEffect(s.items, s.tasks) { store.prune(s.items, s.tasks, s.now) }
+    var gone by remember { mutableStateOf(startGone) }
+    var sheetFor by remember { mutableStateOf(startSheet) }
+    val open: (Need) -> Unit = { n ->
+        when (val t = Needs.target(n, s.items, s.tasks)) { is NeedTarget.Gone -> gone = gone + (n.key to t.line); else -> actions.onNeed(t) }
+    }
+    fun clear(n: Need) { store.dismiss(n); gone = gone - n.key }
     val openGoals = s.goals.filter { it.status == "open" }
     val lastAgent = s.items.lastOrNull { it.kind == "agent" }
     // What the agent is doing and what needs you; then your list, goals and what's coming.
@@ -155,19 +174,21 @@ fun HomeScreen(s: HomeState, actions: HomeActions, bottomPadding: Dp = 120.dp) {
                 }
             }
         }
-        if (pending.isNotEmpty() || blockedMine.isNotEmpty()) {
-            item { SectionHeader("Needs you", "Your agent can't go on without these", Modifier.padding(start = 4.dp, top = 6.dp)) }
-            items(pending, key = { "q${it.id}" }) { q -> NeedsYouCard(q, actions) }
-            items(blockedMine, key = { "b${it.id}" }) { t ->
-                Surface(onClick = actions.onChat, shape = MaterialTheme.shapes.large, color = cs.tertiaryContainer, modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp)) {
-                        Text("BLOCKED", style = Eyebrow, color = cs.onTertiaryContainer)
-                        Text(t.title, style = MaterialTheme.typography.titleSmall, color = cs.onTertiaryContainer)
-                        Text("Needs: ${t.blocker}", style = MaterialTheme.typography.bodyMedium, color = cs.onTertiaryContainer)
+        if (needs.isNotEmpty()) {
+            item { SectionHeader("Needs you", "Tap to open. Swipe to clear, hold for more", Modifier.padding(start = 4.dp, top = 6.dp)) }
+            items(needs, key = { it.key }) { n ->
+                val goneLine = gone[n.key]
+                if (goneLine != null) GoneNeedCard(n.title, goneLine) { clear(n) }
+                else NeedSwipe(n.title, onCleared = { clear(n) }) {
+                    Box(Modifier.fillMaxWidth().combinedClickable(onClick = { open(n) }, onLongClick = { sheetFor = n.key }, onLongClickLabel = "More", onClickLabel = "Open")) {
+                        val task = s.tasks.firstOrNull { it.id == n.taskId }
+                        val q = s.items.firstOrNull { it.id == n.itemId }
+                        if (task != null) BlockedNeedCard(task) { sheetFor = n.key }
+                        else if (q != null) NeedsYouCard(q, actions.copy(onChat = { open(n) }))
                     }
                 }
             }
-        }
+        } else item(key = "needs-none") { NothingNeedsYou(Modifier.padding(top = 2.dp)) }
         if (s.cards.isNotEmpty()) {
             item { SectionHeader("Your cards", "Kept up to date for you. Tap one to open it", Modifier.padding(start = 4.dp, top = 6.dp)) }
             item { com.past9.phoneaos.ui.CardTiles(s.cards, actions.onCard, s.now) }
@@ -183,7 +204,16 @@ fun HomeScreen(s: HomeState, actions: HomeActions, bottomPadding: Dp = 120.dp) {
             Surface(shape = MaterialTheme.shapes.extraLarge, color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(vertical = 6.dp)) {
                     if (myTodos.isEmpty()) Text("Say \"remind me to…\" or \"add … to my list\" and it lands here.", Modifier.padding(18.dp), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-                    myTodos.take(5).forEach { t -> TodoLine(t, today, actions.onToggleTask) }
+                    myTodos.take(5).forEach { t ->
+                        val n = todoNeeds.first { it.taskId == t.id }
+                        androidx.compose.runtime.key(n.key) {
+                            val goneLine = gone[n.key]
+                            if (goneLine != null) GoneNeedCard(n.title, goneLine) { clear(n) }
+                            else NeedSwipe(n.title, onCleared = { clear(n) }) {
+                                Surface(color = cs.surfaceContainerLow) { TodoLine(t, today, actions.onToggleTask, onOpen = { open(n) }, onMore = { sheetFor = n.key }) }
+                            }
+                        }
+                    }
                     if (myTodos.size > 5) TextButton(onClick = actions.onTasks, modifier = Modifier.padding(start = 8.dp)) { Text("${myTodos.size - 5} more") }
                 }
             }
@@ -248,6 +278,18 @@ fun HomeScreen(s: HomeState, actions: HomeActions, bottomPadding: Dp = 120.dp) {
         LazyColumn(Modifier.weight(1f).fillMaxHeight(), contentPadding = PaddingValues(bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(14.dp)) { primary() }
         LazyColumn(Modifier.weight(1f).fillMaxHeight().statusBarsPadding(), contentPadding = PaddingValues(top = 8.dp, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(14.dp)) { secondary() }
     }
+    (needs + todoNeeds).firstOrNull { it.key == sheetFor }?.let { n ->
+        NeedSheet(n, onDismiss = { sheetFor = null }, onPick = { id ->
+            sheetFor = null
+            when (id) {
+                "open" -> open(n)
+                "project" -> Needs.projectTarget(n)?.let(actions.onNeed)
+                "done" -> s.tasks.firstOrNull { it.id == n.taskId && it.status != "done" }?.let(actions.onToggleTask)
+                "drop" -> clear(n)
+                else -> Needs.snoozeUntil(id)?.let { store.snooze(n, it) }
+            }
+        })
+    }
 }
 
 private fun greeting(name: String): String {
@@ -257,7 +299,7 @@ private fun greeting(name: String): String {
 }
 
 @Composable
-private fun NeedsYouCard(q: ChatItem, actions: HomeActions) {
+internal fun NeedsYouCard(q: ChatItem, actions: HomeActions) {
     val cs = MaterialTheme.colorScheme
     val approval = q.text.startsWith("APPROVAL|")
     val parts = q.text.split("|", limit = 3)
@@ -300,7 +342,9 @@ private fun NeedsYouCard(q: ChatItem, actions: HomeActions) {
 }
 
 @Composable
-fun TodoLine(t: TaskRow, today: LocalDate, onToggle: (TaskRow) -> Unit) {
+fun TodoLine(t: TaskRow, today: LocalDate, onToggle: (TaskRow) -> Unit,
+             /** On Home: a tap opens the task and a hold (or the more button) opens its sheet; the box alone ticks it. */
+             onOpen: (() -> Unit)? = null, onMore: (() -> Unit)? = null) {
     val cs = MaterialTheme.colorScheme
     val due = t.dueAt?.let { dayKey(it) }
     val (label, color) = when {
@@ -310,13 +354,15 @@ fun TodoLine(t: TaskRow, today: LocalDate, onToggle: (TaskRow) -> Unit) {
         due == today.plusDays(1) -> "Tomorrow" to cs.onSurfaceVariant
         else -> dueLabel(t.dueAt) to cs.onSurfaceVariant
     }
-    Row(Modifier.fillMaxWidth().clickable { onToggle(t) }.heightIn(min = 56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().then(if (onOpen == null) Modifier.clickable { onToggle(t) } else Modifier.combinedClickable(onClick = onOpen, onLongClick = onMore, onClickLabel = "Open", onLongClickLabel = "More"))
+        .heightIn(min = 56.dp).padding(start = 8.dp, end = if (onMore == null) 8.dp else 0.dp), verticalAlignment = Alignment.CenterVertically) {
         Checkbox(checked = t.status == "done", onCheckedChange = { onToggle(t) })
         Column(Modifier.weight(1f)) {
             Text(t.title, style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (label != null) Text(label, style = MaterialTheme.typography.labelMedium, color = color)
         }
         if (t.status == "blocked") StatusPill("Blocked", cs.tertiaryContainer, cs.onTertiaryContainer, Modifier.padding(end = 8.dp))
+        if (onMore != null) IconButton(onClick = onMore) { Icon(Icons.Rounded.MoreVert, "More", tint = cs.onSurfaceVariant) }
     }
 }
 

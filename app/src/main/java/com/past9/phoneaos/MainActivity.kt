@@ -473,6 +473,7 @@ class MainActivity : ComponentActivity() {
         val miniApps by com.past9.phoneaos.miniapps.MiniAppsHub.apps.collectAsStateWithLifecycle()
         LaunchedEffect(Unit) { com.past9.phoneaos.miniapps.MiniAppsHub.pendingOpen.collect { id -> if (id != null) { nav.navigate("miniapp/$id") { launchSingleTop = true }; com.past9.phoneaos.miniapps.MiniAppsHub.pendingOpen.value = null } } }
         var openCard by remember { mutableStateOf<String?>(null) }
+        val needStore = remember { NeedStore.of(applicationContext) }
         var refreshingCard by remember { mutableStateOf<String?>(null) }
         val home = HomeState(settings.agentName, settings.userName, status, items, goals, tasks, routines,
             notifRows.count { it.postedAt > System.currentTimeMillis() - 86_400_000L }, settings.notifApps.size, browserLive, cards = cards.filter { it.pinned }, miniApps = miniApps)
@@ -500,6 +501,13 @@ class MainActivity : ComponentActivity() {
                             onSettings = { nav.navigate("settings") }, onCall = { startCall() }, onBrowser = { nav.navigate("browser") }, onNotifications = { nav.navigate("notifications") },
                             onCard = { openCard = it.id },
                             onMiniApp = { nav.navigate("miniapp/$it") }, onMiniApps = { nav.navigate("miniapps") },
+                            onNeed = { t -> when (t) {
+                                is NeedTarget.ChatAt -> { ChatFocus.id.value = t.itemId; nav.navigate("chat") }
+                                is NeedTarget.ProjectChat -> openFromCard = t.chat to "Project chat"
+                                is NeedTarget.Task -> { TaskFocus.target = t; go("tasks") }
+                                is NeedTarget.Gone -> Unit
+                            } },
+                            needs = needStore,
                         ), bottomPadding = barPad + 24.dp)
                     }
                 }

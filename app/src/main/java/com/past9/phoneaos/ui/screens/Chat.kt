@@ -260,6 +260,9 @@ fun ChatScreen(
     val lastItem = items.lastOrNull()
     val lastId = lastItem?.id ?: 0L
 
+    // A card opened from Home: scroll to it once the first open has settled.
+    val focusId by ChatFocus.id.collectAsState()
+    LaunchedEffect(focusId, phase) { val f = focusId; if (f != null && phase == 2) { ChatFocus.id.value = null; stick = false; jumpTo(f) } }
     // First open (and every return from the background): land on the first unread, else the latest.
     LaunchedEffect(phase, items.isNotEmpty()) {
         if (items.isEmpty()) return@LaunchedEffect
