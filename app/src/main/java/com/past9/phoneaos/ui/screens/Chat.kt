@@ -152,7 +152,7 @@ const val CHAT_PAGE = 120
 
 /** The id of the first message after [readMark] that did not come from him, or null when nothing is unread. */
 fun firstUnread(items: List<ChatItem>, readMark: Long): ChatItem? =
-    items.firstOrNull { it.id > readMark && it.kind != "user" && !(it.kind == "activity") && !(it.kind == "helper") && !JSONObject(it.meta).has("helper") }
+    com.past9.phoneaos.ui.NewBelow.unreadAfter(items, readMark).firstOrNull()
 
 /** Rows with the "new messages" divider put above the row that holds [firstId]. */
 fun withMarker(rows: List<Row_>, firstId: Long?, count: Int): List<Row_> {
@@ -260,7 +260,9 @@ fun ChatScreen(
     val atBottom by remember { derivedStateOf { val li = list.layoutInfo; li.totalItemsCount == 0 || (li.visibleItemsInfo.lastOrNull()?.index ?: -1) >= li.totalItemsCount - 1 } }
     // Following the bottom: true while he is at the end, so new messages scroll into view; false once he scrolls up to read.
     var stick by remember { mutableStateOf(true) }
-    var seenId by remember { mutableLongStateOf(items.lastOrNull()?.id ?: 0L) }
+    // What was in the chat when he left the bottom: the pill counts the messages that are not in it (ui/NewBelow.kt).
+    var seenIds by remember { mutableStateOf<Set<Long>>(items.mapTo(HashSet()) { it.id }) }
+    val shownItems by rememberUpdatedState(items)
     val lastItem = items.lastOrNull()
     val lastId = lastItem?.id ?: 0L
 
@@ -271,18 +273,18 @@ fun ChatScreen(
     LaunchedEffect(phase, items.isNotEmpty()) {
         if (items.isEmpty()) return@LaunchedEffect
         when (phase) {
-            0 -> { val u = firstUnread(items, baseline); markerId = u?.id; markerCount = if (u == null) 0 else items.count { it.id >= u.id && (it.kind == "agent" || it.kind == "report") }; phase = 1 }
+            0 -> { val u = firstUnread(items, baseline); markerId = u?.id; markerCount = if (u == null) 0 else com.past9.phoneaos.ui.NewBelow.unreadAfter(items, baseline).size; phase = 1 }
             1 -> { val at = rows.indexOfFirst { it is Row_.NewMarker }
                 if (at >= 0) { list.scrollToItem(at); stick = false } else { list.scrollToItem(rows.size - 1); stick = true }
                 phase = 2 }
         }
     }
-    LaunchedEffect(list) { snapshotFlow { list.isScrollInProgress }.filter { !it }.collect { if (phase == 2) { stick = atBottom; if (atBottom) seenId = lastId } } }
+    LaunchedEffect(list) { snapshotFlow { list.isScrollInProgress }.filter { !it }.collect { if (phase == 2) { stick = atBottom; if (atBottom) seenIds = shownItems.mapTo(HashSet()) { it.id } } } }
     // Grow with the conversation, but only while he is following it. A message of his own always brings him back down.
     LaunchedEffect(lastId, lastItem?.meta, lastItem?.text?.length) {
         if (phase != 2 || rows.isEmpty()) return@LaunchedEffect
         if (lastItem?.kind == "user") stick = true
-        if (stick) { list.animateScrollToItem(rows.size - 1); seenId = lastId }
+        if (stick) { seenIds = items.mapTo(HashSet()) { it.id }; list.animateScrollToItem(rows.size - 1) }
     }
     // A card arriving or leaving at the foot of the chat stays in view while he follows the end.
     val cardKey = live?.cards?.joinToString { it.row + it.state }.orEmpty()
@@ -305,7 +307,7 @@ fun ChatScreen(
                     // Back from the background: if he was following the end, or something new came in, re-land; if he was reading
                     // older messages and nothing new came, leave him exactly where he was.
                     val m = readMark()
-                    if (stick || latestItems.any { it.id > m && it.kind != "user" && it.id > seenId }) { baseline = m; phase = 0 }
+                    if (stick || latestItems.any { it.id > m && it.kind != "user" && it.id !in seenIds }) { baseline = m; phase = 0 }
                 }
                 else -> {}
             }
@@ -313,7 +315,7 @@ fun ChatScreen(
         owner.lifecycle.addObserver(obs); onDispose { owner.lifecycle.removeObserver(obs) }
     }
     LaunchedEffect(resumed, atBottom, lastId, positioned) { if (resumed && positioned && atBottom && lastId > 0) onRead(lastId) }
-    val newSince = items.count { it.id > seenId && it.kind != "user" && it.kind != "activity" && !JSONObject(it.meta).has("helper") }
+    val newSince = remember(items, seenIds) { com.past9.phoneaos.ui.NewBelow.countNewMessages(items, seenIds) }
     val waitingOnYou = items.any { it.kind == "question" && !JSONObject(it.meta).has("answer") }
 
     val rs = com.past9.phoneaos.remote.RemoteHub.session.collectAsStateWithLifecycle().value
@@ -382,13 +384,8 @@ fun ChatScreen(
         }
         // Reading older messages while new ones arrive: say so, and offer the way down.
         Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.BottomCenter) {
-            AnimatedVisibility(!atBottom && items.isNotEmpty() && morning == null, enter = fadeIn() + scaleIn(), exit = fadeOut() + scaleOut()) {
-                ExtendedFloatingActionButton(
-                    onClick = { scope.launch { stick = true; list.animateScrollToItem(rows.size); seenId = lastId } },
-                    icon = { Icon(Icons.Rounded.KeyboardArrowDown, null) },
-                    text = { Text(if (newSince > 0) "$newSince new" else "Jump to latest") },
-                    modifier = Modifier.padding(bottom = 12.dp),
-                )
+            com.past9.phoneaos.ui.NewBelowPill(!atBottom && items.isNotEmpty() && morning == null, newSince) {
+                scope.launch { stick = true; seenIds = items.mapTo(HashSet()) { it.id }; list.animateScrollToItem(rows.size) }
             }
         }
     }
@@ -936,83 +933,6 @@ fun ConnectCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
     }
 }
 
-/**
- * Nothing goes out in the user's name without this card. It shows EXACTLY what will happen, in words
- * a person reads (a terminal line for commands, labelled fields for app actions, never raw JSON), and
- * Approve is press-and-hold so a stray tap can never send an email or spend money. Once answered it
- * folds to one line; tap it to see what was approved.
- */
-@Composable
-fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
-    val parts = item.text.split("|", limit = 3)
-    val action = parts.getOrElse(1) { "" }.replaceFirstChar { it.uppercase() }; val details = parts.getOrElse(2) { "" }
-    val answer = JSONObject(item.meta).optString("answer")
-    val pending = answer.isEmpty()
-    val cs = MaterialTheme.colorScheme
-    if (!pending) {
-        var open by remember { mutableStateOf(false) }
-        val ok = answer == "Approve"
-        Column(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable { open = !open }.padding(vertical = 4.dp).animateContentSize()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(28.dp).clip(RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm)).background(if (ok) LocalExtra.current.successContainer else cs.surfaceContainerHigh), contentAlignment = Alignment.Center) {
-                    Icon(if (ok) Icons.Rounded.Check else Icons.Rounded.Close, null, Modifier.size(16.dp), tint = if (ok) LocalExtra.current.success else cs.onSurfaceVariant)
-                }
-                Spacer(Modifier.width(10.dp))
-                Text(action, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                Text(if (ok) "Approved" else if (answer == "Decline") "Declined" else "Answered", style = MaterialTheme.typography.labelMedium, color = if (ok) LocalExtra.current.success else cs.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
-                Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, if (open) "Hide" else "Show what was approved", tint = cs.onSurfaceVariant)
-            }
-            if (open) Box(Modifier.padding(start = 38.dp, top = 8.dp)) { ApprovalDetails(details) }
-        }
-        return
-    }
-    AppCard(container = cs.tertiaryContainer) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(if (details.startsWith("$ ")) Icons.Rounded.Terminal else Icons.Rounded.Shield, null, tint = cs.onTertiaryContainer, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("APPROVE BEFORE I DO THIS", style = Eyebrow, color = cs.onTertiaryContainer)
-        }
-        Spacer(Modifier.height(6.dp))
-        WhyLine(JSONObject(item.meta), cs.onTertiaryContainer)
-        Text(action, style = MaterialTheme.typography.titleLarge, color = cs.onTertiaryContainer)
-        Spacer(Modifier.height(12.dp))
-        ApprovalDetails(details)
-        Spacer(Modifier.height(14.dp))
-        HoldToApprove { onAnswer(item.id, "Approve") }
-        Spacer(Modifier.height(8.dp))
-        TextButton(onClick = { onAnswer(item.id, "Decline") }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Text("Decline", color = cs.onTertiaryContainer)
-        }
-    }
-}
-
-/** What an approval will do: a shell line, an app action's fields, or plain words. */
-@Composable
-private fun ApprovalDetails(details: String) {
-    val cs = MaterialTheme.colorScheme
-    val json = remember(details) { runCatching { JSONObject(details) }.getOrNull() }
-    when {
-        details.startsWith("$ ") -> Surface(shape = MaterialTheme.shapes.medium, color = com.past9.phoneaos.ui.theme.Media.terminal, modifier = Modifier.fillMaxWidth()) {
-            Text(details, Modifier.horizontalScroll(rememberScrollState()).padding(14.dp), style = MaterialTheme.typography.bodySmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace),
-                color = com.past9.phoneaos.ui.theme.Media.onTerminal)
-        }
-        json != null -> Surface(shape = MaterialTheme.shapes.medium, color = cs.surfaceContainerLowest, modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(14.dp).heightIn(max = 320.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                readableFields(json).forEach { (k, v) ->
-                    if (k.startsWith("#")) Text(k.removePrefix("#"), style = MaterialTheme.typography.titleSmall, color = cs.onSurface)
-                    else Column {
-                        Text(k, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                        Text(v, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface, maxLines = 8, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-            }
-        }
-        else -> Surface(shape = MaterialTheme.shapes.medium, color = cs.surfaceContainerLowest, modifier = Modifier.fillMaxWidth()) {
-            Text(details, Modifier.padding(14.dp).heightIn(max = 260.dp), style = MaterialTheme.typography.bodyMedium, color = cs.onSurface)
-        }
-    }
-}
-
 /** App-action JSON as label/value pairs a person can read: "to" -> "To", nested tool calls become headed groups. "#" marks a heading. */
 fun readableFields(o: JSONObject): List<Pair<String, String>> {
     fun label(k: String) = k.replace('_', ' ').replace(Regex("([a-z])([A-Z])"), "$1 $2").lowercase().replaceFirstChar { it.uppercase() }
@@ -1105,7 +1025,9 @@ fun HoldToApprove(onDone: () -> Unit) {
     val fill = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.22f)
     Surface(
         color = MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(50),
+        // A screen reader or a switch cannot press and hold: for them it is a button that approves (audit C-12).
         modifier = Modifier.fillMaxWidth().height(56.dp).graphicsLayer { val s = 1f - 0.03f * p; scaleX = s; scaleY = s }
+            .semantics(mergeDescendants = true) { role = androidx.compose.ui.semantics.Role.Button; onClick("Approve") { onDone(); true } }
             .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(); holding = true; waitForUpOrCancellation(); holding = false } },
     ) {
         Box(Modifier.fillMaxSize().drawBehind { drawRect(fill, size = size.copy(width = size.width * p)) }, contentAlignment = Alignment.Center) {
