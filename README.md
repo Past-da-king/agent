@@ -131,6 +131,27 @@ Your phone can be the remote, not the engine. Under **Connections, Machines** yo
 - **Commands that change things ask first.** The card shows the exact command, unless you switch on *Run without asking* for that machine.
 - **At home**, put the phone and the computer on the same [Tailscale](https://tailscale.com) network and use the computer's tailnet address. On Windows, turn on *OpenSSH Server* under Settings, Optional features, or run `sshd` inside WSL.
 
+## Connect MacroDroid
+
+MacroDroid and Tasker work with the agent in both directions. Both stay on the phone unless you switch the webhook on.
+
+**MacroDroid to Agent.** A macro fires one of your routines or sends the agent an instruction over `http://127.0.0.1:47321`, with the token from Settings, Automation, *Automation from other apps*. Turn on *Allow outside runs* first. Full steps: [docs/automation-macrodroid.md](docs/automation-macrodroid.md).
+
+**Agent to MacroDroid.** The agent runs a macro of yours with its `macrodroid_run` tool: switch a setting, open an app, anything the macro does.
+
+1. In MacroDroid, make a macro with the trigger **Intent Received**.
+2. Action: `com.past9.phoneaos.MACRO`, exactly. It is case-sensitive.
+3. Add one extra: `macro` = the macro's name, for example `Wifi off`.
+4. Optional: `v1`, `v2`, `v3` and `params` = `*`, each saved to a variable. The agent always sends all of them, as text, so the trigger still fires when a value is empty.
+5. In the Agent app, open Settings, Automation, *Agent runs your macros*, and add `Wifi off` to **Allowed macros**. Macros on that list run without asking. Any other macro asks you first, and is not sent when nobody answers.
+6. Tap **Test** to send a macro called `Agent test` with `v1` = `hello`. **Copy** puts this recipe on your clipboard.
+
+Tasker catches the same broadcast: Profile, Event, *Intent Received*, Action `com.past9.phoneaos.MACRO`. The values arrive as `%macro`, `%v1`, `%v2`, `%v3` and `%params`.
+
+The agent on a linked computer can run your phone's macros too. It uses the same tool through the device link, with the same allowlist and the same question on the phone. You can switch this off under Settings, Linked devices.
+
+The **MacroDroid webhook** is optional and off by default. It lets an agent that is not running on this phone reach MacroDroid's own server, `trigger.macrodroid.com`. Your values then pass through MacroDroid's server, so leave it off unless you need it. To use it, add a *Webhook (Url)* trigger whose identifier is the macro name in lower case with dashes, `wifi-off`, and paste the device id from its address into the sheet.
+
 ## Build from source
 
 You need JDK 17, the Android SDK (compileSdk 37), and for the runtime pack `curl`, `ar`, `patchelf` and Node/npm.

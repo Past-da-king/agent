@@ -53,6 +53,8 @@ data class SettingsActions(
     val setAutomationAllowed: (Boolean) -> Unit = {},
     /** A fresh token; every macro holding the old one stops working. */
     val rotateAutomationToken: () -> String = { "" },
+    /** Settings > Automation, the other direction: macros the agent may run without asking, the test and the webhook. */
+    val macro: MacroActions = MacroActions(),
     val linkedLine: String = "Use the agent on your computer from this phone",
 )
 
@@ -62,6 +64,18 @@ data class AutomationInfo(
     val token: String = "",
     val allowed: Boolean = false,
     val running: Boolean = false,
+)
+
+/** The agent runs MacroDroid and Tasker macros: what the sheet reads and writes. */
+data class MacroActions(
+    val allowlist: () -> String = { "" },
+    val setAllowlist: (String) -> Unit = {},
+    val webhookOn: () -> Boolean = { false },
+    val setWebhookOn: (Boolean) -> Unit = {},
+    val webhookId: () -> String = { "" },
+    val setWebhookId: (String) -> Unit = {},
+    /** Sends the test macro now and returns "sent" or "failed: why". */
+    val test: () -> String = { "failed: not available here" },
 )
 
 data class RuntimeInfo(val available: Boolean, val installedBytes: Long, val signedIn: Boolean, val note: String)
@@ -74,6 +88,7 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
     var pickSub by remember { mutableStateOf(false) }
     var voiceSheet by remember { mutableStateOf(false) }
     var automationSheet by remember { mutableStateOf(false) }
+    var macroSheet by remember { mutableStateOf(false) }
     // The sheet keeps what it shows, so a flip of the switch or a new token lands without re-reading Settings.
     var automationAllowedNow by remember { mutableStateOf(automation.allowed) }
     var automationTokenNow by remember { mutableStateOf(automation.token) }
@@ -126,7 +141,7 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
                 if (wakeups) WakeupsSheet { wakeups = false }
                 Line(Icons.Rounded.BatteryChargingFull, "Battery: unrestricted", "Samsung and others stop background apps. Allow this one to keep working.") { actions.onBattery() }
             }
-            SectionHeader("Automation from other apps", "MacroDroid and Tasker can fire a routine", Modifier.padding(start = 4.dp, top = 12.dp))
+            SectionHeader("Automation", "MacroDroid and Tasker, both ways", Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 Line(Icons.Rounded.Bolt, "Automation from other apps",
                     when {
@@ -134,6 +149,8 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
                         automationAllowedNow -> "On \u00b7 ${automation.url}"
                         else -> "Off \u00b7 tap to set it up"
                     }) { automationSheet = true }
+                Line(Icons.Rounded.SmartToy, "Agent runs your macros",
+                    actions.macro.allowlist().let { MacroRulesUi.allowedLine(it) }) { macroSheet = true }
             }
             SectionHeader("Linked devices", "Your computers and servers", Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
@@ -168,6 +185,7 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
         onRotate = { automationTokenNow = actions.rotateAutomationToken() },
         onDismiss = { automationSheet = false },
     )
+    if (macroSheet) MacroSheet(actions.macro) { macroSheet = false }
     if (confirmReset) com.past9.phoneaos.ui.ConfirmSheet(androidx.compose.material.icons.Icons.Rounded.DeleteForever, "This phone", "Reset everything?",
         "This deletes your keys, memory, tasks, routines and the conversation from this phone. It can't be undone.",
         confirm = "Reset everything", onConfirm = { confirmReset = false; actions.onResetAll() }, onDismiss = { confirmReset = false }, cancel = "Keep my stuff", destructive = true)

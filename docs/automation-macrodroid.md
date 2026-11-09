@@ -143,3 +143,47 @@ watching. Firing an agent that sends an email or deletes a file does not, whatev
 - Rotate it if it leaks or if you pasted it somewhere you no longer trust. Old macros stop working at once.
 - The token is a password. Anyone who can run an app on this phone and read that token can fire your routines.
 - Turn the switch off when you are not using it. Nothing answers then.
+
+## The other direction: the agent runs your macros
+
+The agent can run a MacroDroid or Tasker macro with its `macrodroid_run` tool. It sends an Android broadcast on this
+phone, and nothing leaves the phone.
+
+What the broadcast carries:
+
+- Action: `com.past9.phoneaos.MACRO`
+- `macro`: the macro's name, for example `Wifi off`
+- `v1`, `v2`, `v3`: short values, or empty
+- `params`: a JSON object as text, `{}` when unused
+- `from`: `agent`
+
+Every extra is always there and is always text. That matters because MacroDroid's Intent Received trigger fires only
+when every extra it was set up with is present.
+
+### Set up the macro
+
+1. New macro. Add the trigger **Intent Received**.
+2. Action: `com.past9.phoneaos.MACRO`
+3. Extras: `macro` = `Wifi off`. Optional: `v1` = `*` saved to a variable, and the same for `v2`, `v3` and `params`.
+4. Add the actions you want.
+5. In the Agent app, open Settings, Automation, *Agent runs your macros*, and add `Wifi off` under Allowed macros.
+
+### What asks first
+
+- A macro on the Allowed macros list runs straight away.
+- Any other macro shows an approval card with the macro and its values. If nobody answers, as in a routine running at
+  night, it is not sent and the agent is told why.
+- The tool answers `sent` when the broadcast went out. MacroDroid cannot reply, so `sent` means it was delivered, not
+  that the macro did what you wanted.
+
+### From your computer
+
+The agent on a linked computer can call the same tool on the phone through the device link. The same allowlist
+applies, and the question shows on the phone. Switch it off in Settings, Linked devices: *MacroDroid macros*.
+
+### The webhook, optional
+
+Off by default. When it is on, the agent may send `via: webhook` to `https://trigger.macrodroid.com/<device id>/<macro>`,
+where the macro part is the name in lower case with dashes (`wifi-off`), with v1, v2, v3, params and from as query
+values. This goes through MacroDroid's server, not only your phone. Use it only when the agent is not running on the
+phone that runs MacroDroid.

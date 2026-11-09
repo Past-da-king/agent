@@ -794,6 +794,12 @@ class MainActivity : ComponentActivity() {
                             when { l == null -> "Use the agent on your computer from this phone"; l.on -> "Using ${l.nodeName.ifBlank { "your computer" }}"; else -> "Linked to ${l.nodeName.ifBlank { "a computer" }}, using this phone's own agent" } },
                         setAutomationAllowed = { on -> g.settings.setAutomationAllowed(on) },
                         rotateAutomationToken = { g.settings.rotateAutomationToken() },
+                        macro = com.past9.phoneaos.ui.screens.MacroActions(
+                            allowlist = g.settings::macroAllowlistText, setAllowlist = g.settings::setMacroAllowlistText,
+                            webhookOn = g.settings::macroWebhookOn, setWebhookOn = g.settings::setMacroWebhookOn,
+                            webhookId = g.settings::macroWebhookId, setWebhookId = g.settings::setMacroWebhookId,
+                            test = { com.past9.phoneaos.automation.MacroSender(this@MainActivity).broadcast(com.past9.phoneaos.automation.MacroCall(com.past9.phoneaos.automation.MacroRules.TEST_MACRO, v1 = "hello")) },
+                        ),
                     ),
                         automation = com.past9.phoneaos.ui.screens.AutomationInfo(
                             url = g.automation.url.ifBlank { "http://127.0.0.1:" + g.settings.automationPort() },
