@@ -66,13 +66,21 @@ object RemoteRows {
     }
 
     /**
-     * The main chat as the phone should show it: the newest New chat onward, plus any card still waiting on the
-     * person, however old (a question must never be cleared out from under them).
+     * One of the computer's chats as the phone should show it: its newest New chat onward, plus any card still waiting
+     * on the person, however old (a question must never be cleared out from under them). A chat on the computer is not
+     * deleted by a clear, only closed with a divider, so a window that reads the rows themselves (a project chat) has
+     * to hide the closed ones too, or the chat it just cleared comes back (issue #14).
      */
-    fun openMain(rows: List<JSONObject>): List<JSONObject> {
-        val divider = dividerAt(rows)
-        return rows.filter { inMainChat(it) && (!closed(it, divider) || isOpenCard(it)) }
+    fun openIn(rows: List<JSONObject>, chat: String = "main"): List<JSONObject> {
+        val divider = dividerAt(rows, chat)
+        return rows.filter { inChat(it, chat) && (!closed(it, divider, chat) || isOpenCard(it)) }
     }
+
+    /** The main chat as the phone should show it. */
+    fun openMain(rows: List<JSONObject>): List<JSONObject> = openIn(rows)
+
+    /** Does this row belong to that chat? A row that names no chat is the main one (desktop MAIN_CHAT = "main"). */
+    fun inChat(o: JSONObject, chat: String): Boolean = if (chat == "main") inMainChat(o) else chatOf(o) == chat
 
     /** The phone shows the person's general memory; a project's own pages stay on the computer. */
     fun isGeneralMemory(o: JSONObject): Boolean = o.optString("project").isBlank()

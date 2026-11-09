@@ -642,14 +642,14 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     /**
      * Start a new chat on the computer (memory.newChat): it writes the New chat divider, forgets that thread's
      * session so the next turn carries none of the old conversation, and files the old chat to memory in the
-     * background (nothing waits on that). False when this computer is too old to know the call: the phone is
-     * still cleared, and the person is told the computer's copy was not.
+     * background (nothing waits on that). The outcome says which kind of failure, if any: a computer too old to know
+     * the call and one that cannot be reached need different words, and the phone is cleared either way.
      */
-    suspend fun newChat(chat: String = "main"): Boolean = runCatching {
+    suspend fun newChat(chat: String = "main"): NewChatOutcome = runCatching {
         call("memory.newChat", listOf(JSONObject().put("chat", chat).put("from", chat)), 20_000)
         reloadSoon()
-        true
-    }.getOrElse { false }
+        NewChatOutcome.STARTED
+    }.getOrElse { error -> NewChatOutcome.of(error) }
 
     // ---- edits made on the phone's screens, written on the computer ------------------------------
 
@@ -849,7 +849,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     suspend fun chatRows(chat: String, limit: Int = 40): List<JSONObject> {
         val where = JSONObject().put("chat", chat).put("kinds", JSONArray(listOf("user", "agent", "notice"))).put("limit", limit).put("newestFirst", true)
         val a = call("data.where", listOf("chat_item", where), 30_000) as? JSONArray ?: return emptyList()
-        return (0 until a.length()).mapNotNull { a.optJSONObject(it) }.filter { RemoteRows.chatOf(it) == chat }.sortedBy { it.optLong("createdAt") }
+        val rows = (0 until a.length()).mapNotNull { a.optJSONObject(it) }
+        return RemoteRows.openIn(rows, chat).sortedBy { it.optLong("createdAt") }
     }
 
     /** Whether a chat on the computer is at work now. */

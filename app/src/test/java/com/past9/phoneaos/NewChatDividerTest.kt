@@ -70,4 +70,34 @@ class NewChatDividerTest {
         assertFalse(RemoteRows.closed(row("new", 301), divider))
         assertFalse("no divider, nothing closed", RemoteRows.closed(row("old", 100), 0L))
     }
+
+    // ---- a project chat, which the phone reads row by row rather than mirroring into its own table (issue #14) ----
+
+    private val project = listOf(
+        row("p1", 100, chat = "pc1"), row("p2", 200, chat = "pc1"),
+        divider(300, chat = "pc1"), row("p3", 400, chat = "pc1"),
+        row("m1", 500),
+    )
+
+    @Test fun aClearedProjectChatHidesItsOwnEarlierRows() {
+        assertEquals(listOf("d300", "p3"), RemoteRows.openIn(project, "pc1").map { it.optString("id") })
+    }
+
+    @Test fun aProjectChatWindowNeverShowsTheMainChat() {
+        val inProject = RemoteRows.openIn(project, "pc1").map { it.optString("id") }
+        assertFalse("the main chat's row is not this project's", inProject.contains("m1"))
+        assertEquals("the main chat still shows its own", listOf("m1"), RemoteRows.openIn(project).map { it.optString("id") })
+    }
+
+    @Test fun aCardWaitingInAProjectChatSurvivesItsClear() {
+        val question = JSONObject().put("id", "pq").put("createdAt", 150).put("kind", "question").put("text", "Which unit?")
+            .put("meta", JSONObject().put("chat", "pc1").toString())
+        val rows = listOf(row("p1", 100, chat = "pc1"), question, divider(300, chat = "pc1"), row("p3", 400, chat = "pc1"))
+        assertEquals(listOf("pq", "d300", "p3"), RemoteRows.openIn(rows, "pc1").map { it.optString("id") })
+    }
+
+    @Test fun aChatWithNoDividerOfItsOwnKeepsEverything() {
+        val rows = listOf(row("a", 100, chat = "pc1"), row("b", 200), divider(300))
+        assertEquals(listOf("a"), RemoteRows.openIn(rows, "pc1").map { it.optString("id") })
+    }
 }
