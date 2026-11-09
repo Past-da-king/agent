@@ -1,6 +1,7 @@
 package com.past9.phoneaos.ui.screens
 
 import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.RestartAlt
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -57,11 +58,15 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
     var loadingOlder by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val list = rememberLazyListState()
+    var askNewChat by remember(chat) { mutableStateOf(false) }
 
     // Mobile-data rules: the newest PAGE messages, older ones a page at a time as he scrolls up (data.where before).
     suspend fun page(s: RemoteSession, before: Long?): List<JSONObject> {
         val a = s.call("data.where", listOf("chat_item", com.past9.phoneaos.remote.Mentions.pageWhere(chat, PAGE, before)), 30_000) as? org.json.JSONArray ?: return emptyList()
-        return (0 until a.length()).mapNotNull { a.optJSONObject(it) }.filter { RemoteRows.chatOf(it) == chat }
+        val rows = (0 until a.length()).mapNotNull { a.optJSONObject(it) }
+        // A New chat in this chat on the computer closes what came before its divider without deleting it, and this
+        // window reads the rows themselves: hide the closed ones here, or a chat cleared there comes back here.
+        return RemoteRows.openIn(rows, chat)
     }
     suspend fun load(s: RemoteSession) {
         runCatching { page(s, null) to s.chatRunning(chat) }
@@ -102,6 +107,7 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
                     Text(name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(if (working) "Working on it" else "Project chat on your computer", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                IconButton(onClick = { askNewChat = true }) { Icon(Icons.Rounded.RestartAlt, "New chat in this project") }
             }
         },
         bottomBar = {
@@ -145,6 +151,23 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
             }
         }
     }
+    // A slide-up sheet, never a pop-up: what New chat in this chat does, said before it does it.
+    if (askNewChat) com.past9.phoneaos.ui.ConfirmSheet(Icons.Rounded.RestartAlt, name, "Start a new chat here?",
+        "What was said so far is saved to memory and this window starts empty. Nothing on your computer is deleted.", "New chat",
+        onConfirm = {
+            askNewChat = false
+            val s = session
+            if (s == null) problem = "Not linked to a computer right now."
+            else scope.launch {
+                problem = when (s.newChat(chat)) {
+                    com.past9.phoneaos.remote.NewChatOutcome.STARTED -> { rows = emptyList(); more = false; loaded = true; load(s); "" }
+                    com.past9.phoneaos.remote.NewChatOutcome.COMPUTER_OLDER -> "Your computer's Agent app is older than this one, so it cannot start a new chat there. Update it on your computer, then try again."
+                    com.past9.phoneaos.remote.NewChatOutcome.UNREACHABLE -> "Your computer could not be reached. Try again when it is back."
+                    com.past9.phoneaos.remote.NewChatOutcome.NOT_LINKED -> "Not linked to a computer right now."
+                }
+            }
+        },
+        onDismiss = { askNewChat = false })
 }
 
 /** Messages read at a time on the phone (mobile-data rules). */

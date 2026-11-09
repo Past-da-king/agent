@@ -7,6 +7,7 @@ import com.past9.phoneaos.data.PowerMode
 import com.past9.phoneaos.data.Provider
 import com.past9.phoneaos.data.SettingsStore
 import com.past9.phoneaos.data.TurnRow
+import com.past9.phoneaos.remote.NewChatOutcome
 import com.past9.phoneaos.tools.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -1546,8 +1547,38 @@ class AgentRuntime(
         override suspend fun notify(title: String, body: String) {}
     }
 
-    fun clearConversation() = scope.launch {
-        db.chat().clear(); db.chat().clearTurns("main"); db.chat().clearBranchTurns(); settings.setExtra("claude_session", null); settings.setExtra("conversation_id", null); settings.setExtra("branch_pending", null); unmerged.set(0)
+    /**
+     * How a clear asks the computer for a new chat (memory.newChat): the link, when this phone is using a computer.
+     * Replaced in tests; a phone running its own agent has no chat anywhere else, so there is nothing to ask.
+     */
+    internal var newChatOnComputer: suspend (String) -> NewChatOutcome = { chat ->
+        runCatching { com.past9.phoneaos.remote.RemoteHub.session.value }.getOrNull()?.newChat(chat)
+            ?: NewChatOutcome.NOT_LINKED
+    }
+
+    /**
+     * Clear the conversation. When this phone is paired the chat on screen is the computer's, mirrored row by row,
+     * so the computer is asked for a new chat first: clearing only the phone put the whole old conversation straight
+     * back at the next read, and the next turn still carried the old history (issue #14, 4 Nov 2026). The computer
+     * files the closed chat to memory on its own, in the background, so nothing here waits on a model.
+     */
+    fun clearConversation() = scope.launch { clearChat() }
+
+    /**
+     * The clear itself: the computer's chat, then this phone's copy, then a line when only half of it could happen.
+     * The ask never throws out of here: a link that is down still clears the phone, and says which half it could not do.
+     */
+    internal suspend fun clearChat() {
+        val outcome = runCatching { newChatOnComputer("main") }.getOrElse { NewChatOutcome.of(it) }
+        clearLocalChat()
+        clearNotice(outcome)?.let { line -> db.chat().insert(ChatItem(kind = "notice", text = line)) }
+    }
+
+    /** What the phone itself keeps: the rows, both threads' turns, and every id a turn picks up from. */
+    private suspend fun clearLocalChat() {
+        db.chat().clear(); db.chat().clearTurns("main"); db.chat().clearBranchTurns()
+        settings.setExtra("claude_session", null); settings.setExtra("conversation_id", null); settings.setExtra("branch_pending", null)
+        unmerged.set(0)
     }
 
     // ---- tool context -----------------------------------------------------------------------
@@ -1740,4 +1771,17 @@ class GuardedAppsRunTool(private val inner: AppsRunTool, private val guard: com.
         v.account?.let { input.put("account", it) }
         return inner.run(input, ctx)
     }
+}
+
+/**
+ * The line the person sees when the clear could only be half done, or null when the whole conversation is gone. A
+ * computer too old to know memory.newChat and one that cannot be reached need different things done about them, so
+ * they are never one message (issue #14).
+ */
+internal fun clearNotice(outcome: NewChatOutcome): String? = when (outcome) {
+    NewChatOutcome.STARTED, NewChatOutcome.NOT_LINKED -> null
+    NewChatOutcome.COMPUTER_OLDER ->
+        "This phone's chat is cleared. Your computer's chat is not: the Agent app on it is older than this one, so it cannot start a new chat. Update the app on your computer, then clear again."
+    NewChatOutcome.UNREACHABLE ->
+        "This phone's chat is cleared. Your computer could not be reached just now, so its chat is still there and will show again when it syncs. Clear again once it is back."
 }

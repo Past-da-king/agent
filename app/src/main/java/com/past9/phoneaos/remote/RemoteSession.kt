@@ -639,6 +639,18 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         return true
     }
 
+    /**
+     * Start a new chat on the computer (memory.newChat): it writes the New chat divider, forgets that thread's
+     * session so the next turn carries none of the old conversation, and files the old chat to memory in the
+     * background (nothing waits on that). The outcome says which kind of failure, if any: a computer too old to know
+     * the call and one that cannot be reached need different words, and the phone is cleared either way.
+     */
+    suspend fun newChat(chat: String = "main"): NewChatOutcome = runCatching {
+        call("memory.newChat", listOf(JSONObject().put("chat", chat).put("from", chat)), 20_000)
+        reloadSoon()
+        NewChatOutcome.STARTED
+    }.getOrElse { error -> NewChatOutcome.of(error) }
+
     // ---- edits made on the phone's screens, written on the computer ------------------------------
 
     fun upsert(entity: String, row: JSONObject, after: suspend (JSONObject) -> Unit = {}) = scope.launch {
@@ -668,10 +680,13 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         val triggers = list("trigger")
         val projects = list("project")
         val allChat = list("chat_item")
+        // A New chat on the computer closes the rows before its divider without deleting them, so they come back in
+        // data.list. Read the divider first and hide what it closed, exactly as the desktop's own chat does.
+        dividerMain = RemoteRows.dividerAt(allChat)
         // The phone keeps the recent part of the main chat; the full history stays on the computer.
         // Plus every card still waiting on him, from any chat and however old: the computer counts those as waiting for
         // you, so Home's Needs you must show them and let him answer (22 Oct 2026: two helper cards were invisible).
-        val mainTail = allChat.filter(RemoteRows::inMainChat).sortedBy { it.optLong("createdAt") }.takeLast(CHAT_ROWS)
+        val mainTail = RemoteRows.openMain(allChat).sortedBy { it.optLong("createdAt") }.takeLast(CHAT_ROWS)
         val tailIds = mainTail.map { it.optString("id") }.toSet()
         val chat = (mainTail + allChat.filter { RemoteRows.isOpenCard(it) && it.optString("id") !in tailIds }).sortedBy { it.optLong("createdAt") }
         chat.forEach(::noteBrainRow)
@@ -708,6 +723,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     private suspend fun putGoal(g: com.past9.phoneaos.data.GoalRow) { if (db.tasks().goal(g.id) == null) db.tasks().insertGoal(g) else db.tasks().updateGoal(g) }
     private suspend fun putTask(t: TaskRow) { if (db.tasks().task(t.id) == null) db.tasks().insertTask(t) else db.tasks().updateTask(t) }
 
+    /** When the computer last started a new main chat (its "New chat" divider); 0 when it never has. */
+    @Volatile private var dividerMain = 0L
     private var reloadJob: Job? = null
     private fun reloadSoon() { reloadJob?.cancel(); reloadJob = scope.launch { delay(400); runCatching { reloadAll() } } }
 
@@ -736,6 +753,17 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
                 val c = RemoteRows.chatOf(row)
                 val isCard = row.optString("kind") in setOf("question", "approval")
                 val newCard = RemoteRows.isOpenCard(row) && ids.localOrNull(row.optString("id")) == null
+                // A New chat on the computer: what it closed comes off this phone at once, so the screen empties the
+                // moment the person clears the chat (cards still waiting on them stay, as they do everywhere).
+                if (c == "main" && RemoteRows.isDivider(row)) {
+                    dividerMain = maxOf(dividerMain, row.optLong("createdAt"))
+                    runCatching {
+                        db.openHelper.writableDatabase.execSQL(
+                            "DELETE FROM chat_items WHERE kind NOT IN ('question','approval') AND createdAt < $dividerMain")
+                    }
+                }
+                // A row from before that divider is history: it is not put back (its open card, if any, still is).
+                if (c == "main" && !RemoteRows.isDivider(row) && !RemoteRows.isOpenCard(row) && RemoteRows.closed(row, dividerMain)) return
                 // A card from another chat: shown while it waits, and updated (answered) once the phone has it.
                 if (c != "main" && (RemoteRows.isOpenCard(row) || (row.optString("kind") in setOf("question", "approval") && ids.localOrNull(row.optString("id")) != null))) {
                     putChat(RemoteRows.chat(row, ids, notes))
@@ -821,7 +849,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     suspend fun chatRows(chat: String, limit: Int = 40): List<JSONObject> {
         val where = JSONObject().put("chat", chat).put("kinds", JSONArray(listOf("user", "agent", "notice"))).put("limit", limit).put("newestFirst", true)
         val a = call("data.where", listOf("chat_item", where), 30_000) as? JSONArray ?: return emptyList()
-        return (0 until a.length()).mapNotNull { a.optJSONObject(it) }.filter { RemoteRows.chatOf(it) == chat }.sortedBy { it.optLong("createdAt") }
+        val rows = (0 until a.length()).mapNotNull { a.optJSONObject(it) }
+        return RemoteRows.openIn(rows, chat).sortedBy { it.optLong("createdAt") }
     }
 
     /** Whether a chat on the computer is at work now. */

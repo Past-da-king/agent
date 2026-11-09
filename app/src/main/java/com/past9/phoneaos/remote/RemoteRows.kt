@@ -42,6 +42,46 @@ object RemoteRows {
         return chat.isEmpty() || chat == "main"
     }
 
+    /** A "New chat" divider: a notice the computer writes instead of deleting anything (memory/service.ts compressChat). */
+    fun isDivider(o: JSONObject): Boolean = runCatching { JSONObject(o.optString("meta").ifBlank { "{}" }).optBoolean("divider") }.getOrDefault(false)
+
+    /**
+     * When the newest "New chat" divider in [chat] was written, or 0 when that chat has none. Starting a new chat
+     * does not delete a single row: everything at or before the divider is a conversation the person closed, and
+     * the desktop draws only from the divider on (renderer/lib/chat-memory.ts). The phone does the same, or the
+     * chat it just cleared comes back on the next read (issue #14).
+     */
+    fun dividerAt(rows: List<JSONObject>, chat: String = "main"): Long = rows.fold(0L) { best, o ->
+        if (!isDivider(o)) best else {
+            val own = runCatching { JSONObject(o.optString("meta").ifBlank { "{}" }).optString("chat").ifBlank { "main" } }.getOrDefault("main")
+            if (own == chat) maxOf(best, o.optLong("createdAt")) else best
+        }
+    }
+
+    /** Is this row closed by the chat's newest New chat? The divider itself stays: it is the line the chat opens at. */
+    fun closed(o: JSONObject, divider: Long, chat: String = "main"): Boolean {
+        if (divider <= 0L) return false
+        val inChat = if (chat == "main") inMainChat(o) else runCatching { JSONObject(o.optString("meta").ifBlank { "{}" }).optString("chat") }.getOrDefault("") == chat
+        return inChat && o.optLong("createdAt") < divider
+    }
+
+    /**
+     * One of the computer's chats as the phone should show it: its newest New chat onward, plus any card still waiting
+     * on the person, however old (a question must never be cleared out from under them). A chat on the computer is not
+     * deleted by a clear, only closed with a divider, so a window that reads the rows themselves (a project chat) has
+     * to hide the closed ones too, or the chat it just cleared comes back (issue #14).
+     */
+    fun openIn(rows: List<JSONObject>, chat: String = "main"): List<JSONObject> {
+        val divider = dividerAt(rows, chat)
+        return rows.filter { inChat(it, chat) && (!closed(it, divider, chat) || isOpenCard(it)) }
+    }
+
+    /** The main chat as the phone should show it. */
+    fun openMain(rows: List<JSONObject>): List<JSONObject> = openIn(rows)
+
+    /** Does this row belong to that chat? A row that names no chat is the main one (desktop MAIN_CHAT = "main"). */
+    fun inChat(o: JSONObject, chat: String): Boolean = if (chat == "main") inMainChat(o) else chatOf(o) == chat
+
     /** The phone shows the person's general memory; a project's own pages stay on the computer. */
     fun isGeneralMemory(o: JSONObject): Boolean = o.optString("project").isBlank()
 
