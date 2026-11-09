@@ -30,7 +30,9 @@ import java.io.File
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = "w390dp-h844dp-xxhdpi")
-class ScreensTest(private val dark: Boolean) {
+open class ScreensTest(private val dark: Boolean) {
+    /** Where the PNGs go; the 360dp audit run (Screens360Test) writes the same names somewhere else. */
+    protected open val outDir: String get() = "build/screens"
     companion object {
         @JvmStatic @ParameterizedRobolectricTestRunner.Parameters(name = "dark={0}")
         fun params() = listOf(arrayOf<Any>(false), arrayOf<Any>(true))
@@ -41,7 +43,7 @@ class ScreensTest(private val dark: Boolean) {
         rule.mainClock.autoAdvance = false
         rule.setContent { AppTheme(dark = dark) { content() } }
         rule.mainClock.advanceTimeBy(900)
-        rule.onRoot().captureRoboImage(File("build/screens/$name-${if (dark) "dark" else "light"}.png").path)
+        rule.onRoot().captureRoboImage(File("$outDir/$name-${if (dark) "dark" else "light"}.png").path)
     }
 
     private val now = System.currentTimeMillis()
