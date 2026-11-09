@@ -127,6 +127,8 @@ interface ChatDao {
     /** The last few lines of the conversation, without loading the whole chat. */
     @Query("SELECT * FROM chat_items WHERE kind IN ('user', 'agent') ORDER BY id DESC LIMIT :limit") suspend fun recentTalk(limit: Int): List<ChatItem>
     @Query("SELECT COUNT(*) FROM chat_items WHERE kind = 'helper' AND (meta LIKE '%\"state\":\"working\"%' OR meta LIKE '%\"state\":\"interrupted\"%')") suspend fun workingHelpers(): Int
+    /** The helper rows that still say working, so the phone can write back the ones whose computer went away (HelperLive). */
+    @Query("SELECT * FROM chat_items WHERE kind = 'helper' AND meta LIKE '%\"state\":\"working\"%'") suspend fun workingHelperRows(): List<ChatItem>
     @Query("SELECT * FROM chat_items WHERE kind = 'question' AND createdAt >= :since ORDER BY id DESC LIMIT 30") suspend fun questionsSince(since: Long): List<ChatItem>
 
     @Query("SELECT * FROM turns WHERE thread = :thread ORDER BY id DESC LIMIT :limit") suspend fun recentTurns(thread: String, limit: Int): List<TurnRow>
