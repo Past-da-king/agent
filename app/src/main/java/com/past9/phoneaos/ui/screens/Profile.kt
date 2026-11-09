@@ -61,9 +61,7 @@ fun profileGoals(goals: List<GoalRow>, tasks: List<TaskRow>, max: Int = PROFILE_
 fun ProfileScreen(home: HomeState, memories: List<MemoryRow>, actions: ProfileActions, projects: ProfileProjects = rememberProfileProjects()) {
     val cs = MaterialTheme.colorScheme
     val goals = home.goals.filter { it.status == "open" }
-    val shownGoals = profileGoals(home.goals, home.tasks)
-    var newChat by remember { mutableStateOf(false) }
-    if (newChat) NewChatChoice(projects, actions, onDismiss = { newChat = false })
+        .sortedByDescending { g -> home.tasks.any { it.goalId == g.id && it.status == "blocked" } }
     val achieved = home.goals.count { it.status == "achieved" }
     val helpers = remember(home.items) { HelperView.from(home.items) }
     // ONE rule for the header and the list under it (9 Nov 2026: the header said "12 working for you right now" over
@@ -98,13 +96,9 @@ fun ProfileScreen(home: HomeState, memories: List<MemoryRow>, actions: ProfileAc
                         Text("Talk to ${home.agentName.removePrefix("Your ").replaceFirstChar { it.uppercase() }.let { if (home.agentName == "Your agent") "your agent" else home.agentName }}")
                         Spacer(Modifier.width(8.dp)); Icon(Icons.AutoMirrored.Rounded.ArrowForward, null)
                     }
-                    TextButton(onClick = { newChat = true }, modifier = Modifier.heightIn(min = 48.dp), colors = ButtonDefaults.textButtonColors(contentColor = cs.onPrimaryContainer)) {
-                        Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("New chat")
-                    }
                 }
             }
         }
-        item { ProjectsSection(projects, actions, home.now) }
         item {
             SectionHeader("Helpers", if (running.isEmpty()) "None working right now. I hand bigger jobs to helpers." else "${running.size} working for you right now. Tap one to see it.",
                 Modifier.padding(horizontal = 20.dp))
@@ -123,6 +117,7 @@ fun ProfileScreen(home: HomeState, memories: List<MemoryRow>, actions: ProfileAc
                     }
                 }) { HelperCard(h, onClick = { openHelper = h.id }, now = home.now) }
         }
+        item { ProjectsSection(projects, actions, home.now) }
         item { SectionHeader("What I think about you", "Things I keep in mind so you don't repeat yourself", Modifier.padding(horizontal = 20.dp)) { TextButton(onClick = actions.onMemory) { Text("All") } } }
         item {
             Surface(shape = MaterialTheme.shapes.extraLarge, color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
@@ -141,11 +136,11 @@ fun ProfileScreen(home: HomeState, memories: List<MemoryRow>, actions: ProfileAc
                 }
             }
         }
-        item { SectionHeader("Goals I'm working on", if (goals.isEmpty()) "None right now${if (achieved > 0) " · $achieved achieved" else ""}" else "${if (goals.size > shownGoals.size) "${shownGoals.size} of ${goals.size} open" else "${goals.size} open"}${if (achieved > 0) " · $achieved achieved" else ""}, blocked first", Modifier.padding(horizontal = 20.dp, vertical = 2.dp)) { if (goals.isNotEmpty()) TextButton(onClick = actions.onGoals) { Text("See all") } } }
+        item { SectionHeader("Goals I'm working on", if (goals.isEmpty()) "None right now${if (achieved > 0) " · $achieved achieved" else ""}" else "${goals.size} open${if (achieved > 0) " · $achieved achieved" else ""}, blocked first", Modifier.padding(horizontal = 20.dp, vertical = 2.dp)) }
         if (goals.isEmpty()) item {
             Text("Give me something bigger, like \"plan my trip to Durban\", and I'll break it into steps and tick them off here.", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
         }
-        items(shownGoals, key = { it.id }) { g -> GoalDetail(g, home.tasks.filter { it.goalId == g.id }) }
+        items(goals, key = { it.id }) { g -> GoalDetail(g, home.tasks.filter { it.goalId == g.id }) }
     }
 }
 

@@ -3,6 +3,7 @@ package com.past9.phoneaos.ui.screens
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.RestartAlt
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -46,6 +47,12 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
     val project = session?.mentions?.collectAsStateWithLifecycle()?.value?.firstOrNull { it.name == name }
     // System back goes to the main thread too, the same as the arrow.
     androidx.activity.compose.BackHandler { onBack() }
+    val mine = remember(live, chat, project?.id, name) { live?.scoped(chat, project?.id.orEmpty(), name) }
+    // The same fold as the main chat (one choice for the whole app, kept): folded, this chat's list becomes the small
+    // bubbles above the message box, one per project with its count, exactly like the main chat's. It starts folded
+    // when the list is long.
+    val fold = com.past9.phoneaos.remote.rememberAgentsFold()
+    val agentsFolded = live != null && com.past9.phoneaos.remote.pillGroups(live.cards).isNotEmpty() && fold.folded(maxOf(mine?.cards?.size ?: 0, live.cards.count { it.working }))
     var rows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var loaded by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf("") }
@@ -126,8 +133,6 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
                 }
                 IconButton(onClick = { askNewChat = true }) { Icon(Icons.Rounded.RestartAlt, "New chat in this project") }
             }
-            // The running list, the same one as the main chat's (all projects, this one first, one fold for the whole app).
-            if (live != null) com.past9.phoneaos.remote.RunningBlock(live, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 6.dp), current = chat, maxHeight = 260.dp)
             }
         },
         bottomBar = {
@@ -139,8 +144,16 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
                 scope.launch { load(s) }
             }, stop = { session?.let { s -> scope.launch { runCatching { s.call("chat.stop", listOf(chat), 15_000) } } } },
                 onFailed = { problem = "Couldn't send that: $it. Your words are still in the box." })
+            Column {
+            if (live != null && agentsFolded) Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(start = 16.dp, end = 16.dp, top = 6.dp)) {
+                com.past9.phoneaos.remote.AgentsPill(live, onOpen = {
+                    fold.set(true)
+                    scope.launch { delay(120); list.animateScrollToItem(list.layoutInfo.totalItemsCount.coerceAtLeast(1) - 1) }
+                })
+            }
             MessageComposer(box.draft, { box.draft = it }, working, acts, box.attachments, box.docs.keys.toList(), tools?.listening(box) == true, placeholder = "Message $name", dictationOwner = box, sending = box.sending,
                 failed = box.failed, onRetry = box.retry)
+            }
         },
     ) { pad ->
         LazyColumn(state = list, modifier = Modifier.fillMaxSize().padding(pad), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -165,6 +178,7 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
                     else -> Text(row.optString("text"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.fillMaxWidth())
                 }
             }
+            if (mine != null && mine.cards.isNotEmpty() && !agentsFolded) item(key = "live-cards") { com.past9.phoneaos.remote.LiveCardList(mine, onCollapse = { fold.set(false) }) }
             if (working) item(key = "working") {
                 Row(verticalAlignment = Alignment.CenterVertically) { LoadingIndicator(Modifier.size(28.dp)); Spacer(Modifier.width(8.dp)); Text("Working…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }

@@ -1,6 +1,8 @@
 package com.past9.phoneaos.ui.screens
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddComment
@@ -81,15 +83,32 @@ fun ProjectsSection(projects: ProfileProjects, actions: ProfileActions, now: Lon
             TextButton(onClick = { adding = true }, modifier = Modifier.heightIn(min = 48.dp)) { Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("New project") }
         }
         if (problem.isNotBlank()) Text(problem, Modifier.padding(horizontal = 20.dp, vertical = 6.dp), style = MaterialTheme.typography.bodyMedium, color = cs.error)
-        if (rows.isNotEmpty()) {
+        val openProject: (ProjectRow) -> Unit = { p ->
+            problem = ""
+            if (p.latestChat.isNotBlank()) actions.onProjectChat(p.latestChat, p.name) else scope.launch { problem = openNewChat(projects, p, actions) }
+        }
+        // Folded (the default): one row of the first few, side by side, and "All" for the rest. Never a long list by itself.
+        if (rows.isNotEmpty() && !all) {
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.Top) {
+                rows.take(PROJECTS_SHOWN).forEach { p ->
+                    Surface(onClick = { openProject(p) }, shape = MaterialTheme.shapes.large, color = androidx.compose.ui.graphics.Color.Transparent, modifier = Modifier.width(76.dp)) {
+                        Column(Modifier.padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            ProjectIconTile(p.name, p.glyph, p.color, p.image, 44.dp)
+                            Spacer(Modifier.height(6.dp))
+                            Text(if (p.isArchive) p.name.ifBlank { "Earlier chats" } else p.name, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 4.dp))
+                        }
+                    }
+                }
+                if (rows.size > PROJECTS_SHOWN) TextButton(onClick = { all = true }, modifier = Modifier.heightIn(min = 60.dp)) { Text("All ${rows.size}") }
+            }
+        }
+        if (rows.isNotEmpty() && all) {
             Spacer(Modifier.height(10.dp))
             Surface(shape = MaterialTheme.shapes.extraLarge, color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                 Column(Modifier.padding(vertical = 6.dp)) {
-                    (if (all) rows else rows.take(PROJECTS_SHOWN)).forEach { p ->
-                        Surface(onClick = {
-                            problem = ""
-                            if (p.latestChat.isNotBlank()) actions.onProjectChat(p.latestChat, p.name) else scope.launch { problem = openNewChat(projects, p, actions) }
-                        }, color = androidx.compose.ui.graphics.Color.Transparent, modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp)) {
+                    rows.forEach { p ->
+                        Surface(onClick = { openProject(p) }, color = androidx.compose.ui.graphics.Color.Transparent, modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp)) {
                             Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                                 ProjectIconTile(p.name, p.glyph, p.color, p.image, 40.dp)
                                 Spacer(Modifier.width(14.dp))
@@ -102,7 +121,7 @@ fun ProjectsSection(projects: ProfileProjects, actions: ProfileActions, now: Lon
                             }
                         }
                     }
-                    if (rows.size > PROJECTS_SHOWN) TextButton(onClick = { all = !all }, modifier = Modifier.padding(horizontal = 8.dp).heightIn(min = 48.dp)) { Text(if (all) "Show fewer" else "Show all ${rows.size}") }
+                    TextButton(onClick = { all = false }, modifier = Modifier.padding(horizontal = 8.dp).heightIn(min = 48.dp)) { Text("Show fewer") }
                 }
             }
         }

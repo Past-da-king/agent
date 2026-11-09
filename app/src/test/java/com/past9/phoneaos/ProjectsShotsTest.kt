@@ -95,8 +95,8 @@ class ProjectsShotsTest(private val dark: Boolean) {
         cap("profile-top")
         scrollDown(330); cap("profile-projects")
         scrollDown(); cap("profile-goals")
-        rule.onNodeWithText("See all").assertExists()
-        rule.onNodeWithText("Find a new dentist").assertDoesNotExist()
+        // The profile is as it was: every open goal, no cap. Projects are one compact row with "All" for the rest.
+        rule.onNodeWithText("See all").assertDoesNotExist()
     }
     @Test fun profileNotLinked() { start { ProfileScreen(home, mem, ProfileActions(), ProfileProjects()) }; scrollDown(330); cap("profile-not-linked") }
     @Test fun newChatChoice() { sheet { NewChatChoice(linked, ProfileActions(), {}) }; cap("new-chat-choice") }
