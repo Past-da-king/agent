@@ -1,6 +1,10 @@
 package com.past9.phoneaos.remote
 
+import com.past9.phoneaos.data.ChatItem
+import com.past9.phoneaos.ui.HelperLive
+import com.past9.phoneaos.ui.HelperView
 import org.json.JSONArray
+import org.json.JSONObject
 
 /** One of the computer's projects (data.list 'project'): its icon and its chats, oldest first. */
 data class ProjectInfo(val id: String, val name: String, val glyph: String = "", val color: String = "iris", val image: String = "",
@@ -58,9 +62,16 @@ object RunningList {
     fun needsYou(c: LiveCard, states: Map<String, ChatState> = emptyMap()): Boolean =
         c.waiting || (c.isProject && states[c.projectChat]?.waiting == true)
 
-    /** Really at work: ended, failed, stopped and dead ones never count, nor one that only waits on him. */
-    fun live(c: LiveCard, states: Map<String, ChatState> = emptyMap()): Boolean =
-        c.state == "working" && c.endedAt == 0L && !needsYou(c, states)
+    /**
+     * Really at work: ended, failed, stopped and dead ones never count, nor one that only waits on him. "At work" is
+     * the app's one rule (ui/HelperLive.kt), asked about the card the same way the card is drawn (LiveCards.view): a
+     * card is here because the computer listed it a moment ago, so its sign of life is now.
+     */
+    fun live(c: LiveCard, states: Map<String, ChatState> = emptyMap(), at: Long = HelperLive.now()): Boolean =
+        !needsYou(c, states) && HelperLive.isLive(probe(c, at), at)
+
+    private fun probe(c: LiveCard, at: Long): HelperView = HelperView(ChatItem(0L, "helper", c.label,
+        JSONObject().put("label", c.label).put("state", c.state).put("startedAt", c.startedAt).put("endedAt", c.endedAt).put("beat", at).toString(), c.startedAt), emptyList())
 
     fun counts(cards: List<LiveCard>, states: Map<String, ChatState> = emptyMap()): RunCounts {
         var working = 0; var queued = 0; var needs = 0
