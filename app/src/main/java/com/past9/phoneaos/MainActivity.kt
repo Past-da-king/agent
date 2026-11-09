@@ -208,6 +208,20 @@ class MainActivity : ComponentActivity() {
         // Opening a chat from a card: a project chat goes on top of the main thread (Back always lands there), "main"
         // is the main thread itself.
         var openFromCard by remember { mutableStateOf<Pair<String, String>?>(null) }
+        // New project, asked for from the project switcher on a chat title: the same sheet as on the profile, then its first chat.
+        var newProject by remember { mutableStateOf(false) }
+        val projectsApi = com.past9.phoneaos.ui.rememberProjectsApi()
+        val newProjectScope = rememberCoroutineScope()
+        if (newProject) com.past9.phoneaos.ui.NewProjectSheet(onDismiss = { newProject = false }, onCreated = { id ->
+            newProject = false
+            newProjectScope.launch {
+                runCatching {
+                    val api = projectsApi ?: return@runCatching
+                    val p = api.list().firstOrNull { it.id == id } ?: return@runCatching
+                    openFromCard = api.startChat(p).chat to p.name
+                }
+            }
+        })
         val liveUi = remote?.let { r -> liveCards?.let { list -> com.past9.phoneaos.remote.LiveCardsUi(list, r::cardView, r::stopCard, r::dismissCard) { chat, name -> openFromCard = chat to name } } }
         val goals by remember(dataDb) { dataDb.tasks().goals() }.collectAsStateWithLifecycle(emptyList())
         val tasks by remember(dataDb) { dataDb.tasks().tasks() }.collectAsStateWithLifecycle(emptyList())
@@ -498,7 +512,8 @@ class MainActivity : ComponentActivity() {
         }
         androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxWidth().weight(1f)
             .then(if (linkState?.let { com.past9.phoneaos.remote.RemoteTrouble.shows(it) } == true) androidx.compose.ui.Modifier.consumeWindowInsets(WindowInsets.statusBars) else androidx.compose.ui.Modifier)) {
-            androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.LocalComposerTools provides composerTools) {
+            androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.ui.LocalComposerTools provides composerTools,
+                com.past9.phoneaos.ui.LocalNewProject provides (if (projectsApi != null) ({ newProject = true }) else null)) {
             NavHost(nav, startDestination = "home") {
                 composable("home") {
                     androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.surface) {
