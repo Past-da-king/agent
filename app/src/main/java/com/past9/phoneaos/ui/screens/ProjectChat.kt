@@ -134,7 +134,7 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
                         val via = runCatching { JSONObject(row.optString("meta").ifBlank { "{}" }).optJSONObject("via") }.getOrNull()
                         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
                             if (via != null) Text("From ${via.optString("name").ifBlank { "another chat" }}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md), color = if (via == null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.widthIn(max = 320.dp)) {
+                            if (row.optString("text").isNotBlank()) Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md), color = if (via == null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.widthIn(max = 320.dp)) {
                                 Text(row.optString("text"), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
                             }
                             // The pictures he sent with it (paths on the computer, fetched here once; on mobile data on a tap).

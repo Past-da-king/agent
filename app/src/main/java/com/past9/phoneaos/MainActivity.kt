@@ -242,8 +242,6 @@ class MainActivity : ComponentActivity() {
         val attachments = mainBox.attachments
         /** Where the camera button is, while the in-place camera card is open (it grows out of there). */
         var cameraOrigin by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
-        /** Where the camera's shot goes: the chat whose camera button opened it (null: the main chat). */
-        var cameraSend by remember { mutableStateOf<((String, String) -> Unit)?>(null) }
         // Documents attached in chat: name -> (extracted text, page images)
         val docs = mainBox.docs
         val docPaths = mainBox.docPaths
@@ -414,7 +412,7 @@ class MainActivity : ComponentActivity() {
             object : com.past9.phoneaos.ui.ComposerTools {
                 override fun pickPhotos(box: com.past9.phoneaos.ui.ComposerBox) { boxFor = box; picker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
                 override fun pickDocs(box: com.past9.phoneaos.ui.ComposerBox) { boxFor = box; docPicker.launch(arrayOf("*/*")) }
-                override fun camera(box: com.past9.phoneaos.ui.ComposerBox, origin: androidx.compose.ui.geometry.Rect, send: (String, String) -> Unit) { boxFor = box; cameraSend = if (box === mainBox) null else send; cameraOrigin = origin }
+                override fun camera(box: com.past9.phoneaos.ui.ComposerBox, origin: androidx.compose.ui.geometry.Rect) { boxFor = box; cameraOrigin = origin }
                 override fun mic(box: com.past9.phoneaos.ui.ComposerBox) = toggleMic(box)
                 override fun listening(box: com.past9.phoneaos.ui.ComposerBox): Boolean =
                     (dictating && (dictBox ?: mainBox) === box) || (hubUi?.view?.ended == false && hubUi?.owner == (if (box === mainBox) "main" else box))
@@ -556,7 +554,7 @@ class MainActivity : ComponentActivity() {
                                 val docText = docs.entries.joinToString("") { (n, d) -> "\n\n[Attached document: $n${docPaths[n]?.let { p -> ", file saved at $p (you can upload it with browser_upload)" }.orEmpty()}]\n${d.first.take(30_000)}" }
                                 g.runtime.send(it + docText, attachments.toList() + docs.values.flatMap { d -> d.second }.take(12), docPaths.values.toList(), voiceReply = true)
                                 attachments.clear(); docs.clear() }, onStop = { g.runtime.stop() },
-                            onAttachDoc = { composerTools.pickDocs(mainBox) }, onCamera = { composerTools.camera(mainBox, it) { _, _ -> } }, onRemoveDoc = { docs.remove(it); docPaths.remove(it) },
+                            onAttachDoc = { composerTools.pickDocs(mainBox) }, onCamera = { composerTools.camera(mainBox, it) }, onRemoveDoc = { docs.remove(it); docPaths.remove(it) },
                             onAttach = { composerTools.pickPhotos(mainBox) },
                             onRemoveAttachment = { attachments.remove(it) }, onModel = { openModels() }, onCall = { startCall() }, callReady = settings.let { g.call.unavailableReason(remote != null) == null },onStopSpeaking = if (speakingNow) ({ g.stopSpeaking() }) else null,
                             onAnswer = { id, o -> g.runtime.answer(id, o) },
@@ -854,17 +852,12 @@ class MainActivity : ComponentActivity() {
                     modelSheet = false
                 }, onDismiss = { modelSheet = false },
                 subtitle = if (pickingHelper) "Your agent plans and hands the work to helpers. Pick what they run on." else null)
-            LaunchedEffect(route) { if (route != "chat" && !route.startsWith("pchat")) { cameraOrigin = null; cameraSend = null } }
+            LaunchedEffect(route) { if (route != "chat" && !route.startsWith("pchat")) { cameraOrigin = null } }
             cameraOrigin?.let { o ->
                 com.past9.phoneaos.camera.CameraCard(o, onClosed = { cameraOrigin = null },
-                    onSend = { path, caption ->
-                        // The shot goes to the chat whose camera button opened it.
-                        val to = cameraSend
-                        if (to != null) to(path, caption) else {
-                            g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity)
-                            g.runtime.send(caption, listOf(path), emptyList())
-                        }
-                    },
+                    // The shot lands in the message box of the chat whose camera button opened it, as a photo he can
+                    // remove. Nothing is sent and no words are written: he sends it himself, with or without words.
+                    onUse = { path -> (boxFor ?: mainBox).addPhoto(path) },
                     onGallery = { cameraOrigin = null; composerTools.pickPhotos(boxFor ?: mainBox) })
             }
             androidx.compose.animation.AnimatedVisibility(route in barRoutes, modifier = androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.BottomCenter),

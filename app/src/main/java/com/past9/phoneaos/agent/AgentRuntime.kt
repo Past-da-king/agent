@@ -598,7 +598,7 @@ class AgentRuntime(
 
     fun send(text: String, images: List<String> = emptyList(), files: List<String> = emptyList(), voiceReply: Boolean = false, fromCall: String? = null, quiet: Boolean = false) {
         remote?.let { it.send(text, images, files, quiet); return }
-        val clean = text.trim().ifEmpty { if (images.isNotEmpty() || files.isNotEmpty()) "What do you make of this?" else "" }; if (clean.isEmpty()) return
+        val clean = com.past9.phoneaos.remote.Outgoing.words(text, images, files) ?: return
         // A question card is waiting and the user typed instead of tapping: the typed words ARE the answer.
         // Before, the message queued behind the open question and nothing happened.
         if (fromCall == null && !quiet && images.isEmpty() && files.isEmpty() && mainQuestions.isNotEmpty()) {
@@ -620,16 +620,18 @@ class AgentRuntime(
     /** Put the user's message in the chat, then either run it as a turn, or (work is already running) fork a branch for it. */
     private suspend fun admit(clean: String, images: List<String>, files: List<String>, voiceReply: Boolean, fromCall: String?, quiet: Boolean = false) {
         val target = if (fromCall == null) activeLines.values.maxByOrNull { it.seq } else null
-        val rel = target?.let { branchPolicy.classify(clean, it.userText) }
+        // Photos or files with no words: the chat keeps his message empty. Only the model gets a note to go on.
+        val heard = com.past9.phoneaos.remote.Outgoing.forModel(clean)
+        val rel = target?.let { branchPolicy.classify(heard, it.userText) }
         val origin = if (fromCall != null) { db.chat().insert(ChatItem(kind = "activity", text = "On it: $fromCall", meta = JSONObject().put("tool", "call").toString())); null }
         else if (quiet) null // a button tap: the agent hears it, the chat shows nothing as the user's
         else db.chat().insert(ChatItem(kind = "user", text = clean, meta = JSONObject().put("images", org.json.JSONArray(images.filter { !it.contains("/pdf-") }))
             .put("files", org.json.JSONArray(files)).put("voiceReply", voiceReply).toString()))
-        val forModel = if (voiceReply) "$clean\n\n(The user is on the move: answer with a voice_note, then at most one short line of text. Don't repeat the voice note as text.)"
+        val forModel = if (voiceReply) "$heard\n\n(The user is on the move: answer with a voice_note, then at most one short line of text. Don't repeat the voice note as text.)"
             else if (quiet) "[The user tapped a button on a card you drew. They did not type this and it is not in the chat as their message, so don't quote it back as something they said; just act on it.]\n$clean"
-            else clean
+            else heard
         if (target == null || rel == null) {
-            mainLine.userText = clean
+            mainLine.userText = heard
             launchMain { turnLock.withLock { runTurn(forModel, images, replyTo = origin) } }
             return
         }
@@ -638,7 +640,7 @@ class AgentRuntime(
         // Cost: never more than a few branches working at once; the rest wait their turn, in order.
         while (activeLines.values.count { it.id != "main" } >= Branching.MAX_BRANCHES) kotlinx.coroutines.delay(100)
         val parent = activeLines.values.maxByOrNull { it.seq } ?: target
-        startBranch(parent, rel, clean, forModel, images, origin ?: 0)
+        startBranch(parent, rel, clean.ifEmpty { com.past9.phoneaos.remote.Outgoing.label(images, files) }, forModel, images, origin ?: 0)
     }
 
     /** Fork the running line's current state into a new agent that starts on the new message at once. */

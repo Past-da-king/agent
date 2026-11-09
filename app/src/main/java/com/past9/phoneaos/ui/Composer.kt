@@ -49,6 +49,12 @@ class ComposerBox(val state: MutableState<String>, val key: String = "") {
 
     fun isEmpty() = draft.isBlank() && attachments.isEmpty() && docs.isEmpty()
 
+    /** Send is allowed with words, or with at least one photo or document and no words at all. Never with nothing. */
+    val canSend: Boolean get() = !isEmpty()
+
+    /** A photo from the camera or the gallery lands here, beside the words. The words are never touched. */
+    fun addPhoto(path: String) { if (path.isNotBlank() && path !in attachments) attachments += path }
+
     fun clear() { attachments.clear(); docs.clear(); docPaths.clear() }
 
     /** The send of [words] and [pics] was accepted: only now do they leave the box. Words that came since stay. */
@@ -117,8 +123,8 @@ data class ComposerActions(
 interface ComposerTools {
     fun pickPhotos(box: ComposerBox)
     fun pickDocs(box: ComposerBox)
-    /** The in-place camera grows out of [origin]; its shot goes to [send] (path, caption). */
-    fun camera(box: ComposerBox, origin: Rect, send: (String, String) -> Unit)
+    /** The in-place camera grows out of [origin]; its shot lands in [box] as a photo to send, and nothing is sent. */
+    fun camera(box: ComposerBox, origin: Rect)
     /** Dictation into [box]'s words; a second tap stops it. */
     fun mic(box: ComposerBox)
     fun listening(box: ComposerBox): Boolean
@@ -138,16 +144,19 @@ const val BOX_GIVE_UP_MS = 180_000L
  */
 fun composerActionsFor(box: ComposerBox, tools: ComposerTools?, working: Boolean, scope: CoroutineScope, send: suspend (String, List<String>, List<String>) -> Unit,
                        stop: () -> Unit = {}, sendVoice: (suspend (String, List<String>, List<String>) -> Unit)? = null, onFailed: (String) -> Unit = {}): ComposerActions {
-    /** The words of the message on their way now, so a second tap on the SAME message doesn't send it twice. */
+    /** The message on its way now (its words and its pictures), so a second tap on the SAME message doesn't send it twice. */
     var onItsWay: String? = null
     fun go(words: String, via: suspend (String, List<String>, List<String>) -> Unit) {
-        // Only the same message twice is ignored: a new message goes while the agent is still answering the last one.
-        if (onItsWay != null && onItsWay!!.trim() == words.trim()) return
+        // His words as they are. With photos or documents and no words, the text stays empty: nothing is written for him.
         val text = words + box.docText(); val pics = box.images()
         // The documents travel as files of their own, so the computer can open the PDF or the Word file itself.
         val docs = box.docPaths.values.toList()
         if (text.isBlank() && pics.isEmpty() && docs.isEmpty()) return
-        onItsWay = words
+        // Only the same message twice is ignored: a new message goes while the agent is still answering the last one.
+        val key = words.trim() + "\u0000" + pics.joinToString("|")
+        if (onItsWay == key) return
+        onItsWay = key
+        val kept = if (words.isBlank()) "Your photos and files are still here." else "Your words are still here."
         box.beganSending()
         scope.launch {
             try {
@@ -155,7 +164,7 @@ fun composerActionsFor(box: ComposerBox, tools: ComposerTools?, working: Boolean
                 kotlinx.coroutines.withTimeout(BOX_GIVE_UP_MS) { via(text, pics, docs) }
                 box.accepted(words, pics)
             } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-                box.failed = "That took too long to send. Your words are still here."
+                box.failed = "That took too long to send. $kept"
                 box.retry = { go(words, via) }
                 onFailed(box.failed.orEmpty())
             } catch (e: kotlinx.coroutines.CancellationException) { throw e
@@ -163,13 +172,14 @@ fun composerActionsFor(box: ComposerBox, tools: ComposerTools?, working: Boolean
                 box.failed = e.message.orEmpty().ifBlank { "That didn't send." }
                 box.retry = { go(words, via) }
                 onFailed(box.failed.orEmpty())
-            } finally { if (onItsWay == words) onItsWay = null; box.endedSending() }
+            } finally { if (onItsWay == key) onItsWay = null; box.endedSending() }
         }
     }
     return ComposerActions(
         onSend = { go(it, send) }, onSendVoice = sendVoice?.let { v -> { w: String -> go(w, v) } }, onStop = stop,
         onAttach = { tools?.pickPhotos(box) }, onAttachDoc = { tools?.pickDocs(box) },
-        onCamera = { r -> tools?.camera(box, r) { path, caption -> scope.launch { try { send(caption, listOf(path), box.docPaths.values.toList()) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { onFailed(e.message.orEmpty()) } } } },
+        // The shot lands in this box as a photo to send. Nothing goes out until he presses Send.
+        onCamera = { r -> tools?.camera(box, r) },
         onMic = { tools?.mic(box) },
         onRemoveAttachment = { box.attachments.remove(it) }, onRemoveDoc = { box.docs.remove(it); box.docPaths.remove(it) },
         onRecordings = tools?.let { t -> { t.recordings(box) } },

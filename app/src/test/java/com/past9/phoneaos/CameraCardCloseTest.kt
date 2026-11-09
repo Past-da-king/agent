@@ -64,7 +64,7 @@ class CameraCardCloseTest {
         rule.setContent {
             AppTheme(dark = false) {
                 Box(Modifier.fillMaxSize()) {
-                    if (open) CameraCard(Rect(300f, 2000f, 380f, 2080f), onClosed = { closed++; open = false }, onSend = { _, _ -> sent++ }, onGallery = {}, binder = fake, startWith = photo)
+                    if (open) CameraCard(Rect(300f, 2000f, 380f, 2080f), onClosed = { closed++; open = false }, onUse = { sent++ }, onGallery = {}, binder = fake, startWith = photo)
                 }
             }
         }
@@ -120,8 +120,12 @@ class CameraCardCloseTest {
         back(); rule.waitForIdle(); back(); assertClosedCleanly()
     }
 
-    @Test fun sendSendsAndCloses() {
-        show(review = true); rule.onNodeWithText("Send").performClick()
+    @Test fun addPhotoHandsItOverOnceAndCloses() {
+        show(review = true)
+        // No caption box and no Send in the camera: the words and Send live in the message box.
+        rule.onNodeWithText("Send").assertDoesNotExist()
+        rule.onNodeWithText("Add a caption (optional)").assertDoesNotExist()
+        rule.onNodeWithText("Add photo").performClick()
         assertClosedCleanly(); assertEquals(1, sent)
     }
     @Test fun retakeThenEveryPathStillCloses() {

@@ -597,6 +597,8 @@ private fun UserBubble(item: ChatItem) {
             }
         }
     }
+    // Photos or files sent with no words are the whole message: no bubble, and no words put in his mouth.
+    if (text.substringBefore("\n\n[Attached document:").substringBefore("\n\n[Shared with you").isBlank() && (images.isNotEmpty() || files.isNotEmpty())) return
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
         Surface(color = if (sender == null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg, com.past9.phoneaos.ui.theme.Radius.lg, com.past9.phoneaos.ui.theme.Radius.xs, com.past9.phoneaos.ui.theme.Radius.lg), modifier = Modifier.widthIn(max = 320.dp).padding(start = 48.dp)) {
             Text(text.substringBefore("\n\n[Attached document:").substringBefore("\n\n[Shared with you").ifBlank { "Here's a document." }, Modifier.padding(horizontal = 16.dp, vertical = 11.dp), style = MaterialTheme.typography.bodyLarge,
@@ -1329,16 +1331,8 @@ fun MessageComposer(draft: String, onDraft: (String) -> Unit, working: Boolean, 
                     leadingIcon = { Icon(Icons.Rounded.Description, null, Modifier.size(18.dp)) }, trailingIcon = { Icon(Icons.Rounded.Close, "Remove", Modifier.size(16.dp)) }, shape = RoundedCornerShape(50))
             }
         }
-        if (attachments.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            attachments.forEach { path ->
-                Box {
-                    coil.compose.AsyncImage(java.io.File(path), "Photo to send", Modifier.size(72.dp).clip(MaterialTheme.shapes.medium), contentScale = ContentScale.Crop)
-                    Surface(onClick = { actions.onRemoveAttachment(path) }, shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.inverseSurface, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(24.dp)) {
-                        Icon(Icons.Rounded.Close, "Remove photo", Modifier.padding(4.dp), tint = MaterialTheme.colorScheme.inverseOnSurface)
-                    }
-                }
-            }
-        }
+        // The photos to send (camera, gallery), each with an X; a send that failed shows on them with a tap to try again.
+        com.past9.phoneaos.ui.ComposerPhotos(attachments, actions.onRemoveAttachment, failed = !failed.isNullOrBlank(), onRetry = onRetry)
         // While he dictates into this box: listening, reconnecting, paused, writing down the rest, or Retry.
         com.past9.phoneaos.ui.DictationStatus(dictationOwner)
         Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp), verticalAlignment = Alignment.Bottom) {

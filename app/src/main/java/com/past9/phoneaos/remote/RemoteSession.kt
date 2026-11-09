@@ -545,8 +545,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     override suspend fun sendAccepted(text: String, images: List<String>) = sendAccepted(text, images, emptyList())
 
     override suspend fun sendAccepted(text: String, images: List<String>, files: List<String>) {
-        val clean = text.trim().ifEmpty { if (images.isNotEmpty() || files.isNotEmpty()) "What do you make of this?" else "" }
-        if (clean.isEmpty()) return
+        // His words as they are: photos or files with no words go out with empty text.
+        val clean = Outgoing.words(text, images, files) ?: return
         try {
             turnRunning = true; publishStatus()
             deliver(clean, images, null, null, files)
@@ -567,8 +567,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     override fun send(text: String, images: List<String>, quiet: Boolean) = send(text, images, emptyList(), quiet)
 
     override fun send(text: String, images: List<String>, files: List<String>, quiet: Boolean) {
-        val clean = text.trim().ifEmpty { if (images.isNotEmpty() || files.isNotEmpty()) "What do you make of this?" else "" }
-        if (clean.isEmpty()) return
+        // His words as they are: photos or files with no words go out with empty text.
+        val clean = Outgoing.words(text, images, files) ?: return
         scope.launch {
             try {
                 turnRunning = true; publishStatus()
@@ -905,8 +905,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
      * always sent an empty attachment list, so a photo picked there never reached the computer (29 Oct 2026).
      */
     suspend fun sendTo(chat: String, text: String, images: List<String> = emptyList(), files: List<String> = emptyList()) {
-        val words = text.trim().ifEmpty { if (images.isNotEmpty() || files.isNotEmpty()) "What do you make of this?" else "" }
-        if (words.isEmpty()) return
+        // His words as they are: photos or files with no words go out with empty text.
+        val words = Outgoing.words(text, images, files) ?: return
         deliver(words, images, chat, files = files)
     }
 
@@ -964,8 +964,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
 
     /** A reply on a project's answer card, with its pictures: into that project chat, its answer back to the main chat. */
     suspend fun replyTo(chat: String, text: String, images: List<String> = emptyList(), files: List<String> = emptyList()) {
-        val words = text.trim().ifEmpty { if (images.isNotEmpty() || files.isNotEmpty()) "What do you make of this?" else "" }
-        if (words.isEmpty()) return
+        // His words as they are: photos or files with no words go out with empty text.
+        val words = Outgoing.words(text, images, files) ?: return
         deliver(words, images, chat, "main", files)
     }
 
