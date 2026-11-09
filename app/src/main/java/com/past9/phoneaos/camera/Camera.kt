@@ -38,7 +38,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -89,11 +88,11 @@ private enum class Flash(val mode: Int, val label: String) {
 
 /**
  * The camera, opened in place over the chat: a rounded card that grows out of [origin] (the camera button),
- * dims the chat behind it, and can be dragged down to close. [onSend] gets the compressed photo and a caption,
- * to be sent exactly like a photo attached from the gallery.
+ * dims the chat behind it, and can be dragged down to close. [onUse] gets the compressed photo, which
+ * lands in the message box exactly like a photo attached from the gallery. The card sends nothing and writes nothing.
  */
 @Composable
-fun CameraCard(origin: Rect, onClosed: () -> Unit, onSend: (path: String, caption: String) -> Unit, onGallery: () -> Unit, binder: CameraBinder? = null, startWith: String? = null) {
+fun CameraCard(origin: Rect, onClosed: () -> Unit, onUse: (path: String) -> Unit, onGallery: () -> Unit, binder: CameraBinder? = null, startWith: String? = null) {
     val ctx = LocalContext.current
     val cam = binder ?: remember { CameraXBinder(ctx) }
     val host = LocalLifecycleOwner.current
@@ -169,10 +168,10 @@ fun CameraCard(origin: Rect, onClosed: () -> Unit, onSend: (path: String, captio
             }.graphicsLayer { alpha = ((progress.value - 0.25f) / 0.6f).coerceIn(0f, 1f) }) {
                 when {
                     !hasCamera -> Calm("There is no camera on this device.", "You can still attach a photo from your gallery.", null, null, onGallery, ::close)
-                    !granted -> Calm("The camera is off.", "Your agent only sees a photo when you take it and press Send.",
+                    !granted -> Calm("The camera is off.", "Your agent only sees a photo when you take it and send it.",
                         if (asked) "Open settings" else null, { runCatching { ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
                         onGallery, ::close, retry = if (asked) ({ perm.launch(Manifest.permission.CAMERA) }) else null)
-                    else -> Live(cam, cardLife, progress, frozen, photo, onFrozen = { frozen = it }, onPhoto = { photo = it }, onRetake = ::retake, onClose = ::close, onGallery = onGallery, onSend = { cap -> photo?.let { onSend(it, cap); close() } })
+                    else -> Live(cam, cardLife, progress, frozen, photo, onFrozen = { frozen = it }, onPhoto = { photo = it }, onRetake = ::retake, onClose = ::close, onGallery = onGallery, onUse = { photo?.let { onUse(it); close() } })
                 }
             }
         }
@@ -200,7 +199,7 @@ private fun Calm(title: String, line: String, action: String?, onAction: (() -> 
 @Composable
 private fun Live(
     binder: CameraBinder, owner: LifecycleOwner, progress: Animatable<Float, AnimationVector1D>, frozen: Bitmap?, photo: String?,
-    onFrozen: (Bitmap?) -> Unit, onPhoto: (String) -> Unit, onRetake: () -> Unit, onClose: () -> Unit, onGallery: () -> Unit, onSend: (String) -> Unit,
+    onFrozen: (Bitmap?) -> Unit, onPhoto: (String) -> Unit, onRetake: () -> Unit, onClose: () -> Unit, onGallery: () -> Unit, onUse: () -> Unit,
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -291,7 +290,7 @@ private fun Live(
                     }
                 }
             }
-        } else Review(photo != null, onRetake, onSend)
+        } else Review(photo != null, onRetake, onUse)
 
         failed?.let { msg ->
             Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.align(Alignment.Center).padding(28.dp)) {
@@ -336,20 +335,11 @@ private fun MenuRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label
     }
 }
 
-/** Retake / Send with an optional caption, inside the card; the card rises with the keyboard. */
+/** Retake, or add the photo to the message. No caption and no send here: the words and Send live in the message box. */
 @Composable
-private fun BoxScope.Review(ready: Boolean, onRetake: () -> Unit, onSend: (String) -> Unit) {
-    var caption by remember { mutableStateOf("") }
-    Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg), color = com.past9.phoneaos.ui.theme.Media.glassMid, modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp)) {
-            Box(Modifier.padding(horizontal = 18.dp, vertical = 13.dp)) {
-                if (caption.isEmpty()) Text("Add a caption (optional)", style = MaterialTheme.typography.bodyLarge, color = OnStage.copy(alpha = 0.6f))
-                BasicTextField(caption, { caption = it }, textStyle = MaterialTheme.typography.bodyLarge.copy(color = OnStage), cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), maxLines = 3, modifier = Modifier.fillMaxWidth())
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            FilledTonalButton(onClick = onRetake, Modifier.weight(1f).heightIn(min = 52.dp)) { Icon(Icons.Rounded.Replay, null); Spacer(Modifier.width(8.dp)); Text("Retake") }
-            Button(onClick = { onSend(caption.trim()) }, enabled = ready, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Icon(Icons.AutoMirrored.Rounded.Send, null); Spacer(Modifier.width(8.dp)); Text("Send") }
-        }
+private fun BoxScope.Review(ready: Boolean, onRetake: () -> Unit, onUse: () -> Unit) {
+    Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        FilledTonalButton(onClick = onRetake, Modifier.weight(1f).heightIn(min = 52.dp)) { Icon(Icons.Rounded.Replay, null); Spacer(Modifier.width(8.dp)); Text("Retake") }
+        Button(onClick = onUse, enabled = ready, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Icon(Icons.Rounded.Check, null); Spacer(Modifier.width(8.dp)); Text("Add photo") }
     }
 }
