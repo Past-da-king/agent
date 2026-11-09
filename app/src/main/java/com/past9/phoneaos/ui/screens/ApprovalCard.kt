@@ -95,15 +95,16 @@ fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
     LaunchedEffect(a.answer, a.failed) { if (sent && !a.pending) { open = false; sent = false } else if (a.failed) sent = false }
     val cs = MaterialTheme.colorScheme
     if (!a.pending) {
-        Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable(onClickLabel = "Show what was ${a.decided.lowercase()}") { open = true }.heightIn(min = 48.dp).padding(vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically) {
+        Surface(onClick = { open = true }, shape = MaterialTheme.shapes.medium, color = cs.surface, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.heightIn(min = 48.dp).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(28.dp).clip(RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm)).background(if (a.approved) LocalExtra.current.successContainer else cs.surfaceContainerHigh), contentAlignment = Alignment.Center) {
                 Icon(if (a.approved) Icons.Rounded.Check else Icons.Rounded.Close, null, Modifier.size(16.dp), tint = if (a.approved) LocalExtra.current.success else cs.onSurfaceVariant)
             }
             Spacer(Modifier.width(10.dp))
             Text(a.summary, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             Text(a.decided, style = MaterialTheme.typography.labelMedium, color = if (a.approved) LocalExtra.current.success else cs.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
-            Icon(Icons.Rounded.ChevronRight, null, tint = cs.onSurfaceVariant)
+            Icon(Icons.Rounded.ChevronRight, "Show what was ${a.decided.lowercase()}", tint = cs.onSurfaceVariant)
+        }
         }
     } else AppCard(container = cs.tertiaryContainer, onClick = { open = true }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
