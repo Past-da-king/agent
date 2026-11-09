@@ -33,6 +33,7 @@ class Graph(context: Context) {
         onRoutineDeleted = { id -> Routines.cancel(app, id) }
     }
     init {
+        com.past9.phoneaos.triggers.Routines.appContext = app
         scope.launch { runCatching { com.past9.phoneaos.triggers.Overnight.ensureRoutine(this@Graph) } }
         // Anything scheduled that was missed while the app was dead runs once now.
         scope.launch { runCatching { Routines.catchUp(app) } }
@@ -47,6 +48,17 @@ class Graph(context: Context) {
         com.past9.phoneaos.tools.ComposioConnect.onAppTools = { t -> t.filterKeys { it.startsWith("custom_") }.takeIf { it.isNotEmpty() }?.let { settings.rememberComposioAppTools(it) } }
         settings.composioKey()?.takeIf { com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(it) }?.let { k -> scope.launch { com.past9.phoneaos.tools.ComposioConnect.load(k.trim()) } }
     }
+    /**
+     * The outside entry point (GitHub issue #18): MacroDroid and Tasker fire a routine or send an instruction over
+     * 127.0.0.1. It lives exactly as long as this process does, which is the honest v1: no background service behind it.
+     */
+    private val automationHandlers by lazy {
+        com.past9.phoneaos.automation.PhoneAutomation(settings, runtime, scope) { db.triggers().list() }.handlers()
+    }
+    val automation = com.past9.phoneaos.automation.AutomationServer(settings.automationPort()).also { server ->
+        server.start(scope, settings::automationToken, { automationHandlers })
+    }
+
     val call by lazy { com.past9.phoneaos.voice.CallController(app, db, settings, runtime, scope) }
 
     private val systemVoice by lazy { com.past9.phoneaos.system.Speaker(app) }

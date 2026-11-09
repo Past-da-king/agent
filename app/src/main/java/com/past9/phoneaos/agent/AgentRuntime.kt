@@ -1455,7 +1455,9 @@ class AgentRuntime(
      * @param silentIf the answer means "nothing to say" (a check-in that found nothing): it is not posted to the chat
      *   and no notification goes out.
      */
-    suspend fun runBackground(name: String, prompt: String, silentIf: ((String) -> Boolean)? = null): String {
+    suspend fun runBackground(name: String, prompt: String, silentIf: ((String) -> Boolean)? = null,
+                              /** What this run is: an instruction from an automation app runs as the main agent, a routine as a routine. */
+                              role: PromptRole = PromptRole.ROUTINE): String {
         val sub = subscriptionForBackground()
         val provider = if (sub == null) providerFactory(settings) else null
         if (sub == null && provider == null) {
@@ -1470,7 +1472,7 @@ class AgentRuntime(
         phone.workStarted()
         return try {
             // A routine is work, not conversation: it runs with the helpers' tools.
-            val sys = systemPrompt(prompt, role = PromptRole.ROUTINE)
+            val sys = systemPrompt(prompt, role = role)
             val out = if (sub != null) runRoutineOnSubscription(sub, "Routine \"$name\": $prompt", sys, ctx)
                 else AgentLoop(provider!!, settings.state.value.model, routineTools()).run(sys, mutableListOf(Msg.user("Routine \"$name\": $prompt")), ctx)
             if (silentIf?.invoke(out) == true) return out
