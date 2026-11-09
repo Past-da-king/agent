@@ -515,7 +515,9 @@ class MainActivity : ComponentActivity() {
                 composable("profile") {
                     androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.surface) {
                         ProfileScreen(home, memories, ProfileActions(onBack = { nav.popBackStack() }, onChat = { nav.navigate("chat") },
-                            onMemory = { nav.navigate("memory") }, onRoutines = { go("routines") }, onStyle = { nav.navigate("style") }))
+                            onMemory = { nav.navigate("memory") }, onRoutines = { go("routines") }, onStyle = { nav.navigate("style") }, onGoals = { go("tasks") },
+                            onProjectChat = { chat, name -> nav.navigate("pchat/" + Uri.encode(chat) + "?name=" + Uri.encode(name)) },
+                            onNewMainChat = { g.runtime.clearConversation(); nav.navigate("chat") }))
                     }
                 }
                 composable("notifications") {

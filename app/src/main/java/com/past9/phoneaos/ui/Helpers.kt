@@ -159,7 +159,7 @@ fun ProjectIconTile(name: String, glyphName: String, color: String, image: Strin
 }
 
 /** The desktop app's project icon names (its own icon set) drawn with the phone's matching icons. */
-private val projectGlyphs: Map<String, androidx.compose.ui.graphics.vector.ImageVector> = mapOf(
+internal val projectGlyphs: Map<String, androidx.compose.ui.graphics.vector.ImageVector> = mapOf(
     "folder" to Icons.Rounded.Folder, "building" to Icons.Rounded.Business, "code" to Icons.Rounded.Code, "term" to Icons.Rounded.Terminal,
     "globe" to Icons.Rounded.Public, "doc" to Icons.Rounded.Description, "mail" to Icons.Rounded.Mail, "cal" to Icons.Rounded.CalendarMonth,
     "chat" to Icons.Rounded.ChatBubble, "tasks" to Icons.Rounded.TaskAlt, "heart" to Icons.Rounded.Favorite, "bolt" to Icons.Rounded.Bolt,
