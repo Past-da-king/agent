@@ -2,6 +2,7 @@ package com.past9.phoneaos.ui.screens
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -15,6 +16,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -103,27 +107,58 @@ fun VoiceSheet(s: AgentSettings, actions: VoiceActions, onDismiss: () -> Unit) {
     }
 }
 
-/** The call: the character, big, breathing with whoever is talking. */
+/** What the call is doing right now, in a word or two. Always one of these, never blank. */
+fun callStatusLabel(st: CallState): String {
+    val base = when (st.phase) {
+        "listening" -> if (st.muted) "Muted" else "Listening"
+        "thinking" -> "Working on it"
+        "speaking" -> "Talking"
+        "reconnecting" -> "Reconnecting"
+        "failed" -> if (st.needsMic) "Microphone needed" else "Couldn't connect"
+        "ended" -> if (st.error.isNotBlank()) "Call cut off" else "Call ended"
+        else -> "Connecting"
+    }
+    return if (st.muted && st.active && st.phase != "listening") "$base, you're muted" else base
+}
+
+/** The sound button's label and icon for where the sound comes out. */
+private fun routeLabel(route: String): String = when (route) {
+    "EARPIECE" -> "Earpiece"; "BLUETOOTH" -> "Bluetooth"; "WIRED" -> "Earphones"; "USB" -> "Headset"; "HEARING_AID" -> "Hearing aid"; else -> "Speaker"
+}
+
+/** The call: the character, breathing with whoever is talking, what was said, and the controls. */
 @Composable
 fun CallScreen(name: String, st: CallState, onMute: () -> Unit, onEnd: () -> Unit, onStart: () -> Unit, actions: List<String> = emptyList(),
                /** What the main agent is waiting on: shown right here so the call never hides it. */
-               question: com.past9.phoneaos.data.ChatItem? = null, onAnswer: (Long, String) -> Unit = { _, _ -> }, onBrowser: () -> Unit = {}) {
+               question: com.past9.phoneaos.data.ChatItem? = null, onAnswer: (Long, String) -> Unit = { _, _ -> }, onBrowser: () -> Unit = {},
+               /** Moves the sound to the next place it can go (earphones, loudspeaker, earpiece). */
+               onRoute: () -> Unit = {}) {
     val cs = MaterialTheme.colorScheme
     val level by animateFloatAsState(maxOf(st.mine, st.theirs), spring(0.6f, 800f), label = "lvl")
     LaunchedEffect(Unit) { if (!st.active) onStart() }
+    // Back ends the call, the same as End and the notification's End.
+    androidx.activity.compose.BackHandler(enabled = st.active) { onEnd() }
+    // The microphone was refused: Try again asks for it again, then starts the call.
+    val registry = androidx.activity.compose.LocalActivityResultRegistryOwner.current
+    val askMic = if (registry != null) androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { onStart() } else null
+    val again: () -> Unit = { if (st.needsMic && askMic != null) askMic.launch(android.Manifest.permission.RECORD_AUDIO) else onStart() }
     Surface(color = cs.primaryContainer, modifier = Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().systemBarsPadding().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Spacer(Modifier.height(24.dp))
-            Text(name, style = MaterialTheme.typography.headlineMedium, color = cs.onPrimaryContainer)
-            Text(when (st.phase) { "connecting" -> "Connecting…"; "listening" -> if (st.muted) "Muted" else "Listening"; "speaking" -> "Talking"; "failed" -> "Couldn't connect"; "ended" -> "Call ended"; else -> "" },
-                style = MaterialTheme.typography.titleMedium, color = cs.onPrimaryContainer.copy(alpha = 0.8f))
+        Column(Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 24.dp, vertical = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Spacer(Modifier.height(8.dp))
+            Text(name, style = MaterialTheme.typography.headlineMedium, color = cs.onPrimaryContainer, textAlign = TextAlign.Center, maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth())
+            Spacer(Modifier.height(8.dp))
+            CallStatus(st)
             // A card waiting on him makes the call compact: a small avatar, the card scrolling in the middle, and the
             // mute and end buttons always on screen (22 Oct 2026: a big approval card pushed Decline and End call off it).
             val compact = question != null
+            val captions = st.lines.isNotEmpty() && !compact
             Column(Modifier.weight(1f).fillMaxWidth().then(if (compact) Modifier.verticalScroll(rememberScrollState()) else Modifier),
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = if (compact) Arrangement.Top else Arrangement.Center) {
-            Spacer(Modifier.height(if (compact) 8.dp else 0.dp))
-            AgentAvatar(working = st.phase == "speaking" || st.phase == "connecting", size = if (compact) 88.dp else if (st.reply.isNotBlank() || actions.isNotEmpty()) 150.dp else 200.dp, modifier = Modifier.graphicsLayer { val sc = 1f + 0.18f * level; scaleX = sc; scaleY = sc })
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = if (compact || captions) Arrangement.Top else Arrangement.Center) {
+            Spacer(Modifier.height(if (compact) 8.dp else if (captions) 20.dp else 0.dp))
+            AgentAvatar(working = st.phase == "speaking" || st.phase == "connecting" || st.phase == "thinking" || st.phase == "reconnecting" || (st.active && st.phase.isEmpty()),
+                size = if (compact) 88.dp else if (captions) 96.dp else if (st.reply.isNotBlank() || actions.isNotEmpty() || st.error.isNotBlank()) 150.dp else 200.dp,
+                modifier = Modifier.graphicsLayer { val sc = 1f + 0.18f * level; scaleX = sc; scaleY = sc })
             Spacer(Modifier.height(if (compact) 16.dp else 20.dp))
             if (st.delegated.isNotBlank()) Surface(shape = RoundedCornerShape(50), color = cs.surface.copy(alpha = 0.85f)) {
                 Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -137,7 +172,7 @@ fun CallScreen(name: String, st: CallState, onMute: () -> Unit, onEnd: () -> Uni
                 Surface(shape = MaterialTheme.shapes.extraLarge, color = cs.surface.copy(alpha = 0.85f), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
                         Text("YOUR AGENT", style = Eyebrow, color = cs.primary)
-                        Text(st.reply, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface, maxLines = 4, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+                        Text(st.reply, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface, maxLines = if (captions) 2 else 4, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
                     }
                 }
             }
@@ -152,8 +187,8 @@ fun CallScreen(name: String, st: CallState, onMute: () -> Unit, onEnd: () -> Uni
                 Spacer(Modifier.height(8.dp))
                 Text("Or just say it", style = MaterialTheme.typography.labelMedium, color = cs.onPrimaryContainer.copy(alpha = 0.7f))
             } else
-            // What the agent is doing while you talk.
-            if (actions.isNotEmpty()) {
+            // What the agent is doing while you talk. The captions take its place once there is talk to show.
+            if (actions.isNotEmpty() && !captions) {
                 Spacer(Modifier.height(10.dp))
                 Surface(shape = MaterialTheme.shapes.extraLarge, color = cs.surface.copy(alpha = 0.85f), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
@@ -167,22 +202,100 @@ fun CallScreen(name: String, st: CallState, onMute: () -> Unit, onEnd: () -> Uni
                     }
                 }
             }
-            if (!compact) {
+            // Why the call is not on (no key, no microphone, no network, cut off), in plain words.
+            if (st.error.isNotBlank()) {
                 Spacer(Modifier.height(12.dp))
-                st.lines.takeLast(2).forEach { (who, t) ->
-                    Text(t, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, color = if (who == "user") cs.onPrimaryContainer.copy(alpha = 0.7f) else cs.onPrimaryContainer, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Surface(shape = MaterialTheme.shapes.extraLarge, color = cs.errorContainer, modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.ErrorOutline, null, Modifier.size(20.dp), tint = cs.onErrorContainer); Spacer(Modifier.width(12.dp))
+                        Text(st.error, style = MaterialTheme.typography.bodyMedium, color = cs.onErrorContainer)
+                    }
                 }
             }
-            if (st.error.isNotBlank()) Text(st.error, color = cs.error, textAlign = TextAlign.Center)
+            if (captions) {
+                Spacer(Modifier.height(12.dp))
+                CallCaptions(st.lines, name, Modifier.weight(1f).fillMaxWidth())
+            }
             }
             Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
-                FilledTonalIconButton(onClick = onMute, modifier = Modifier.size(64.dp)) { Icon(if (st.muted) Icons.Rounded.MicOff else Icons.Rounded.Mic, if (st.muted) "Unmute" else "Mute") }
-                if (st.active || st.phase == "connecting") FilledIconButton(onClick = onEnd, modifier = Modifier.size(80.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = com.past9.phoneaos.ui.theme.Lights.endCall, contentColor = com.past9.phoneaos.ui.theme.Lights.onEndCall)) {
-                    Icon(Icons.Rounded.CallEnd, "End call", Modifier.size(34.dp))
-                } else FilledIconButton(onClick = onStart, modifier = Modifier.size(80.dp)) { Icon(Icons.Rounded.Call, "Call again", Modifier.size(34.dp)) }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Top) {
+                if (st.active) {
+                    CallControl(if (st.muted) "Unmute" else "Mute") {
+                        FilledTonalIconButton(onClick = onMute, modifier = Modifier.size(64.dp),
+                            colors = if (st.muted) IconButtonDefaults.filledTonalIconButtonColors(containerColor = cs.inverseSurface, contentColor = cs.inverseOnSurface) else IconButtonDefaults.filledTonalIconButtonColors()) {
+                            Icon(if (st.muted) Icons.Rounded.MicOff else Icons.Rounded.Mic, if (st.muted) "Unmute the microphone" else "Mute the microphone")
+                        }
+                    }
+                    CallControl("End") {
+                        FilledIconButton(onClick = onEnd, modifier = Modifier.size(80.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = com.past9.phoneaos.ui.theme.Lights.endCall, contentColor = com.past9.phoneaos.ui.theme.Lights.onEndCall)) {
+                            Icon(Icons.Rounded.CallEnd, "End call", Modifier.size(34.dp))
+                        }
+                    }
+                    CallControl(routeLabel(st.route)) {
+                        FilledTonalIconButton(onClick = onRoute, enabled = st.route.isNotBlank(), modifier = Modifier.size(64.dp)) {
+                            Icon(when (st.route) { "EARPIECE" -> Icons.Rounded.PhoneInTalk; "BLUETOOTH" -> Icons.Rounded.Bluetooth; "WIRED", "USB" -> Icons.Rounded.Headset; "HEARING_AID" -> Icons.Rounded.Hearing; else -> Icons.Rounded.Speaker },
+                                "Sound: ${routeLabel(st.route)}. Tap to change")
+                        }
+                    }
+                } else {
+                    val label = when { st.needsMic -> "Allow microphone"; st.phase == "failed" || st.error.isNotBlank() -> "Try again"; else -> "Call again" }
+                    CallControl(label) {
+                        FilledIconButton(onClick = again, modifier = Modifier.size(80.dp)) { Icon(if (st.needsMic) Icons.Rounded.Mic else Icons.Rounded.Call, label, Modifier.size(34.dp)) }
+                    }
+                }
             }
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+/** The state pill under the name: a dot and a word, read out when it changes. */
+@Composable
+private fun CallStatus(st: CallState) {
+    val cs = MaterialTheme.colorScheme
+    val dot = when {
+        st.phase == "failed" || (st.phase == "ended" && st.error.isNotBlank()) -> cs.error
+        st.phase == "ended" || st.muted -> cs.outline
+        st.phase == "listening" || st.phase == "speaking" -> cs.primary
+        else -> cs.tertiary
+    }
+    Surface(shape = RoundedCornerShape(50), color = cs.surface.copy(alpha = 0.7f), modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(8.dp).background(dot, CircleShape))
+            Spacer(Modifier.width(8.dp))
+            Text(callStatusLabel(st), style = MaterialTheme.typography.titleSmall, color = cs.onSurface, maxLines = 1)
+        }
+    }
+}
+
+/** One call button with its name under it. */
+@Composable
+private fun CallControl(label: String, button: @Composable () -> Unit) {
+    Column(Modifier.widthIn(min = 88.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.height(80.dp), contentAlignment = Alignment.Center) { button() }
+        Spacer(Modifier.height(4.dp))
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimaryContainer, maxLines = 1)
+    }
+}
+
+/**
+ * What was said, both sides, newest at the bottom: the user's words on the right, the agent's on the left. It holds
+ * the bottom as text grows, so a line being spoken fills in place and nothing jumps.
+ */
+@Composable
+private fun CallCaptions(lines: List<Pair<String, String>>, name: String, modifier: Modifier = Modifier) {
+    val cs = MaterialTheme.colorScheme
+    Column(modifier.verticalScroll(rememberScrollState(), reverseScrolling = true), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        lines.forEach { (who, text) ->
+            val me = who == "in" || who == "user" || who == "you"
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = if (me) Alignment.End else Alignment.Start) {
+                Text(if (me) "You" else name, style = MaterialTheme.typography.labelSmall, color = cs.onPrimaryContainer.copy(alpha = 0.75f), maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 6.dp))
+                Spacer(Modifier.height(2.dp))
+                Surface(shape = MaterialTheme.shapes.large, color = if (me) cs.primary else cs.surface.copy(alpha = 0.9f), modifier = Modifier.widthIn(max = 300.dp)) {
+                    Text(text.trim(), style = MaterialTheme.typography.bodyMedium, color = if (me) cs.onPrimary else cs.onSurface, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+                }
+            }
         }
     }
 }
@@ -205,7 +318,7 @@ private fun CallApprovalCard(item: com.past9.phoneaos.data.ChatItem, onAnswer: (
         if (details.isNotBlank()) {
             Spacer(Modifier.height(8.dp))
             Surface(shape = MaterialTheme.shapes.medium, color = cs.surface.copy(alpha = 0.9f), modifier = Modifier.fillMaxWidth()) {
-                Text(details, style = MaterialTheme.typography.bodySmall, color = cs.onSurface, maxLines = 4, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                Text(details, style = MaterialTheme.typography.bodySmall, color = cs.onSurface, maxLines = 12, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
             }
         }
@@ -214,6 +327,43 @@ private fun CallApprovalCard(item: com.past9.phoneaos.data.ChatItem, onAnswer: (
             TextButton(onClick = { onAnswer(item.id, "Decline") }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Decline", color = cs.onTertiaryContainer) }
             Spacer(Modifier.width(8.dp))
             Box(Modifier.weight(1f)) { HoldToApprove { onAnswer(item.id, "Approve") } }
+        }
+    }
+}
+
+/**
+ * A call held through the computer, as the computer logged it (one "call" row): how long it was and the last thing
+ * said, tap for the whole conversation. A row with no transcript in it still shows its own line of text.
+ */
+@Composable
+fun CallLogRow(item: com.past9.phoneaos.data.ChatItem, agentName: String) {
+    val cs = MaterialTheme.colorScheme
+    val meta = remember(item.meta) { runCatching { org.json.JSONObject(item.meta) }.getOrDefault(org.json.JSONObject()) }
+    val lines = remember(item.meta) {
+        meta.optJSONArray("lines")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { it.optString("who") to it.optString("text").trim() } }.orEmpty().filter { it.second.isNotBlank() }
+    }
+    var open by remember { mutableStateOf(false) }
+    val last = lines.lastOrNull()?.second ?: item.text.trim()
+    Surface(onClick = { if (lines.isNotEmpty()) open = !open }, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md), color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(28.dp).background(cs.primaryContainer, RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Call, null, Modifier.size(16.dp), tint = cs.onPrimaryContainer)
+                }
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(com.past9.phoneaos.voice.CallCore.rowTitle(lines.size, 0L, meta.optLong("durationMs")), style = MaterialTheme.typography.labelLarge, color = cs.onSurface)
+                    if (!open && last.isNotBlank()) Text(last, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                }
+                if (lines.isNotEmpty()) Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, if (open) "Hide the call" else "Show the call", tint = cs.onSurfaceVariant)
+            }
+            if (open) Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                lines.forEach { (who, text) ->
+                    val me = who == "you" || who == "in" || who == "user"
+                    Text(if (me) "You" else agentName, style = MaterialTheme.typography.labelMedium, color = if (me) cs.onSurfaceVariant else cs.primary)
+                    Text(text, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface)
+                }
+            }
         }
     }
 }

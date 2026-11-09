@@ -332,7 +332,7 @@ class MainActivity : ComponentActivity() {
 
         // Start CameraX early (no camera is opened, no permission is asked) so the camera card opens fast.
         LaunchedEffect(route) { if (route == "chat") com.past9.phoneaos.camera.CameraWarm.warm(this@MainActivity) }
-        val micPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) nav.navigate("call") }
+        val micPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { nav.navigate("call") { launchSingleTop = true } } // refused: the call screen says why and offers to ask again
         // The call button always shows. When this phone can't place the call, a tap says why instead of hiding it.
         var callWhy by remember { mutableStateOf<String?>(null) }
         fun startCall() { g.call.unavailableReason(remote != null)?.let { callWhy = it; return }
@@ -789,7 +789,7 @@ class MainActivity : ComponentActivity() {
                 }
                 composable("call") {
                     val cst by g.call.state.collectAsStateWithLifecycle()
-                    CallScreen(settings.agentName, cst, onMute = { g.call.toggleMute() }, onEnd = { g.call.end(); nav.popBackStack() }, onStart = { g.call.start() },
+                    CallScreen(settings.agentName, cst, onMute = { g.call.toggleMute() }, onEnd = { g.call.end(); nav.popBackStack() }, onStart = { g.call.start() }, onRoute = { g.call.nextRoute() },
                         actions = items.filter { it.kind == "activity" && it.createdAt >= g.call.callStart && g.call.callStart > 0 }.map { it.text },
                         // Any card waiting on him (a question or an approval, from the agent or a helper), linked or not.
                         question = com.past9.phoneaos.voice.CallController.openQuestion(items),

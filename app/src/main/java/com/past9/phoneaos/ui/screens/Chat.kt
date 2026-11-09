@@ -354,6 +354,8 @@ fun ChatScreen(
                             else -> QuestionCard(r.item, actions.onAnswer, actions.onBrowser)
                         }
                         "voice" -> VoiceBubble(r.item)
+                        // A call held through the computer: one tidy row (duration, last thing said, tap for the words).
+                        "call" -> CallLogRow(r.item, agentName)
                         "card" -> { val id = JSONObject(r.item.meta).optString("card"); com.past9.phoneaos.ui.CardChatRow(LocalCards.current.firstOrNull { it.id == id }, r.item.text) { actions.onCard(id) } }
                         // A video, picture or sound an agent showed on the computer, playing here (0.15.27).
                         "media" -> com.past9.phoneaos.ui.MediaChatRow(r.item, rs)
@@ -697,7 +699,7 @@ private fun CallRow(items: List<ChatItem>, agentName: String) {
                 }
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Voice call · ${items.size} message${if (items.size == 1) "" else "s"}", style = MaterialTheme.typography.labelLarge, color = cs.onSurface)
+                    Text(com.past9.phoneaos.voice.CallCore.rowTitle(items.size, items.first().createdAt, items.last().createdAt), style = MaterialTheme.typography.labelLarge, color = cs.onSurface)
                     if (!open) Text(items.last().text, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, if (open) "Hide the call" else "Show the call", tint = cs.onSurfaceVariant)
