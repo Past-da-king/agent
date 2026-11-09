@@ -42,7 +42,10 @@ fun dueLabel(ms: Long): String = Instant.ofEpochMilli(ms).atZone(ZoneId.systemDe
 @Composable
 fun TasksScreen(goals: List<GoalRow>, tasks: List<TaskRow>, actions: TaskActions, startTab: Int = 0, bottomPadding: androidx.compose.ui.unit.Dp = 120.dp) {
     var adding by remember { mutableStateOf(false) }
-    var tab by remember { mutableIntStateOf(startTab) }
+    // Opened from a Home card: land on that task's tab with the task itself open.
+    val focus = remember { TaskFocus.take() }
+    var tab by remember { mutableIntStateOf(focus?.let { if (it.agentTab) 1 else 0 } ?: startTab) }
+    var openTask by remember { mutableStateOf(focus?.taskId) }
     val mine = tasks.filter { it.owner == "user" }
     val agents = tasks.filter { it.owner == "agent" }
     val open = mine.count { it.status != "done" }
@@ -86,6 +89,7 @@ fun TasksScreen(goals: List<GoalRow>, tasks: List<TaskRow>, actions: TaskActions
             }
         }
     }
+    tasks.firstOrNull { it.id == openTask }?.let { t -> TaskSheet(t, actions) { openTask = null } }
     if (adding) AddTaskSheet({ adding = false }, onAsk = { actions.onAsk(it); adding = false }) { t, due -> actions.onAdd(t, due); adding = false }
 }
 
@@ -129,6 +133,27 @@ fun TaskLine(t: TaskRow, actions: TaskActions) {
         }
         if (t.status == "blocked" && t.blocker.isNotBlank()) Unit
         if (!done && t.owner == "user") IconButton(onClick = { actions.onAsk("Help me with task #${t.id}: ${t.title}") }) { Icon(Icons.Rounded.AutoAwesome, "Ask your agent to do this", tint = MaterialTheme.colorScheme.primary) }
+    }
+}
+
+/** One task, opened from Home: what it is, what it waits on, and the two things he can do with it. */
+@Composable
+internal fun TaskSheet(t: TaskRow, actions: TaskActions, onDismiss: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val done = t.status == "done"
+    com.past9.phoneaos.ui.AppSheet(Icons.Rounded.TaskAlt, if (t.owner == "user") "Your list" else "Your agent's step", t.title, onDismiss,
+        primary = if (done) "Open it again" else "Mark done", primaryEnabled = true, onPrimary = { actions.onToggle(t); onDismiss() },
+        shape = MaterialShapes.Cookie7Sided,
+        secondary = {
+            if (!done && t.owner == "user") TextButton(onClick = { actions.onAsk("Help me with task #${t.id}: ${t.title}"); onDismiss() }, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Ask your agent to do this")
+            }
+        }) {
+        val lines = listOfNotNull(
+            "Done".takeIf { done }, t.dueAt?.let { "Due ${dueLabel(it)}" },
+            t.blocker.takeIf { t.status == "blocked" && it.isNotBlank() }?.let { "Needs: $it" }, t.notes.takeIf { it.isNotBlank() })
+        if (lines.isEmpty()) Text("No date and no notes.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+        lines.forEach { Text(it, style = MaterialTheme.typography.bodyLarge, color = cs.onSurface, modifier = Modifier.padding(bottom = 8.dp)) }
     }
 }
 
