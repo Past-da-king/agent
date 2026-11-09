@@ -39,14 +39,23 @@ class GoalCreateTool(private val dao: TaskDao) : Tool {
     }
 }
 
-class TaskAddTool(private val dao: TaskDao) : Tool {
+/**
+ * @param skipDuplicates for a routine, which runs again and again: a task still open with the same title, owner and due
+ *   date is not added a second time. The main agent is told instead, because it can see the whole list and decides.
+ */
+class TaskAddTool(private val dao: TaskDao, private val skipDuplicates: Boolean = false) : Tool {
     override val spec = ToolSpec("task_add", "Add a task. owner 'user' puts it on the user's own to-do list (things THEY must do, or reminders they asked for); owner 'agent' is a step you will do yourself. Optional goal and due date.",
         schema(listOf("title", "owner"), "title" to str("The task"), "owner" to enumOf("Whose task", "user", "agent"), "notes" to str("Details"), "goal_id" to int("Goal it belongs to"), "due" to str("Due, ISO like 2026-10-06T14:00 or 2026-10-06")))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
+        val owner = if (input.optString("owner") == "agent") "agent" else "user"
+        val dueAt = parseWhen(input.optString("due"))
+        // A routine comes round again: the same job still waiting on the list is not added twice.
+        if (skipDuplicates) dao.openTasks().firstOrNull {
+            it.title.trim().equals(input.optString("title").trim(), true) && it.owner == owner && it.dueAt == dueAt
+        }?.let { return "Already on the list as task #${it.id} (${if (it.owner == "user") "the user's to-do" else "your own step"}, ${it.status}). Nothing added." }
         val id = dao.insertTask(TaskRow(title = input.optString("title"), notes = input.optString("notes"),
-            goalId = if (input.has("goal_id")) input.optLong("goal_id") else null, dueAt = parseWhen(input.optString("due")),
-            owner = if (input.optString("owner") == "agent") "agent" else "user"))
-        ctx.activity((if (input.optString("owner") == "agent") "Planned: " else "Added to your to-dos: ") + input.optString("title"), JSONObject().put("tool", "tasks"))
+            goalId = if (input.has("goal_id")) input.optLong("goal_id") else null, dueAt = dueAt, owner = owner))
+        ctx.activity((if (owner == "agent") "Planned: " else "Added to your to-dos: ") + input.optString("title"), JSONObject().put("tool", "tasks"))
         return "Task #$id added"
     }
 }

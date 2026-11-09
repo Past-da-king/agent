@@ -367,16 +367,22 @@ class AgentRuntime(
             .map { Capped(it, turn.line.calls) }
     }
 
-    /**
-     * What a routine works with: the helpers' tools, plus adding to and clearing the user's list. A helper's findings
-     * go through the main agent, which decides what lands on the list; a routine runs with no main agent, so it does it itself.
-     */
     /** Jobs handed to a machine, and the Host that runs them. The sync sign-in is only ever read here, never shown to the model. */
     private fun handoffTools(): List<Tool> = com.past9.phoneaos.handoff.handoffTools(machines, {
         java.io.File(context.cacheDir, "agent-host.mjs").also { f -> context.assets.open("agent-host.mjs").use { i -> f.outputStream().use { o -> i.copyTo(o) } } }
     }) { com.past9.phoneaos.handoff.HandoffStore(settings).let { st -> if (st.signedIn) st.url!! to st.token!! else null } }
 
-    private fun routineTools(): List<Tool> = tools(forHelper = true) + Gated(TaskAddTool(db.tasks())) + Gated(TaskDeleteTool(db.tasks())) +
+    /**
+     * What a routine works with: the helpers' tools, plus adding to and clearing the user's list, keeping its own note in
+     * memory, and setting the user a wake-up. A helper's findings go through the main agent, which decides what lands on
+     * the list and in memory; a routine has no main agent in the loop, so it does that itself.
+     *
+     * A routine comes round again, so task_add here refuses a second copy of a task that is still open with the same
+     * title, owner and due date. A task that was finished does not block the next one: the weekly job is a new task
+     * when last week's is done. Memory has no such guard because memory_save replaces the page with the same title.
+     */
+    private fun routineTools(): List<Tool> = tools(forHelper = true) + Gated(TaskAddTool(db.tasks(), skipDuplicates = true)) + Gated(TaskDeleteTool(db.tasks())) +
+        Gated(MemorySaveTool(db.memory())) +
         com.past9.phoneaos.tools.WakeScheduleTool(context) + com.past9.phoneaos.tools.WakeListTool(context) + com.past9.phoneaos.tools.WakeCancelTool(context)
 
     /** Everything that acts: what helpers and routines work with. */
