@@ -18,6 +18,10 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -478,7 +482,11 @@ class MainActivity : ComponentActivity() {
         val home = HomeState(settings.agentName, settings.userName, status, items, goals, tasks, routines,
             notifRows.count { it.postedAt > System.currentTimeMillis() - 86_400_000L }, settings.notifApps.size, browserLive, cards = cards.filter { it.pinned }, miniApps = miniApps)
         val barRoutes = setOf("home", "tasks", "memory", "routines", "connections")
-        val barPad = 112.dp
+        // The floating bar sits above the system navigation inset. Pages built on SubScreen already get that inset from
+        // their scaffold; Home draws to the screen edge, so it adds the inset itself (3-button navigation is 48dp).
+        val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        var barHeightPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+        val barPad = com.past9.phoneaos.ui.barClearance(with(androidx.compose.ui.platform.LocalDensity.current) { barHeightPx.toDp() }, navInset)
 
         androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxSize()) {
         // Linked: no bar at all while something answers (failover is silent); a bar only when nothing can.
@@ -501,7 +509,7 @@ class MainActivity : ComponentActivity() {
                             onSettings = { nav.navigate("settings") }, onCall = { startCall() }, onBrowser = { nav.navigate("browser") }, onNotifications = { nav.navigate("notifications") },
                             onCard = { openCard = it.id },
                             onMiniApp = { nav.navigate("miniapp/$it") }, onMiniApps = { nav.navigate("miniapps") },
-                        ), bottomPadding = barPad + 24.dp)
+                        ), bottomPadding = barPad + 24.dp + navInset)
                     }
                 }
                 composable("profile") {
@@ -776,7 +784,7 @@ class MainActivity : ComponentActivity() {
                 composable("key") {
                     var p by remember { mutableStateOf(settings.provider) }
                     androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.surface) {
-                        androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.systemBarsPadding()) {
+                        androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.systemBarsPadding().imePadding()) {
                             // Changing the key of an Other server: its address and model are already filled in.
                             val other = p == Provider.CUSTOM && settings.provider == Provider.CUSTOM
                             KeyStep(p, { p = it }, onboardingActions(g), initialBaseUrl = if (other) settings.baseUrl else "", initialModel = if (other) settings.model else "") {
@@ -870,7 +878,7 @@ class MainActivity : ComponentActivity() {
             }
             androidx.compose.animation.AnimatedVisibility(route in barRoutes, modifier = androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
                 enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut()) {
-                HomeBar(route, ::go, onTalk = { nav.navigate("chat") })
+                HomeBar(route, ::go, onTalk = { nav.navigate("chat") }, modifier = androidx.compose.ui.Modifier.onSizeChanged { barHeightPx = it.height })
             }
         }
         }

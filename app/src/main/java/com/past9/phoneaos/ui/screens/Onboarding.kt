@@ -99,6 +99,8 @@ fun OnboardingScreen(actions: OnboardingActions, start: OnbStep = OnbStep.HELLO,
         OnbStep.POWER -> ({ step = OnbStep.STYLE }); OnbStep.KEY, OnbStep.SUB -> ({ step = OnbStep.POWER })
         OnbStep.APPS -> ({ step = OnbStep.POWER }); OnbStep.READY -> ({ step = OnbStep.APPS })
     }
+    // System back does what the arrow does: one step back. On the first page there is nothing to go back to, so it leaves.
+    androidx.activity.compose.BackHandler(enabled = back != null) { back?.invoke() }
     // The whole onboarding re-themes live as the user picks a colour and a mascot.
     AppTheme(dark = dark, accent = accent, mascot = mascot) {
         Surface(color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxSize()) {

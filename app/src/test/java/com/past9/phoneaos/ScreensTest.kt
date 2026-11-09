@@ -41,7 +41,8 @@ open class ScreensTest(private val dark: Boolean) {
 
     private fun shot(name: String, content: @Composable () -> Unit) {
         rule.mainClock.autoAdvance = false
-        rule.setContent { AppTheme(dark = dark) { content() } }
+        // The page colour comes from the Surface each route sits on in MainActivity; without it Home and Profile draw on white in dark.
+        rule.setContent { AppTheme(dark = dark) { androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.surface, modifier = androidx.compose.ui.Modifier.fillMaxSize()) { content() } } }
         rule.mainClock.advanceTimeBy(900)
         rule.onRoot().captureRoboImage(File("$outDir/$name-${if (dark) "dark" else "light"}.png").path)
     }

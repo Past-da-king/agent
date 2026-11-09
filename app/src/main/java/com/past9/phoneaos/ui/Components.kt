@@ -20,7 +20,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -169,6 +171,14 @@ fun MorphIconButton(onClick: () -> Unit, modifier: Modifier = Modifier, size: Dp
     ) { content() }
 }
 
+/**
+ * Bottom padding a list needs so its last row clears the floating bar. [barHeight] is the bar as measured, with the
+ * system navigation inset and its own bottom margin inside it; [navInset] is that inset. The result is counted from the
+ * top of the inset, so a page that draws to the screen edge adds the inset on top. Never less than the old fixed 112dp.
+ */
+fun barClearance(barHeight: androidx.compose.ui.unit.Dp, navInset: androidx.compose.ui.unit.Dp): androidx.compose.ui.unit.Dp =
+    maxOf(112.dp, barHeight - navInset + 16.dp)
+
 /** Secondary screens: a large flexible top bar that collapses as you scroll, and a back arrow. */
 @Composable
 fun SubScreen(title: String, subtitle: String?, onBack: () -> Unit, actions: @Composable RowScope.() -> Unit = {}, fab: @Composable () -> Unit = {}, content: @Composable (PaddingValues) -> Unit) {
@@ -191,7 +201,9 @@ fun SubScreen(title: String, subtitle: String?, onBack: () -> Unit, actions: @Co
         },
         // The button sits at the content column's edge, not the far edge of a tablet.
         floatingActionButton = { Box(Modifier.padding(end = com.past9.phoneaos.ui.sidePad(16.dp) - 16.dp)) { fab() } },
-        content = content,
+        // Edge to edge: the window is not resized for the keyboard, so the page makes room for it here, once, for every
+        // secondary screen. The navigation bar inset is already in the padding the page gets, so it is not counted twice.
+        content = { pad -> Box(Modifier.fillMaxSize().consumeWindowInsets(PaddingValues(bottom = pad.calculateBottomPadding())).imePadding()) { content(pad) } },
     )
 }
 

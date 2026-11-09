@@ -140,6 +140,8 @@ fun LinkScreen(onBack: () -> Unit, onLinked: () -> Unit, offerText: String? = nu
         scope.launch { step = pair(context, offer, null, offer.code) }
     }
     LaunchedEffect(offerText) { if (confirmFirst == null) offerText?.let { scanned(it) } }
+    // System back is the arrow, for every caller: onboarding, a link that opened the app, and the add form in Linked devices.
+    androidx.activity.compose.BackHandler { onBack() }
     SubScreen("Use the agent on my computer", "Link this phone to a computer or server", onBack) { pad ->
         Column(Modifier.padding(pad).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             when (val s = step) {

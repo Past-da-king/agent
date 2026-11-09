@@ -97,7 +97,8 @@ class AuditShotsTest(private val width: Int, private val height: Int, private va
     private fun start(content: @Composable () -> Unit) {
         RuntimeEnvironment.setQualifiers("w${width}dp-h${height}dp-xxhdpi")
         rule.mainClock.autoAdvance = false
-        rule.setContent { AppTheme(dark = dark) { content() } }
+        // The page colour comes from the Surface each route sits on in MainActivity; without it Home and Profile draw on white in dark.
+        rule.setContent { AppTheme(dark = dark) { Surface(color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxSize()) { content() } } }
         rule.mainClock.advanceTimeBy(900)
     }
     private fun cap(name: String) {
