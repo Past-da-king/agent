@@ -95,6 +95,8 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // A finished turn asks this before it buzzes the phone (system/ChatOnScreen.kt, issue #15).
         com.past9.phoneaos.system.ChatOnScreen.resumed = true
+        // Back on the chat with a reply waiting in the shade: it has been read.
+        if (com.past9.phoneaos.system.ChatOnScreen.route == "chat") com.past9.phoneaos.system.AndroidPhone.clearReply(this)
         com.past9.phoneaos.triggers.Overnight.onAppOpen(this)
         // A memory pack pushed over adb (Android/data/<pkg>/files/memory-pack.json) is imported once, on open.
         val g = App.graph(this)

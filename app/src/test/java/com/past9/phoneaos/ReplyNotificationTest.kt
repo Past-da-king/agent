@@ -7,6 +7,10 @@ import android.app.NotificationManager
 import androidx.core.app.NotificationCompat
 import androidx.test.core.app.ApplicationProvider
 import com.past9.phoneaos.agent.AgentRuntime
+import com.past9.phoneaos.agent.Completion
+import com.past9.phoneaos.agent.LlmProvider
+import com.past9.phoneaos.agent.Msg
+import com.past9.phoneaos.agent.ToolSpec
 import com.past9.phoneaos.data.AppDb
 import com.past9.phoneaos.data.PowerMode
 import com.past9.phoneaos.data.Provider
@@ -64,7 +68,7 @@ class ReplyNotificationTest {
         settings.setMode(PowerMode.API_KEY); settings.setProvider(Provider.ANTHROPIC); settings.setApiKey(Provider.ANTHROPIC, "sk-test"); settings.setUserName("Sam")
     }
 
-    private fun runtime(provider: ScriptedProvider) =
+    private fun runtime(provider: LlmProvider) =
         AgentRuntime(app, db, settings, CoroutineScope(SupervisorJob() + Dispatchers.IO), phone, { provider })
 
     private fun posted(): List<Notification> = shadowOf(nm).allNotifications.toList()
@@ -158,4 +162,34 @@ class ReplyNotificationTest {
         AndroidPhone.clearReply(app)
         assertNull(reply())
     }
+
+    @Test fun aTurnThatFailedWithNobodyWatchingStillTellsHim() = runBlocking {
+        val rt = runtime(FailingProvider("the model went quiet"))
+        ChatOnScreen.resumed = false
+        rt.send("run the report")
+        withTimeout(20_000) { rt.awaitIdle() }
+
+        val n = reply()
+        assertNotNull("a failed turn is not silence", n)
+        assertTrue(said(n!!), said(n).contains("went quiet"))
+    }
+
+    @Test fun aPhoneWithNoAiSetUpSaysSoInsteadOfGoingQuiet() {
+        // Nothing can run, so no turn will ever end: the notice itself is the only thing that can tell him.
+        val rt = AgentRuntime(app, db, settings, CoroutineScope(SupervisorJob() + Dispatchers.IO), phone, providerFactory = { null })
+        ChatOnScreen.resumed = false
+        rt.send("hello")
+        val end = System.currentTimeMillis() + 10_000
+        while (reply() == null && System.currentTimeMillis() < end) Thread.sleep(50)
+        val n = reply()
+        assertNotNull("it says why nothing happened", n)
+        assertTrue(said(n!!), said(n).contains("API key"))
+    }
+}
+
+/** A model that fails the way a provider fails: the turn ends with the agent having said nothing at all. */
+private class FailingProvider(private val why: String) : LlmProvider {
+    override val name = "failing"
+    override suspend fun complete(system: String, messages: List<Msg>, tools: List<ToolSpec>, model: String, maxTokens: Int): Completion =
+        throw IllegalStateException(why)
 }

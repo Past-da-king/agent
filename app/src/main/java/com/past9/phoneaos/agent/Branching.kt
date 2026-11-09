@@ -70,6 +70,12 @@ class Line(val id: String, val seq: Long) {
 class Turn(val line: Line, val branchItem: Long? = null) {
     @Volatile var origin: Long? = null
     @Volatile var late: Boolean = false
+    /**
+     * The last thing the agent said in this turn: what the phone carries to the user when the turn ends and the chat
+     * is not in front of them (issue #15). Kept per turn, so the main chat and a side thread never hand over each
+     * other's words.
+     */
+    @Volatile var lastSaid: String? = null
 }
 
 /** A branch while this process runs it. The persisted record is the chat_items row `item` (kind "branch"). */
