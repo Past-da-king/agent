@@ -284,7 +284,7 @@ fun ChatScreen(
     // A card arriving or leaving at the foot of the chat stays in view while he follows the end.
     val cardKey = live?.cards?.joinToString { it.row + it.state }.orEmpty()
     LaunchedEffect(cardKey) {
-        if (phase != 2 || live == null || live.cards.isEmpty() || !stick || agentsFolded) return@LaunchedEffect
+        if (phase != 2 || live == null || live.cards.isEmpty() || !stick) return@LaunchedEffect
         list.animateScrollToItem(rows.size)
     }
     // Reading the latest counts as having read it; leaving and coming back re-lands him on what is new.
