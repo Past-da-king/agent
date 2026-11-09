@@ -25,6 +25,8 @@ data class LiveCard(
     val waiting: Boolean = false,
     /** When its group last moved (older computers: its start or end). */
     val activityAt: Long = 0L,
+    /** The helper that started this one (desktop 0.2.123 on); '' when none or when the computer is older. */
+    val parentHelper: String = "",
 ) {
     val working get() = state == "working"
     /** A project agent's own card (it stands for a project chat). */
@@ -58,7 +60,7 @@ object LiveCards {
             model = c.optString("model"), startedAt = c.optLong("startedAt"), endedAt = if (c.isNull("endedAt")) 0L else c.optLong("endedAt"),
             brief = c.optString("brief"), result = c.optString("result"), steps = steps,
             parentChat = c.optString("parentChat"), ownerId = owner.optString("id"), waiting = c.optBoolean("waiting"),
-            activityAt = c.optLong("activityAt"),
+            activityAt = c.optLong("activityAt"), parentHelper = if (c.isNull("parentHelper")) "" else c.optString("parentHelper"),
         )
     }
 

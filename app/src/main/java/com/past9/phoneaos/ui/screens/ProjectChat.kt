@@ -46,7 +46,6 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
     val project = session?.mentions?.collectAsStateWithLifecycle()?.value?.firstOrNull { it.name == name }
     // System back goes to the main thread too, the same as the arrow.
     androidx.activity.compose.BackHandler { onBack() }
-    val mine = remember(live, chat, project?.id, name) { live?.scoped(chat, project?.id.orEmpty(), name) }
     var rows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var loaded by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf("") }
@@ -99,15 +98,24 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
-            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.fillMaxWidth().statusBarsPadding()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to the chat") }
+                // The title opens the project switcher (ui/ProjectSwitcher.kt): the main chat, or another project's newest chat.
+                com.past9.phoneaos.ui.SwitcherTitle(chat, { c, n -> if (c == com.past9.phoneaos.remote.RunningList.MAIN) onBack() else live?.openChat?.invoke(c, n) }, Modifier.weight(1f)) {
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (project != null) ProjectIconTile(project.name, project.glyph, project.color, project.image, 32.dp, working = working)
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(if (working) "Working on it" else "Project chat on your computer", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if (working) "Working on it" else "Project chat on your computer", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                }
                 }
                 IconButton(onClick = { askNewChat = true }) { Icon(Icons.Rounded.RestartAlt, "New chat in this project") }
+            }
+            // The running list, the same one as the main chat's (all projects, this one first, one fold for the whole app).
+            if (live != null) com.past9.phoneaos.remote.RunningBlock(live, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 6.dp), current = chat, maxHeight = 260.dp)
             }
         },
         bottomBar = {
@@ -145,7 +153,6 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
                     else -> Text(row.optString("text"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.fillMaxWidth())
                 }
             }
-            if (mine != null && mine.cards.isNotEmpty()) item(key = "live-cards") { com.past9.phoneaos.remote.LiveCardList(mine) }
             if (working) item(key = "working") {
                 Row(verticalAlignment = Alignment.CenterVertically) { LoadingIndicator(Modifier.size(28.dp)); Spacer(Modifier.width(8.dp)); Text("Working…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }

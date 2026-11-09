@@ -190,7 +190,7 @@ fun LiveCardList(ui: LiveCardsUi, modifier: Modifier = Modifier, onCollapse: (()
         shown.flatten().forEach { c ->
             val sub = c.depth == 1
             androidx.compose.runtime.key(c.row) {
-                SwipeCard(c, onSwiped = { ui.dismiss(c) }, modifier = if (sub) Modifier.padding(start = 22.dp) else Modifier) {
+                LiveSwipeCard(c, onSwiped = { ui.dismiss(c) }, modifier = if (sub) Modifier.padding(start = 22.dp) else Modifier) {
                     HelperCard(ui.view(c), onClick = {
                         when (val t = tapOf(c)) {
                             is CardTap.Chat -> ui.openChat(t.chat, t.name)
@@ -218,7 +218,7 @@ fun LiveCardList(ui: LiveCardsUi, modifier: Modifier = Modifier, onCollapse: (()
  * leaves. Behind it, what the swipe does, in the theme's colours.
  */
 @Composable
-private fun SwipeCard(c: LiveCard, onSwiped: () -> Unit, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+internal fun LiveSwipeCard(c: LiveCard, onSwiped: () -> Unit, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val state = androidx.compose.material3.rememberSwipeToDismissBoxState()
     val cs = MaterialTheme.colorScheme
     val stops = c.working && !c.waiting
