@@ -135,7 +135,7 @@ fun MediaViewerHost() {
         Text(
             target.name,
             style = MaterialTheme.typography.bodySmall,
-            color = Color.White.copy(alpha = 0.72f),
+            color = com.past9.phoneaos.ui.theme.Media.onStage.copy(alpha = 0.72f),
             maxLines = 1,
             modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(16.dp),
         )

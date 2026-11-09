@@ -175,6 +175,8 @@ fun group(items: List<ChatItem>, hideHelpers: Boolean = false): List<Row_> {
     // A finished helper leaves the chat once the main agent has replied after it (its result lives in that reply).
     // If that reply never came (the turn failed), the helper stays so its result isn't lost.
     val lastAgentAt = items.filter { it.kind == "agent" }.maxOfOrNull { it.createdAt } ?: 0L
+    // A helper's own steps, so HelperLive sees the newest sign of life it has (its steps are what move while it works).
+    val stepsOf = items.filter { it.kind == "activity" && JSONObject(it.meta).has("helper") }.groupBy { JSONObject(it.meta).optLong("helper") }
     items.forEach {
         val m = JSONObject(it.meta)
         if (m.optBoolean("call") && (it.kind == "user" || it.kind == "agent")) { flush(); call += it; return@forEach }
@@ -184,7 +186,12 @@ fun group(items: List<ChatItem>, hideHelpers: Boolean = false): List<Row_> {
             it.kind == "activity" && m.has("branch") -> {} // shown inside its branch's sheet
             hideHelpers && it.kind == "helper" -> {} // shown as a live card at the foot of the chat
             // A helper only shows while it works: once it's done or stopped it leaves the chat; its result lives in the agent's reply.
-            it.kind == "helper" && m.optString("state", "working").let { st -> st == "stopped" || (st != "working" && lastAgentAt > m.optLong("endedAt", Long.MAX_VALUE)) } -> {}
+            it.kind == "helper" && run {
+                // A helper that says working but is not live any more (HelperLive) leaves once the agent has replied
+                // after it, exactly like one that finished: no ghost rows in the chat either.
+                val st = com.past9.phoneaos.ui.HelperLive.shownState(com.past9.phoneaos.ui.HelperView(it, stepsOf[it.id].orEmpty()))
+                st == "stopped" || (st != "working" && lastAgentAt > m.optLong("endedAt", Long.MAX_VALUE))
+            } -> {}
             it.kind == "activity" && m.optString("image").isEmpty() && m.optString("file").isEmpty() -> {
                 val routine = m.optString("by") == "routine"
                 if (buf.isNotEmpty() && bufRoutine != routine) flush()
@@ -825,6 +832,9 @@ val LocalCards = androidx.compose.runtime.staticCompositionLocalOf<List<com.past
 
 /** How a helper row reaches the runtime to stop its helper. */
 val LocalStopHelper = androidx.compose.runtime.staticCompositionLocalOf<((Long) -> Unit)?> { null }
+
+/** How a helper row he swipes away reaches the runtime: stopped if it runs, and gone from every list. */
+val LocalDismissHelper = androidx.compose.runtime.staticCompositionLocalOf<((Long) -> Unit)?> { null }
 
 @Composable
 fun QuestionCard(item: ChatItem, onAnswer: (Long, String) -> Unit, onBrowser: () -> Unit) {
