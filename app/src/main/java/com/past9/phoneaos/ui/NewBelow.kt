@@ -58,10 +58,10 @@ object NewBelow {
         return fresh.size
     }
 
-    fun countNewMessages(items: List<ChatItem>, seenIds: Set<Long>): Int = countNew(items, seenIds, { it.id }, ::isMessageRow)
+    fun countNewMessages(items: List<ChatItem>, seenIds: Set<Long>): Int = countNew(items, seenIds, { it.id }, { isMessageRow(it) })
 
     /** The same count over a project chat's rows (the computer's own ids). */
-    fun countNewRows(rows: List<JSONObject>, seenIds: Set<String>): Int = countNew(rows, seenIds, { it.optString("id") }, ::isMessageRow)
+    fun countNewRows(rows: List<JSONObject>, seenIds: Set<String>): Int = countNew(rows, seenIds, { it.optString("id") }, { isMessageRow(it) })
 
     /** Messages from anyone but him after [readMark], for the divider a chat opens at. */
     fun unreadAfter(items: List<ChatItem>, readMark: Long): List<ChatItem> =
