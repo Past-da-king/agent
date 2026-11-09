@@ -15,6 +15,8 @@ import com.past9.phoneaos.data.ChatItem
 import com.past9.phoneaos.data.MemoryRow
 import com.past9.phoneaos.data.TaskRow
 import com.past9.phoneaos.data.TriggerRow
+import com.past9.phoneaos.ui.HelperLive
+import com.past9.phoneaos.ui.HelperView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -24,7 +26,10 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import org.json.JSONArray
@@ -50,6 +55,8 @@ interface RemoteSink {
     fun answer(itemId: Long, option: String)
     fun stop()
     fun stopHelper(id: Long): Boolean
+    /** He swiped a helper row away: it is stopped if it still runs, and the phone's own copy reads ended (HelperLive.dismissed). */
+    fun dismissHelper(id: Long) {}
 }
 
 /** Where the link stands, for the strip at the top of the screen. */
@@ -114,6 +121,9 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         // One rule for the whole app (LiveCards.reconcile): the computer's newest list wins outright, and a card whose
         // brain is not answering is never counted as working.
         val live = rpc?.isOpen == true
+        // The card list IS the truth about what is working on that computer: a helper row in the phone's own copy that
+        // the list does not name is not working (HelperLive). No list at all: the rule falls back to the heartbeat.
+        if (list == null) HelperLive.cardsUnknown() else HelperLive.cardsSeen(list.map { c -> c.row })
         val next = LiveCards.reconcile(cardsRaw, list, live)
         cardsRaw = next
         // A swipe is forgotten once the computer no longer lists that card.
@@ -227,13 +237,16 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
             // give it longer, it is the one that answers when the first is gone.
             val h = RemoteApi(clientFor(b.fp)).health(u, if (b.id == top) 3_000 else 6_000)
             synchronized(seen) { if (h != null || !seen.containsKey(b.id)) seen[b.id] = h }
+            // A brain that answered its health check is a device that is there (HelperLive hides a helper whose computer is gone).
+            h?.let { HelperLive.heardFrom(b.id, b.name) }
             h != null && h.ready && (h.meshId.isBlank() || link.meshId.isBlank() || h.meshId == link.meshId)
         }
         // Brains after the chosen one were not asked this round: ask them too, so Settings shows every brain's state,
         // beside the move and not before it.
         scope.launch {
             val all = synchronized(seen) { HashMap(seen) }
-            for (b in brains) if (!all.containsKey(b.id)) all[b.id] = if (b.id in skip) null else b.urls.firstNotNullOfOrNull { u -> RemoteApi(clientFor(b.fp)).health(u, 2_000) }
+            for (b in brains) if (!all.containsKey(b.id)) all[b.id] = (if (b.id in skip) null else b.urls.firstNotNullOfOrNull { u -> RemoteApi(clientFor(b.fp)).health(u, 2_000) })
+                ?.also { HelperLive.heardFrom(b.id, b.name) }
             _health.value = all
         }
         val cur = current
@@ -413,6 +426,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         pauseJob?.cancel(); pauseJob = null
         // Back on screen: the working list and the Home count are re-read, so nothing that ended meanwhile is still shown.
         if (rpc?.isOpen == true) scope.launch { runCatching { loadCards() } }
+        // Back on screen: any helper row that ended (or stopped working) while the phone was away is put right now (HelperLive).
+        scope.launch { runCatching { reconcileHelpers() } }
         if (_state.value is LinkState.Paused) _state.value = LinkState.Connecting
         // Back on screen: try now rather than at the end of a backoff wait.
         if (rpc?.isOpen != true && nextTryAt > System.currentTimeMillis()) retry()
@@ -455,10 +470,13 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
 
     suspend fun call(method: String, args: List<Any?>, timeoutMs: Long = 30_000): Any? {
         val r = rpc ?: run { kick.trySend(Unit); throw RpcException("Not connected to a computer right now.") }
-        return try { r.call(method, args, timeoutMs) } catch (e: RpcException) {
+        val out = try { r.call(method, args, timeoutMs) } catch (e: RpcException) {
             if (!r.isOpen) kick.trySend(Unit)
             throw e
         }
+        // A computer that just answered is a computer that is there: the helpers it owns may count as working (HelperLive).
+        current?.brain?.let { b -> HelperLive.heardFrom(b.id, b.name) }
+        return out
     }
 
     /** Never a machine name in errors and status: which computer answers lives in Settings > Linked devices. Only a stand-in says its name, once. */
@@ -639,6 +657,15 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         return true
     }
 
+    override fun dismissHelper(id: Long) {
+        scope.launch {
+            val row = db.chat().get(id) ?: return@launch
+            // Still at work as far as the phone can tell: the swipe stops it on the computer too.
+            if (HelperLive.isLive(HelperView(row, emptyList()))) stopHelper(id)
+            reapLock.withLock { db.chat().get(id)?.let { cur -> HelperLive.dismissed(cur)?.let { runCatching { db.chat().update(it) } } } }
+        }
+    }
+
     // ---- edits made on the phone's screens, written on the computer ------------------------------
 
     fun upsert(entity: String, row: JSONObject, after: suspend (JSONObject) -> Unit = {}) = scope.launch {
@@ -692,6 +719,67 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         }
         publishStatus()
         chat.forEach { fetchMedia(it) }
+        // Rows that came back saying working, whose computer went away since: ended here too (HelperLive).
+        runCatching { reapStaleHelpers() }
+    }
+
+    private val reapLock = Mutex()
+
+    /**
+     * A mirrored helper row that still says working after its computer went away would say so for ever (9 Nov 2026:
+     * his Profile page listed 8 helpers that had died days before, "Rebuild: payroll 260 h"). The screens already
+     * count with HelperLive; this writes the phone's own copy back as ended, with the reason and when it was last
+     * seen, so the chat, the helper sheet and swipe-to-dismiss agree with what he sees. It never argues with
+     * replication: a live owner that sends a fresher row replaces this (putChat), and a row that is really moving is
+     * left alone. [only] reaps one row (a row that just arrived); null reaps every working row.
+     */
+    internal suspend fun reapStaleHelpers(only: Long? = null) = reapLock.withLock { reapLocked(only) }
+
+    private suspend fun reapLocked(only: Long?) {
+        val rows = if (only == null) db.chat().workingHelperRows()
+        else listOfNotNull(db.chat().get(only)).filter { it.kind == "helper" && JSONObject(it.meta).optString("state") == "working" }
+        if (rows.isEmpty()) return
+        val all = db.chat().all().first()
+        val steps = all.filter { it.kind == "activity" && JSONObject(it.meta).has("helper") }.groupBy { JSONObject(it.meta).optLong("helper") }
+        val plan = HelperLive.reapPlan(rows.map { HelperView(it, steps[it.id].orEmpty()) })
+        plan.forEach { r -> runCatching { db.chat().update(r.row.copy(meta = r.meta)) } }
+        if (plan.isNotEmpty()) android.util.Log.i("HelperLive", "wrote back ${plan.size} helper row(s) that had stopped working")
+    }
+
+    /**
+     * The phone's copy of a helper row froze at "working" when the run ended while the phone was away (9 Nov 2026: his
+     * Profile page listed "Rebuild: payroll 260 h" although the computer had written done nine days before). A linked
+     * device is only sent the recent rows, the helpers working now and the open cards, so an old helper that ended is
+     * never in a list again and its end never arrives. On every connect (and whenever the phone comes back on screen)
+     * each row the phone holds that still says working is put to the computer that owns it, by id (data.get), and
+     * takes its state, its result and when it ended. A row that computer no longer has is marked lost. A computer too
+     * old to answer data.get is left to the heartbeat rule.
+     */
+    internal suspend fun reconcileHelpers() = reapLock.withLock { reconcileLocked() }
+
+    private suspend fun reconcileLocked() {
+        val at = System.currentTimeMillis()
+        val rows = db.chat().workingHelperRows()
+        if (rows.isNotEmpty()) {
+            val all = db.chat().all().first()
+            val steps = all.filter { it.kind == "activity" && JSONObject(it.meta).has("helper") }.groupBy { JSONObject(it.meta).optLong("helper") }
+            var wrote = 0
+            for (row in rows.take(MAX_HELPER_CHECKS)) {
+                val rid = runCatching { JSONObject(row.meta).optString("rid") }.getOrDefault("")
+                if (rid.isBlank()) continue // made on this phone: its own runtime knows its state
+                val device = try {
+                    call("data.get", listOf("chat_item", rid), 10_000) as? JSONObject
+                } catch (e: Exception) {
+                    continue // an older computer, or the link went: the heartbeat rule still applies
+                }
+                // The row as the computer has it now, or null when it no longer has it at all.
+                val theirs = device?.let { d -> runCatching { JSONObject(d.optString("meta").ifBlank { "{}" }) }.getOrDefault(JSONObject()) }
+                val fixed = HelperLive.reconciled(HelperView(row, steps[row.id].orEmpty()), theirs, at) ?: continue
+                if (runCatching { db.chat().update(fixed) }.isSuccess) wrote++
+            }
+            if (wrote > 0) android.util.Log.i("HelperLive", "took the computer's word for $wrote helper row(s) that had ended")
+        }
+        reapLocked(null)
     }
 
     /** Delete rows of [table] that the computer no longer has. */
@@ -747,6 +835,11 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
                     projectRow(c)?.let { putChat(it) }
                 }
                 if (isCard) cardNotice(row, newCard)
+                // A helper row that arrived saying working: if it is already past the quiet window (or its computer is
+                // gone), it is written back as ended here rather than staying "working" for ever (HelperLive).
+                if (row.optString("kind") == "helper") {
+                    ids.localOrNull(row.optString("id"))?.let { lid -> runCatching { reapStaleHelpers(lid) } }
+                }
             }
             "project" -> if (!protocolV2) reloadSoon()
             "memory" -> if (RemoteRows.isGeneralMemory(row)) putMemory(RemoteRows.memory(row, ids)) else ids.localOrNull(row.optString("id"))?.let { db.memory().delete(it) }
@@ -901,7 +994,10 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         val raw = call("devices.list", listOf(), 20_000)
         val answering = (state.value as? LinkState.Connected)?.brain?.id
         val ready = health.value.filterValues { it?.ready == true }.keys
-        return MeshDevice.parse(raw, link.deviceId, answering, ready)
+        val list = MeshDevice.parse(raw, link.deviceId, answering, ready)
+        // What the link says about each device's last sign of life, so HelperLive knows which computers are gone.
+        list.forEach { d -> HelperLive.heardFrom(d.id, d.name, if (d.lastSeen > 0) d.lastSeen else 0L) }
+        return list
     }
 
     /** The web apps the computer's agent taught itself (read only here: they run there). */
@@ -962,6 +1058,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         if (!protocolV2) {
             // An older computer: the way it always was (its own list is bounded).
             runCatching { refreshBrains(pick) }; runCatching { loadCards() }; runCatching { reloadAll() }
+            // A helper row that ended while the phone was away takes the computer's word for it (HelperLive).
+            runCatching { reconcileHelpers() }
             return
         }
         if (!metered) runCatching { refreshBrains(pick) }
@@ -974,6 +1072,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         // The cards ARE the working list and the Home count: read on every link-up, mobile data or not (a few KB), so a
         // helper that ended while the phone was away, or before the computer restarted, can never stay on screen.
         runCatching { loadCards() }
+        // A helper row that ended while the phone was away takes the computer's word for it (HelperLive), on every link-up.
+        runCatching { reconcileHelpers() }
         if (!metered) runCatching { fullSync(initial = caught) }
     }
 
@@ -1358,6 +1458,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         const val EVT_CARDS = "agent:evt:helpers.cards"
         /** How long the cards stay with no link to the computer that sent them. */
         const val STALE_CARDS_MS = 20_000L
+        /** How many rows one connect asks the computer about (a handful in practice; the cap keeps the read small). */
+        const val MAX_HELPER_CHECKS = 40
         const val EVT_COMMAND = "device.command"
     }
 }
