@@ -36,24 +36,39 @@ data class ProfileActions(
     val onMemory: () -> Unit = {},
     val onRoutines: () -> Unit = {},
     val onStyle: () -> Unit = {},
+    /** Every goal and its steps (the Tasks screen). */
+    val onGoals: () -> Unit = {},
+    /** Open one of the computer's project chats. */
+    val onProjectChat: (chat: String, name: String) -> Unit = { _, _ -> },
+    /** Start the main chat fresh, then show it. */
+    val onNewMainChat: () -> Unit = {},
 )
+
+/** How many goals the profile shows before "See all". */
+const val PROFILE_GOALS_MAX = 3
+
+/** The goals the profile shows: the open ones, blocked first, at most [max]. The rest are behind "See all". */
+fun profileGoals(goals: List<GoalRow>, tasks: List<TaskRow>, max: Int = PROFILE_GOALS_MAX): List<GoalRow> =
+    goals.filter { it.status == "open" }.sortedByDescending { g -> tasks.any { it.goalId == g.id && it.status == "blocked" } }.take(max)
 
 /**
  * The agent's profile: what it is doing right now, what it thinks about you, and every goal it
  * is working on with the steps under each, blocked ones first.
  */
 @Composable
-fun ProfileScreen(home: HomeState, memories: List<MemoryRow>, actions: ProfileActions) {
+fun ProfileScreen(home: HomeState, memories: List<MemoryRow>, actions: ProfileActions, projects: ProfileProjects = rememberProfileProjects()) {
     val cs = MaterialTheme.colorScheme
     val goals = home.goals.filter { it.status == "open" }
-        .sortedByDescending { g -> home.tasks.any { it.goalId == g.id && it.status == "blocked" } }
+    val shownGoals = profileGoals(home.goals, home.tasks)
+    var newChat by remember { mutableStateOf(false) }
+    if (newChat) NewChatChoice(projects, actions, onDismiss = { newChat = false })
     val achieved = home.goals.count { it.status == "achieved" }
     val helpers = remember(home.items) { HelperView.from(home.items) }
     var openHelper by remember { mutableStateOf<Long?>(null) }
     val stop = LocalStopHelper.current
     helpers.firstOrNull { it.id == openHelper && it.working }?.let { h -> HelperSheet(h, stop, onDismiss = { openHelper = null }, now = home.now) }
     val about = (memories.filter { it.pinned } + memories.filter { !it.pinned }.sortedByDescending { it.updatedAt }).distinctBy { it.id }.take(6)
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = com.past9.phoneaos.ui.sidePad(0.dp), end = com.past9.phoneaos.ui.sidePad(0.dp), bottom = 48.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = com.past9.phoneaos.ui.sidePad(0.dp), end = com.past9.phoneaos.ui.sidePad(0.dp), bottom = 48.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
             Box(Modifier.fillMaxWidth().background(cs.primaryContainer, MaterialTheme.shapes.extraLarge.copy(topStart = androidx.compose.foundation.shape.CornerSize(0.dp), topEnd = androidx.compose.foundation.shape.CornerSize(0.dp)))) {
                 Column(Modifier.fillMaxWidth().statusBarsPadding().padding(bottom = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -76,9 +91,13 @@ fun ProfileScreen(home: HomeState, memories: List<MemoryRow>, actions: ProfileAc
                         Text("Talk to ${home.agentName.removePrefix("Your ").replaceFirstChar { it.uppercase() }.let { if (home.agentName == "Your agent") "your agent" else home.agentName }}")
                         Spacer(Modifier.width(8.dp)); Icon(Icons.AutoMirrored.Rounded.ArrowForward, null)
                     }
+                    TextButton(onClick = { newChat = true }, modifier = Modifier.heightIn(min = 48.dp), colors = ButtonDefaults.textButtonColors(contentColor = cs.onPrimaryContainer)) {
+                        Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("New chat")
+                    }
                 }
             }
         }
+        item { ProjectsSection(projects, actions, home.now) }
         item {
             val running = helpers.filter { it.working }
             SectionHeader("Helpers", if (running.isEmpty()) "None working right now. I hand bigger jobs to helpers." else "${running.size} working for you right now. Tap one to see it.",
@@ -103,11 +122,11 @@ fun ProfileScreen(home: HomeState, memories: List<MemoryRow>, actions: ProfileAc
                 }
             }
         }
-        item { SectionHeader("Goals I'm working on", if (goals.isEmpty()) "None right now${if (achieved > 0) " · $achieved achieved" else ""}" else "${goals.size} open${if (achieved > 0) " · $achieved achieved" else ""}, blocked first", Modifier.padding(horizontal = 20.dp, vertical = 2.dp)) }
+        item { SectionHeader("Goals I'm working on", if (goals.isEmpty()) "None right now${if (achieved > 0) " · $achieved achieved" else ""}" else "${if (goals.size > shownGoals.size) "${shownGoals.size} of ${goals.size} open" else "${goals.size} open"}${if (achieved > 0) " · $achieved achieved" else ""}, blocked first", Modifier.padding(horizontal = 20.dp, vertical = 2.dp)) { if (goals.isNotEmpty()) TextButton(onClick = actions.onGoals) { Text("See all") } } }
         if (goals.isEmpty()) item {
             Text("Give me something bigger, like \"plan my trip to Durban\", and I'll break it into steps and tick them off here.", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
         }
-        items(goals, key = { it.id }) { g -> GoalDetail(g, home.tasks.filter { it.goalId == g.id }) }
+        items(shownGoals, key = { it.id }) { g -> GoalDetail(g, home.tasks.filter { it.goalId == g.id }) }
     }
 }
 
