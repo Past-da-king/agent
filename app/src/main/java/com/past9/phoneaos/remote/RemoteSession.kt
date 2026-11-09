@@ -592,12 +592,16 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         val rid = ids.remote(itemId) ?: return
         scope.launch {
             val item = db.chat().get(itemId)
-            item?.let { db.chat().update(it.copy(meta = JSONObject(it.meta).put("answer", option).toString())) }
+            item?.let { db.chat().update(it.copy(meta = JSONObject(it.meta).put("answer", option).apply { remove("decideFailed") }.toString())) }
             runCatching {
                 val approval = item?.kind == "approval" || item?.let { runCatching { JSONObject(it.meta).optString("remoteKind") }.getOrNull() } == "approval"
                 if (approval) call("chat.decide", listOf(rid, if (isYes(option)) "approve" else "decline"))
                 else call("chat.answer", listOf(rid, option))
-            }.onFailure { notice("Couldn't answer on ${brainName()}: ${it.message}") }
+            }.onFailure { e ->
+                // It did not reach the computer: the card waits again with its buttons, and says so (ui/screens/ApprovalCard.kt).
+                db.chat().get(itemId)?.let { cur -> db.chat().update(cur.copy(meta = JSONObject(cur.meta).apply { remove("answer"); put("decideFailed", true) }.toString())) }
+                notice("Couldn't answer on ${brainName()}: ${e.message}")
+            }
         }
     }
 

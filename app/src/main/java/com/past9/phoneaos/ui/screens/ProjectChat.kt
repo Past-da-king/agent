@@ -94,7 +94,19 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
     }
     // Follow the newest message (not when a page above arrives).
     val newestKey = rows.lastOrNull()?.let { it.optString("id") + it.optString("text").length }
-    LaunchedEffect(newestKey) { if (rows.isNotEmpty()) { list.scrollToItem(list.layoutInfo.totalItemsCount.coerceAtLeast(1) - 1); delay(300); settled = true } }
+    // Only while he is at the end: reading older messages, he stays put and the pill says what came in (ui/NewBelow.kt).
+    val atBottom by remember { derivedStateOf { val li = list.layoutInfo; li.totalItemsCount == 0 || (li.visibleItemsInfo.lastOrNull()?.index ?: -1) >= li.totalItemsCount - 1 } }
+    var stick by remember(chat) { mutableStateOf(true) }
+    var seenIds by remember(chat) { mutableStateOf<Set<String>>(emptySet()) }
+    LaunchedEffect(list) { androidx.compose.runtime.snapshotFlow { list.isScrollInProgress }.filter { !it }.collect { if (settled) stick = atBottom } }
+    LaunchedEffect(stick, rows) { if (stick) seenIds = rows.mapTo(HashSet()) { it.optString("id") } }
+    LaunchedEffect(newestKey) {
+        if (rows.isNotEmpty()) {
+            if (stick || !settled || rows.last().optString("kind") == "user") { stick = true; list.scrollToItem(list.layoutInfo.totalItemsCount.coerceAtLeast(1) - 1) }
+            delay(300); settled = true
+        }
+    }
+    val newBelow = remember(rows, seenIds, stick) { if (stick) 0 else com.past9.phoneaos.ui.NewBelow.countNewRows(rows, seenIds) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -148,6 +160,11 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
             if (mine != null && mine.cards.isNotEmpty()) item(key = "live-cards") { com.past9.phoneaos.remote.LiveCardList(mine) }
             if (working) item(key = "working") {
                 Row(verticalAlignment = Alignment.CenterVertically) { LoadingIndicator(Modifier.size(28.dp)); Spacer(Modifier.width(8.dp)); Text("Working…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
+        }
+        Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.BottomCenter) {
+            com.past9.phoneaos.ui.NewBelowPill(settled && !atBottom && rows.isNotEmpty(), newBelow) {
+                stick = true; scope.launch { list.animateScrollToItem(list.layoutInfo.totalItemsCount.coerceAtLeast(1) - 1) }
             }
         }
     }
