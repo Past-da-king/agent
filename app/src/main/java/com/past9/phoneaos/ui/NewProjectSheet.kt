@@ -125,7 +125,7 @@ fun NewProjectSheet(
                 Surface(onClick = { if (!busy) draft = draft.copy(color = c) }, shape = CircleShape, color = androidx.compose.ui.graphics.Color.Transparent,
                     modifier = Modifier.size(48.dp).semantics { contentDescription = accent.label; selected = on; role = Role.RadioButton }) {
                     Box(contentAlignment = Alignment.Center) {
-                        Box(Modifier.size(36.dp).clip(CircleShape).background(accent.lP).then(if (on) Modifier.border(BorderStroke(3.dp, cs.onSurface), CircleShape) else Modifier), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(36.dp).clip(CircleShape).background(accent.lP).border(if (on) BorderStroke(3.dp, cs.onSurface) else BorderStroke(1.dp, cs.outlineVariant), CircleShape), contentAlignment = Alignment.Center) {
                             if (on) Icon(Icons.Rounded.Check, null, Modifier.size(18.dp), tint = accent.lOnP)
                         }
                     }
@@ -138,9 +138,11 @@ fun NewProjectSheet(
             ProjectsApi.GLYPHS.forEach { gl ->
                 val on = emoji.isEmpty() && draft.glyph == gl
                 Surface(onClick = { if (!busy) { emoji = ""; draft = draft.copy(glyph = gl) } }, shape = MaterialTheme.shapes.medium,
-                    color = if (on) cs.primaryContainer else androidx.compose.ui.graphics.Color.Transparent,
+                    color = if (on) cs.primaryContainer else cs.surfaceContainerHigh, contentColor = cs.onSurfaceVariant,
                     modifier = Modifier.size(48.dp).semantics { contentDescription = gl; selected = on; role = Role.RadioButton }) {
-                    Box(contentAlignment = Alignment.Center) { ProjectIconTile("", gl, if (on) draft.color else "graphite", "", 34.dp) }
+                    Box(contentAlignment = Alignment.Center) {
+                        if (on) ProjectIconTile("", gl, draft.color, "", 34.dp) else projectGlyphs[gl]?.let { Icon(it, null, Modifier.size(22.dp)) }
+                    }
                 }
             }
         }
