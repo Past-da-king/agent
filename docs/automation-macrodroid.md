@@ -1,0 +1,145 @@
+# Automation from other apps (MacroDroid, Tasker)
+
+Your Agent app has a small web server inside it. A macro in MacroDroid, a task in Tasker, or any other app on the
+phone can call it to fire one of your routines, or to send the agent an instruction and read the answer back.
+
+## The one limit
+
+It answers only on the phone itself, at 127.0.0.1, and only while the app is running.
+
+Nothing outside the phone can reach it. Not your computer, not your Wi-Fi, not the internet.
+
+If you force stop the app, or Android kills it, the address stops answering until you open the app again. A macro that
+runs while the app is closed gets a connection error. That is the honest behaviour of this first version: there is no
+background service holding the port open.
+
+## Turning it on
+
+1. Open the app, then Settings.
+2. Find "Automation from other apps" and tap it.
+3. The sheet shows the address and the token. Copy the token with the Copy token button.
+4. Turn on "Allow outside runs". While that switch is off, every call is refused.
+
+The address is normally http://127.0.0.1:47321. If another app already holds that port, the app moves to the next free
+one and the sheet shows the address it is really using.
+
+The token is made once per install. "New token" replaces it. Every macro that still holds the old token stops working
+straight away, so rotate it if it has been seen by someone else, then paste the new one into your macros.
+
+## MacroDroid
+
+### Fire a routine
+
+1. In your macro, add an action.
+2. Choose "HTTP Request".
+3. Method: POST
+4. URL: http://127.0.0.1:47321/v1/routines/run
+5. Content type: application/json
+6. Add a header.
+   - Name: Authorization
+   - Value: Bearer YOURTOKEN
+7. Body, as text:
+
+   {"name":"Morning brief"}
+
+   The name must match a routine in the app, exactly or close enough to be the only one. You can send {"id":12} instead
+   if you know the routine's id. An optional "context" string is passed to the agent as a note about why it is running.
+
+The reply comes back at once and looks like this:
+
+   {"runId":"run-1","status":"running"}
+
+The routine is now running in the background. The runId is how you collect the answer.
+
+### Read the result
+
+Add a later action to the same macro, after a short wait:
+
+1. Action: HTTP Request
+2. Method: GET
+3. URL: http://127.0.0.1:47321/v1/runs/RUNID
+
+Replace RUNID with the id from the first reply. To use it directly, MacroDroid lets you put the previous action's
+response into the URL as a variable, so the address becomes .../v1/runs/{http_response} or a JSON path to runId.
+
+The reply:
+
+   {"runId":"run-1","status":"done","result":"Slept 6 hours 40. Three meetings today.","needsApproval":false,"durationMs":18420}
+
+status is running, done or failed. result is the full text the agent produced, not a shortened preview. needsApproval is
+true when the run stopped because it wanted your approval for something.
+
+### Send an instruction
+
+Same shape, different route:
+
+1. Action: HTTP Request
+2. Method: POST
+3. URL: http://127.0.0.1:47321/v1/instruction
+4. Header: Authorization, value Bearer YOURTOKEN
+5. Body, as text:
+
+   {"text":"What is on my plate today?"}
+
+The reply is a run id again:
+
+   {"runId":"instruction-2","status":"running"}
+
+Then poll GET http://127.0.0.1:47321/v1/instructions/instruction-2 for the reply. Instructions take longer than
+routines because a real conversation runs: expect several seconds, sometimes a minute.
+
+## Tasker
+
+### Fire a routine
+
+1. Add an action, choose Net, then HTTP Request.
+2. Method: POST
+3. URL: http://127.0.0.1:47321/v1/routines/run
+4. Headers: Authorization:Bearer YOURTOKEN
+5. Body: {"name":"Morning brief"}
+6. Content Type: application/json
+7. Tick "Structure Output" if you want the JSON split into fields, so %http_data.runId is usable in the next action.
+
+Read the result with a second HTTP Request action, GET http://127.0.0.1:47321/v1/runs/%http_data.runId, and read the
+answer from %http_data or from %http_data.result with Structure Output on.
+
+### Send an instruction
+
+The same action, POST http://127.0.0.1:47321/v1/instruction, body {"text":"Summarise my unread email"}. Poll
+GET http://127.0.0.1:47321/v1/instructions/<id> for the reply.
+
+## Endpoints
+
+| Method | Path | Body | Comes back |
+| --- | --- | --- | --- |
+| GET | /v1/health | none | {"ok":true,"app":"Agent","server":"automation","allowed":true} |
+| GET | /v1/routines | none | every routine: id, name, enabled, schedule, lastResult |
+| POST | /v1/routines/run | {"name":"..."} or {"id":12}, optional "context" | {"runId":"run-1","status":"running"} |
+| GET | /v1/runs/{id} | none | runId, status, result, needsApproval, durationMs |
+| POST | /v1/instruction | {"text":"..."} | {"runId":"instruction-1","status":"running"} |
+| GET | /v1/instructions/{id} | none | runId, status, result, needsApproval, durationMs |
+
+Every route needs the header Authorization: Bearer YOURTOKEN. Without it, or with a wrong token, the answer is 401 and
+nothing runs. With the switch off, the answer is 403 and nothing runs. A body over 64 KB is refused with 413. An
+unknown route answers 404 and lists the routes it does know.
+
+## What is refused
+
+Anything that would send, spend or delete needs your approval, and nobody is there to give it while a macro runs. So
+the agent stops instead of guessing, and the run's result says so in a line you can match on:
+
+   Needs the user's approval and nobody is around. Not done.
+
+In the JSON that is the text of "result", and "needsApproval" is true. A macro can branch on either: if the reply
+contains "nobody is around", the thing it wanted did not happen.
+
+Reading is fine: checking mail, looking at calendar, searching memory, reading a page, all of that runs with nobody
+watching. Firing an agent that sends an email or deletes a file does not, whatever a macro asks for.
+
+## Security
+
+- Loopback only. The server binds 127.0.0.1, so no other device can connect, even on the same Wi-Fi.
+- One token per install. It lives in the app's encrypted settings and is only shown in Settings.
+- Rotate it if it leaks or if you pasted it somewhere you no longer trust. Old macros stop working at once.
+- The token is a password. Anyone who can run an app on this phone and read that token can fire your routines.
+- Turn the switch off when you are not using it. Nothing answers then.

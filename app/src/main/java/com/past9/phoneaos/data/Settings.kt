@@ -228,6 +228,32 @@ class SettingsStore(context: Context) {
         secrets.edit().putString("local_token", it).apply()
     }
 
+    // ---- automation from other apps (MacroDroid, Tasker: GitHub issue #18) ------------------------------------------
+
+    private fun freshAutomationToken() = java.util.UUID.randomUUID().toString().replace("-", "").also {
+        secrets.edit().putString("automation_token", it).apply()
+    }
+
+    /**
+     * The token an automation app sends as `Authorization: Bearer <token>`. Made on first read (32 hex characters) and
+     * never sent anywhere by us. Backed by encrypted preferences, so this is safe to call from a background thread.
+     */
+    fun automationToken(): String = secrets.getString("automation_token", null) ?: freshAutomationToken()
+
+    /** Replace the token with a fresh one and return it: every macro holding the old one stops working at once. */
+    fun rotateAutomationToken(): String = freshAutomationToken()
+
+    /** Whether apps outside this one may fire routines and send instructions. Off until the user turns it on. */
+    fun automationAllowed(): Boolean = extra("automation_allowed") == "true"
+
+    fun setAutomationAllowed(on: Boolean) = setExtra("automation_allowed", if (on) "true" else null)
+
+    /** The port the endpoint listens on; the next free one is used when something else holds it. */
+    fun automationPort(): Int = extra("automation_port")?.toIntOrNull()?.takeIf { it in 1024..65535 }
+        ?: com.past9.phoneaos.automation.AutomationServer.PORT
+
+    fun setAutomationPort(port: Int) = setExtra("automation_port", port.toString())
+
     /** Encrypted storage for other secrets (machine passwords and keys). */
     fun secret(key: String): String? = secrets.getString("s_$key", null)
     fun setSecret(key: String, value: String?) { secrets.edit().apply { if (value.isNullOrEmpty()) remove("s_$key") else putString("s_$key", value) }.apply() }

@@ -10,6 +10,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.past9.phoneaos.data.AgentSettings
 import com.past9.phoneaos.data.PowerMode
@@ -45,18 +49,34 @@ data class SettingsActions(
     val onLinked: () -> Unit = {},
     /** Settings > Recordings: the dictations kept on this phone. */
     val onRecordings: () -> Unit = {},
+    /** Settings > Automation from other apps (GitHub issue #18): the switch that lets a macro fire a routine. */
+    val setAutomationAllowed: (Boolean) -> Unit = {},
+    /** A fresh token; every macro holding the old one stops working. */
+    val rotateAutomationToken: () -> String = { "" },
     val linkedLine: String = "Use the agent on your computer from this phone",
+)
+
+/** Settings > Automation from other apps: the address MacroDroid and Tasker reach, the token, and the switch. */
+data class AutomationInfo(
+    val url: String = "http://127.0.0.1:47321",
+    val token: String = "",
+    val allowed: Boolean = false,
+    val running: Boolean = false,
 )
 
 data class RuntimeInfo(val available: Boolean, val installedBytes: Long, val signedIn: Boolean, val note: String)
 
 @Composable
-fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, actions: SettingsActions) {
+fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, actions: SettingsActions, automation: AutomationInfo = AutomationInfo()) {
     var edit by remember { mutableStateOf<Pair<String, (String) -> Unit>?>(null) }
     var editValue by remember { mutableStateOf("") }
     var confirmReset by remember { mutableStateOf(false) }
     var pickSub by remember { mutableStateOf(false) }
     var voiceSheet by remember { mutableStateOf(false) }
+    var automationSheet by remember { mutableStateOf(false) }
+    // The sheet keeps what it shows, so a flip of the switch or a new token lands without re-reading Settings.
+    var automationAllowedNow by remember { mutableStateOf(automation.allowed) }
+    var automationTokenNow by remember { mutableStateOf(automation.token) }
     if (voiceSheet) VoiceSheet(s, actions.voice) { voiceSheet = false }
     SubScreen("Settings", null, actions.onBack) { pad ->
         Column(Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(horizontal = com.past9.phoneaos.ui.sidePad(16.dp)).padding(bottom = 48.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -106,6 +126,15 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
                 if (wakeups) WakeupsSheet { wakeups = false }
                 Line(Icons.Rounded.BatteryChargingFull, "Battery: unrestricted", "Samsung and others stop background apps. Allow this one to keep working.") { actions.onBattery() }
             }
+            SectionHeader("Automation from other apps", "MacroDroid and Tasker can fire a routine", Modifier.padding(start = 4.dp, top = 12.dp))
+            AppCard(padding = PaddingValues(vertical = 4.dp)) {
+                Line(Icons.Rounded.Bolt, "Automation from other apps",
+                    when {
+                        !automation.running -> "Not listening yet: open the app once"
+                        automationAllowedNow -> "On \u00b7 ${automation.url}"
+                        else -> "Off \u00b7 tap to set it up"
+                    }) { automationSheet = true }
+            }
             SectionHeader("Linked devices", "Your computers and servers", Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 Line(Icons.Rounded.Devices, "Linked devices", actions.linkedLine) { actions.onLinked() }
@@ -130,6 +159,15 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
             com.past9.phoneaos.ui.SheetField(editValue, { editValue = it }, label, "", singleLine = true)
         }
     }
+    if (automationSheet) AutomationSheet(
+        info = automation,
+        token = automationTokenNow,
+        allowed = automationAllowedNow,
+        onAllowed = { on -> automationAllowedNow = on; actions.setAutomationAllowed(on) },
+        onToken = { t -> automationTokenNow = t },
+        onRotate = { automationTokenNow = actions.rotateAutomationToken() },
+        onDismiss = { automationSheet = false },
+    )
     if (confirmReset) com.past9.phoneaos.ui.ConfirmSheet(androidx.compose.material.icons.Icons.Rounded.DeleteForever, "This phone", "Reset everything?",
         "This deletes your keys, memory, tasks, routines and the conversation from this phone. It can't be undone.",
         confirm = "Reset everything", onConfirm = { confirmReset = false; actions.onResetAll() }, onDismiss = { confirmReset = false }, cancel = "Keep my stuff", destructive = true)
@@ -154,3 +192,72 @@ private fun Line(icon: ImageVector, title: String, value: String, danger: Boolea
 private fun helpersLine(roster: List<com.past9.phoneaos.data.HelperModel>, single: String): String =
     if (roster.isEmpty()) "$single · tap to add more and tag what each is good for"
     else "${roster.size} helper${if (roster.size > 1) "s" else ""}: " + roster.joinToString(", ") { it.name.substringAfterLast('/') }
+
+/**
+ * Settings > Automation from other apps (GitHub issue #18): the address, the token and the switch. A slide-up sheet,
+ * never a pop-up, built from the app's own pieces and tokens.
+ */
+@Composable
+private fun AutomationSheet(
+    info: AutomationInfo,
+    token: String,
+    allowed: Boolean,
+    onAllowed: (Boolean) -> Unit,
+    onToken: (String) -> Unit,
+    onRotate: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val clip = LocalClipboardManager.current
+    var confirmRotate by remember { mutableStateOf(false) }
+    com.past9.phoneaos.ui.AgentSheet(onDismiss) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 24.dp).navigationBarsPadding()) {
+            com.past9.phoneaos.ui.SheetHead(Icons.Rounded.Bolt, "Settings", "Automation from other apps",
+                "Let MacroDroid or Tasker fire one of your routines and read the result. It works only on this phone, and only while the app is running. Anything that needs your approval is refused.")
+            Spacer(Modifier.height(20.dp))
+            AppCard(padding = PaddingValues(vertical = 4.dp)) {
+                Line(Icons.Rounded.Link, "Address", info.url) {}
+                Line(Icons.Rounded.Key, "Token", "Copy it, then paste it into the macro as a Bearer token") {
+                    if (token.isNotBlank()) { clip.setText(AnnotatedString(token)); com.past9.phoneaos.ui.AppNotice.say("Token copied") }
+                }
+                if (token.isNotBlank()) SelectionContainer {
+                    Text(
+                        token,
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 4.dp),
+                    )
+                }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = {
+                        if (token.isNotBlank()) { clip.setText(AnnotatedString(token)); com.past9.phoneaos.ui.AppNotice.say("Token copied") }
+                    }, enabled = token.isNotBlank()) { Text("Copy token", style = MaterialTheme.typography.labelLarge) }
+                    OutlinedButton(onClick = { confirmRotate = true }) { Text("New token", style = MaterialTheme.typography.labelLarge) }
+                }
+                if (confirmRotate) Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp)) {
+                    Text("A new token stops every macro that holds the old one. You paste the new one in.",
+                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+                    Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { onRotate(); confirmRotate = false }) { Text("Make a new token", style = MaterialTheme.typography.labelLarge) }
+                        TextButton(onClick = { confirmRotate = false }) { Text("Keep it", style = MaterialTheme.typography.labelLarge) }
+                    }
+                }
+                Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Bolt, null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(16.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Allow outside runs", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            if (allowed) "A macro may fire a routine. Anything needing your approval is refused."
+                            else "Off: every call is refused.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(allowed, onAllowed)
+                }
+            }
+            Text("Only this phone can reach the address, and only while the app is running. If the app is force-stopped, open it once.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp))
+        }
+    }
+}

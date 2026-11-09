@@ -754,13 +754,22 @@ class MainActivity : ComponentActivity() {
                             else { g.settings.setSubKind(k); g.settings.setMode(PowerMode.SUBSCRIPTION); nav.navigate("sub") } },
                         onPinHome = { com.past9.phoneaos.system.Identity.pinNamedShortcut(this@MainActivity, settings.agentName, settings.mascot, settings.accent) },
                         onClearChat = { g.runtime.clearConversation() },
-                        onResetAll = { scope.launch { g.runtime.stop(); g.db.clearAllTables(); g.settings.resetAll() } },
+                        onResetAll = { scope.launch { g.automation.stop(); g.runtime.stop(); g.db.clearAllTables(); g.settings.resetAll() } },
                         onBattery = { runCatching { startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))) } },
                         onLinked = { nav.navigate("linked") },
                         onRecordings = { nav.navigate("recordings?box=main") },
                         linkedLine = com.past9.phoneaos.remote.RemoteHub.link.collectAsStateWithLifecycle().value.let { l ->
                             when { l == null -> "Use the agent on your computer from this phone"; l.on -> "Using ${l.nodeName.ifBlank { "your computer" }}"; else -> "Linked to ${l.nodeName.ifBlank { "a computer" }}, using this phone's own agent" } },
-                    ))
+                        setAutomationAllowed = { on -> g.settings.setAutomationAllowed(on) },
+                        rotateAutomationToken = { g.settings.rotateAutomationToken() },
+                    ),
+                        automation = com.past9.phoneaos.ui.screens.AutomationInfo(
+                            url = g.automation.url.ifBlank { "http://127.0.0.1:" + g.settings.automationPort() },
+                            token = g.settings.automationToken(),
+                            allowed = g.settings.automationAllowed(),
+                            running = g.automation.running,
+                        ),
+                    )
                 }
                 composable("linked") { com.past9.phoneaos.remote.LinkedDevicesScreen(onBack = { nav.popBackStack() }) }
                 composable("key") {

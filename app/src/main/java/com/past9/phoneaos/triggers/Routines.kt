@@ -164,6 +164,34 @@ object Routines {
             OneTimeWorkRequestBuilder<RoutineWorker>().setInputData(workDataOf("id" to id, "manual" to true, "context" to context_)).build())
     }
 
+    /** The application context, set once by the App graph, so an outside caller can fire without holding one. */
+    @Volatile
+    var appContext: Context? = null
+
+    /**
+     * Fire a routine for an outside caller (an automation app: GitHub issue #18), by id or by name, and return the id of
+     * a run whose FULL result it can collect from AutomationRuns. The routine goes through the same worker as [runNow].
+     *
+     * Null when nothing matches, or when two routines share the name: guessing which one the user meant is how the
+     * wrong thing runs. Nothing is changed when it returns null.
+     */
+    fun runTraced(nameOrId: String, source: String): String? {
+        val ctx = appContext ?: return null
+        val key = nameOrId.trim()
+        if (key.isEmpty()) return null
+        val all = runCatching { kotlinx.coroutines.runBlocking { App.graph(ctx).db.triggers().list() } }.getOrNull() ?: return null
+        val id = key.toLongOrNull()
+        val matches = if (id != null) all.filter { it.id == id } else all.filter { it.name.equals(key, ignoreCase = true) }
+        if (matches.size != 1) return null
+        val routine = matches.single()
+        val runId = com.past9.phoneaos.automation.AutomationRuns.start("run")
+        WorkManager.getInstance(ctx).enqueue(
+            OneTimeWorkRequestBuilder<RoutineWorker>()
+                .setInputData(workDataOf("id" to routine.id, "manual" to true, "context" to source.trim(), "run" to runId))
+                .build())
+        return runId
+    }
+
     fun cancel(context: Context, id: Long) {
         WorkManager.getInstance(context).cancelUniqueWork(name(id))
         com.past9.phoneaos.system.ExactAlarms.cancel(context, com.past9.phoneaos.system.ExactAlarms.ACTION_ROUTINE, id)
@@ -180,7 +208,22 @@ object Routines {
 }
 
 class RoutineWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    /** The text this run produced, handed to the automation app that asked for it (Routines.runTraced). */
+    private var payload: String? = null
+
     override suspend fun doWork(): Result {
+        // An outside caller (GitHub issue #18) asked for this run by name and is polling for the answer: it gets the
+        // whole text, not the 500 characters a routine row keeps.
+        val runId = inputData.getString("run")?.takeIf { it.isNotBlank() }
+        val result = try { runBody() } catch (t: Throwable) {
+            if (runId != null) com.past9.phoneaos.automation.AutomationRuns.fail(runId, "The routine stopped: ${t.message ?: t::class.java.simpleName}")
+            throw t
+        }
+        if (runId != null) com.past9.phoneaos.automation.AutomationRuns.finish(runId, payload ?: "It ran, and had nothing to report.")
+        return result
+    }
+
+    private suspend fun runBody(): Result {
         val g = App.graph(applicationContext)
         val id = inputData.getLong("id", -1)
         val t = g.db.triggers().get(id) ?: return Result.success()
@@ -190,16 +233,19 @@ class RoutineWorker(context: Context, params: WorkerParameters) : CoroutineWorke
 
         if (t.kind == com.past9.phoneaos.cards.CardScripts.KIND) {
             val out = runCatching { com.past9.phoneaos.cards.CardScripts.tick(applicationContext, t) }.getOrElse { "Refresh failed: ${it.message}" }
+            payload = out
             g.db.triggers().get(id)?.let { g.db.triggers().upsert(it.copy(lastRunAt = System.currentTimeMillis(), lastResult = out.take(300))) }
             return Result.success()
         }
         if (t.kind == Watchers.KIND) {
             val out = runCatching { Watchers.tick(applicationContext, t) }.getOrElse { "Check failed: ${it.message}" }
+            payload = out
             g.db.triggers().get(id)?.let { g.db.triggers().upsert(it.copy(lastRunAt = System.currentTimeMillis(), lastResult = out.take(300))) }
             return Result.success()
         }
         if (t.kind == Overnight.KIND) {
             val out = runCatching { Overnight.run(g, full = true) }.getOrElse { "Overnight run failed: ${it.message}" }
+            payload = out
             g.db.triggers().upsert(t.copy(lastRunAt = System.currentTimeMillis(), lastResult = out.take(500)))
             if (!manual) Routines.schedule(applicationContext, g.db.triggers().get(id)!!)
             return Result.success()
@@ -235,6 +281,7 @@ class RoutineWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         }
 
         val out = g.runtime.runBackground(t.name, prompt)
+        payload = out
         // Re-read: the row may have been edited while this ran.
         val now = g.db.triggers().get(id) ?: return Result.success()
         g.db.triggers().upsert(now.copy(lastRunAt = System.currentTimeMillis(), lastResult = out.take(500), cursor = cursor,
