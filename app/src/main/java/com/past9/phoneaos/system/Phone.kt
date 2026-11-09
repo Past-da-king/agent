@@ -39,7 +39,7 @@ class AndroidPhone(private val context: Context) : PhoneBridge {
         val me = androidx.core.app.Person.Builder().setName(st.userName.ifBlank { "You" }).setKey("me").build()
         val style = NotificationCompat.MessagingStyle(me).setConversationTitle(null).addMessage("$title\n$shown", System.currentTimeMillis(), agent)
         val b = NotificationCompat.Builder(context, CH_MESSAGES).setSmallIcon(Identity.statIcon(context, st.mascot)).setContentTitle(title)
-            .setColor(com.past9.phoneaos.ui.theme.accentOf(st.accent).lP.let { android.graphics.Color.rgb((it.red * 255).toInt(), (it.green * 255).toInt(), (it.blue * 255).toInt()) })
+            .setColor(tint(st.accent))
             .setContentText(shown).setStyle(style).setShortcutId("agent").setLargeIcon(Identity.avatar(context, st.mascot, st.accent, 192))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE).setAutoCancel(true).setContentIntent(open)
         val nid = questionItemId?.toInt() ?: (System.currentTimeMillis() % 100000).toInt()
@@ -50,6 +50,43 @@ class AndroidPhone(private val context: Context) : PhoneBridge {
         }
         runCatching { NotificationManagerCompat.from(context).notify(nid, b.build()) } // no permission yet: chat still has it
     }
+
+    /**
+     * A turn in the chat has ended and its last word was [reply]: tell the user, unless the chat is already in front of
+     * them. Issue #15 (5 Nov 2026): the "working" notification used to be the last thing the phone said. When a
+     * background turn finished, the work service stopped and took that notification with it, and the reply sat in a
+     * chat nobody had been told about. This is a notification of its own, on the messages channel and under its own id,
+     * so the working notification coming and going cannot take it; and it is always the same id, so an afternoon of
+     * work leaves one line behind (the newest reply), not twenty.
+     */
+    override fun replyPosted(reply: String) {
+        // The chat is open in front of them, or the agent chose to say nothing: there is nothing to tell.
+        val text = reply.replace(Regex("\\s+"), " ").trim()
+        if (text.isEmpty() || ChatOnScreen.showing()) return
+        // Android 13+ can refuse notifications at the permission, and older versions in the settings: either way the
+        // reply is in the chat, so nothing is posted and nothing is said about it.
+        val allowed = (Build.VERSION.SDK_INT < 33 || androidx.core.content.ContextCompat.checkSelfPermission(context,
+            android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) &&
+            NotificationManagerCompat.from(context).areNotificationsEnabled()
+        if (!allowed) return
+        val st = App.graph(context).settings.state.value
+        // Tapping it opens the conversation itself; reading it there takes it out of the shade.
+        val open = PendingIntent.getActivity(context, NID_REPLY,
+            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("open", "chat"), PendingIntent.FLAG_IMMUTABLE)
+        val shown = short(text)
+        val b = NotificationCompat.Builder(context, CH_MESSAGES).setSmallIcon(Identity.statIcon(context, st.mascot))
+            .setColor(tint(st.accent)).setContentTitle(st.agentName.ifBlank { "Your agent" }).setContentText(shown)
+            .setAutoCancel(true).setContentIntent(open)
+        Identity.asAgent(context, b, "", shown)
+        runCatching { NotificationManagerCompat.from(context).notify(NID_REPLY, b.build()) }
+    }
+
+    /** How much of a reply the shade shows: one paragraph's worth. The whole reply stays in the chat. */
+    private fun short(text: String, max: Int = 400) = if (text.length <= max) text else text.take(max).trimEnd() + "\u2026"
+
+    /** The user's accent colour, outside Compose. */
+    private fun tint(accent: String): Int = com.past9.phoneaos.ui.theme.accentOf(accent).lP
+        .let { android.graphics.Color.rgb((it.red * 255).toInt(), (it.green * 255).toInt(), (it.blue * 255).toInt()) }
 
     override fun openLink(url: String) {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -73,6 +110,11 @@ class AndroidPhone(private val context: Context) : PhoneBridge {
 
     companion object {
         const val CH_MESSAGES = "messages"; const val CH_WORK = "work"
+        /** The one notification a finished turn leaves behind. Far above every other id here, so it can never land on a
+         *  question card's (a chat row's id) or a reminder's (200_000 + id). */
+        const val NID_REPLY = 1_500_000_042
+        /** The chat is open: whatever waited in the shade for it has been read. */
+        fun clearReply(context: Context) { runCatching { NotificationManagerCompat.from(context).cancel(NID_REPLY) } }
         /** Work in this process right now (helpers, a chat turn, a routine) and how many of it is helpers. */
         @Volatile var activeCount = 0
         @Volatile var helperCount = 0

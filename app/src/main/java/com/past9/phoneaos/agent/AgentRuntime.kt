@@ -58,6 +58,11 @@ interface PhoneBridge {
     fun openLink(url: String)
     fun workStarted()
     fun workFinished()
+    /**
+     * A turn in the chat has just ended and the last thing the agent said was [reply]. The phone tells the user with a
+     * notification, unless the chat is already on screen in front of them (issue #15).
+     */
+    fun replyPosted(reply: String) {}
     /** How many helpers are working now: the "Agent is working" notification shows it, and a safety-net check runs while there are any. */
     fun helpersChanged(count: Int) {}
 }
@@ -737,7 +742,11 @@ class AgentRuntime(
             } catch (e: Exception) {
                 b.outcome = "failed"; b.error = friendlyError(e)
                 db.chat().insert(ChatItem(kind = "notice", text = "A side thread (\"${b.userText.take(50)}\") failed: ${friendlyError(e)}", meta = JSONObject().put("error", true).put("branch", b.item).toString()))
-            } finally { phone.workFinished() }
+            } finally {
+                // A side thread's answer tells them too, when they are not looking at the chat (issue #15).
+                turnEnded(b.turn)
+                phone.workFinished()
+            }
         }
     }
 
@@ -966,11 +975,15 @@ class AgentRuntime(
     private suspend fun runTurn(userText: String, images: List<String> = emptyList(), fromUser: Boolean = true, replyTo: Long? = null) {
         if (fromUser) { mainBudget.used = 0; mainLine.calls.used = 0 }
         mainTurn.origin = replyTo; mainTurn.late = !fromUser
+        mainTurn.lastSaid = null
         if (settings.state.value.mode == PowerMode.SUBSCRIPTION && subscription?.ready == true) return runSubscriptionTurn(userText, subscription!!, images)
         val provider = providerFactory(settings)
         if (provider == null) {
-            db.chat().insert(ChatItem(kind = "notice", text = if (settings.state.value.mode == PowerMode.SUBSCRIPTION)
-                "Your ${settings.state.value.subKind.label} subscription isn't set up on this phone yet. Open Settings to finish setup, or switch to an API key." else "Add an API key in Settings so I can start working."))
+            val why = if (settings.state.value.mode == PowerMode.SUBSCRIPTION)
+                "Your ${settings.state.value.subKind.label} subscription isn't set up on this phone yet. Open Settings to finish setup, or switch to an API key." else "Add an API key in Settings so I can start working."
+            db.chat().insert(ChatItem(kind = "notice", text = why))
+            // Nothing started, so nothing will end: tell them now instead of leaving the phone quiet (issue #15).
+            phone.replyPosted(why)
             return
         }
         _status.value = _status.value.copy(working = true, label = "Thinking")
@@ -998,9 +1011,13 @@ class AgentRuntime(
             // A correction closed this line: its work is kept, and the branch that replaced it carries on. That isn't "Stopped".
             if (mainLine.supersededBy == null) db.chat().insert(ChatItem(kind = "notice", text = "Stopped."))
         } catch (e: Exception) {
-            db.chat().insert(ChatItem(kind = "notice", text = friendlyError(e), meta = JSONObject().put("error", true).toString()))
+            // It failed while nobody was watching: the failure IS what this turn has to tell them (issue #15).
+            val why = friendlyError(e)
+            mainTurn.lastSaid = why
+            db.chat().insert(ChatItem(kind = "notice", text = why, meta = JSONObject().put("error", true).toString()))
         } finally {
             lineEnded(mainLine)
+            turnEnded(mainTurn)
             phone.workFinished()
         }
     }
@@ -1008,7 +1025,20 @@ class AgentRuntime(
     /** The main agent said something: into the chat, quoting what it answers. "HOLD" means it chose to say nothing yet. */
     private suspend fun say(text: String, turn: Turn = mainTurn) {
         if (isHold(text)) return
+        // What this turn has to tell the user when it ends (issue #15). Any line's turn: a side thread's answer is as
+        // much an answer as the main chat's.
+        if (text.isNotBlank()) turn.lastSaid = text
         db.chat().insert(ChatItem(kind = "agent", text = text, meta = JSONObject().apply { replyMeta(turn, this) }.toString()))
+    }
+
+    /**
+     * A turn on the main line is over: hand its last words to the phone, which tells the user if they were not watching.
+     * Called in the turn's own finally, so it happens whether the turn answered, failed or was stopped.
+     */
+    private fun turnEnded(turn: Turn = mainTurn) {
+        val reply = turn.lastSaid ?: return
+        turn.lastSaid = null
+        phone.replyPosted(reply)
     }
 
     /** What a reply carries so the chat can quote what it answers (and mark it as a branch's). */
@@ -1067,6 +1097,7 @@ class AgentRuntime(
     private suspend fun runSubscriptionTurn(userText: String, engine: SubscriptionEngine, images: List<String> = emptyList()) {
         _status.value = _status.value.copy(working = true, label = "Thinking"); phone.workStarted()
         mainLine.job = kotlin.coroutines.coroutineContext[Job]; mainLine.supersededBy = null
+        mainTurn.lastSaid = null
         try {
             var resume = settings.extra("claude_session")
             for (attempt in 1..2) {
@@ -1084,8 +1115,10 @@ class AgentRuntime(
         } catch (e: CancellationException) {
             if (mainLine.supersededBy == null) db.chat().insert(ChatItem(kind = "notice", text = "Stopped."))
         } catch (e: Exception) {
-            db.chat().insert(ChatItem(kind = "notice", text = friendlyError(e), meta = JSONObject().put("error", true).toString()))
-        } finally { lineEnded(mainLine); phone.workFinished() }
+            val why = friendlyError(e)
+            mainTurn.lastSaid = why
+            db.chat().insert(ChatItem(kind = "notice", text = why, meta = JSONObject().put("error", true).toString()))
+        } finally { lineEnded(mainLine); turnEnded(mainTurn); phone.workFinished() }
     }
 
     /** "API Error: 400 {...claude_code_version_too_old...}" -> a line the user can act on. */

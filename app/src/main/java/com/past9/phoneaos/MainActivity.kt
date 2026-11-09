@@ -93,6 +93,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // A finished turn asks this before it buzzes the phone (system/ChatOnScreen.kt, issue #15).
+        com.past9.phoneaos.system.ChatOnScreen.resumed = true
+        // Back on the chat with a reply waiting in the shade: it has been read.
+        if (com.past9.phoneaos.system.ChatOnScreen.route == "chat") com.past9.phoneaos.system.AndroidPhone.clearReply(this)
         com.past9.phoneaos.triggers.Overnight.onAppOpen(this)
         // A memory pack pushed over adb (Android/data/<pkg>/files/memory-pack.json) is imported once, on open.
         val g = App.graph(this)
@@ -104,6 +108,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
+        com.past9.phoneaos.system.ChatOnScreen.resumed = false
         // Leaving the screen: what is in the message boxes and the dictation's words are on disk now.
         com.past9.phoneaos.data.DraftStore.flush()
         com.past9.phoneaos.voice.Dictations.of(this).flush()
@@ -220,6 +225,12 @@ class MainActivity : ComponentActivity() {
         val notifRows by g.db.notifications().recent(200).collectAsStateWithLifecycle(emptyList())
         val backEntry by nav.currentBackStackEntryAsState()
         val route = backEntry?.destination?.route ?: "home"
+        // Is the chat itself on screen? A finished turn reads that before it notifies (issue #15), and a chat opened
+        // under a reply notification takes it away: it has been read.
+        LaunchedEffect(route) {
+            com.past9.phoneaos.system.ChatOnScreen.route = route
+            if (route == "chat") com.past9.phoneaos.system.AndroidPhone.clearReply(this@MainActivity)
+        }
         val scope = rememberCoroutineScope()
         val ops = remember(remote) { com.past9.phoneaos.remote.DataOps(applicationContext, remote, g.scope) }
         // The main chat's message box; a project or helper chat has its own (ui/Composer.kt). Its words live on disk, not

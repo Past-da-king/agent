@@ -15,6 +15,7 @@ import com.past9.phoneaos.data.ChatItem
 import com.past9.phoneaos.data.MemoryRow
 import com.past9.phoneaos.data.TaskRow
 import com.past9.phoneaos.data.TriggerRow
+import com.past9.phoneaos.system.ChatOnScreen
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -151,6 +152,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     }
     @Volatile private var current: Pick? = null
     @Volatile private var turnRunning = false
+    /** Issue #15: the newest thing the agent had said when this turn started, so only the turn's own words are announced. */
+    @Volatile private var replyAfterId = 0L
     @Volatile private var foreground = true
     @Volatile private var holdingWork = false
     private var loop: Job? = null
@@ -784,6 +787,58 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         }
     }
 
+    /**
+     * What the computer says about the main chat's turn.
+     *
+     * Issue #15 (5 Nov 2026): when the computer runs the turn, the phone's own turn never ends, so nothing was posted
+     * for the reply and the working notification simply went away with the computer's run. [tellReply] closes that.
+     */
+    internal fun runEvent(type: String) {
+        when (type) {
+            "run_started", "thinking" -> {
+                // The first word of a turn marks the line: what the chat already holds is not news.
+                if (!turnRunning) replyAfterId = newestAgentRowId()
+                turnRunning = true; publishStatus()
+            }
+            "run_finished" -> {
+                turnRunning = false; publishStatus()
+                scope.launch { runCatching { tellReply() } }
+                if (holdingWork && !foreground) scope.launch { delay(5_000); if (!foreground && !turnRunning) pause() }
+                // Between turns: a higher brain that came back takes over now.
+                kick.trySend(Unit)
+            }
+            // "chat_changed" says only that something changed: the rows themselves come as data.changed.
+            // Reloading here pulled the whole chat again on every helper step (hundreds of MB an hour).
+            "chat_changed" -> {}
+        }
+    }
+
+    /**
+     * A mirrored turn has ended: hand its last words to the same notification the phone's own turns use, unless the
+     * chat is the screen in front of them. The words are read from the mirrored chat, because they arrive on their own
+     * stream (data.changed) and can land a moment after the event that closed the turn.
+     */
+    internal suspend fun tellReply() {
+        if (ChatOnScreen.showing()) return
+        repeat(3) {
+            val words = newestAgentWords()
+            if (words != null) { App.graph(app).phone.replyPosted(words); return }
+            delay(600)
+        }
+    }
+
+    /** The newest thing the agent said since this turn started, if it said anything at all. */
+    private fun newestAgentWords(): String? = runCatching {
+        db.query("SELECT id, text FROM chat_items WHERE kind = 'agent' ORDER BY id DESC LIMIT 1", null).use { c ->
+            if (!c.moveToFirst() || c.getLong(0) <= replyAfterId) null else c.getString(1)?.takeIf { it.isNotBlank() }
+        }
+    }.getOrNull()
+
+    /** The newest agent row the phone holds right now: the line this turn's own words will sit above. */
+    private fun newestAgentRowId(): Long = runCatching {
+        db.query("SELECT MAX(id) FROM chat_items WHERE kind = 'agent'", null).use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else 0L }
+    }.getOrDefault(0L)
+
     private fun publishStatus() {
         _status.value = AgentStatus(working = turnRunning, label = if (turnRunning) "Working" else "")
     }
@@ -803,18 +858,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
                     if (projectOf.containsKey(chat)) scope.launch { runCatching { projectRow(chat)?.let { putChat(it) } } }
                     return
                 }
-                when (e.optString("type")) {
-                    "run_started", "thinking" -> { turnRunning = true; publishStatus() }
-                    "run_finished" -> {
-                        turnRunning = false; publishStatus()
-                        if (holdingWork && !foreground) scope.launch { delay(5_000); if (!foreground && !turnRunning) pause() }
-                        // Between turns: a higher brain that came back takes over now.
-                        kick.trySend(Unit)
-                    }
-                    // "chat_changed" says only that something changed: the rows themselves come as data.changed.
-                    // Reloading here pulled the whole chat again on every helper step (hundreds of MB an hour).
-                    "chat_changed" -> {}
-                }
+                runEvent(e.optString("type"))
             }
             EVT_CARDS -> onCards(payload)
             EVT_DEVICES -> current?.let { p -> scope.launch { runCatching { refreshBrains(p) } } }
