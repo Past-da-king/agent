@@ -14,6 +14,9 @@ import org.junit.Test
  * 12,000 characters: the first real call lost its transcript that way (it came last in a 20,000 character status).
  */
 class CallReportTest {
+    /** Where a top-level key starts in an answer (each is on its own line). */
+    private fun at(out: String, key: String) = out.indexOf("\n \"$key\": ")
+
     private fun transcript(lines: Int) = (1..lines).joinToString("\n") { i -> (if (i % 2 == 0) "Voice: " else "Them: ") + "line $i says \"something\" about the weekend, ngiyabonga kakhulu, and then a little more to make it long" }
 
     /** A half-hour call: every list as full as [CallDiag] lets it get, every detail as long as it may be. */
@@ -67,7 +70,7 @@ class CallReportTest {
         assertEquals(65, o.getJSONObject("voice").getInt("min_seconds")); assertEquals(1, o.getJSONObject("voice").getInt("end_call_refused"))
         assertTrue(o.getString("more").contains("part 'transcript'"))
         // The state comes first, the pointer to the parts last.
-        assertTrue(out.indexOf("\"state\"") < out.indexOf("\"call\"")); assertTrue(out.indexOf("\"ended\"") < out.indexOf("\"timeline_last\""))
+        assertTrue(at(out, "state") in 0 until at(out, "call")); assertTrue(at(out, "ended") in 1 until at(out, "timeline_last")); assertTrue(at(out, "more") > at(out, "timeline_last"))
     }
 
     @Test fun whileACallRunsTheSummarySaysItsPhase() {
@@ -134,8 +137,8 @@ class CallReportTest {
         val o = JSONObject(out)
         assertEquals("answered", o.getString("outcome")); assertEquals(65, o.getInt("min_seconds"))
         // The transcript and the ended block come before the lists that grow with the call.
-        val t = out.indexOf("\"transcript\""); val e = out.indexOf("\"ended\""); val tl = out.indexOf("\"timeline\""); val c = out.indexOf("\"counters\"")
-        assertTrue(t in 1 until e); assertTrue(e < tl); assertTrue(tl < c); assertTrue(out.indexOf("\"trimmed\"") in e until tl)
+        val t = at(out, "transcript"); val e = at(out, "ended"); val tl = at(out, "timeline"); val c = at(out, "counters")
+        assertTrue(t in 1 until e); assertTrue(e < tl); assertTrue(tl < c); assertTrue(at(out, "trimmed") in e until tl)
         // Its beginning and its end are there, and it says how much is missing and how to get it.
         val words = result().getString("transcript")
         assertTrue(o.getString("transcript").startsWith(words.take(200))); assertTrue(o.getString("transcript").endsWith(words.takeLast(200))); assertTrue(o.getString("transcript").contains("characters left out here"))

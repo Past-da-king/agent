@@ -63,14 +63,17 @@ While no call voice runs, a request for the listed microphone by its id reaches 
 
 ### A whole call in one step: `place_whatsapp_call`
 
-`place_whatsapp_call {chat, goal, max_minutes?, contact?, wait?}`
+`place_whatsapp_call {chat, goal, max_minutes?, min_seconds?, contact?, wait?}`
 
 - `chat`: the chat's exact name, the number with its country code, or the chat id. A part of a name works when only
   one chat matches. Groups are refused.
 - `goal`: why the agent calls and what to say or find out.
 - `max_minutes`: hang up after this many minutes of conversation. Default 5, at most 30.
+- `min_seconds`: the conversation must last at least this long after the answer. Default 0. See "A minimum length"
+  below.
 - `contact`: what to call the person when the chat's name is not what they are called.
-- `wait`: `false` returns at once; `browser_call_voice` with action `status` then shows the phase and the result.
+- `wait`: `false` returns at once; `browser_call_voice` with action `status` then shows the phase and the result
+  (`state` and `call` in the summary, the words under part `transcript`).
 
 What it does: opens WhatsApp Web when the browser is elsewhere, checks that it is signed in and that the call voice
 is in the page (loading the page again once when it is not), opens the chat, checks that the chat has a voice call
@@ -83,15 +86,59 @@ It returns JSON:
 ```json
 {"outcome": "answered | no_answer | failed", "reason": "...", "contact": "...", "chat": "<chat id>",
  "rang_seconds": 8, "duration_seconds": 22, "ended_by": "agent | max_minutes | other side or dropped | page",
- "transcript": "Them: ...\nVoice: ...", "saved_to_chat": true, "calling_offered": true,
- "test_account": "...", "whatsapp": {"...": "the call as WhatsApp reported it"}}
+ "min_seconds": 0, "transcript": "Them: ...\nVoice: ...", "transcript_chars": 123, "saved_to_chat": true,
+ "ended": {"...": "who or what ended it, see below"}, "calling_offered": true, "test_account": "...",
+ "whatsapp": {"...": "the call as WhatsApp reported it"}, "trimmed": {"...": "only when something was cut"},
+ "timeline": [], "counters": [], "page_errors": []}
 ```
+
+The keys come in this order, and the whole answer is never longer than 10,000 characters (see "Answers that fit").
 
 When the chat has no voice call button it places no call and says why: WhatsApp does not offer calling in WhatsApp
 Web to the account, and whether the test-account switch is off or the signed-in number is not a marked one.
 
 The call runs on the app's own scope. If the one who asked stops waiting (a linked computer waits a few minutes at
 most), the call still ends properly and `browser_call_voice status` has the result under `call`.
+
+### A minimum length: `min_seconds` (0.15.36)
+
+In the first real call the goal asked for at least 65 seconds of conversation and the voice called `end_call` at
+42.4 seconds. A goal is only words to the voice; `min_seconds` is a rule the app keeps. It is on
+`place_whatsapp_call` and on `browser_call_voice` `start`, and it is 0 (no minimum) unless asked for.
+
+- The voice is told the minimum before the call, in its instructions.
+- If it calls `end_call` before `min_seconds` have passed since the answer, the call is not ended. The voice gets
+  back `{ok: false, call_continues: true, seconds_left: N}` and is told to keep the conversation going naturally
+  and not to say goodbye yet. The timeline keeps an `end_call_refused` event with the second it was asked and how
+  long was left; `ended.voice` has `end_call_refused` (how often) and `min_seconds`, and `ended.notes` says it.
+- Once the minimum has passed, a voice that was refused is told so once (`min_seconds_reached` in the timeline) and
+  its next `end_call` is carried out as always.
+- A hangup on the other side ends the call at once, whatever the minimum.
+- `max_minutes` wins: a minimum longer than the limit is the limit.
+- Before anyone has answered, the whole minimum is still to come.
+
+### Answers that fit (0.15.36)
+
+A phone tool's answer that travels to a linked computer is cut there at 12,000 characters (the computer's device
+tools, `MAX_TEXT_TO_AGENT`). The whole status of the first real call was longer, and the transcript came last, so
+it was lost. Now no answer of `browser_call_voice` or `place_whatsapp_call` is longer than 10,000 characters, by
+construction (`browser/CallReport.kt`, `CallReportTest`):
+
+- `browser_call_voice` `status` with nothing else is a summary of at most 5,500 characters: `state`, `call` (the
+  phase while it runs, then outcome, reason, contact, durations, `ended_by`), `ended` (by, detail, seconds after
+  the answer, signs, notes, the page and voice blocks), `duration_seconds`, `voice` (running, ready, the minimum
+  and what is left of it, frames heard and sent), `transcript_chars`, `transcript_lines`, `transcript_last`,
+  `timeline_events` with `timeline_last` (the last six), `counters_total`, `page_errors` (a count) and `more`.
+- `status` with `part` gives one whole part: `transcript`, `timeline`, `counters`, `errors`, `ended` or `page`
+  (the page's own state and its last log lines). A part that does not fit comes in pages: each says `from`, `to`,
+  the total, `more` and `next`; ask again with `from` set to `next` until `more` is false. `more` and `next` come
+  before the content.
+- The result of `place_whatsapp_call` has the outcome, the transcript and `ended` first. A transcript over 5,000
+  characters is given as its beginning and its end with a line saying how much is left out between them. The
+  timeline is cut to the events that explain the call (the answer, the end, a refused `end_call`, failures) and
+  the newest of the rest, the counters to the first and last lines, the page errors to the last few. `trimmed`
+  says what was cut and how to fetch each whole.
+- Anything else these tools say (the words `stop` hands back, for one) goes through the same cap.
 
 Hanging up is made sure of: the page's own End call button, the same again, and as the last resort the page is left
 (`about:blank`), which takes the call down with it.
@@ -119,7 +166,9 @@ buttons. The app can switch it on inside the open page, but:
 How it decides:
 
 - You type the test account's number, with its country code. The switch cannot be turned on without one, and
-  turning it on asks you to confirm the number, in the sheet itself.
+  turning it on asks you to confirm the number, in the sheet itself. This sheet is the one supported way to set it;
+  an agent cannot (the phone tools have no way to), and anything typed into the WhatsApp Web page by hand is not a
+  setting.
 - It is applied only by `place_whatsapp_call`, at the moment of the call, and only when the number signed in to
   WhatsApp Web is exactly a number you marked. The page script checks the signed-in number again itself.
 - Any other account, a switch that is off, or a page that does not say who is signed in: nothing is changed, and
@@ -134,6 +183,22 @@ typed into the page by hand. In unit tests and against made-up pages in Node: th
 (`node tools/check-whatsapp-call-scripts.mjs`), the call from start to end in every outcome, the test-account rule
 and the sheet. Not yet proven on a phone: 0.15.34 itself, so the answers as shipped in the app,
 `place_whatsapp_call` end to end, hanging up by the End call button, and the switch taking effect at once.
+
+### These settings and an update (0.15.36)
+
+After the update from 0.15.33 to 0.15.35 the test account switch was off and had no number, and it looked as if
+the update had lost it. It had not: 0.15.33 has no such switch (it came with 0.15.34, which was never installed),
+and the calls made on 0.15.33 had calling forced by hand inside the page, which is page memory and gone on a
+reload. Nothing was ever stored, so there was nothing to carry over.
+
+What is stored, and where: all four browser settings live in the app's `settings` preferences file, under keys
+that have not changed since they were added: `x_isolated_origins` and `x_call_bridge_on` (0.15.33),
+`x_call_test_on` and `x_call_test_numbers` (0.15.34). There is no migration, nothing is cleared when the version
+changes, and opening the store writes nothing. `SettingsCarryOverTest` writes the file the way 0.15.33 and 0.15.35
+did and reads it with today's code, and fails if a key is renamed.
+
+One real gap was closed: these settings were written in the background, so a switch turned on a moment before the
+app was killed (an update over adb kills it) could be lost. They are now on disk before the tap returns.
 
 ### Why a call ended: the call's own story (0.15.35)
 
@@ -160,17 +225,28 @@ So every call now explains itself. `browser_call_voice status` and the result of
     cannot be told apart.
   - `whatsapp` (the fields of `lastEndedCall`, with `result` as a name), `voice` (failed, closed with its close
     code, end_call asked), `microphone` (the state of its audio context, tracks handed out, ended, muted, and how
-    often it had to be started again), `page` (answering, hidden, errors), `seconds_after_answer`.
+    often it had to be started again), `page` (answering, `hidden_now`, `was_hidden`, `hidden_seconds`, errors),
+    `seconds_after_answer`.
   - `signs`: what looked wrong on our own side, in plain words, whatever the verdict: the voice failed or its
     connection closed (with the close code), a microphone track ended, the microphone's audio context was not
-    running or had to be started again, the page loaded again, stopped answering or was hidden, nothing arrived or
-    nothing was sent in the last counter lines. An empty list with `unknown` or `remote_hangup` points away from us.
+    running or had to be started again, the page loaded again or stopped answering, nothing arrived or nothing was
+    sent in the last counter lines, sound stopped while the page was hidden. An empty list with `unknown` or
+    `remote_hangup` points away from us.
+  - `notes` (0.15.36): things worth knowing that are not faults. A page that was hidden while sound kept flowing
+    is one. In the first real call the person answered on the same phone, so WhatsApp's own call screen covered
+    the browser; 0.15.35 listed "The page was hidden during the call." under `signs` while `page.hidden` said
+    false (it was visible again by the end). Now `page` says both things apart (`hidden_now`, and `was_hidden`
+    with `hidden_seconds`), the note says for how long and whether it is hidden now, and it only becomes a sign
+    when counter lines taken while it was hidden, after the answer, show no sound (no sound frames in the page, or
+    nothing sent, or nothing received). The page script counts the hidden time itself (`page_hidden` and
+    `page_visible` in the timeline) and does nothing else about it.
 - `timeline`: the events that matter, each with `s`, the seconds since the answer (negative before it): voice
   armed, ready, reconnecting, closed; first words heard and spoken; `wa_connected`, `wa_not_connected`,
   `wa_ended`; each WhatsApp call event by name (`wa_event`); microphone and track changes; page loaded again.
 - `counters`: one line every 5 seconds: voice chunks played into the microphone, frames heard, bytes sent and
   received on the busiest of the call's connections (`getStats`), how many connections are open, the ICE state,
-  the microphone's state, whether the page is hidden. A long call keeps its first minute and its last four.
+  the microphone's state, whether the page is hidden and for how many seconds of the line (`hidden_seconds`).
+  Lines are timed from the answer like the timeline. A long call keeps its first minute and its last four.
 - `page_errors`: the page's last 20 errors, with their second.
 
 The story stays readable after the call, until the next call voice starts.
@@ -199,7 +275,7 @@ What else changed so that a call is not lost on our side:
 
 ## Tests
 
-- `IsolatedOriginsTest`, `BrowserSheetTest`, `PcmTest`, `CallBridgeTest`, `CallDiagTest`, `WhatsAppCallTest` run on any machine: `./gradlew :app:testDebugUnitTest`.
+- `IsolatedOriginsTest`, `BrowserSheetTest`, `PcmTest`, `CallBridgeTest`, `CallDiagTest`, `WhatsAppCallTest`, `CallReportTest`, `SettingsCarryOverTest` run on any machine: `./gradlew :app:testDebugUnitTest`.
 - The page scripts run in Node: `node tools/check-call-bridge-hooks.mjs` and `node tools/check-whatsapp-call-scripts.mjs`.
 - `CrossOriginIsolationDeviceTest` needs a real WebView, so a phone or an emulator:
   `./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.past9.phoneaos.CrossOriginIsolationDeviceTest`

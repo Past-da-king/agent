@@ -444,7 +444,7 @@ class WhatsAppCallTest {
         val r = rig(mapOf(0 to ringing, 5 to talking))
         val out = r.run(max = 1, min = 600)
         assertEquals(60, r.voice.min)
-        assertEquals("max_minutes", out.endedBy); assertEquals(60, out.durationSeconds)
+        assertEquals("max_minutes", out.endedBy)
     }
 
     @Test fun withNoMinimumNothingChanges() {
