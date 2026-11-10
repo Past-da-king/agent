@@ -440,7 +440,7 @@ class ScreenSession(
         helper()?.let { return it }
         val p = ask(op("ping"))
         buildString {
-            append("The background screen is ready (Android ${p.optInt("sdk")}).")
+            append("The background screen is ready.")
             if (p.optInt("display") == 0 || !s.open) append(" Nothing is open on it.")
             else append(" ${s.app.ifBlank { "An app" }} is open on it (${p.optInt("width")}x${p.optInt("height")})${if (s.owner.isNotBlank()) ", used by ${s.owner}" else ""}.")
             if (s.stopped) append(" The user has stopped it.")

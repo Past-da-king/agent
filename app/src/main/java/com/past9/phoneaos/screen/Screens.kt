@@ -205,6 +205,8 @@ object Screens {
  */
 class ScreenService : Service() {
     private var jobs: Job? = null
+    /** A small live picture of the hidden screen, shown on the notification while a job runs. */
+    @Volatile private var thumb: android.graphics.Bitmap? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -226,6 +228,13 @@ class ScreenService : Service() {
         val b = androidx.core.app.NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(com.past9.phoneaos.system.Identity.statIcon(this, st.mascot)).setContentTitle(title).setContentText(text)
             .setOngoing(true).setOnlyAlertOnce(true).setContentIntent(open)
+        thumb?.let { b.setLargeIcon(it) }
+        // A live update where the phone has them (Android 16: the status chip and Samsung's Now Bar): asked for by the
+        // platform's own keys, so nothing here depends on the library version. Where it is not promoted, this is a plain ongoing notification.
+        if (!s.stopped) b.addExtras(android.os.Bundle().apply {
+            putBoolean("android.requestPromotedOngoing", true)
+            putString("android.shortCriticalText", s.app.ifBlank { "Working" }.take(7))
+        })
         if (s.stopped) b.addAction(0, "Allow again", act(ALLOW, 2)) else b.addAction(0, "Stop", act(STOP, 1))
         b.addAction(0, "Watch", open)
         return b.build()
@@ -239,6 +248,19 @@ class ScreenService : Service() {
         val session = Screens.session(this)
         jobs = CoroutineScope(Dispatchers.Main).launch {
             launch { session.state.collectLatest { runCatching { nm.notify(ID, build()) } } }
+            // The live picture: gently, every two seconds, only while something is open and only when it changed.
+            launch {
+                val link = Screens.preview(this@ScreenService)
+                var seq = -1L
+                while (true) {
+                    delay(2_000)
+                    if (!session.state.value.open) continue
+                    val m = runCatching { link.call(op("frame").put("max", 160).put("q", 50).put("after", seq), 3_000) }.getOrNull() ?: continue
+                    val bin = m.bin ?: continue
+                    seq = m.json.optLong("seq")
+                    android.graphics.BitmapFactory.decodeByteArray(bin, 0, bin.size)?.let { thumb = it; runCatching { nm.notify(ID, build()) } }
+                }
+            }
             // Battery and privacy: an app left open on a display nobody watches is closed after a few idle minutes.
             while (true) {
                 delay(30_000)

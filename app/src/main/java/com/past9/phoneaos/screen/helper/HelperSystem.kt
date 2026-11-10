@@ -54,16 +54,17 @@ internal object Sys {
     /** A Context good enough to make a DisplayManager, without being an app. */
     val systemContext: Context by lazy {
         val at = Class.forName("android.app.ActivityThread")
+        // The system's own way first: on Android 14 and later a hand-made ActivityThread has no configuration
+        // controller, and making a display with it fails (seen on a Galaxy A35, Android 16).
         val thread = runCatching { at.getMethod("currentActivityThread").invoke(null) }.getOrNull()
-            ?: runCatching {
-                // Make the object without running the system server's start-up (some phones crash in systemMain).
+            ?: runCatching { at.getMethod("systemMain").invoke(null) }.getOrNull()
+            ?: run {
                 val ctor = at.getDeclaredConstructor(); ctor.isAccessible = true
                 val t = ctor.newInstance()
                 at.getDeclaredField("sCurrentActivityThread").apply { isAccessible = true }.set(null, t)
                 runCatching { at.getDeclaredField("mSystemThread").apply { isAccessible = true }.setBoolean(t, true) }
                 t
-            }.getOrNull()
-            ?: at.getMethod("systemMain").invoke(null)
+            }
         at.getMethod("getSystemContext").invoke(thread) as Context
     }
 
