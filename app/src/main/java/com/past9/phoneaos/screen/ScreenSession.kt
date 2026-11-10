@@ -144,7 +144,7 @@ class ScreenSession(
     }
 
     private fun forget() {
-        displayId = 0; elements = emptyList(); borrowed.clear()
+        displayId = 0; elements = emptyList(); borrowed.clear(); jobOwner = ""; ownerLabel = ""
         run?.finish(); run = null; secrets.clear()
         if (_state.value.open) { _state.value = _state.value.copy(open = false, pkg = "", app = "", step = "", takenOver = false, steps = 0, shown = 0); active(false) }
     }
@@ -153,9 +153,11 @@ class ScreenSession(
     private fun blocked(ctx: ToolContext, needOpen: Boolean): String? {
         val s = _state.value
         if (ctx.agentLabel == "you") return null
+        // A Stop holds for two minutes after the display closed, then the person's next request can use it again.
+        if (s.stopped && !s.open && now() - stoppedAt > 120_000) { _state.value = s.copy(stopped = false); return null }
         if (s.stopped) return STOPPED
         if (s.takenOver) return TAKEN
-        if (s.open && s.owner.isNotBlank() && s.owner != "you" && s.owner != ctx.agentLabel && now() - lastUsed < 90_000)
+        if (s.open && s.owner.isNotBlank() && s.owner != "you" && ownerLabel.isNotBlank() && ownerLabel != ctx.agentLabel && now() - lastUsed < BUSY_MS)
             return "The background screen is in use by ${if (s.owner == "main") "the main agent" else "\"${s.owner}\""} right now. Wait a little and try again."
         if (needOpen && !s.open) return CLOSED
         return null
@@ -163,7 +165,7 @@ class ScreenSession(
 
     private fun touch(owner: String, step: String) {
         lastUsed = now()
-        _state.value = _state.value.copy(owner = owner, step = step)
+        _state.value = _state.value.copy(owner = jobOwner.ifBlank { owner }, step = step)
     }
 
     // ---- the run: every step written down, with a picture ----
@@ -444,13 +446,21 @@ class ScreenSession(
             if (p.optInt("display") == 0 || !s.open) append(" Nothing is open on it.")
             else append(" ${s.app.ifBlank { "An app" }} is open on it (${p.optInt("width")}x${p.optInt("height")})${if (s.owner.isNotBlank()) ", used by ${s.owner}" else ""}.")
             if (s.stopped) append(" The user has stopped it.")
-            if (s.takenOver) append(" The user has taken it over.")
+            if (s.takenOver) append(" The user has taken it over and is using the app on their own screen: wait until they give it back.")
+            else if (s.step.startsWith("Handed back")) append(" The user handed it back to you: look at the screen and carry on.")
         }
     } }
 
     /** Open [app] on the hidden display: its front door, or [link] inside it. */
-    suspend fun open(ctx: ToolContext, app: String, link: String = ""): String = mutex.withLock { safely {
+    suspend fun open(ctx: ToolContext, app: String, link: String = "", owner: String = ""): String = mutex.withLock { safely {
         blocked(ctx, needOpen = false)?.let { return it }
+        // One job at a time. Every caller from a linked computer looks alike, so a helper says its own name when it opens an app.
+        val who = owner.trim().take(40).ifBlank { ctx.agentLabel }
+        val cur = _state.value
+        if (cur.open && cur.owner.isNotBlank() && cur.owner != who && cur.owner != "you" && now() - lastUsed < BUSY_MS)
+            return "The background screen is busy with ${cur.owner}, doing ${cur.app.ifBlank { "a job" }}, for ${((now() - jobStart) / 60_000).coerceAtLeast(0)} min. One job at a time: try again when it is closed, or tell the user."
+        if (!cur.open || cur.owner != who) jobStart = now()
+        jobOwner = who; ownerLabel = ctx.agentLabel
         val ref = apps.find(app) ?: return "No app called \"$app\" is installed.${apps.near(app).takeIf { it.isNotEmpty() }?.let { " Close matches: ${it.joinToString(", ")}." } ?: " Use android_apps to see what is installed."}"
         val out = doOpen(ctx, ref, link, fresh = false)
         if (out != null && !out.startsWith("!")) return out
@@ -623,7 +633,56 @@ class ScreenSession(
     // ---- the person's own controls: these always win ----
 
     /** Stop: the agent may do nothing more on the background screen until the person allows it again. */
-    fun userStop() { _state.value = _state.value.copy(stopped = true, takenOver = false, step = "Stopped by you"); note("stop", "You pressed Stop") }
+    fun userStop() { stoppedAt = now(); handed = null; _state.value = _state.value.copy(stopped = true, takenOver = false, step = "Stopped by you"); note("stop", "You pressed Stop") }
+
+    private var handed: Front? = null
+    /** Whose job is on the hidden display: the name the caller gave, and the kind of caller it came through. Freed on close, on Stop, and when it has sat idle. */
+    private var jobOwner = ""
+    private var ownerLabel = ""
+    private var jobStart = 0L
+    private val BUSY_MS = 180_000L
+    private var stoppedAt = 0L
+
+    /**
+     * Take over for real: the app itself moves from the hidden display onto the person's own screen, the same task in
+     * the same state, so they carry on in it natively. "" when it moved; otherwise what happened instead.
+     */
+    suspend fun userTakeOverReal(): String = mutex.withLock {
+        if (displayId == 0) return "Nothing is open on the background screen."
+        val f = runCatching { front() }.getOrNull() ?: return "No app is in front on the background screen."
+        var how = "moved"
+        val moved = runCatching { ask(op("move").put("task", f.taskId).put("to", "main")).optBoolean("ok") }.getOrDefault(false)
+        if (!moved) {
+            how = "opened again"
+            if (runCatching { ask(op("launch").put("pkg", f.pkg).put("where", "main")).optBoolean("ok") }.getOrDefault(false) != true) return "It could not be brought to your screen."
+        }
+        handed = f; borrowed -= f.pkg
+        lastUsed = now()
+        _state.value = _state.value.copy(takenOver = true, step = "You have it")
+        note("takeover", "You took over: ${apps.label(f.pkg)} was $how onto your screen")
+        if (how == "moved") "" else "It was opened again on your screen: the same app, started afresh."
+    }
+
+    /** Give it back: the app moves to the hidden display again and the agent's tools work again. "" when done. */
+    suspend fun userGiveBack(): String = mutex.withLock {
+        val f = handed ?: run { _state.value = _state.value.copy(takenOver = false, step = ""); return "" }
+        money(f.pkg)?.let { return it }
+        val c = config()
+        val made = runCatching { ask(op("create").put("w", c.width).put("h", c.height).put("dpi", c.dpi).put("locked", c.whileLocked).put("block", JSONArray(c.blockAdded))) }.getOrNull()
+            ?: return "The background screen is not running."
+        displayId = made.optInt("display")
+        val task = runCatching { tasks().firstOrNull { it.optString("pkg") == f.pkg && it.optInt("display") == 0 }?.optInt("id") }.getOrNull()
+        var how = "moved"
+        var ok = task != null && runCatching { ask(op("move").put("task", task).put("to", "hidden")).optBoolean("ok") }.getOrDefault(false)
+        if (!ok) { how = "opened again"; ok = runCatching { ask(op("launch").put("pkg", f.pkg).put("where", "hidden")).optBoolean("ok") }.getOrDefault(false) }
+        if (!ok) return "It could not be given back to the agent."
+        handed = null
+        lastUsed = now()
+        _state.value = _state.value.copy(takenOver = false, open = true, pkg = f.pkg, app = apps.label(f.pkg), step = "Handed back to the agent")
+        note("handback", "You gave it back to the agent ($how)")
+        runCatching { readTree() }
+        ""
+    }
     fun userAllow() { _state.value = _state.value.copy(stopped = false, step = "") }
     fun userTakeOver() { if (_state.value.open) { _state.value = _state.value.copy(takenOver = true, step = "You have the screen"); note("takeover", "You took over") } }
     fun userHandBack() { _state.value = _state.value.copy(takenOver = false, step = ""); note("handback", "You handed it back") }

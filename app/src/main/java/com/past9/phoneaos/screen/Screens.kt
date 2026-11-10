@@ -214,12 +214,13 @@ class ScreenService : Service() {
         val st = App.graph(this).settings.state.value
         val s = Screens.session(this).state.value
         val name = st.agentName.ifBlank { "Your agent" }
-        val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java).putExtra("open", "screen").addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        // Straight to the full-screen watch view, in its own task: the app he was in is not disturbed and comes back when he leaves it.
+        val open = PendingIntent.getActivity(this, 0, Intent(this, ScreenWatchActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         fun act(action: String, code: Int) = PendingIntent.getService(this, code, Intent(this, ScreenService::class.java).setAction(action), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val title = when {
             s.stopped -> "Background screen stopped"
-            s.takenOver -> "You have the background screen"
-            else -> "$name is using ${s.app.ifBlank { "an app" }} in the background"
+            s.takenOver -> "You have it"
+            else -> "${s.owner.takeIf { it.isNotBlank() && it != "main" && it != "linked computer" } ?: name} is using ${s.app.ifBlank { "an app" }} in the background"
         }
         val text = when {
             s.stopped -> "$name can do nothing more there until you allow it"
@@ -236,7 +237,8 @@ class ScreenService : Service() {
             putString("android.shortCriticalText", s.app.ifBlank { "Working" }.take(7))
         })
         if (s.stopped) b.addAction(0, "Allow again", act(ALLOW, 2)) else b.addAction(0, "Stop", act(STOP, 1))
-        b.addAction(0, "Watch", open)
+        if (s.takenOver) b.addAction(0, "Give back to the agent", act(GIVE, 3)) else if (!s.stopped && s.open) b.addAction(0, "Take over", act(TAKE, 4))
+        if (!s.takenOver) b.addAction(0, "Watch", open)
         return b.build()
     }
 
@@ -273,7 +275,9 @@ class ScreenService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            STOP -> Screens.session(this).userStop()
+            STOP -> { val s = Screens.session(this); s.userStop(); CoroutineScope(Dispatchers.Default).launch { runCatching { s.close() } } }
+            TAKE -> { val s = Screens.session(this); CoroutineScope(Dispatchers.Default).launch { runCatching { s.userTakeOverReal() } } }
+            GIVE -> { val s = Screens.session(this); CoroutineScope(Dispatchers.Default).launch { runCatching { s.userGiveBack() } } }
             ALLOW -> Screens.session(this).userAllow()
         }
         return START_NOT_STICKY
@@ -286,6 +290,8 @@ class ScreenService : Service() {
         const val ID = 43
         const val STOP = "com.past9.phoneaos.screen.STOP"
         const val ALLOW = "com.past9.phoneaos.screen.ALLOW"
+        const val TAKE = "com.past9.phoneaos.screen.TAKE"
+        const val GIVE = "com.past9.phoneaos.screen.GIVE"
         const val IDLE_MS = 3 * 60_000L
     }
 }

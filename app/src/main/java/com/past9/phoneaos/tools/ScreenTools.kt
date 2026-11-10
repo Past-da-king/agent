@@ -34,10 +34,11 @@ class ScreenOpenAppTool(private val session: () -> ScreenSession) : Tool {
             "Anything that sends, pays, deletes or posts asks the user first by itself. Banking and money apps are never opened here. If the background screen is not set up, the answer says so and the user is shown the steps.",
         schema(listOf("app"),
             "app" to str("The app's name as the user knows it (e.g. 'Calendar'), or its package name"),
-            "link" to str("Optional: a deep link to open inside that app instead of its front screen (e.g. a geo:, https: or app-scheme link)")))
+            "link" to str("Optional: a deep link to open inside that app instead of its front screen (e.g. a geo:, https: or app-scheme link)"),
+            "owner" to str("Your own name when you are a helper, a project chat or a routine (e.g. 'Uber booking helper'): it is shown to the user, and the screen is held for you. One job at a time; another agent is told it is busy.")))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val app = input.optString("app").trim(); if (app.isEmpty()) return "Say which app."
-        return session().open(ctx, app, input.optString("link").trim())
+        return session().open(ctx, app, input.optString("link").trim(), input.optString("owner"))
     }
 }
 
