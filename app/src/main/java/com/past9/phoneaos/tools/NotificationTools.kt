@@ -59,6 +59,8 @@ class NotificationActTool(private val allowed: () -> Set<String>) : Tool {
         val hit = hits.firstOrNull { s -> s.notification.actions.any { it.title?.toString().orEmpty().contains(want, true) } } ?: return "None of them has a button \"$want\":\n" + list()
         val a = hit.notification.actions.first { it.title?.toString().orEmpty().contains(want, true) }
         val inputs = a.remoteInputs
+        // A button that opens the app would open it on the user's own screen: that is theirs.
+        if (a.actionIntent?.isActivity == true) return "\"${a.title}\" opens the app itself, which would come up on the user's own screen. Not pressed: use the background screen for that (screen_open_app)."
         if (reply.isNotBlank() && inputs.isNullOrEmpty()) return "\"${a.title}\" does not take a reply. Leave reply out to press it."
         if (reply.isBlank() && !inputs.isNullOrEmpty()) return "\"${a.title}\" needs the text to send: give reply."
         val (title, text) = words(hit.notification); val name = label(hit.packageName)
