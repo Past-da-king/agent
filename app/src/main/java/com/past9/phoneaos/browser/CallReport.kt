@@ -61,7 +61,7 @@ object CallReport {
 
     /** The last line of defence for anything a call tool returns: never longer than [OUT_MAX]. */
     fun cap(out: String): String =
-        if (out.length <= OUT_MAX) out else middleCut(out, OUT_MAX - 200) + "\n[Cut to fit a tool result. The whole of it: $HOW]"
+        if (out.length <= OUT_MAX) out else middleCut(out, OUT_MAX - 400) + "\n[Cut to fit a tool result. The whole of it: $HOW]"
 
     // ---- status: the summary ------------------------------------------------------------------------------------------
 
