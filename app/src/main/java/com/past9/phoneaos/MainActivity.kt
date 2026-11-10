@@ -803,6 +803,12 @@ class MainActivity : ComponentActivity() {
                                 com.past9.phoneaos.automation.IntentRules.ACTIVITY, Intent.ACTION_VIEW, data = "geo:0,0?q=Sandton+City")) },
                             test = { name -> com.past9.phoneaos.automation.MacroSender(this@MainActivity).broadcast(com.past9.phoneaos.automation.MacroCall(name, v1 = "hello")) },
                         ),
+                        browser = com.past9.phoneaos.ui.screens.BrowserSettingsActions(
+                            origins = g.settings::isolatedOrigins,
+                            addOrigin = { typed -> g.settings.addIsolatedOrigin(typed).also { if (it == null) com.past9.phoneaos.browser.BrowserService.applyIsolation(g.settings.isolatedOrigins()) } },
+                            removeOrigin = { origin -> g.settings.removeIsolatedOrigin(origin); com.past9.phoneaos.browser.BrowserService.applyIsolation(g.settings.isolatedOrigins()) },
+                            callVoiceOn = g.settings::callBridgeOn, setCallVoiceOn = g.settings::setCallBridgeOn,
+                        ),
                     ),
                         automation = com.past9.phoneaos.ui.screens.AutomationInfo(
                             url = g.automation.url.ifBlank { "http://127.0.0.1:" + g.settings.automationPort() },

@@ -184,7 +184,27 @@ class BrowserUploadTool(c: Context) : BrowserTool(c) {
     }
 }
 
-fun browserTools(c: Context): List<Tool> = listOf(BrowserUploadTool(c), BrowserOpenTool(c), SiteProbeTool(c), SiteCatalogTool(c), BrowserReadTool(c), BrowserClickTool(c), BrowserTypeTool(c), BrowserKeyTool(c), BrowserWaitTool(c), BrowserScrollTool(c), BrowserBackTool(c), BrowserScreenshotTool(c), BrowserLookTool(c), BrowserHandoffTool(c), BrowserEvalTool(c), BrowserNetworkTool(c), BrowserConsoleTool(c))
+fun browserTools(c: Context): List<Tool> = listOf(BrowserUploadTool(c), BrowserOpenTool(c), SiteProbeTool(c), SiteCatalogTool(c), BrowserReadTool(c), BrowserClickTool(c), BrowserTypeTool(c), BrowserKeyTool(c), BrowserWaitTool(c), BrowserScrollTool(c), BrowserBackTool(c), BrowserScreenshotTool(c), BrowserLookTool(c), BrowserHandoffTool(c), BrowserEvalTool(c), BrowserNetworkTool(c), BrowserConsoleTool(c), BrowserCallVoiceTool(c))
+
+/** The agent's own voice in a WhatsApp Web call it places in this browser (the call audio bridge). Off unless the user switched it on. */
+class BrowserCallVoiceTool(c: Context) : BrowserTool(c) {
+    override val spec = ToolSpec("browser_call_voice", "Speak in a WhatsApp Web voice call placed in this browser, with a live voice that listens and answers. Works only when the user switched on 'Let the agent speak in WhatsApp calls' in Settings > Browser, on web.whatsapp.com. Order: open the chat, action 'start' with who you are calling and why, THEN press the voice call button in the page; 'status' shows whether the voice is ready, what was heard and the words so far; after you hang up in the page, 'stop' ends the voice and saves the words to the chat. Calling someone goes out in the user's name: get request_approval first. This phone's own microphone and speaker are not used.",
+        schema(listOf("action"), "action" to enumOf("What to do", "start", "status", "stop"), "peer" to str("Who is being called, by name (for start)"), "goal" to str("Why you are calling and what to say, in a sentence or two (for start)")))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String {
+        val e = engine(ctx)
+        val b = e.callBridge ?: return if (App.graph(context).settings.callBridgeOn())
+            "The call voice was switched on after this browser opened, or this phone's browser is too old for it. Let the browser close (a few minutes idle), open https://web.whatsapp.com again, then start."
+        else "The call voice is off. The user turns it on in Settings > Browser > Let the agent speak in WhatsApp calls. Ask them; do not work around it."
+        return when (input.optString("action")) {
+            "start" -> {
+                if (!e.page.value.url.startsWith("https://web.whatsapp.com")) return "Open https://web.whatsapp.com and the chat first."
+                b.start(input.optString("peer").trim(), input.optString("goal").trim()).also { ctx.activity("Got the call voice ready", JSONObject().put("tool", "browser")) }
+            }
+            "stop" -> b.stop()
+            else -> { val s = b.status(); kotlinx.coroutines.delay(300); s.put("page", b.pageState ?: JSONObject.NULL).toString(2) }
+        }
+    }
+}
 
 
 /** Run JavaScript in the page the agent is looking at: read its structure and storage, call the site's own endpoints, test a tool body. */

@@ -75,9 +75,21 @@ class BrowserEngine(private val context: Context, val profile: String = "Persona
     @SuppressLint("SetJavaScriptEnabled")
     private fun newWebView(): WebView = WebView(context.applicationContext).apply {
         // Each profile is its own cookie jar: work and personal accounts stay signed in side by side.
+        // WebView hides SharedArrayBuffer unless the app names the site. WhatsApp Web's calling needs it (threaded
+        // WebAssembly), and so do editors and models that run in the page. The list is the user's own (Settings >
+        // Browser), exact https sites only, never "*": naming a site relaxes a Spectre guard for that site.
+        val isolated = runCatching { com.past9.phoneaos.App.graph(context).settings.isolatedOrigins() }.getOrDefault(IsolatedOrigins.DEFAULT)
+        val canIsolate = androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.CROSS_ORIGIN_ISOLATED_ALLOWLIST)
         if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.MULTI_PROFILE)) runCatching {
-            androidx.webkit.ProfileStore.getInstance().getOrCreateProfile(profile)
+            val p = androidx.webkit.ProfileStore.getInstance().getOrCreateProfile(profile)
+            // An older WebView has no such list: nothing happens, and sites that need it say so themselves.
+            IsolatedOrigins.apply(canIsolate, isolated) { p.setCrossOriginIsolatedAllowlist(it) }
             androidx.webkit.WebViewCompat.setProfile(this, profile)
+        }
+        // No separate profiles on this WebView: everything runs in the default one, so the list goes there.
+        else if (canIsolate) runCatching {
+            androidx.webkit.ProfileStore.getInstance().getProfile(androidx.webkit.Profile.DEFAULT_PROFILE_NAME)
+                ?.let { p -> IsolatedOrigins.apply(true, isolated) { p.setCrossOriginIsolatedAllowlist(it) } }
         }
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
@@ -175,6 +187,19 @@ class BrowserEngine(private val context: Context, val profile: String = "Persona
         addJavascriptInterface(WebNotifications(context, profile), "__aosWeb")
         if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT))
             runCatching { androidx.webkit.WebViewCompat.addDocumentStartJavaScript(this, WebNotifications.SHIM, setOf("*")); androidx.webkit.WebViewCompat.addDocumentStartJavaScript(this, com.past9.phoneaos.connections.PageJs.NET_SHIM, setOf("*")) }
+        // The agent's voice in a WhatsApp Web call: only when the user switched it on, only on that site, and the hooks
+        // pass everything through until a call voice is started (browser_call_voice).
+        if (runCatching { com.past9.phoneaos.App.graph(context).settings.callBridgeOn() }.getOrDefault(false) &&
+            androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.WEB_MESSAGE_LISTENER) &&
+            androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)) runCatching {
+            val bridge = callBridge ?: newCallBridge().also { callBridge = it }
+            androidx.webkit.WebViewCompat.addWebMessageListener(this, CallBridgeProtocol.OBJECT, setOf(CallBridgeProtocol.ORIGIN)) { _, message, origin, isMainFrame, reply ->
+                if (!isMainFrame || origin.toString().trimEnd('/') != CallBridgeProtocol.ORIGIN) return@addWebMessageListener
+                callReply = reply
+                bridge.onPageMessage(message.data)
+            }
+            androidx.webkit.WebViewCompat.addDocumentStartJavaScript(this, CallBridgeJs.HOOKS, setOf(CallBridgeProtocol.ORIGIN))
+        }.onFailure { android.util.Log.w("AgentBrowser", "call bridge not installed", it) }
         webViewClient = object : WebViewClient() {
             // Links into other apps (intent://, market://, mailto:) used to load as a blank error page.
             override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
@@ -218,6 +243,53 @@ class BrowserEngine(private val context: Context, val profile: String = "Persona
                         notice = "Google refused this sign-in inside this browser. Use the site's email or password option instead, or hand the browser to the user (browser_handoff) to try."
                 }
             }
+        }
+    }
+
+    /** The agent's voice in a WhatsApp Web call. Null unless the user switched it on before this browser opened and the WebView can carry it. */
+    @Volatile var callBridge: CallBridge? = null; private set
+    /** The WhatsApp Web page that last said hello: messages for the page go here. */
+    @Volatile private var callReply: androidx.webkit.JavaScriptReplyProxy? = null
+
+    /** The real wiring of [CallBridge]: the voice as phone calls get it (the computer's one-use token, or this phone's key), the words saved as a call. */
+    private fun newCallBridge(): CallBridge {
+        val g = com.past9.phoneaos.App.graph(context)
+        val auth: suspend () -> com.past9.phoneaos.voice.LiveAuth.Token = auth@{
+            val key = g.settings.voiceKey("gemini")
+            val r = com.past9.phoneaos.remote.RemoteHub.session.value
+            if (r != null) {
+                val t = try { com.past9.phoneaos.voice.LiveAuth.parse(r.call("voice.liveToken", emptyList(), 20_000)) }
+                    catch (e: Exception) { com.past9.phoneaos.voice.LiveAuth.Token.No(if (com.past9.phoneaos.voice.LiveAuth.isOldComputer(e.message)) com.past9.phoneaos.voice.LiveAuth.OLD_COMPUTER else e.message ?: "Your computer didn't answer the call request.", false) }
+                if (t is com.past9.phoneaos.voice.LiveAuth.Token.Ok || key == null) return@auth t
+            }
+            if (key != null) com.past9.phoneaos.voice.LiveAuth.Token.Ok(com.past9.phoneaos.voice.LiveAuth.keyUrl(key), "", "")
+            else com.past9.phoneaos.voice.LiveAuth.Token.No(com.past9.phoneaos.voice.CallController.reason(false, false).orEmpty(), true)
+        }
+        return CallBridge(
+            toPage = { msg -> val r = callReply; if (r == null) false else { main.post { runCatching { r.postMessage(msg) } }; true } },
+            auth = auth,
+            open = { url, model, voice, system, tools, onEvent ->
+                val s = g.settings.state.value
+                com.past9.phoneaos.voice.LiveSession(url, model, s.ttsVoice.takeIf { s.ttsProvider == "gemini" && it.isNotBlank() } ?: voice, system, tools = tools,
+                    renew = { (kotlinx.coroutines.runBlocking { runCatching { auth() }.getOrNull() } as? com.past9.phoneaos.voice.LiveAuth.Token.Ok)?.url }, onEvent = onEvent)
+            },
+            save = { began, ended, lines ->
+                val r = com.past9.phoneaos.remote.RemoteHub.session.value
+                // Linked: one call row in the computer's chat, like a call held there. Alone: the agent remembers what was said.
+                if (r != null) g.scope.launch { runCatching { r.call("voice.callSave", listOf(com.past9.phoneaos.voice.LiveAuth.record(began, ended, lines)), 30_000) } }
+                else g.runtime.rememberCall(CallBridge.transcript(lines))
+            },
+            names = { g.settings.state.value.let { (it.agentName.takeIf { n -> n != "Your agent" } ?: "") to it.userName } },
+            keepAlive = ::touch,
+        )
+    }
+
+    /** The list changed in Settings: hand it to this browser's profile now. Pages pick it up when they next load. */
+    fun applyIsolation(origins: List<String>) = main.post {
+        if (!androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.CROSS_ORIGIN_ISOLATED_ALLOWLIST)) return@post
+        runCatching {
+            val name = if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.MULTI_PROFILE)) profile else androidx.webkit.Profile.DEFAULT_PROFILE_NAME
+            androidx.webkit.ProfileStore.getInstance().getProfile(name)?.let { p -> IsolatedOrigins.apply(true, origins) { p.setCrossOriginIsolatedAllowlist(it) } }
         }
     }
 
@@ -308,7 +380,7 @@ class BrowserEngine(private val context: Context, val profile: String = "Persona
         v.layout(0, 0, width, height)
     }
 
-    fun destroy() = main.post { stack.forEach { (it.parent as? ViewGroup)?.removeView(it); it.destroy() }; stack.clear(); web = null; container = null }
+    fun destroy() = main.post { runCatching { callBridge?.stop() }; callReply = null; stack.forEach { (it.parent as? ViewGroup)?.removeView(it); it.destroy() }; stack.clear(); web = null; container = null }
 
     /** For the Browser screen: hand the live WebView to a container, and take it back after. */
     fun attachTo(parent: ViewGroup) {

@@ -54,7 +54,7 @@ class LiveSession(
     /** A fresh URL for a reconnect (a token is good for one new call), run off the main thread. Null keeps [url]. */
     private val renew: (() -> String?)? = null,
     private val onEvent: (Event) -> Unit,
-) {
+) : LiveLink {
     sealed class Event {
         object Connected : Event()
         object SetupComplete : Event()
@@ -102,9 +102,27 @@ class LiveSession(
     @Volatile private var retries = 0
     @Volatile private var everReady = false
 
-    fun start() {
+    override fun start() {
         if (running.getAndSet(true)) return
         connect()
+    }
+
+    /** Where the voice goes when it is not this phone's speaker (a call inside the browser). */
+    @Volatile private var external: ExternalAudio? = null
+
+    /**
+     * The call's sound lives somewhere else: no AudioRecord, no AudioTrack, no audio focus and no route. What the
+     * model says goes to [out]; what the other side says comes in through [sendAudio].
+     */
+    override fun openExternalAudio(out: ExternalAudio) {
+        if (micOpen.getAndSet(true)) return
+        external = out
+    }
+
+    /** 16 kHz mono PCM16 from outside the phone, sent as the caller's voice. False when it was not sent (not ready, muted, ended). */
+    override fun sendAudio(pcm: ByteArray): Boolean {
+        if (!running.get() || !micOpen.get() || muted || !ready.get() || pcm.isEmpty()) return false
+        return ws?.send(audioMessage(pcm, pcm.size)) == true
     }
 
     private fun connect() {
@@ -247,6 +265,7 @@ class LiveSession(
             if (sc.optBoolean("interrupted")) {
                 val q = speaker
                 if (q != null) q.interrupt()
+                else if (external != null) { runCatching { external?.flush() }; onEvent(Event.Speaking(false)) }
                 else { runCatching { track?.pause(); track?.flush(); track?.play() }; onEvent(Event.Speaking(false)) }
             }
             sc.optJSONObject("inputTranscription")?.optString("text")?.takeIf { it.isNotBlank() }
@@ -263,7 +282,7 @@ class LiveSession(
                         val pcm = Base64.decode(data, Base64.DEFAULT)
                         // Queued, never written from this thread: a blocked write here delayed every later frame,
                         // the "interrupted" one included.
-                        speaker?.enqueue(pcm)
+                        speaker?.enqueue(pcm) ?: runCatching { external?.play(pcm) }
                     }
                 }
             }
@@ -277,7 +296,7 @@ class LiveSession(
     }
 
     /** Send a text turn as if the operator had said it — used to deliver the agent's briefing. */
-    fun announce(text: String) {
+    override fun announce(text: String) {
         val msg = JSONObject().put(
             "clientContent",
             JSONObject()
@@ -294,7 +313,7 @@ class LiveSession(
         ws?.send(msg.toString())
     }
 
-    fun sendToolResult(id: String, name: String, result: JSONObject) {
+    override fun sendToolResult(id: String, name: String, result: JSONObject) {
         val response = JSONObject()
             .put("id", id)
             .put("name", name)
@@ -483,8 +502,9 @@ class LiveSession(
         runCatching { ws?.send(JSONObject().put("realtimeInput", JSONObject().put("audioStreamEnd", true)).toString()) }
     }
 
-    fun stop() {
+    override fun stop() {
         if (!running.getAndSet(false)) return
+        external = null
         router?.stop()
         router = null
         speaker?.close()
@@ -513,6 +533,12 @@ class LiveSession(
         private const val IN_RATE = 16000
         private const val OUT_RATE = 24000
         private const val CHUNK_BYTES = 3200 // 100ms of 16k mono PCM16
+
+        /** One piece of the caller's voice on the wire: realtimeInput.audio, 16 kHz PCM16, base64. */
+        fun audioMessage(pcm: ByteArray, n: Int): String = JSONObject().put(
+            "realtimeInput",
+            JSONObject().put("audio", JSONObject().put("data", java.util.Base64.getEncoder().encodeToString(pcm.copyOf(n))).put("mimeType", "audio/pcm;rate=$IN_RATE"))
+        ).toString()
 
         /**
          * How loud a chunk of little-endian PCM16 is, 0..1, shaped so ordinary speech lands around

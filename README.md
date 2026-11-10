@@ -190,6 +190,10 @@ Two doors, with the same token and the same switch (Settings, Automation, *Autom
 
 The agent on a linked computer can use `android_intent`, `android_apps` and `macrodroid_run` on the phone through the device link, with the same allowlists and the same question on the phone. Switch it off under Settings, Linked devices.
 
+## Sites that need advanced browser features
+
+WhatsApp Web calls, in-browser editors and models that run in the page need shared memory (SharedArrayBuffer), which Android's WebView hides unless the app names the site. Settings, Browser, *Sites that need advanced browser features* is your list: `https://web.whatsapp.com` to start with, exact https sites only, no wildcards. In the same sheet, **Let the agent speak in WhatsApp calls** (off by default) lets the agent's live voice go into a WhatsApp Web call it places, with `browser_call_voice`. Details and the check to run on the phone: [docs/browser-advanced-features.md](docs/browser-advanced-features.md).
+
 ## Build from source
 
 You need JDK 17, the Android SDK (compileSdk 37), and for the runtime pack `curl`, `ar`, `patchelf` and Node/npm.
