@@ -32,6 +32,11 @@ class SystemDictation(
     private val context: Context,
     private val onText: (String) -> Unit,
     private val onEnd: (error: String?) -> Unit,
+    /**
+     * One request, not a dictation (the assist sheet): it ends by itself the moment he stops speaking, and after a
+     * stretch of silence, instead of listening on until a tap.
+     */
+    private val oneShot: Boolean = false,
 ) : Dictating {
     private val main = Handler(Looper.getMainLooper())
     private var sr: SpeechRecognizer? = null
@@ -55,7 +60,7 @@ class SystemDictation(
 
     private fun listen() {
         heardThisStretch = false
-        runCatching { sr?.startListening(intent(context)) }.onFailure { end("This phone's speech recogniser could not start: ${it.message}") }
+        runCatching { sr?.startListening(intent(context, quickEnd = oneShot)) }.onFailure { end("This phone's speech recogniser could not start: ${it.message}") }
     }
 
     override fun finish() { main.post {
@@ -94,13 +99,18 @@ class SystemDictation(
             if (r.isNotBlank()) { if (committed.isNotEmpty()) committed.append(' '); committed.append(r.trim()) }
             onText(text())
             busyRetries = 0; netRetries = 0
-            if (stopping) end(null) else listen()
+            if (stopping || (oneShot && committed.isNotBlank())) end(null) else listen()
         }
 
         override fun onError(error: Int) {
             if (ended) return
             when {
                 stopping -> end(null)
+                // One request: silence, or words it showed but could not settle, end it with whatever was heard.
+                oneShot && (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) -> {
+                    if (partial.isNotBlank()) { if (committed.isNotEmpty()) committed.append(' '); committed.append(partial.trim()); partial = ""; onText(text()) }
+                    end(null)
+                }
                 // Silence or a stretch it could not match: he may be thinking. Keep what it showed and listen again; only his
                 // tap ends it (29 Oct 2026: it used to end here, cutting him off mid-dictation).
                 error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
@@ -136,7 +146,9 @@ class SystemDictation(
 
     companion object {
         /** Whether this phone has any speech recogniser at all. */
-        fun available(context: Context): Boolean = SpeechRecognizer.isRecognitionAvailable(context)
+        fun available(context: Context): Boolean = SpeechRecognizer.isRecognitionAvailable(context) &&
+            // This app's own recogniser (it has one as the phone's assistant) only passes speech on: it does not count.
+            runCatching { context.packageManager.queryIntentServices(Intent(RecognitionService.SERVICE_INTERFACE), 0).any { it.serviceInfo.packageName != context.packageName } }.getOrDefault(true)
 
         /**
          * Which recogniser to use: the phone's own default when it is Google's; Google's when the default is another
@@ -146,6 +158,8 @@ class SystemDictation(
             val installed = runCatching {
                 context.packageManager.queryIntentServices(Intent(RecognitionService.SERVICE_INTERFACE), 0)
                     .map { ComponentName(it.serviceInfo.packageName, it.serviceInfo.name) }
+                    // Never this app's own recogniser: as the phone's assistant it has one, and that one only passes speech on to these.
+                    .filter { it.packageName != context.packageName }
             }.getOrDefault(emptyList())
             val default = runCatching { Settings.Secure.getString(context.contentResolver, "voice_recognition_service") }.getOrNull()
                 ?.let { ComponentName.unflattenFromString(it) }?.takeIf { it in installed }
@@ -162,7 +176,7 @@ class SystemDictation(
         private val GOOGLE_ORDER = listOf("com.google.android.tts", "com.google.android.googlequicksearchbox")
 
         /** Free-form speech in the phone's own language, live partial results, and Google's best (online) model. */
-        fun intent(context: Context, locale: Locale = Locale.getDefault()): Intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+        fun intent(context: Context, locale: Locale = Locale.getDefault(), quickEnd: Boolean = false): Intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             val tag = locale.toLanguageTag()
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, tag)
@@ -171,9 +185,9 @@ class SystemDictation(
             putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
-            // Room to pause and think mid-sentence before a stretch counts as finished.
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2_500L)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2_000L)
+            // Room to pause and think mid-sentence before a stretch counts as finished; one request to the assistant ends sooner.
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, if (quickEnd) 1_400L else 2_500L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, if (quickEnd) 1_100L else 2_000L)
         }
 
         fun describe(error: Int): String = when (error) {

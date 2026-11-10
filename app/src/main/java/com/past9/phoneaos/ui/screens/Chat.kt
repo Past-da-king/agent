@@ -607,10 +607,10 @@ private fun UserBubble(item: ChatItem) {
         }
     }
     // Photos or files sent with no words are the whole message: no bubble, and no words put in his mouth.
-    if (text.substringBefore("\n\n[Attached document:").substringBefore("\n\n[Shared with you").isBlank() && (images.isNotEmpty() || files.isNotEmpty())) return
+    if (text.substringBefore("\n\n[Attached document:").substringBefore("\n\n[Shared with you").substringBefore(com.past9.phoneaos.assist.AssistMessage.MARK).isBlank() && (images.isNotEmpty() || files.isNotEmpty())) return
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
         Surface(color = if (sender == null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg, com.past9.phoneaos.ui.theme.Radius.lg, com.past9.phoneaos.ui.theme.Radius.xs, com.past9.phoneaos.ui.theme.Radius.lg), modifier = Modifier.widthIn(max = 320.dp).padding(start = 48.dp)) {
-            Text(text.substringBefore("\n\n[Attached document:").substringBefore("\n\n[Shared with you").ifBlank { "Here's a document." }, Modifier.padding(horizontal = 16.dp, vertical = 11.dp), style = MaterialTheme.typography.bodyLarge,
+            Text(text.substringBefore("\n\n[Attached document:").substringBefore("\n\n[Shared with you").substringBefore(com.past9.phoneaos.assist.AssistMessage.MARK).ifBlank { "Here's a document." }, Modifier.padding(horizontal = 16.dp, vertical = 11.dp), style = MaterialTheme.typography.bodyLarge,
                 color = if (sender == null) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
         }
     }
