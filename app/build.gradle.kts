@@ -148,6 +148,9 @@ dependencies {
   // Reading the link QR code from CameraX frames: zxing core only (pure Java, about 0.5 MB, no Play Services, works offline,
   // and its encoder lets unit tests make real QR codes). ML Kit barcode scanning would add a model and Play Services.
   implementation("com.google.zxing:core:3.5.3")
+  // Background screen: Shizuku, when the person has it, lends the shell user that may open a hidden display (screen/ScreenHelper.kt).
+  implementation("dev.rikka.shizuku:api:13.1.5")
+  implementation("dev.rikka.shizuku:provider:13.1.5")
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.androidx.credentials)
   implementation(libs.androidx.credentials.play.services)

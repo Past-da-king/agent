@@ -19,6 +19,8 @@ interface PageRunner {
     suspend fun run(body: String, args: JSONObject, ctx: ToolContext): String
     /** "" when [body] parses (or can't be checked right now), else the error. */
     suspend fun syntaxError(body: String, ctx: ToolContext): String
+    /** A tool of an app on the phone itself: do its learned steps on the background screen. */
+    suspend fun runScreen(app: LearnedApp, tool: LearnedTool, args: JSONObject, ctx: ToolContext): String = "Error: this tool needs the phone's background screen, which is not available here."
 }
 
 /** Every agent works in its own browser (helpers in parallel must not share one), so the browser always comes from the caller. */
@@ -42,6 +44,7 @@ class EnginePageRunner(private val context: Context) : PageRunner {
     override suspend fun run(body: String, args: JSONObject, ctx: ToolContext): String = engine(null, ctx).runAsync(body, args)
     /** Checks in the browser the agent already has open; if it has none, the check is skipped (the first run finds a mistake just as well). */
     override suspend fun syntaxError(body: String, ctx: ToolContext): String = BrowserService.existing(ctx.agentLabel)?.syntaxError(body) ?: ""
+    override suspend fun runScreen(app: LearnedApp, tool: LearnedTool, args: JSONObject, ctx: ToolContext): String = com.past9.phoneaos.screen.ScreenLearned.run(context, app, tool, args, ctx)
 }
 
 object WebApps {
@@ -63,7 +66,9 @@ Rules: never put a password, token or cookie value in a tool or in your reply. R
     /** What the model is shown for an example of the contract. */
     const val EXAMPLE = "e.g. Reddit: const r = await fetch('/r/' + args.sub + '/new.json?limit=' + (args.limit || 10), {credentials:'include'}); const j = await r.json(); return j.data.children.map(c => ({title: c.data.title, score: c.data.score, url: c.data.permalink}));"
 
-    fun toolName(app: LearnedApp, tool: LearnedTool) = "web_${app.id}_${tool.name}"
+    /** web_<app>_<tool> for a site; app_<app>_<tool> for an app on the phone, done on the background screen. */
+    fun toolName(app: LearnedApp, tool: LearnedTool) = toolName(app.isScreen, app.id, tool.name)
+    fun toolName(screen: Boolean, appId: String, tool: String) = (if (screen) "app_" else "web_") + appId + "_" + tool
 
     /** The JSON the model sees for a tool's inputs. */
     fun schemaOf(t: LearnedTool): JSONObject = JSONObject().put("type", "object").put("properties", t.params).put("required", JSONArray(t.required.filter { t.params.has(it) }))
@@ -83,6 +88,7 @@ Rules: never put a password, token or cookie value in a tool or in your reply. R
     fun problem(t: LearnedTool): String? = when {
         !toolNameRx.matches(t.name) -> "Tool name \"${t.name}\" must be lower-case letters, digits and underscores, 2 to 30 characters, starting with a letter."
         t.description.isBlank() -> "${t.name}: add a description saying what it does and when to use it."
+        t.steps.length() > 0 -> null
         t.js.isBlank() -> "${t.name}: the js body is empty (0 characters arrived). If you did write it, the call may have been cut off: send fewer tools per call."
         t.js.length > LearnedStore.MAX_JS -> "${t.name}: the js is too long (${t.js.length} characters, limit ${LearnedStore.MAX_JS}). Split it into smaller tools."
         t.params.keys().asSequence().any { k -> !Regex("^[a-zA-Z][a-zA-Z0-9_]{0,29}$").matches(k) || t.params.optJSONObject(k)?.optString("type") !in paramTypes } ->
@@ -109,7 +115,7 @@ class WebAppListTool(private val store: LearnedStore) : Tool {
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val apps = store.apps.value
         if (apps.isEmpty()) return "None yet. Read webapp_guide to teach yourself one."
-        return apps.joinToString("\n\n") { a -> "${a.name} (${a.startUrl}${if (a.desktop) ", desktop" else ""}${if (a.trusted) ", user trusts its changes" else ""})\n" + a.about.takeIf { it.isNotBlank() }?.let { "$it\n" }.orEmpty() +
+        return apps.joinToString("\n\n") { a -> "${a.name} (${if (a.isScreen) "an app on this phone, done on the background screen" else a.startUrl}${if (a.desktop) ", desktop" else ""}${if (a.trusted) ", user trusts its changes" else ""})\n" + a.about.takeIf { it.isNotBlank() }?.let { "$it\n" }.orEmpty() +
             a.tools.joinToString("\n") { t -> "- ${WebApps.toolName(a, t)} [${if (t.readOnly) "reads" else "CHANGES things"}]: ${t.description}" } }
     }
 }
@@ -117,7 +123,10 @@ class WebAppListTool(private val store: LearnedStore) : Tool {
 /** One learned tool, as a tool the agent can call. Anything that changes things asks first unless the user trusts the app. */
 class LearnedCallTool(private val appId: String, private val tool: LearnedTool, private val store: LearnedStore, private val runner: PageRunner) : Tool {
     private val app0 get() = store.apps.value.firstOrNull { it.id == appId }
-    override val spec = ToolSpec("web_${appId}_${tool.name}", "[${app0?.name ?: appId}] ${tool.description}" + if (tool.readOnly) "" else " CHANGES things on the user's account: they are asked first.", WebApps.schemaOf(tool))
+    private val screen = tool.steps.length() > 0
+    override val spec = ToolSpec(WebApps.toolName(screen, appId, tool.name), "[${app0?.name ?: appId}${if (screen) ", on the phone's background screen" else ""}] ${tool.description}" +
+        (if (screen) " A learned way of doing it in the real app: quick, and it returns what the app's screen shows at the end. A press that sends, pays or deletes still asks the user."
+        else if (tool.readOnly) "" else " CHANGES things on the user's account: they are asked first."), WebApps.schemaOf(tool))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val app = app0 ?: return "That app was removed."
         val t = app.tools.firstOrNull { it.name == tool.name } ?: return "That tool was removed."
@@ -129,6 +138,8 @@ object WebAppRun {
     suspend fun call(app: LearnedApp, t: LearnedTool, input: JSONObject, ctx: ToolContext, runner: PageRunner): String {
         val missing = t.required.filter { !input.has(it) || input.isNull(it) }
         if (missing.isNotEmpty()) return "Missing input: ${missing.joinToString()}."
+        // An app on the phone: its steps run on the background screen, where each press that sends, pays or deletes asks by itself.
+        if (app.isScreen) return runner.runScreen(app, t, input, ctx)
         if (!t.readOnly && !app.trusted) {
             val what = if (input.length() == 0) "No inputs." else input.keys().asSequence().joinToString("\n") { "${it}: ${input.opt(it).toString().take(600)}" }
             when (ctx.ask("APPROVAL|${app.name}: ${t.description.take(90)}|$what", listOf("Approve", "Decline"))) {
@@ -227,4 +238,7 @@ class WebAppRemoveTool(private val store: LearnedStore) : Tool {
 /** Every tool the learned apps offer, read from the store when asked, so a new app shows up without a restart. */
 fun learnedTools(store: LearnedStore, runner: PageRunner): List<Tool> =
     listOf(WebAppGuideTool(), WebAppListTool(store), WebAppSaveTool(store, runner), WebAppTestTool(store, runner), WebAppRemoveTool(store)) +
-        store.apps.value.flatMap { a -> a.tools.map { LearnedCallTool(a.id, it, store, runner) } }
+        store.apps.value.filter { !it.isScreen || screenOn() }.flatMap { a -> a.tools.map { LearnedCallTool(a.id, it, store, runner) } }
+
+/** Learned tools for apps on the phone only exist while the background screen is switched on. Set by the app; tests leave it on. */
+var screenOn: () -> Boolean = { true }

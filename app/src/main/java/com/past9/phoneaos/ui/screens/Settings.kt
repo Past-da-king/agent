@@ -160,6 +160,17 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
                 Line(Icons.Rounded.SmartToy, "Agent talks to your apps",
                     MacroRulesUi.allowedLine(actions.macro.allowlist(), actions.macro.intents())) { macroSheet = true }
             }
+            SectionHeader("Background screen", "Other apps, while you keep your screen", Modifier.padding(start = 4.dp, top = 12.dp))
+            AppCard(padding = PaddingValues(vertical = 4.dp)) {
+                val screenCtx = androidx.compose.ui.platform.LocalContext.current
+                var screenOn by remember { mutableStateOf(com.past9.phoneaos.screen.Screens.on(screenCtx)) }
+                // Off by default: it is new and still being proven on real phones. Switched off, nothing of it exists in the app.
+                Line(Icons.Rounded.Layers, "Background screen", if (screenOn) "On. Setup, rules and blocked apps" else "Off. Experimental: your agent uses other apps on a hidden screen while you keep yours",
+                    trailing = { Switch(screenOn, { on -> screenOn = on; com.past9.phoneaos.screen.Screens.setOn(screenCtx, on) }) }) {
+                    if (screenOn) com.past9.phoneaos.screen.ScreenUi.show.value = com.past9.phoneaos.screen.ScreenUi.SETUP
+                }
+                if (screenOn) Line(Icons.Rounded.Movie, "Recordings and learned apps", "Watch what it did there, and teach it a job yourself") { com.past9.phoneaos.screen.ScreenUi.show.value = com.past9.phoneaos.screen.ScreenUi.RUNS }
+            }
             SectionHeader("Browser", "The browser your agent uses", Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 // Read again each time the sheet closes, so the line says what the sheet just changed.
