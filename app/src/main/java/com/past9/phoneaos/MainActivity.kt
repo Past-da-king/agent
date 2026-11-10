@@ -807,7 +807,10 @@ class MainActivity : ComponentActivity() {
                             origins = g.settings::isolatedOrigins,
                             addOrigin = { typed -> g.settings.addIsolatedOrigin(typed).also { if (it == null) com.past9.phoneaos.browser.BrowserService.applyIsolation(g.settings.isolatedOrigins()) } },
                             removeOrigin = { origin -> g.settings.removeIsolatedOrigin(origin); com.past9.phoneaos.browser.BrowserService.applyIsolation(g.settings.isolatedOrigins()) },
-                            callVoiceOn = g.settings::callBridgeOn, setCallVoiceOn = g.settings::setCallBridgeOn,
+                            callVoiceOn = g.settings::callBridgeOn,
+                            setCallVoiceOn = { on -> g.settings.setCallBridgeOn(on); com.past9.phoneaos.browser.BrowserService.applyCallBridge(on) },
+                            testNumbers = g.settings::callTestNumbers, addTestNumber = g.settings::addCallTestNumber, removeTestNumber = g.settings::removeCallTestNumber,
+                            testCallingOn = g.settings::callTestOn, setTestCallingOn = { on -> g.settings.setCallTestOn(on) },
                         ),
                     ),
                         automation = com.past9.phoneaos.ui.screens.AutomationInfo(

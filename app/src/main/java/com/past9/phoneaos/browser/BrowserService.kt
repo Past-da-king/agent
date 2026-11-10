@@ -91,6 +91,9 @@ class BrowserService : Service() {
         /** Settings > Browser changed the sites list: every open browser's profile gets it. */
         fun applyIsolation(origins: List<String>) { engines.values.forEach { it.applyIsolation(origins) } }
 
+        /** Settings > Browser changed the call voice switch: every open browser takes it now, not when it next opens. */
+        fun applyCallBridge(on: Boolean) { engines.values.forEach { it.applyCallBridge(on) } }
+
         /** The browser this agent already has open, if any. Never starts one. */
         fun existing(owner: String): BrowserEngine? = engines.entries.firstOrNull { it.key.startsWith("$owner/") }?.value
 
