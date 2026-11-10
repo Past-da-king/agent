@@ -1,8 +1,5 @@
 package com.past9.phoneaos.screen.helper
 
-import android.net.LocalServerSocket
-import android.net.LocalSocket
-import android.net.LocalSocketAddress
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -18,9 +15,9 @@ import java.io.DataOutputStream
  * The screen helper: a small program from this app that runs as the phone's shell user and owns the hidden display.
  *
  * Started with (one line, by Shizuku or from a computer over adb):
- *   CLASSPATH=<this app's apk> app_process /system/bin com.past9.phoneaos.screen.helper.HelperMain <package>
+ *   CLASSPATH=<this app's apk> app_process /system/bin com.past9.phoneaos.screen.helper.HelperMain <package> --port <n> --token <secret>
  *
- * It listens on a local socket and answers only this app (and the shell itself, for testing). It never touches
+ * It listens on 127.0.0.1 only and answers only a caller that proves it knows the secret the app made. It never touches
  * display 0, the person's own screen. With nobody asking for ten minutes it closes the hidden display by itself.
  *
  * Banking and money apps are refused HERE, below every tool: it will not start one or move one onto the hidden
@@ -35,7 +32,7 @@ object HelperMain {
     private var display: HiddenDisplay? = null
     private var keyboard = ""
     @Volatile private var lastAsked = SystemClock.uptimeMillis()
-    private var appUid = -1
+    private var token = ""
     private var builtIn = ""
     @Volatile private var blocklist = ScreenBlocklist("")
     private val labels = HashMap<String, String>()
@@ -44,21 +41,23 @@ object HelperMain {
     @Volatile private var lastBlockedAt = 0L
 
     @JvmStatic fun main(args: Array<String>) {
-        val pkg = args.getOrNull(0) ?: run { System.err.println("usage: HelperMain <package> [--call json [--save file]]"); return }
-        val call = args.indexOf("--call")
-        if (call >= 0) { client(pkg, args.getOrNull(call + 1).orEmpty(), args.indexOf("--save").takeIf { it >= 0 }?.let { args.getOrNull(it + 1) }); return }
+        fun arg(name: String) = args.indexOf(name).takeIf { it >= 0 }?.let { args.getOrNull(it + 1) }
+        val pkg = args.getOrNull(0) ?: run { System.err.println("usage: HelperMain <package> --port <n> --token <secret> [--call json [--save file]]"); return }
+        val port = arg("--port")?.toIntOrNull() ?: run { System.err.println("screen helper: no --port"); return }
+        token = arg("--token").orEmpty()
+        if (token.length < 16) { System.err.println("screen helper: no --token"); return }
+        arg("--call")?.let { client(port, it, arg("--save")); return }
 
         if (Looper.getMainLooper() == null) Looper.prepareMainLooper()
-        appUid = uidOf(pkg)
-        val server = try { LocalServerSocket(ScreenProtocol.socketName(pkg)) } catch (e: java.io.IOException) {
-            println("screen helper: already running for $pkg"); return
+        val server = try { java.net.ServerSocket(port, 16, java.net.InetAddress.getByName("127.0.0.1")) } catch (e: java.io.IOException) {
+            println("screen helper: already running for $pkg (or port $port is taken)"); return
         }
         builtIn = readBuiltIn()
         blocklist = ScreenBlocklist(builtIn)
         if (blocklist.rules < 50) { System.err.println("screen helper: the list of blocked money apps could not be read, so nothing will be opened"); }
         Sys.leaveAdbGroup()
         Thread.setDefaultUncaughtExceptionHandler { t, e -> System.err.println("screen helper: ${t.name}: $e"); e.printStackTrace() }
-        println("screen helper: started for $pkg (app uid $appUid, version ${ScreenProtocol.VERSION}, pid ${android.os.Process.myPid()}, ${blocklist.rules} blocked-app rules)")
+        println("screen helper: started for $pkg (port $port, version ${ScreenProtocol.VERSION}, pid ${android.os.Process.myPid()}, ${blocklist.rules} blocked-app rules)")
         Thread({ while (true) { val s = try { server.accept() } catch (e: Throwable) { break }; Thread({ serve(s) }, "screen-client").apply { isDaemon = true; start() } } }, "screen-accept").start()
         Thread({
             var n = 0
@@ -77,11 +76,6 @@ object HelperMain {
         val apk = System.getenv("CLASSPATH").orEmpty().split(':').first()
         java.util.zip.ZipFile(apk).use { z -> z.getInputStream(z.getEntry("assets/" + ScreenBlocklist.ASSET)).readBytes().toString(Charsets.UTF_8) }
     }.getOrDefault("")
-
-    private fun uidOf(pkg: String): Int {
-        val out = Sys.exec("cmd", "package", "list", "packages", "-U", pkg).out
-        return out.lineSequence().map { it.trim() }.firstOrNull { it.startsWith("package:$pkg ") }?.substringAfter("uid:")?.trim()?.takeWhile { it.isDigit() }?.toIntOrNull() ?: -1
-    }
 
     private fun <T> onMain(block: () -> T): T {
         if (Looper.myLooper() == Looper.getMainLooper()) return block()
@@ -119,11 +113,19 @@ object HelperMain {
         return hit
     }
 
-    private fun serve(s: LocalSocket) {
+    private fun serve(s: java.net.Socket) {
         try {
-            val uid = s.peerCredentials.uid
-            if (uid != appUid && uid != 0 && uid != android.os.Process.SHELL_UID) { s.close(); return }
-            val inp = DataInputStream(s.inputStream); val out = DataOutputStream(s.outputStream)
+            s.tcpNoDelay = true
+            val inp = DataInputStream(s.getInputStream()); val out = DataOutputStream(s.getOutputStream())
+            // Who is calling: it must prove it knows the secret, and we prove the same to it.
+            s.soTimeout = 5_000
+            val hello = ScreenProtocol.read(inp).json
+            val mine = ScreenProtocol.nonce()
+            ScreenProtocol.write(out, ScreenProtocol.ok().put("proof", ScreenProtocol.proof(token, hello.optString("nonce"))).put("nonce", mine).put("version", ScreenProtocol.VERSION))
+            val auth = ScreenProtocol.read(inp).json
+            if (hello.optString("nonce").length < 8 || auth.optString("proof") != ScreenProtocol.proof(token, mine)) { s.close(); return }
+            ScreenProtocol.write(out, ScreenProtocol.ok())
+            s.soTimeout = 0
             while (true) {
                 val m = try { ScreenProtocol.read(inp) } catch (e: java.io.IOException) { break }
                 lastAsked = SystemClock.uptimeMillis()
@@ -280,12 +282,19 @@ object HelperMain {
     }
 
     /** `--call`: send one request to the running helper and print the answer. For testing from a computer. */
-    private fun client(pkg: String, json: String, save: String?) {
-        val s = LocalSocket()
+    private fun client(port: Int, json: String, save: String?) {
+        val s = java.net.Socket()
         try {
-            s.connect(LocalSocketAddress(ScreenProtocol.socketName(pkg), LocalSocketAddress.Namespace.ABSTRACT))
-            ScreenProtocol.write(DataOutputStream(s.outputStream), JSONObject(json))
-            val m = ScreenProtocol.read(DataInputStream(s.inputStream))
+            s.connect(java.net.InetSocketAddress("127.0.0.1", port), 2_000)
+            val inp = DataInputStream(s.getInputStream()); val out = DataOutputStream(s.getOutputStream())
+            val mine = ScreenProtocol.nonce()
+            ScreenProtocol.write(out, JSONObject().put("op", "hello").put("nonce", mine))
+            val h = ScreenProtocol.read(inp).json
+            if (h.optString("proof") != ScreenProtocol.proof(token, mine)) throw IllegalStateException("what answered is not the helper")
+            ScreenProtocol.write(out, JSONObject().put("op", "auth").put("proof", ScreenProtocol.proof(token, h.optString("nonce"))))
+            ScreenProtocol.read(inp)
+            ScreenProtocol.write(out, JSONObject(json))
+            val m = ScreenProtocol.read(inp)
             if (m.bin != null && save != null) java.io.File(save).writeBytes(m.bin)
             println(m.json.toString())
         } catch (t: Throwable) {

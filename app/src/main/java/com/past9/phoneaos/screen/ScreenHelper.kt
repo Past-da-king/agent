@@ -2,8 +2,6 @@ package com.past9.phoneaos.screen
 
 import android.content.Context
 import android.content.pm.PackageManager
-import android.net.LocalSocket
-import android.net.LocalSocketAddress
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -24,23 +22,31 @@ interface ScreenBackend {
 
 fun op(name: String) = JSONObject().put("op", name)
 
-/** Talks to the helper over the phone's own local socket. One request at a time; it reconnects by itself. */
-class SocketBackend(private val pkg: String) : ScreenBackend {
+/** Talks to the helper over the phone's own loopback address. One request at a time; it reconnects by itself. */
+class SocketBackend(private val port: () -> Int, private val token: () -> String) : ScreenBackend {
     private val mutex = Mutex()
-    private var socket: LocalSocket? = null
+    private var socket: java.net.Socket? = null
     private var inp: DataInputStream? = null
     private var out: DataOutputStream? = null
 
-    private fun open(): LocalSocket {
+    private fun open(): java.net.Socket {
         socket?.let { return it }
-        val s = LocalSocket()
-        try { s.connect(LocalSocketAddress(ScreenProtocol.socketName(pkg), LocalSocketAddress.Namespace.ABSTRACT)) }
-        catch (e: Exception) { runCatching { s.close() }; throw HelperAbsent("the screen helper is not running") }
-        // Only the phone's shell (or root) can be the helper. Another app that took the name is refused.
-        val uid = runCatching { s.peerCredentials.uid }.getOrDefault(-1)
-        if (uid != 0 && uid != android.os.Process.SHELL_UID) { runCatching { s.close() }; throw HelperAbsent("something that is not the screen helper answered (uid $uid)") }
-        socket = s; inp = DataInputStream(s.inputStream); out = DataOutputStream(s.outputStream)
-        return s
+        val s = java.net.Socket()
+        try {
+            s.connect(java.net.InetSocketAddress("127.0.0.1", port()), 1_500)
+            s.tcpNoDelay = true; s.soTimeout = 4_000
+            val i = DataInputStream(s.getInputStream()); val o = DataOutputStream(s.getOutputStream())
+            // Only the helper knows the secret this app made. Anything else on that port is refused, and never sees it.
+            val mine = ScreenProtocol.nonce()
+            ScreenProtocol.write(o, op("hello").put("nonce", mine))
+            val h = ScreenProtocol.read(i).json
+            if (h.optString("proof") != ScreenProtocol.proof(token(), mine)) throw HelperAbsent("something that is not the screen helper answered")
+            ScreenProtocol.write(o, op("auth").put("proof", ScreenProtocol.proof(token(), h.optString("nonce"))))
+            ScreenProtocol.read(i)
+            socket = s; inp = i; out = o
+            return s
+        } catch (e: HelperAbsent) { runCatching { s.close() }; throw e
+        } catch (e: Exception) { runCatching { s.close() }; throw HelperAbsent("the screen helper is not running") }
     }
 
     private fun drop() { runCatching { socket?.close() }; socket = null; inp = null; out = null }
@@ -67,15 +73,15 @@ object ScreenStarter {
     const val HELPER_CLASS = "com.past9.phoneaos.screen.helper.HelperMain"
 
     /** The script that starts the helper. It finds the app's file by itself, so it keeps working after an update. */
-    fun script(pkg: String): String = """
+    fun script(pkg: String, port: Int, token: String): String = """
         #!/system/bin/sh
         # Starts the background screen helper for $pkg. Run it as the shell user:
         #   adb shell sh /sdcard/Android/data/$pkg/files/screen-helper.sh
-        APK=${'$'}(pm path $pkg | head -n 1 | cut -d: -f2)
+        APK=${'$'}(pm path $pkg 2>/dev/null | head -n 1 | cut -d: -f2)
         if [ -z "${'$'}APK" ]; then echo "$pkg is not installed"; exit 1; fi
         export CLASSPATH=${'$'}APK
-        app_process /system/bin $HELPER_CLASS $pkg --call '{"op":"exit"}' >/dev/null 2>&1
-        setsid app_process /system/bin --nice-name=agent_screen_helper $HELPER_CLASS $pkg </dev/null >/dev/null 2>&1 &
+        app_process /system/bin $HELPER_CLASS $pkg --port $port --token $token --call '{"op":"exit"}' >/dev/null 2>&1
+        setsid app_process /system/bin --nice-name=agent_screen_helper $HELPER_CLASS $pkg --port $port --token $token </dev/null >/dev/null 2>&1 &
         sleep 1
         echo "background screen helper started"
     """.trimIndent() + "\n"
@@ -83,7 +89,7 @@ object ScreenStarter {
     /** Write the script where the shell user can read it. The path to hand to adb, or null when storage is not there. */
     fun writeScript(context: Context): File? = runCatching {
         val dir = context.getExternalFilesDir(null) ?: return null
-        File(dir, "screen-helper.sh").apply { writeText(script(context.packageName)) }
+        File(dir, "screen-helper.sh").apply { writeText(script(context.packageName, Screens.port(context), Screens.token(context))) }
     }.getOrNull()
 
     /** What to type on a computer with the phone plugged in. */
@@ -107,7 +113,7 @@ object ScreenStarter {
         return try {
             val m = rikka.shizuku.Shizuku::class.java.getDeclaredMethod("newProcess", Array<String>::class.java, Array<String>::class.java, String::class.java)
             m.isAccessible = true
-            val p = m.invoke(null, arrayOf("sh", "-c", script(context.packageName)), null, null) as Process
+            val p = m.invoke(null, arrayOf("sh", "-c", script(context.packageName, Screens.port(context), Screens.token(context))), null, null) as Process
             Thread { runCatching { p.inputStream.readBytes() } }.apply { isDaemon = true; start() }
             runCatching { p.waitFor() }
             null

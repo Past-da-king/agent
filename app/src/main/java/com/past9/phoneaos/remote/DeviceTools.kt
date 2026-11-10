@@ -33,10 +33,46 @@ object DeviceTools {
     val GROUPS = linkedMapOf("browser" to true, "notifications" to true, "files" to true, "approval" to true, "phone" to true, "location" to true, "automation" to true)
     val LABELS = mapOf("browser" to "Browser", "notifications" to "Notifications it can read", "files" to "Files", "approval" to "Questions and approvals", "phone" to "Notifications to you", "location" to "Your location (asked once)", "automation" to "Other apps: intents and macros (asks unless allowed)")
 
+    /**
+     * Every tool this phone lends to a linked computer, by name. A tool the phone has must be either here or in
+     * [PHONE_ONLY] with the reason: LentToolsTest fails the build on one that is in neither, so a new tool can never
+     * be left unreachable from the computer by accident. Learned tools (web_<app>_<tool>, app_<app>_<tool>) are lent too.
+     */
+    val LENT = setOf(
+        "browser_upload", "browser_open", "site_probe", "site_catalog", "browser_read", "browser_click", "browser_type", "browser_press_key", "browser_wait_for", "browser_scroll",
+        "browser_back", "browser_show_user", "browser_look", "browser_handoff", "browser_eval", "browser_network", "browser_console", "browser_call_voice", "place_whatsapp_call",
+        "webapp_list", "webapp_test",
+        "notifications_read", "notifications_wait_code", "phone_files", "photos_recent", "ask_user", "request_approval", "notify_user", "phone_location",
+        "android_intent", "android_apps", "macrodroid_run",
+        "screen_open_app", "screen_look", "screen_tap", "screen_type", "screen_swipe", "screen_key", "screen_wait", "screen_close", "screen_status",
+        "screen_skill_save", "screen_skill_list", "screen_skill_run", "screen_skill_undo",
+    )
+
+    /** Tools that stay on the phone on purpose, each with why. */
+    val PHONE_ONLY: Map<String, String> = mapOf(
+        "run_code" to "A shell on the phone is never lent.",
+        "selfcheck_ping" to "The phone's own start-up check.",
+        "now" to "The computer has its own clock tool.", "web_fetch" to "The computer fetches pages itself.", "report" to "Writes into the phone's own chat.",
+        "files_pick" to "Opens a picker for the phone's own agent; a computer reads phone files with phone_files.",
+        "media_frames" to "Works on files in the phone agent's own folders.", "media_transcribe" to "Works on files in the phone agent's own folders.",
+        "voice_note" to "Speaks in the phone's own chat.", "profile_create" to "Profiles belong to the agent that runs; the computer has its own.",
+        "location_get" to "Replaced for computers by phone_location.",
+        "notifications_allow" to "Shows a permission prompt in the phone's own chat.", "notifications_stop" to "Changes the phone's own setting.",
+        "webapp_guide" to "Teaching and saving a web app is done by the agent that owns it.", "webapp_save" to "Teaching and saving a web app is done by the agent that owns it.",
+        "webapp_remove" to "Removing a learned app is the person's or the phone agent's call.",
+        "watcher_save" to "Watchers run in the phone's own agent.",
+    ) + listOf("delegate", "helpers_status", "helper_steer", "helper_push", "helper_stop", "escalation_triage", "agent_pin", "agent_unpin", "agents_pinned").associateWith { "Runs the phone's own helpers; the computer has its own." } +
+        listOf("routine_create", "routine_list", "routine_update", "routine_delete", "wake_schedule", "wake_list", "wake_cancel", "quiet_hours").associateWith { "The phone agent's own routines and wake-ups; the computer has its own." } +
+        listOf("memory_search", "memory_save", "memory_get", "memory_update", "skill_save", "skill_find", "goal_create", "goal_update", "goal_delete", "task_add", "task_update", "task_delete", "task_list").associateWith { "The phone agent's own memory and tasks; a linked computer is the one that holds them." } +
+        listOf("card_guide", "card_save", "card_update", "card_list", "card_show", "card_pin", "card_delete").associateWith { "Cards in the phone's own chat." } +
+        listOf("machine_list", "machine_run", "machine_job_start", "machine_job_status", "machine_upload", "machine_download", "send_file", "machine_handoff", "machine_handoff_status", "machine_host_setup").associateWith { "The phone agent reaching computers; a computer does not need the phone for that." } +
+        listOf("apps_connected", "apps_connect", "apps_find_tools", "apps_run").associateWith { "Connected apps run on the computer's own account." }
+
     fun groupOf(name: String): String? = when {
         name.startsWith("browser_") || name == "site_probe" || name == "site_catalog" || name == "place_whatsapp_call" -> "browser"
-        name.startsWith("notifications") -> "notifications"
-        name == "phone_files" -> "files"
+        name == "webapp_list" || name == "webapp_test" || name.startsWith("web_") -> "browser"
+        name == "notifications_read" || name == "notifications_wait_code" -> "notifications"
+        name == "phone_files" || name == "photos_recent" -> "files"
         name == "ask_user" || name == "request_approval" -> "approval"
         name == "notify_user" -> "phone"
         name == "phone_location" -> "location"
@@ -57,9 +93,14 @@ object DeviceTools {
             com.past9.phoneaos.tools.PhoneFilesTool(context),
             com.past9.phoneaos.tools.AskUserTool(), com.past9.phoneaos.tools.ApprovalTool(), com.past9.phoneaos.tools.NotifyTool(),
             com.past9.phoneaos.tools.PhoneLocationTool(context),
+            com.past9.phoneaos.tools.PhotosTool(context),
+            com.past9.phoneaos.tools.WaitForCodeTool(g.db, g.settings, com.past9.phoneaos.tools.NotificationsAllowTool(context, g.settings)),
+            // The web apps this phone's agent taught itself, run in the phone's own signed-in browser.
+            com.past9.phoneaos.connections.WebAppListTool(g.runtime.learned), com.past9.phoneaos.connections.WebAppTestTool(g.runtime.learned, g.runtime.pageRunner),
             com.past9.phoneaos.automation.AndroidIntentTool(context, g.settings.intentSettings), com.past9.phoneaos.automation.AndroidAppsTool(context),
             com.past9.phoneaos.automation.MacroDroidRunTool(context, g.settings.macroSettings),
-        ) + (if (com.past9.phoneaos.screen.Screens.on(context)) com.past9.phoneaos.tools.screenTools(context) + com.past9.phoneaos.tools.screenLearnedTools(context) else emptyList())
+        ) + g.runtime.learned.apps.value.filter { !it.isScreen }.flatMap { a -> a.tools.map { com.past9.phoneaos.connections.LearnedCallTool(a.id, it, g.runtime.learned, g.runtime.pageRunner) } } +
+            (if (com.past9.phoneaos.screen.Screens.on(context)) com.past9.phoneaos.tools.screenTools(context) + com.past9.phoneaos.tools.screenLearnedTools(context) else emptyList())
     }
 
     /** The tools this phone offers right now (only switched-on groups). */
