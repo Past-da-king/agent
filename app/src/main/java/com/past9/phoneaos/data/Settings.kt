@@ -286,6 +286,23 @@ class SettingsStore(context: Context) {
     fun secret(key: String): String? = secrets.getString("s_$key", null)
     fun setSecret(key: String, value: String?) { secrets.edit().apply { if (value.isNullOrEmpty()) remove("s_$key") else putString("s_$key", value) }.apply() }
 
+    // ---- browser: sites that need advanced browser features, and the agent's voice in WhatsApp calls --------------------
+
+    /** Sites the browser lets use shared memory (SharedArrayBuffer). Starts as [com.past9.phoneaos.browser.IsolatedOrigins.DEFAULT]; an emptied list stays empty. */
+    fun isolatedOrigins(): List<String> = com.past9.phoneaos.browser.IsolatedOrigins.parse(extra("isolated_origins"))
+    /** Adds what the user typed. Returns why not, or null when it was added. */
+    fun addIsolatedOrigin(input: String): String? {
+        val (list, error) = com.past9.phoneaos.browser.IsolatedOrigins.add(isolatedOrigins(), input)
+        if (error == null) setExtra("isolated_origins", com.past9.phoneaos.browser.IsolatedOrigins.encode(list))
+        return error
+    }
+    fun removeIsolatedOrigin(origin: String) =
+        setExtra("isolated_origins", com.past9.phoneaos.browser.IsolatedOrigins.encode(com.past9.phoneaos.browser.IsolatedOrigins.remove(isolatedOrigins(), origin)))
+
+    /** Let the agent speak in WhatsApp Web calls (the call audio bridge). Off until the user turns it on. */
+    fun callBridgeOn(): Boolean = extra("call_bridge_on") == "true"
+    fun setCallBridgeOn(on: Boolean) = setExtra("call_bridge_on", if (on) "true" else null)
+
     fun extra(key: String): String? = prefs.getString("x_$key", null)
     fun setExtra(key: String, value: String?) { prefs.edit().apply { if (value == null) remove("x_$key") else putString("x_$key", value) }.apply() }
 

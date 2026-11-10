@@ -88,6 +88,9 @@ class BrowserService : Service() {
             return e
         }
 
+        /** Settings > Browser changed the sites list: every open browser's profile gets it. */
+        fun applyIsolation(origins: List<String>) { engines.values.forEach { it.applyIsolation(origins) } }
+
         /** The browser this agent already has open, if any. Never starts one. */
         fun existing(owner: String): BrowserEngine? = engines.entries.firstOrNull { it.key.startsWith("$owner/") }?.value
 

@@ -55,6 +55,8 @@ data class SettingsActions(
     val rotateAutomationToken: () -> String = { "" },
     /** Settings > Automation, the other direction: macros the agent may run without asking, the test and the webhook. */
     val macro: MacroActions = MacroActions(),
+    /** Settings > Browser: sites that may use shared memory in the agent's browser, and the agent's voice in WhatsApp calls. */
+    val browser: BrowserSettingsActions = BrowserSettingsActions(),
     val linkedLine: String = "Use the agent on your computer from this phone",
 )
 
@@ -94,6 +96,7 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
     var voiceSheet by remember { mutableStateOf(false) }
     var automationSheet by remember { mutableStateOf(false) }
     var macroSheet by remember { mutableStateOf(false) }
+    var browserSheet by remember { mutableStateOf(false) }
     // The sheet keeps what it shows, so a flip of the switch or a new token lands without re-reading Settings.
     var automationAllowedNow by remember { mutableStateOf(automation.allowed) }
     var automationTokenNow by remember { mutableStateOf(automation.token) }
@@ -157,6 +160,12 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
                 Line(Icons.Rounded.SmartToy, "Agent talks to your apps",
                     MacroRulesUi.allowedLine(actions.macro.allowlist(), actions.macro.intents())) { macroSheet = true }
             }
+            SectionHeader("Browser", "The browser your agent uses", Modifier.padding(start = 4.dp, top = 12.dp))
+            AppCard(padding = PaddingValues(vertical = 4.dp)) {
+                // Read again each time the sheet closes, so the line says what the sheet just changed.
+                val sites = remember(browserSheet) { actions.browser.origins() }
+                Line(Icons.Rounded.Public, "Sites that need advanced browser features", com.past9.phoneaos.browser.IsolatedOrigins.line(sites)) { browserSheet = true }
+            }
             SectionHeader("Linked devices", "Your computers and servers", Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 Line(Icons.Rounded.Devices, "Linked devices", actions.linkedLine) { actions.onLinked() }
@@ -191,6 +200,7 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
         onDismiss = { automationSheet = false },
     )
     if (macroSheet) MacroSheet(actions.macro) { macroSheet = false }
+    if (browserSheet) BrowserSheet(actions.browser) { browserSheet = false }
     if (confirmReset) com.past9.phoneaos.ui.ConfirmSheet(androidx.compose.material.icons.Icons.Rounded.DeleteForever, "This phone", "Reset everything?",
         "This deletes your keys, memory, tasks, routines and the conversation from this phone. It can't be undone.",
         confirm = "Reset everything", onConfirm = { confirmReset = false; actions.onResetAll() }, onDismiss = { confirmReset = false }, cancel = "Keep my stuff", destructive = true)

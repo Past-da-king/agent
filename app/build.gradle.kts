@@ -16,8 +16,8 @@ android {
     applicationId = "com.past9.phoneaos"
     minSdk = 28
     targetSdk = 28
-    versionCode = 135
-    versionName = "0.15.32"
+    versionCode = 136
+    versionName = "0.15.33"
     // Android never lets an installed app rename itself or change the icon Samsung shows on
     // notifications, so a personal build bakes the owner's agent in: -PagentName=Hina -PagentIcon=ic_app_heart_red
     resValue("string", "app_name", (project.findProperty("agentName") as String?) ?: "Agent")
@@ -26,6 +26,8 @@ android {
     ndk { abiFilters += listOf("arm64-v8a") }
     // A test install beside the real app (an emulator that already has it): -PappIdSuffix=.linktest
     (project.findProperty("appIdSuffix") as String?)?.let { applicationIdSuffix = it }
+    // Tests that need a real WebView (app/src/androidTest) run on a phone or an emulator: ./gradlew :app:connectedDebugAndroidTest
+    testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
   // The runtimes (node, Claude Code, Codex, Antigravity) are not in the APK: they download on first use (runtime/RuntimePacks.kt).
   packaging {
@@ -164,6 +166,9 @@ dependencies {
   testImplementation(files(strippedSftp))
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation("org.json:json:20240303")
+  androidTestImplementation(libs.junit)
+  androidTestImplementation("androidx.test:runner:1.6.2")
+  androidTestImplementation("androidx.test.ext:junit:1.2.1")
   debugImplementation(libs.androidx.compose.ui.test.manifest)
   debugImplementation(libs.androidx.compose.ui.tooling)
 }
