@@ -52,7 +52,7 @@ class Graph(context: Context) {
      * The outside entry point (GitHub issue #18): MacroDroid and Tasker fire a routine or send an instruction over
      * 127.0.0.1. It lives exactly as long as this process does, which is the honest v1: no background service behind it.
      */
-    private val automationHandlers by lazy {
+    val automationHandlers by lazy {
         com.past9.phoneaos.automation.PhoneAutomation(settings, runtime, scope) { db.triggers().list() }.handlers()
     }
     val automation = com.past9.phoneaos.automation.AutomationServer(settings.automationPort()).also { server ->

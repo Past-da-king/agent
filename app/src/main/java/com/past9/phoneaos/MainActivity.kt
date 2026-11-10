@@ -798,7 +798,10 @@ class MainActivity : ComponentActivity() {
                             allowlist = g.settings::macroAllowlistText, setAllowlist = g.settings::setMacroAllowlistText,
                             webhookOn = g.settings::macroWebhookOn, setWebhookOn = g.settings::setMacroWebhookOn,
                             webhookId = g.settings::macroWebhookId, setWebhookId = g.settings::setMacroWebhookId,
-                            test = { com.past9.phoneaos.automation.MacroSender(this@MainActivity).broadcast(com.past9.phoneaos.automation.MacroCall(com.past9.phoneaos.automation.MacroRules.TEST_MACRO, v1 = "hello")) },
+                            intents = g.settings::intentAllowlistText, setIntents = g.settings::setIntentAllowlistText,
+                            testMaps = { com.past9.phoneaos.automation.IntentSender(this@MainActivity) { true }.send(com.past9.phoneaos.automation.IntentSpec(
+                                com.past9.phoneaos.automation.IntentRules.ACTIVITY, Intent.ACTION_VIEW, data = "geo:0,0?q=Sandton+City")) },
+                            test = { name -> com.past9.phoneaos.automation.MacroSender(this@MainActivity).broadcast(com.past9.phoneaos.automation.MacroCall(name, v1 = "hello")) },
                         ),
                     ),
                         automation = com.past9.phoneaos.ui.screens.AutomationInfo(

@@ -21,18 +21,22 @@ import com.past9.phoneaos.ui.AppCard
 
 /** The Settings line under Automation, in words. */
 object MacroRulesUi {
-    fun allowedLine(allowlistText: String): String = MacroRules.parseAllowlist(allowlistText).let { list ->
-        when (list.size) {
-            0 -> "Every macro asks you first · tap to set it up"
-            1 -> "\"${list[0]}\" runs without asking; others ask"
-            else -> "${list.size} macros run without asking; others ask"
+    fun allowedLine(allowlistText: String, intentsText: String = ""): String {
+        val macros = MacroRules.parseAllowlist(allowlistText).size
+        val intents = com.past9.phoneaos.automation.IntentRules.parseAllowlist(intentsText).size
+        return when {
+            macros == 0 && intents == 0 -> "Intents and macros \u00b7 anything that changes something asks you first"
+            else -> listOfNotNull(
+                macros.takeIf { it > 0 }?.let { "$it macro${if (it == 1) "" else "s"}" },
+                intents.takeIf { it > 0 }?.let { "$it app intent${if (it == 1) "" else "s"}" },
+            ).joinToString(" and ") + " can run without asking; others ask"
         }
     }
 }
 
 /**
- * Settings > Automation > Agent runs your macros: the allowlist, a test, the recipe to copy and the optional
- * MacroDroid webhook. A slide-up sheet in the app's own pieces, never a pop-up.
+ * Settings > Automation > Agent talks to your apps: what may run without asking (app intents and macros), a test for
+ * each, the MacroDroid recipe to copy and the optional MacroDroid webhook. A slide-up sheet in the app's own pieces, never a pop-up.
  */
 @Composable
 internal fun MacroSheet(actions: MacroActions, onDismiss: () -> Unit) {
@@ -41,12 +45,36 @@ internal fun MacroSheet(actions: MacroActions, onDismiss: () -> Unit) {
     var webhookOn by remember { mutableStateOf(actions.webhookOn()) }
     var webhookId by remember { mutableStateOf(actions.webhookId()) }
     var testResult by remember { mutableStateOf<String?>(null) }
+    var intents by remember { mutableStateOf(actions.intents()) }
+    var mapsResult by remember { mutableStateOf<String?>(null) }
     val recipe = remember { MacroRules.recipe(MacroRules.parseAllowlist(allow).firstOrNull() ?: "Wifi off") }
+    // The test runs the user's own first macro when they have listed one, so they test the thing they made.
+    val testMacro = MacroRules.parseAllowlist(allow).firstOrNull() ?: MacroRules.TEST_MACRO
     fun save() { actions.setAllowlist(allow); actions.setWebhookId(webhookId) }
     com.past9.phoneaos.ui.AgentSheet({ save(); onDismiss() }) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 24.dp).navigationBarsPadding().imePadding()) {
-            com.past9.phoneaos.ui.SheetHead(Icons.Rounded.SmartToy, "Automation", "Agent runs your macros",
-                "Your agent can run a MacroDroid or Tasker macro: switch a setting, open an app, anything the macro does. It sends a message on this phone that the macro's Intent Received trigger catches. Nothing leaves the phone.")
+            com.past9.phoneaos.ui.SheetHead(Icons.Rounded.SmartToy, "Automation", "Agent talks to your apps",
+                "Your agent can send any app on this phone an Android intent: open a place in Maps, share into an app, run a MacroDroid or Tasker macro. Opening a screen never asks. Anything else asks you first, unless it is listed here. Nothing leaves the phone.")
+            Spacer(Modifier.height(20.dp))
+            com.past9.phoneaos.ui.SheetField(intents, { intents = it; actions.setIntents(it) }, "Allowed app intents", "action | package, one per line",
+                minLines = 2, mono = true, keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.None))
+            Text("An action and the app it goes to, like android.intent.action.SEND | com.whatsapp. Use * for any app. When you approve one, the card shows the line to add.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp))
+            AppCard(padding = PaddingValues(vertical = 4.dp)) {
+                Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Place, null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(16.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Test with Maps", style = MaterialTheme.typography.titleSmall)
+                        Text(mapsResult?.let { if (it.startsWith("sent")) "Sent. Your maps app should open on Sandton City." else it.replaceFirstChar { c -> c.uppercase() } }
+                            ?: "Opens Sandton City in your maps app, by intent.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (mapsResult?.startsWith("failed") == true) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    OutlinedButton(onClick = { mapsResult = actions.testMaps() }) { Text("Open", style = MaterialTheme.typography.labelLarge) }
+                }
+            }
             Spacer(Modifier.height(20.dp))
             com.past9.phoneaos.ui.SheetField(allow, { allow = it; actions.setAllowlist(it) }, "Allowed macros", "One macro name per line, e.g. Wifi off",
                 minLines = 3, keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences))
@@ -59,13 +87,13 @@ internal fun MacroSheet(actions: MacroActions, onDismiss: () -> Unit) {
                     Icon(Icons.Rounded.PlayArrow, null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Test", style = MaterialTheme.typography.titleSmall)
-                        Text(testResult?.let { if (it == "sent") "Sent \"${MacroRules.TEST_MACRO}\" with v1 = hello. Your macro should run now." else it.replaceFirstChar { c -> c.uppercase() } }
-                            ?: "Sends a macro called \"${MacroRules.TEST_MACRO}\". Make one in MacroDroid to see it work.",
+                        Text("Test a macro", style = MaterialTheme.typography.titleSmall)
+                        Text(testResult?.let { if (it == "sent") "Sent \"$testMacro\". Nothing happened? In the trigger, the extra's name must be macro in small letters, with no space after the value." else it.replaceFirstChar { c -> c.uppercase() } }
+                            ?: "Sends your macro \"$testMacro\" now.".takeIf { MacroRules.parseAllowlist(allow).isNotEmpty() } ?: "Sends a macro called \"${MacroRules.TEST_MACRO}\". Add yours above to test that one.",
                             style = MaterialTheme.typography.bodySmall,
                             color = if (testResult?.startsWith("failed") == true) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    OutlinedButton(onClick = { testResult = actions.test() }) { Text("Send", style = MaterialTheme.typography.labelLarge) }
+                    OutlinedButton(onClick = { testResult = actions.test(testMacro) }) { Text("Send", style = MaterialTheme.typography.labelLarge) }
                 }
             }
             Spacer(Modifier.height(16.dp))
@@ -73,7 +101,7 @@ internal fun MacroSheet(actions: MacroActions, onDismiss: () -> Unit) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.ContentCopy, null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(16.dp))
-                    Text("Set up the trigger", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                    Text("Set up a macro", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                     OutlinedButton(onClick = { clip.setText(AnnotatedString(recipe)); com.past9.phoneaos.ui.AppNotice.say("Recipe copied") }) {
                         Text("Copy", style = MaterialTheme.typography.labelLarge)
                     }

@@ -131,26 +131,64 @@ Your phone can be the remote, not the engine. Under **Connections, Machines** yo
 - **Commands that change things ask first.** The card shows the exact command, unless you switch on *Run without asking* for that machine.
 - **At home**, put the phone and the computer on the same [Tailscale](https://tailscale.com) network and use the computer's tailnet address. On Windows, turn on *OpenSSH Server* under Settings, Optional features, or run `sshd` inside WSL.
 
-## Connect MacroDroid
+## Connect other apps: intents, MacroDroid, Tasker
 
-MacroDroid and Tasker work with the agent in both directions. Both stay on the phone unless you switch the webhook on.
+The agent talks to the other apps on your phone the way Android apps talk to each other, with intents, and other apps can talk to it the same way. Everything stays on the phone.
 
-**MacroDroid to Agent.** A macro fires one of your routines or sends the agent an instruction over `http://127.0.0.1:47321`, with the token from Settings, Automation, *Automation from other apps*. Turn on *Allow outside runs* first. Full steps: [docs/automation-macrodroid.md](docs/automation-macrodroid.md).
+### Agent to any app
 
-**Agent to MacroDroid.** The agent runs a macro of yours with its `macrodroid_run` tool: switch a setting, open an app, anything the macro does.
+Two tools do this.
+
+- `android_apps` shows what is installed and what each app accepts: links, places, shared text and images, and its exported screens. It only reads, so it never asks.
+- `android_intent` sends an intent: `{kind: broadcast | activity | service, action, package, component, data, mimeType, category, extras, flags}`. Extras keep their type (text, true or false, numbers, lists), or you force one with `{type, value}`.
+
+A Google Maps route, for example:
+
+```
+{kind: "activity", action: "android.intent.action.VIEW", data: "google.navigation:q=Sandton+City", package: "com.google.android.apps.maps"}
+```
+
+What asks first:
+
+- An intent that only opens a screen goes straight away: view a link or a place, open an app, the dialler with a number filled in, a search, a settings page.
+- Anything else asks you first: sharing into an app, a broadcast, a service.
+- To stop being asked for one, add its action and app to Settings, Automation, *Agent talks to your apps*, **Allowed app intents**, one per line: `android.intent.action.SEND | com.whatsapp`. Use `*` for any app. The approval card shows the exact line.
+- When nobody is there to answer, as in a routine at night, it is not sent.
+
+Android does not let an app open a screen from the background. If the Agent app is not on screen, the intent arrives as a notification you tap. Allow *Display over other apps* for Agent to skip that.
+
+### Agent to MacroDroid or Tasker
+
+`macrodroid_run` is a preset over the same thing: one broadcast your macro listens for.
 
 1. In MacroDroid, make a macro with the trigger **Intent Received**.
 2. Action: `com.past9.phoneaos.MACRO`, exactly. It is case-sensitive.
-3. Add one extra: `macro` = the macro's name, for example `Wifi off`.
-4. Optional: `v1`, `v2`, `v3` and `params` = `*`, each saved to a variable. The agent always sends all of them, as text, so the trigger still fires when a value is empty.
-5. In the Agent app, open Settings, Automation, *Agent runs your macros*, and add `Wifi off` to **Allowed macros**. Macros on that list run without asking. Any other macro asks you first, and is not sent when nobody answers.
-6. Tap **Test** to send a macro called `Agent test` with `v1` = `hello`. **Copy** puts this recipe on your clipboard.
+3. Add one extra. Name: `macro`, in small letters. Value: the macro's name, for example `demo`, with nothing after it, not even a space.
+4. Optional: `v1`, `v2`, `v3` and `params` = `*`, each saved to a variable. The agent always sends all of them as text.
+5. In the Agent app, open Settings, Automation, *Agent talks to your apps*, and add `demo` to **Allowed macros**. Macros on that list run without asking. Any other macro asks first.
+6. Tap **Send** under *Test a macro*. It sends the first macro on your list.
+
+If the macro does not run, MacroDroid gives no error. Check these, in order:
+
+- MacroDroid is switched on, and so is the macro.
+- The extra's name is `macro`, not `Macro`. Phone keyboards capitalise it. The agent also sends `Macro` and `MACRO`, so this one is covered from 0.15.32.
+- The value has no space after it. Predictive keyboards add one, and then it never matches. `demo*` also works.
+- Remove the extra and test with the action alone. If that fires, the extra was the problem.
 
 Tasker catches the same broadcast: Profile, Event, *Intent Received*, Action `com.past9.phoneaos.MACRO`. The values arrive as `%macro`, `%v1`, `%v2`, `%v3` and `%params`.
 
-The agent on a linked computer can run your phone's macros too. It uses the same tool through the device link, with the same allowlist and the same question on the phone. You can switch this off under Settings, Linked devices.
+The **MacroDroid webhook** is optional and off by default. It lets an agent that is not on this phone reach MacroDroid's own server, `trigger.macrodroid.com`. Your values then pass through MacroDroid's server, so leave it off unless you need it.
 
-The **MacroDroid webhook** is optional and off by default. It lets an agent that is not running on this phone reach MacroDroid's own server, `trigger.macrodroid.com`. Your values then pass through MacroDroid's server, so leave it off unless you need it. To use it, add a *Webhook (Url)* trigger whose identifier is the macro name in lower case with dashes, `wifi-off`, and paste the device id from its address into the sheet.
+### Any app to Agent
+
+Two doors, with the same token and the same switch (Settings, Automation, *Automation from other apps*, **Allow outside runs**). A run started from outside has nobody watching, so anything that needs your approval is refused.
+
+- **By intent.** Send a broadcast to package `com.past9.phoneaos` with action `com.past9.phoneaos.RUN_ROUTINE` and the extras `token` and `routine` (its name or id), plus an optional `note`. Or action `com.past9.phoneaos.INSTRUCT` with `token` and `text`. This works when the Agent app is closed. The package is required, because Android does not deliver a broadcast to a closed app without it. The sheet has a recipe to copy, with your token in it.
+- **Over HTTP.** `http://127.0.0.1:47321` with the token as a Bearer header, only while the app is running. This one can also read the result back. Steps: [docs/automation-macrodroid.md](docs/automation-macrodroid.md).
+
+### From your computer
+
+The agent on a linked computer can use `android_intent`, `android_apps` and `macrodroid_run` on the phone through the device link, with the same allowlists and the same question on the phone. Switch it off under Settings, Linked devices.
 
 ## Build from source
 

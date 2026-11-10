@@ -37,7 +37,7 @@ class MacroSheetShotTest(private val dark: Boolean) {
             AppTheme(dark = dark) {
                 CompositionLocalProvider(LocalSheetPreview provides true) {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
-                        MacroSheet(MacroActions(allowlist = { "Wifi off\nTorch" }, webhookOn = { true }, webhookId = { "a1b2c3" })) {}
+                        MacroSheet(MacroActions(allowlist = { "Wifi off\nTorch" }, intents = { "android.intent.action.SEND | com.whatsapp" }, webhookOn = { true }, webhookId = { "a1b2c3" })) {}
                     }
                 }
             }

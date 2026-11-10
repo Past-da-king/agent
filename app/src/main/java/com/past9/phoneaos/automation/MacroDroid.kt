@@ -18,21 +18,26 @@ import java.net.URLEncoder
 /**
  * The other direction of issue #18: the agent tells MacroDroid (or Tasker) to DO something, by running a macro.
  *
- * Local first. The agent sends an Android broadcast on this phone, and MacroDroid's "Intent Received" trigger catches
- * it. Nothing leaves the phone. MacroDroid's trigger matches the action exactly (case-sensitive) and fires only when
- * EVERY extra it was set up with is present and matches, so every extra below is always sent, as a string, even when
- * it is empty. A macro set up with "v1 = *" still fires when the agent had nothing to put in v1.
+ * A preset over the system-wide intent layer (AndroidIntents.kt): a macro call is one broadcast with a fixed action and
+ * a fixed set of extras, sent by the same [IntentSender] every other intent goes through. Nothing leaves the phone.
+ *
+ * What MacroDroid's "Intent Received" trigger needs, measured against MacroDroid 6.1.5 on 10 Nov 2026:
+ * - it listens only while MacroDroid is running, and matches the action exactly (case-sensitive);
+ * - it fires only when EVERY extra it was set up with is present and matches, so every extra below is always sent, as a
+ *   string, even when it is empty;
+ * - the extra's NAME is case-sensitive ("Macro" does not match "macro") and the value must match in full ("demo " with
+ *   a space after it does not match "demo"); the value's case does not matter. A phone keyboard capitalises the first
+ *   letter of the name, so the name is also sent as "Macro" and "MACRO". The value is the user's to type right, and
+ *   the recipe says so.
  *
  *   action  com.past9.phoneaos.MACRO
- *   macro   the macro's name, e.g. "Wifi off"         match it exactly in the trigger
+ *   macro   the macro's name, e.g. "Wifi off"         match it exactly in the trigger (also sent as Macro and MACRO)
  *   v1..v3  short values, "" when unused             match with * and save into variables
  *   params  a JSON object as text, "{}" when unused  for anything more
  *   from    "agent"
  *
  * Optional, off by default: MacroDroid's own webhook (trigger.macrodroid.com), for when the agent runs on another
  * device. That call goes through MacroDroid's server, and the sheet says so.
- *
- * Pure parts ([MacroCall], [MacroRules]) are plain Kotlin so they test without a phone.
  */
 data class MacroCall(
     val macro: String,
@@ -49,11 +54,14 @@ data class MacroCall(
         MacroRules.EXTRA_FROM to MacroRules.FROM_AGENT,
     )
 
-    /** The broadcast for this call. Implicit on purpose: MacroDroid and Tasker both register for the action. */
-    fun intent(): Intent = Intent(MacroRules.ACTION).apply {
-        extras().forEach { (k, v) -> putExtra(k, v) }
-        addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
-    }
+    /** This call as a plain intent: an implicit broadcast, so MacroDroid, Tasker and anything else listening gets it. */
+    fun spec(): IntentSpec = IntentSpec(
+        kind = IntentRules.BROADCAST, action = MacroRules.ACTION,
+        extras = LinkedHashMap<String, Any>(extras()).apply { MacroRules.NAME_SPELLINGS.forEach { put(it, macro) } },
+        flags = listOf("foreground"),
+    )
+
+    fun intent(): Intent = IntentRules.build(spec())
 
     /** MacroDroid's webhook address for this call: the identifier is the macro name, the values travel as query. */
     fun webhookUrl(deviceId: String): String {
@@ -66,6 +74,8 @@ data class MacroCall(
 object MacroRules {
     const val ACTION = "com.past9.phoneaos.MACRO"
     const val EXTRA_MACRO = "macro"
+    /** The name again as a phone keyboard would capitalise it: MacroDroid matches an extra's name case-sensitively. */
+    val NAME_SPELLINGS = listOf("Macro", "MACRO")
     const val EXTRA_PARAMS = "params"
     const val EXTRA_FROM = "from"
     const val FROM_AGENT = "agent"
@@ -130,10 +140,12 @@ object MacroRules {
         MacroDroid: Agent to MacroDroid
         1. New macro. Add trigger: search for Intent Received.
         2. Action: $ACTION (exactly, it is case-sensitive).
-        3. Extras: macro = $macro
+        3. Add extra. Name: macro (small letters). Value: $macro
+           Nothing after the value, not even a space. Or end it with a star: $macro*
            Optional: v1 = * (save to a variable), v2 = *, v3 = *, params = * (JSON text).
         4. Add the actions you want (Wifi off, open an app, anything).
         5. In the Agent app: Settings > Automation > Allowed macros, add "$macro" so it runs without asking.
+        Not firing? Remove the extra and test with the action alone. MacroDroid must be switched on and running.
         Tasker: Profile > Event > Intent Received, Action $ACTION; the extras arrive as %macro, %v1, %v2, %v3, %params.
         Optional webhook (goes through MacroDroid's server): trigger Webhook (Url) with identifier ${webhookId(macro)}.
     """.trimIndent()
@@ -141,8 +153,7 @@ object MacroRules {
 
 /** Sends a [MacroCall]: the broadcast on this phone, or MacroDroid's webhook when the user switched it on. */
 class MacroSender(private val context: Context) {
-    fun broadcast(call: MacroCall): String = runCatching { context.sendBroadcast(call.intent()); "sent" }
-        .getOrElse { "failed: ${it.message ?: it::class.java.simpleName}" }
+    fun broadcast(call: MacroCall): String = IntentSender(context).send(call.spec())
 
     suspend fun webhook(call: MacroCall, deviceId: String): String = withContext(Dispatchers.IO) {
         runCatching {
@@ -179,7 +190,8 @@ class MacroDroidRunTool(
     override val spec = ToolSpec("macrodroid_run",
         "Run one of the user's MacroDroid (or Tasker) macros on this phone: toggle a setting, open an app, anything their macro does. " +
             "Sends an Android broadcast that the macro's 'Intent Received' trigger catches; nothing leaves the phone. " +
-            "Macros on the user's allowlist run at once; any other asks the user first. Returns 'sent' (MacroDroid got it; it can't report back) or 'failed: why'.",
+            "Macros on the user's allowlist run at once; any other asks the user first. Returns 'sent' (the broadcast went out; MacroDroid can't report back, so it does not prove the macro ran) or 'failed: why'. " +
+            "A preset over android_intent, which talks to any other app.",
         schema(listOf("macro"),
             "macro" to str("The macro's name exactly as the user set it in the trigger, e.g. 'Wifi off'"),
             "v1" to str("Optional value the macro reads from v1"), "v2" to str("Optional value for v2"), "v3" to str("Optional value for v3"),

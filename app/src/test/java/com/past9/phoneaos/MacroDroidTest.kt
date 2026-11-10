@@ -73,6 +73,10 @@ class MacroDroidTest {
         assertEquals("", i.getStringExtra("v3"))
         assertEquals(7, JSONObject(i.getStringExtra("params")!!).getInt("volume"))
         assertNull("implicit, so MacroDroid and Tasker both get it", i.component)
+        assertNull(i.`package`)
+        // MacroDroid matches an extra's NAME case-sensitively, and a phone keyboard types "Macro".
+        assertEquals("Open Spotify", i.getStringExtra("Macro"))
+        assertEquals("Open Spotify", i.getStringExtra("MACRO"))
     }
 
     @Test fun theWebhookAddressUsesTheMacroAsIdentifier() {
@@ -187,6 +191,7 @@ class MacroDroidTest {
 
     @Test fun theRecipeNamesTheActionAndMacro() {
         val r = MacroRules.recipe("Wifi off")
-        assertTrue(r.contains("com.past9.phoneaos.MACRO") && r.contains("macro = Wifi off") && r.contains("wifi-off"))
+        assertTrue(r.contains("com.past9.phoneaos.MACRO") && r.contains("Name: macro (small letters). Value: Wifi off") && r.contains("wifi-off"))
+        assertTrue("it says what makes MacroDroid stay silent", r.contains("not even a space") && r.contains("action alone"))
     }
 }
