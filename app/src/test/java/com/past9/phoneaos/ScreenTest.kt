@@ -544,6 +544,18 @@ class ScreenSessionTest {
         assertTrue(screenSkillTools(l).first { it.spec.name == "screen_skill_run" }.run(JSONObject().put("app", "Notes").put("tool", "add_note").put("args", JSONObject().put("title", "Tea")), ctx).contains("\"Tea\""))
     }
 
+    @Test fun switchedOffThereAreNoLearnedPhoneTools() = runBlocking {
+        val ctx = ScreenCtx(); val l = learning()
+        doTheJob(ctx, "Milk")
+        ScreenLearned.save(session, store, apps, config().blocklist, ctx, "add_note", "Adds a note.", mapOf("title" to "Milk"), false)
+        try {
+            com.past9.phoneaos.connections.screenOn = { false }
+            assertTrue(learnedTools(store, l.runner).none { it.spec.name.startsWith("app_") })
+            com.past9.phoneaos.connections.screenOn = { true }
+            assertTrue(learnedTools(store, l.runner).any { it.spec.name == "app_notes_add_note" })
+        } finally { com.past9.phoneaos.connections.screenOn = { true } }
+    }
+
     @Test fun aLearnedToolStillAsksBeforeASendAndStopsWhenThePersonSaysNo() = runBlocking {
         val ctx = ScreenCtx(); val l = learning()
         session.open(ctx, "Notes"); session.tap(ctx, null, "New note", null, null, false)

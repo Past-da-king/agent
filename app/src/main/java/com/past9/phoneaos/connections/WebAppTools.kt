@@ -238,4 +238,7 @@ class WebAppRemoveTool(private val store: LearnedStore) : Tool {
 /** Every tool the learned apps offer, read from the store when asked, so a new app shows up without a restart. */
 fun learnedTools(store: LearnedStore, runner: PageRunner): List<Tool> =
     listOf(WebAppGuideTool(), WebAppListTool(store), WebAppSaveTool(store, runner), WebAppTestTool(store, runner), WebAppRemoveTool(store)) +
-        store.apps.value.flatMap { a -> a.tools.map { LearnedCallTool(a.id, it, store, runner) } }
+        store.apps.value.filter { !it.isScreen || screenOn() }.flatMap { a -> a.tools.map { LearnedCallTool(a.id, it, store, runner) } }
+
+/** Learned tools for apps on the phone only exist while the background screen is switched on. Set by the app; tests leave it on. */
+var screenOn: () -> Boolean = { true }

@@ -69,6 +69,21 @@ object Screens {
     /** Apps the person added to the blocked list: one package (or pattern) per line, with the app's name after a bar. */
     const val BLOCKED = "screen_blocked"
     const val RECORD = "screen_record"
+    /** The whole feature's switch. Off by default: with it off there are no screen tools, no service and no setup prompts. */
+    const val ON = "screen_on"
+    fun on(context: Context): Boolean = runCatching { App.graph(context).settings.extra(ON) == "1" }.getOrDefault(false)
+
+    /** The person switches the background screen on or off (Settings). Off also closes whatever is open on it. */
+    fun setOn(context: Context, on: Boolean) {
+        val app = context.applicationContext
+        App.graph(app).settings.setExtra(ON, if (on) "1" else "0")
+        // Shizuku's door into the app only exists while the feature is on.
+        runCatching {
+            app.packageManager.setComponentEnabledSetting(android.content.ComponentName(app, "rikka.shizuku.ShizukuProvider"),
+                if (on) android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED else android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT, android.content.pm.PackageManager.DONT_KILL_APP)
+        }
+        if (!on) made?.let { s -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch { runCatching { s.close() } } }
+    }
     @Volatile private var builtIn: String? = null
     @Volatile private var runsStore: ScreenRuns? = null
 

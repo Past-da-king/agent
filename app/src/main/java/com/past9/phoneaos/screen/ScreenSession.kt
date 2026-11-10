@@ -202,7 +202,8 @@ class ScreenSession(
     private suspend fun front(): Front? = tasks().firstOrNull { it.optInt("display") == displayId && it.optBoolean("visible") && it.optString("pkg").isNotBlank() }
         ?.let { Front(it.optString("pkg"), it.optString("cls"), it.optInt("id")) }
 
-    private suspend fun settle() { runCatching { ask(op("idle").put("quiet", 350).put("timeout", 2_500), 6_000) }.onFailure { if (it is ScreenBlocked) throw it } }
+    /** Wait until the screen has been quiet for [quiet] ms. A replay waits less: its next step looks for its own element anyway. */
+    private suspend fun settle(quiet: Int = 350, timeout: Int = 2_500) { runCatching { ask(op("idle").put("quiet", quiet).put("timeout", timeout), 6_000) }.onFailure { if (it is ScreenBlocked) throw it } }
 
     /** Read the element list only, quietly. True when it could be read. */
     private suspend fun readTree(): Boolean {
@@ -262,7 +263,7 @@ class ScreenSession(
 
     // ---- what the tools and a replay both do (the caller holds the lock) ----
 
-    private suspend fun doOpen(ctx: ToolContext, ref: AppRef, link: String, fresh: Boolean, by: String = "agent"): String? {
+    private suspend fun doOpen(ctx: ToolContext, ref: AppRef, link: String, fresh: Boolean, by: String = "agent", quick: Boolean = false): String? {
         money(ref.pkg, ref.label)?.let { note("blocked", "Blocked: ${ref.label}"); return it }
         if (rule(ref.pkg) == ScreenRules.Rule.NEVER) return ScreenRules.NEVER_REASON
         helper()?.let { return it }
@@ -290,7 +291,7 @@ class ScreenSession(
         _state.value = _state.value.copy(open = true, pkg = ref.pkg, app = ref.label, width = made.optInt("width"), height = made.optInt("height"))
         touch(ctx.agentLabel, "Opened ${ref.label}")
         active(true)
-        settle()
+        if (!quick) settle() else settle(150, 1_200)
         runCatching { readTree() }.onFailure { if (it is ScreenBlocked) throw it }
         log("open", "Opened ${ref.label}", by = by, extra = JSONObject().put("link", link))
         if (!made.optBoolean("trusted")) return "!Note: this phone only allows a basic background screen, so the keyboard or the focus may show on the user's screen while typing."
@@ -317,7 +318,7 @@ class ScreenSession(
         val name = inside.ifBlank { under?.label.orEmpty() }.ifBlank { "$px,$py" }.take(60)
         val sel = selOf(under, before)
         touch(ctx.agentLabel, "Pressed $name")
-        if (!quick) settle() else delay(120)
+        if (!quick) settle() else settle(150, 1_200)
         runCatching { readTree() }.onFailure { if (it is ScreenBlocked) throw it }
         log(if (long) "long" else "tap", "Pressed \"$name\"", sel, by = by, took = now() - t0,
             extra = JSONObject().put("fx", px.toDouble() / s.width.coerceAtLeast(1)).put("fy", py.toDouble() / s.height.coerceAtLeast(1)))
@@ -362,7 +363,7 @@ class ScreenSession(
             blocked(ctx, needOpen = true)?.let { return it to "" }
             submitted = ask(op("act").put("node", field?.takeIf { it.editable }?.id ?: -1).put("action", "enter")).optBoolean("ok") || ask(op("key").put("code", 66)).optBoolean("ok")
             said += if (submitted) " Submitted." else " The submit key did not go through: press the app's own send or search button."
-            if (!quick) settle() else delay(150)
+            if (!quick) settle() else settle(150, 1_200)
             runCatching { readTree() }.onFailure { if (it is ScreenBlocked) throw it }
         }
         log("type", "Typed ${if (hidden) "(hidden)" else "\"${text.take(80)}\""}${if (submitted) " and submitted" else ""}", sel, text, hidden, by,
@@ -383,7 +384,7 @@ class ScreenSession(
         blocked(ctx, needOpen = true)?.let { return it }
         if (!ask(op("key").put("code", code)).optBoolean("ok")) return "The key did not go through."
         touch(ctx.agentLabel, "Pressed ${name.lowercase()}")
-        if (!quick) settle() else delay(120)
+        if (!quick) settle() else settle(150, 1_200)
         runCatching { readTree() }.onFailure { if (it is ScreenBlocked) throw it }
         log("key", "Pressed the ${name.lowercase()} key", by = by, extra = JSONObject().put("key", name.lowercase()))
         return null
@@ -407,7 +408,7 @@ class ScreenSession(
         val sel = selOf(box)
         if (!ask(op("swipe").put("x1", p[0]).put("y1", p[1]).put("x2", p[2]).put("y2", p[3]).put("ms", 320)).optBoolean("ok")) return "The swipe did not go through."
         touch(ctx.agentLabel, "Swiped ${direction.ifBlank { "across" }}")
-        if (!quick) settle() else delay(250)
+        if (!quick) settle() else settle(150, 1_200)
         runCatching { readTree() }.onFailure { if (it is ScreenBlocked) throw it }
         log("swipe", "Swiped ${direction.ifBlank { "across" }}", sel, by = by, extra = JSONObject().put("dir", direction.lowercase()).put("x1", p[0]).put("y1", p[1]).put("x2", p[2]).put("y2", p[3]))
         return null
@@ -557,14 +558,14 @@ class ScreenSession(
             blocked(ctx, needOpen = false)?.let { return fail(-1, it) }
             // Start from the app's front door, so the steps begin where they were learned.
             val first = steps.optJSONObject(0)?.takeIf { it.optString("do") == "open" }
-            val opened = doOpen(ctx, ref, ScreenSkills.fill(first?.optJSONObject("extra")?.optString("link").orEmpty(), args), fresh = true)
+            val opened = doOpen(ctx, ref, ScreenSkills.fill(first?.optJSONObject("extra")?.optString("link").orEmpty(), args), fresh = true, quick = true)
             if (opened != null && !opened.startsWith("!")) return fail(-1, opened)
             suspend fun await(sel: JSONObject, ms: Long): ScreenElement? {
                 val until = now() + ms
                 while (true) {
                     ScreenSkills.find(sel, elements, args)?.let { return it }
                     if (now() >= until) return null
-                    delay(180); readTree()
+                    delay(90); readTree()
                 }
             }
             for (i in 0 until steps.length()) {
@@ -609,7 +610,8 @@ class ScreenSession(
                 if (why != null) return fail(i, "Step ${i + 1} of ${steps.length()} (${ScreenSkills.say(s)}) stopped: $why\n" + runCatching { read() }.getOrDefault(""))
                 stepMs += now() - st
             }
-            settle()
+            // The last screen is what is handed back: give it a moment to finish drawing, no longer than it needs.
+            runCatching { ask(op("idle").put("quiet", 200).put("timeout", 1_500), 4_000) }.onFailure { if (it is ScreenBlocked) throw it }
             Replay(true, read(), -1, now() - t0, stepMs, skipped, usedPicture)
         } catch (e: ScreenBlocked) {
             note("blocked", "Blocked: a banking or money app"); fail(-1, e.message ?: ScreenBlocklist.REASON)

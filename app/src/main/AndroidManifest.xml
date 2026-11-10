@@ -538,9 +538,10 @@
         <service android:name=".screen.ScreenService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="The user's agent uses another app in the background on their behalf, on a hidden display, while they keep their own screen" />
         </service>
-        <!-- Shizuku, when the person has it, hands this app its link here. Only Shizuku (which holds this permission) can call it. -->
+        <!-- Shizuku, when the person has it, hands this app its link here. Only Shizuku (which holds this permission) can call it.
+             Off until the person switches the background screen on (screen/Screens.kt setOn). -->
         <provider android:name="rikka.shizuku.ShizukuProvider" android:authorities="${applicationId}.shizuku" android:multiprocess="false"
-            android:enabled="true" android:exported="true" android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+            android:enabled="false" android:exported="true" android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
         <service android:name=".voice.CallService" android:exported="false" android:foregroundServiceType="microphone|mediaPlayback" />
         <service android:name=".voice.DictationService" android:exported="false" android:foregroundServiceType="microphone" />
         <service android:name=".system.WorkService" android:exported="false" android:foregroundServiceType="specialUse">

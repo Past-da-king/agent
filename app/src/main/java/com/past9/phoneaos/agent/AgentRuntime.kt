@@ -408,6 +408,7 @@ class AgentRuntime(
         list += if (machines.store.machines.value.isEmpty()) listOf(com.past9.phoneaos.machines.MachineListTool(machines))
             else com.past9.phoneaos.machines.machineTools(machines, java.io.File(context.filesDir, "downloads/machines")) + handoffTools()
         list += browserTools(context)
+        com.past9.phoneaos.connections.screenOn = { com.past9.phoneaos.screen.Screens.on(context) }
         list += com.past9.phoneaos.connections.learnedTools(learned, pageRunner)
         val openSignIn: suspend (String) -> Unit = { url -> com.past9.phoneaos.system.UiBus.openInBrowser.emit(com.past9.phoneaos.system.UiBus.OpenInBrowser(url)) }
         if (settings.state.value.composioEnabled && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(settings.composioKey())) {
@@ -420,7 +421,8 @@ class AgentRuntime(
         list += AskUserTool(); list += ApprovalTool(); list += NotifyTool()
         list += com.past9.phoneaos.automation.AndroidIntentTool(context, settings.intentSettings); list += com.past9.phoneaos.automation.AndroidAppsTool(context)
         list += com.past9.phoneaos.automation.MacroDroidRunTool(context, settings.macroSettings)
-        list += com.past9.phoneaos.tools.screenTools(context) + com.past9.phoneaos.tools.screenSkillTools(context)
+        // The background screen is off until the person switches it on (Settings > Background screen): no tools before that.
+        if (com.past9.phoneaos.screen.Screens.on(context)) list += com.past9.phoneaos.tools.screenTools(context) + com.past9.phoneaos.tools.screenSkillTools(context)
         list += SkillFindTool(db.memory()); list += SkillSaveTool(db.memory())
         list += com.past9.phoneaos.cards.CardGuideTool(context)
         list += com.past9.phoneaos.cards.CardSaveTool(context, cards, settings, db.chat()) { c -> com.past9.phoneaos.cards.CardScripts.schedule(context, c, onRoutineChanged, onRoutineDeleted) }

@@ -21,6 +21,8 @@ class ScreenProbe : BroadcastReceiver() {
         val name = intent.getStringExtra("tool") ?: return
         val args = runCatching { JSONObject(intent.getStringExtra("args") ?: "{}") }.getOrDefault(JSONObject())
         val id = intent.getStringExtra("id") ?: "last"
+        // The feature is off by default; a probe run switches it on for the test install.
+        if (!Screens.on(context)) Screens.setOn(context, true)
         val pending = goAsync()
         CoroutineScope(Dispatchers.Default).launch {
             val t0 = System.currentTimeMillis()

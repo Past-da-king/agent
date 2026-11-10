@@ -163,7 +163,7 @@ class MainActivity : ComponentActivity() {
             return
         }
         // The background screen's notification, or adb: am start -n <pkg>/.MainActivity --es open screen | screen_setup | screen_runs
-        when (i.getStringExtra("open")) {
+        if (com.past9.phoneaos.screen.Screens.on(this)) when (i.getStringExtra("open")) {
             "screen" -> { com.past9.phoneaos.screen.ScreenUi.show.value = com.past9.phoneaos.screen.ScreenUi.PEEK; return }
             "screen_setup" -> { com.past9.phoneaos.screen.ScreenUi.show.value = com.past9.phoneaos.screen.ScreenUi.SETUP; return }
             "screen_runs" -> { com.past9.phoneaos.screen.ScreenUi.show.value = com.past9.phoneaos.screen.ScreenUi.RUNS; return }

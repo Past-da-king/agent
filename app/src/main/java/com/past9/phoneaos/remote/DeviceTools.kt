@@ -30,8 +30,8 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 object DeviceTools {
     /** group -> on by default. Shell (run_code) is never lent. */
-    val GROUPS = linkedMapOf("browser" to true, "notifications" to true, "files" to true, "approval" to true, "phone" to true, "location" to true, "automation" to true, "screen" to true)
-    val LABELS = mapOf("browser" to "Browser", "notifications" to "Notifications it can read", "files" to "Files", "approval" to "Questions and approvals", "phone" to "Notifications to you", "location" to "Your location (asked once)", "automation" to "Other apps: intents and macros (asks unless allowed)", "screen" to "Background screen: other apps on a hidden display (asks before it sends)")
+    val GROUPS = linkedMapOf("browser" to true, "notifications" to true, "files" to true, "approval" to true, "phone" to true, "location" to true, "automation" to true)
+    val LABELS = mapOf("browser" to "Browser", "notifications" to "Notifications it can read", "files" to "Files", "approval" to "Questions and approvals", "phone" to "Notifications to you", "location" to "Your location (asked once)", "automation" to "Other apps: intents and macros (asks unless allowed)")
 
     fun groupOf(name: String): String? = when {
         name.startsWith("browser_") || name == "site_probe" || name == "site_catalog" || name == "place_whatsapp_call" -> "browser"
@@ -45,7 +45,7 @@ object DeviceTools {
         else -> null
     }
 
-    fun allowed(context: Context, group: String): Boolean =
+    fun allowed(context: Context, group: String): Boolean = if (group == "screen") com.past9.phoneaos.screen.Screens.on(context) else
         App.graph(context).settings.extra("remote_share_$group")?.let { it == "1" } ?: (GROUPS[group] ?: false)
 
     fun setAllowed(context: Context, group: String, on: Boolean) = App.graph(context).settings.setExtra("remote_share_$group", if (on) "1" else "0")
@@ -59,7 +59,7 @@ object DeviceTools {
             com.past9.phoneaos.tools.PhoneLocationTool(context),
             com.past9.phoneaos.automation.AndroidIntentTool(context, g.settings.intentSettings), com.past9.phoneaos.automation.AndroidAppsTool(context),
             com.past9.phoneaos.automation.MacroDroidRunTool(context, g.settings.macroSettings),
-        ) + com.past9.phoneaos.tools.screenTools(context) + com.past9.phoneaos.tools.screenLearnedTools(context)
+        ) + (if (com.past9.phoneaos.screen.Screens.on(context)) com.past9.phoneaos.tools.screenTools(context) + com.past9.phoneaos.tools.screenLearnedTools(context) else emptyList())
     }
 
     /** The tools this phone offers right now (only switched-on groups). */
