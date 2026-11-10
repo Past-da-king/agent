@@ -122,9 +122,8 @@
             </intent-filter>
         </activity>
 
-        <!-- The assist sheet: a compact slide-up voice sheet over whatever app is on screen, and over the lock screen.
-             Exported because the phone itself starts it (the assist and voice command intents) and so does the launcher
-             (the Talk shortcut). It never takes words or instructions from an intent: it only opens and listens. -->
+        <!-- The assist sheet: a compact slide-up voice sheet over whatever app is on screen (over the lock screen only with
+             its switch on). Exported because the phone itself starts it (the assist and voice command intents). It never takes words or instructions from an intent: it only opens and listens. -->
         <activity
             android:name=".assist.AssistActivity"
             android:exported="true"
@@ -132,8 +131,6 @@
             android:taskAffinity="com.past9.phoneaos.assist"
             android:excludeFromRecents="true"
             android:launchMode="singleTask"
-            android:showWhenLocked="true"
-            android:turnScreenOn="true"
             android:theme="@style/Theme.Share"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|uiMode"
             android:windowSoftInputMode="adjustResize">
@@ -613,10 +610,6 @@
         <receiver android:name=".assist.AssistEntryReceiver" android:exported="false">
             <intent-filter><action android:name="com.past9.phoneaos.action.ASSIST" /></intent-filter>
         </receiver>
-        <service android:name=".assist.AssistTileService" android:exported="true" android:label="@string/assist_tile"
-            android:icon="@drawable/ic_assist_mic" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
-            <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
-        </service>
         <receiver android:name=".system.BootReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

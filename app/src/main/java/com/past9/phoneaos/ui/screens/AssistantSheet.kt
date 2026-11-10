@@ -8,6 +8,7 @@ import androidx.compose.material.icons.rounded.Assistant
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -73,6 +74,9 @@ fun AssistantSheet(agentName: String, onDismiss: () -> Unit, held: Boolean? = nu
             screenOn) { on -> screenOn = on; if (!on) pictureOn = false; AssistPrefs.setReadScreen(context, on) }
         SwitchRow(Icons.Rounded.Image, "Also send a picture of the screen", "For screens that are mostly pictures. Only with the switch above on.",
             pictureOn, enabled = screenOn) { on -> pictureOn = on; AssistPrefs.setReadScreenshot(context, on) }
+        var lockOn by remember(tick) { mutableStateOf(AssistPrefs.overLockScreen(context)) }
+        SwitchRow(Icons.Rounded.Lock, "Open over the lock screen", "Off: unlock the phone first, then call it. On: it opens on a locked phone and sends your request once you unlock.",
+            lockOn) { on -> lockOn = on; AssistPrefs.setOverLockScreen(context, on) }
         Spacer(Modifier.height(8.dp))
         Text("It never reads banking, payment or money apps, with either switch on. What it reads is used for that request only.",
             style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)

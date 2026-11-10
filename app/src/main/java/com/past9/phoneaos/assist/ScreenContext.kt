@@ -19,6 +19,10 @@ object AssistPrefs {
     /** "Also send a picture of the screen". Only counts while [readScreen] is on. */
     fun readScreenshot(context: Context): Boolean = readScreen(context) && prefs(context).getBoolean(SHOT, false)
 
+    /** "Open over the lock screen". Off: the sheet only opens on an unlocked phone. */
+    fun overLockScreen(context: Context): Boolean = prefs(context).getBoolean("x_assist_over_lock", false)
+    fun setOverLockScreen(context: Context, on: Boolean) { prefs(context).edit().putBoolean("x_assist_over_lock", on).apply() }
+
     fun setReadScreen(context: Context, on: Boolean) {
         val e = prefs(context).edit().putBoolean(TEXT, on)
         if (!on) e.putBoolean(SHOT, false)

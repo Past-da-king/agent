@@ -81,7 +81,8 @@ class AssistActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        if (Build.VERSION.SDK_INT >= 27) { setShowWhenLocked(true); setTurnScreenOn(true) }
+        // Over the lock screen only when he switched that on; otherwise the phone asks for the unlock first.
+        if (Build.VERSION.SDK_INT >= 27 && AssistPrefs.overLockScreen(this)) { setShowWhenLocked(true); setTurnScreenOn(true) }
         g = App.graph(this)
         RemoteHub.init(this)
         source = sourceOf(intent)

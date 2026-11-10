@@ -1,5 +1,4 @@
 <resources>
     <string name="share_label">Send to your agent</string>
     <string name="assist_label">Talk to your agent</string>
-    <string name="assist_tile">Talk to your agent</string>
 </resources>

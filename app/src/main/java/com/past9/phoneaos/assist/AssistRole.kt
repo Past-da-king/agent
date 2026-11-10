@@ -61,7 +61,7 @@ object AssistRole {
             else -> listOf(
                 "Use your phone's assistant shortcut: on most phones, holding the power or home button, or a swipe up from a bottom corner.",
             )
-        } + if (sdk >= 25) listOf("Or press and hold the app's icon and tap Talk.") else emptyList()
+        }
         return Guide(steps, triggers)
     }
 
