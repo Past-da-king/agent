@@ -80,6 +80,13 @@ object CallBridgeProtocol {
         .put("description", "The call is over. Call this only after you have said goodbye and the other person has finished.")
         .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject().put("reason", JSONObject().put("type", "STRING")))))))
 
+    /** What the voice is told when it asks to end the call before the minimum time: the call goes on. */
+    fun endRefused(secondsLeft: Int): JSONObject = JSONObject().put("ok", false).put("call_continues", true).put("seconds_left", secondsLeft)
+        .put("instruction", "The call has NOT ended. It must go on for at least $secondsLeft more seconds. Do not say goodbye yet and do not mention this. Keep the conversation going naturally: ask a follow-up question, listen and respond. Call end_call again only after that.")
+
+    /** The longest minimum a call may be given: the longest call there is. */
+    const val MAX_MIN_SECONDS = 30 * 60
+
     /** Two names for one person: the same words, or one is the other's first name ("Sam" and "Sam Jones"). */
     fun sameName(a: String, b: String): Boolean {
         val x = a.trim().lowercase().split(' ', '\t').filter { it.isNotEmpty() }
@@ -95,7 +102,7 @@ object CallBridgeProtocol {
      * name first, why it calls, and to end politely. When the person called IS the user, it greets them as its own
      * person and does not say it calls on anyone's behalf.
      */
-    fun system(agentName: String, userName: String, peer: String, goal: String): String {
+    fun system(agentName: String, userName: String, peer: String, goal: String, minSeconds: Int = 0): String {
         val me = agentName.trim().ifEmpty { "an assistant" }
         val user = userName.trim()
         val who = peer.trim()
@@ -112,6 +119,7 @@ object CallBridgeProtocol {
             append("Why you are calling: ${goal.trim().trimEnd('.').ifEmpty { "to pass on a short message" }}. ")
             append("Let them say hello first when they do. Speak plainly and briefly, one thought at a time, listen, and answer in the language they speak. ")
             append("Never invent facts and never agree to anything about money. When the reason for the call is done, say a polite goodbye, let them answer, then call end_call.")
+            if (minSeconds > 0) append(" This call must last at least $minSeconds seconds from the moment they answer. Until then keep the conversation going naturally (ask a follow-up question, listen, respond), do not say goodbye and do not call end_call: an end_call before that is not carried out, and you are told how many seconds are left. If they hang up themselves, that is fine.")
         }
     }
 }
@@ -156,6 +164,13 @@ class CallBridge(
     @Volatile var armed = false; private set
     @Volatile var ready = false; private set
     @Volatile var endRequested = false; private set
+    /** The shortest conversation asked for, in seconds since the answer. 0: the voice may end it whenever it is done. */
+    @Volatile var minSeconds = 0; private set
+    /** How often the voice asked to end the call too early and was told to go on. */
+    @Volatile var endRefused = 0; private set
+    @Volatile private var minTold = false
+    /** The words of the call that just ended, kept until the next one starts (the live lines are cleared when the voice stops). */
+    @Volatile private var lastWords = ""
     @Volatile var failed: String? = null; private set
     @Volatile var heardFrames = 0; private set
     @Volatile var sentFrames = 0; private set
@@ -167,7 +182,20 @@ class CallBridge(
     /** Turns of speech so far, either side. */
     val turns: Int get() = synchronized(lock) { lines.size }
     /** The words so far, as they will be saved. */
-    fun words(): String = transcript(synchronized(lock) { lines.toList() })
+    fun words(): String = synchronized(lock) { if (link == null && lines.isEmpty()) lastWords else transcript(lines.toList()) }
+
+    /**
+     * Seconds the conversation must still go on before the voice may end it: 0 with no minimum or once it has passed.
+     * Before anyone has answered the whole minimum is still to come.
+     */
+    fun minSecondsLeft(): Int {
+        val min = minSeconds; if (min <= 0) return 0
+        val answered = diag.answeredAtMs(); if (answered <= 0L) return min
+        return (((answered + min * 1000L - now()) + 999) / 1000).coerceIn(0, min.toLong()).toInt()
+    }
+
+    /** The one who placed the call saw it answered: the minimum time counts from here when the page has not said so itself. */
+    fun answered() = diag.answer(now())
     /** A line only the voice hears, from the app: "the call is connected, greet them now". Nothing when no voice runs. */
     fun nudge(text: String): Boolean = synchronized(lock) { link }?.let { runCatching { it.announce(text) }.isSuccess } ?: false
 
@@ -205,19 +233,21 @@ class CallBridge(
      * Arms the page and starts the voice. Call it BEFORE the call is placed, so WhatsApp is handed the fake
      * microphone. Returns what happened, in words for the agent.
      */
-    suspend fun start(peer: String, goal: String): String {
+    suspend fun start(peer: String, goal: String, minSeconds: Int = 0): String {
+        val min = minSeconds.coerceIn(0, CallBridgeProtocol.MAX_MIN_SECONDS)
         synchronized(lock) { if (link != null) return "A call voice is already running. Stop it first." }
         if (!pageReady) return "WhatsApp Web has not loaded with the call bridge yet. Open https://web.whatsapp.com (or reload it), then start again."
         val token = runCatching { auth() }.getOrElse { LiveAuth.Token.No(it.message ?: "The voice could not start.", false) }
         val ok = token as? LiveAuth.Token.Ok ?: return "The voice could not start: " + (token as LiveAuth.Token.No).why
         val (agent, user) = names()
-        val l = open(ok.url, ok.model.ifBlank { DEFAULT_MODEL }, ok.voice.ifBlank { "Kore" }, CallBridgeProtocol.system(agent, user, peer, goal), CallBridgeProtocol.tools(), ::onEvent)
+        val l = open(ok.url, ok.model.ifBlank { DEFAULT_MODEL }, ok.voice.ifBlank { "Kore" }, CallBridgeProtocol.system(agent, user, peer, goal, min), CallBridgeProtocol.tools(), ::onEvent)
         synchronized(lock) {
             if (link != null) { runCatching { l.stop() }; return "A call voice is already running. Stop it first." }
             link = l; startedAt = now(); lines.clear(); lastWho = ""; frames.drain()
             ready = false; endRequested = false; failed = null; heardFrames = 0; sentFrames = 0; playedChunks = 0; heardPeak = 0f
             unanswered = 0; saidIn = false; saidOut = false
-            diag.reset(); diag.add("app", "voice_armed")
+            this.minSeconds = min; endRefused = 0; minTold = false; lastWords = ""
+            diag.reset(); diag.minimum(min); diag.add("app", "voice_armed", if (min > 0) "min_seconds $min" else "")
             runCatching { hold(true) }
             stopTick = runCatching { every(TICK_MS, ::tick) }.getOrNull()
         }
@@ -240,6 +270,12 @@ class CallBridge(
         if (!running) return
         keepAlive()
         val sent = toPage(CallBridgeProtocol.sample())
+        // The voice was told to go on because of the minimum time: once that has passed it is told it may finish.
+        if (endRefused > 0 && !minTold && !endRequested && minSecondsLeft() == 0) {
+            minTold = true
+            diag.add("app", "min_seconds_reached", "The minimum of $minSeconds seconds has passed.")
+            nudge("The minimum call time has passed. Finish the conversation naturally: when it is done, say a polite goodbye, let them answer, then call end_call.")
+        }
         if (++unanswered == SILENT_TICKS) diag.add("app", CallDiag.PAGE_SILENT, if (sent) "The page has not answered the app for ${SILENT_TICKS * TICK_MS / 1000} seconds." else "No page is listening.")
     }
 
@@ -264,6 +300,15 @@ class CallBridge(
                 else { lines += Triple(e.who, e.text, now()); lastWho = e.who }
             }
             is LiveSession.Event.ToolCall -> {
+                val left = if (e.name == "end_call") minSecondsLeft() else 0
+                if (e.name == "end_call" && left > 0) {
+                    // Too early: the call goes on, the voice is told for how long, and the story keeps it.
+                    endRefused++
+                    val at = diag.answeredAtMs().let { a -> if (a > 0) "${Math.round((now() - a) / 100.0) / 10.0} s after the answer" else "before the answer" }
+                    diag.add("voice", CallDiag.END_REFUSED, "end_call $at was not carried out: min_seconds $minSeconds, $left s left." + e.args.optString("reason").takeIf { it.isNotBlank() }?.let { " Its reason: ${it.take(200)}" }.orEmpty())
+                    synchronized(lock) { link }?.sendToolResult(e.id, e.name, CallBridgeProtocol.endRefused(left))
+                    return
+                }
                 if (e.name == "end_call") { endRequested = true; diag.add("voice", CallDiag.END_CALL, e.args.optString("reason")) }
                 synchronized(lock) { link }?.sendToolResult(e.id, e.name, JSONObject().put("ok", true))
             }
@@ -287,7 +332,7 @@ class CallBridge(
             runCatching { stopTick?.invoke() }; stopTick = null
             runCatching { hold(false) }
             diag.add("app", "voice_stopped")
-            Triple(l, lines.map { Triple(it.first, it.second.trim(), it.third) }.filter { it.second.isNotEmpty() }, startedAt).also { lines.clear(); lastWho = "" }
+            Triple(l, lines.map { Triple(it.first, it.second.trim(), it.third) }.filter { it.second.isNotEmpty() }, startedAt).also { lastWords = transcript(it.second); lines.clear(); lastWho = "" }
         }
         armed = false; ready = false
         toPage(CallBridgeProtocol.flush()); toPage(CallBridgeProtocol.arm(false))
@@ -296,17 +341,21 @@ class CallBridge(
         return if (words.isEmpty()) "Stopped. Nothing was said." else "Stopped. The call's words were saved to the chat:\n" + transcript(words)
     }
 
+    /**
+     * Everything the bridge knows, whole: the tools never hand this out as it is (a long call does not fit in a tool
+     * result). [CallReport] makes the small summary and the parts from it.
+     */
     fun status(): JSONObject {
         toPage(CallBridgeProtocol.status())
-        val words = synchronized(lock) { lines.toList() }
         return JSONObject()
             .put("running", running).put("page_ready", pageReady).put("armed", armed).put("voice_ready", ready)
             .put("end_requested", endRequested).put("failed", failed ?: JSONObject.NULL)
+            .put("min_seconds", minSeconds).put("min_seconds_left", if (running) minSecondsLeft() else 0).put("end_call_refused", endRefused)
             .put("heard_frames", heardFrames).put("sent_frames", sentFrames).put("heard_peak", Math.round(heardPeak * 1000) / 1000.0)
             .put("voice_chunks_played", playedChunks)
             .put("page", pageState ?: JSONObject.NULL).put("page_log", JSONArray(pageLog.toList().takeLast(15)))
-            .put("transcript", transcript(words.takeLast(30)))
-            .also { s -> if (diag.started) { val d = diagnostics(); for (k in listOf("ended", "timeline", "counters", "page_errors")) s.put(k, d.opt(k)) } }
+            .put("transcript", words())
+            .also { s -> if (diag.started) { val d = diagnostics(); for (k in listOf("ended", "timeline", "counters", "page_errors")) s.put(k, d.opt(k)); s.put("totals", diag.totals()) } }
     }
 
     companion object {
@@ -354,7 +403,7 @@ object CallBridgeJs {
     val HOOKS = """
 (() => {
   if (window.__hina || window.top !== window || typeof hinaCall === 'undefined') return;
-  const H = window.__hina = { log: [], gumCalls: 0, taps: 0, inject: false, muteRemote: true, forward: false, remoteFrames: 0, remotePeak: 0, played: 0, deviceLists: 0, micAsked: 0, tracksOut: 0, tracksEnded: 0, tracksMuted: 0, micResumes: 0, errs: 0, pcs: [], watch: false, waHooked: false, waSeen: {} };
+  const H = window.__hina = { log: [], gumCalls: 0, taps: 0, inject: false, muteRemote: true, forward: false, remoteFrames: 0, remotePeak: 0, played: 0, deviceLists: 0, micAsked: 0, tracksOut: 0, tracksEnded: 0, tracksMuted: 0, micResumes: 0, errs: 0, pcs: [], watch: false, waHooked: false, waSeen: {}, hiddenMs: 0, hiddenSince: 0 };
   const post = (o) => { try { hinaCall.postMessage(JSON.stringify(o)); } catch (e) {} };
   const log = H.L = (...a) => { const line = a.join(' '); H.log.push(line); if (H.log.length > 200) H.log.shift(); post({ t: 'log', m: line }); };
   // Something the call's own story needs (who ended it, what broke), stamped with this phone's clock.
@@ -527,10 +576,21 @@ object CallBridgeJs {
       PC.prototype[m] = function (...a) { note(this); return o.apply(this, a); };
     }
   }
+  // How long the page has been hidden while a call voice runs (another app in front, the screen locked). Sound
+  // normally keeps flowing while hidden, so this is only counted and said, never acted on.
+  const isHidden = () => typeof document !== 'undefined' && !!document.hidden;
+  H.hiddenTotal = () => H.hiddenMs + (H.hiddenSince ? Math.max(0, Date.now() - H.hiddenSince) : 0);
+  H.seeHidden = () => {
+    if (!H.watch) return;
+    const h = isHidden();
+    if (h && !H.hiddenSince) { H.hiddenSince = Date.now(); ev('page_hidden'); }
+    else if (!h && H.hiddenSince) { H.hiddenMs += Math.max(0, Date.now() - H.hiddenSince); H.hiddenSince = 0; ev('page_visible', Math.round(H.hiddenMs / 100) / 10 + ' s hidden so far'); }
+  };
+  try { if (typeof document !== 'undefined' && document.addEventListener) document.addEventListener('visibilitychange', () => H.seeHidden()); } catch (e) {}
   // Cumulative counters, answering the app every five seconds. The connection that carries the call is the busiest one.
   H.sample = async () => {
     const o = { t: 'sample', at: Date.now(), played: H.played, remote_frames: H.remoteFrames, mic: H.micCtx ? H.micCtx.state : 'none', tracks_ended: H.tracksEnded,
-      hidden: typeof document !== 'undefined' && !!document.hidden, pcs: 0, bytes_sent: 0, bytes_received: 0, ice: '', errors: H.errs };
+      hidden: isHidden(), hidden_ms: H.hiddenTotal(), pcs: 0, bytes_sent: 0, bytes_received: 0, ice: '', errors: H.errs };
     let best = -1;
     for (const pc of H.pcs.slice()) {
       try {
@@ -590,6 +650,7 @@ object CallBridgeJs {
   H.watchTick = () => {
     try {
       H.hookWa();
+      H.seeHidden();
       // A microphone the browser stopped without saying so (no statechange) is started again here.
       if (H.inject && H.micCtx && H.micCtx.state !== 'running' && H.micCtx.state !== 'closed') { H.micResumes++; H.micCtx.resume().catch(() => {}); }
       const col = waCalls(); if (!col) return;
@@ -601,18 +662,19 @@ object CallBridgeJs {
   };
   H.startWatch = () => {
     H.watch = true; H.waConn = false; H.waSeen = {}; H.waEndedId = '';
+    H.hiddenMs = 0; H.hiddenSince = 0; H.seeHidden();
     try { const c = waCalls(); const e = c && c.lastEndedCall; H.waEndedId = e ? callId(e) : ''; } catch (e) {}
     if (H.offTimer) { clearTimeout(H.offTimer); H.offTimer = null; }
     if (!H.watchTimer) H.watchTimer = setInterval(H.watchTick, 1000);
     H.watchTick();
   };
-  H.stopWatch = () => { H.watch = false; if (H.watchTimer) { clearInterval(H.watchTimer); H.watchTimer = null; } if (H.offTimer) { clearTimeout(H.offTimer); H.offTimer = null; } H.pcs = []; };
+  H.stopWatch = () => { if (H.hiddenSince) { H.hiddenMs += Math.max(0, Date.now() - H.hiddenSince); H.hiddenSince = 0; } H.watch = false; if (H.watchTimer) { clearInterval(H.watchTimer); H.watchTimer = null; } if (H.offTimer) { clearTimeout(H.offTimer); H.offTimer = null; } H.pcs = []; };
   // The voice stopped: the end of the call may still be on its way, so the page keeps looking a little longer.
   H.endWatchSoon = () => { if (!H.watch || H.offTimer) return; H.offTimer = setTimeout(() => { H.offTimer = null; if (!H.inject) H.stopWatch(); }, 20000); };
 
   H.state = () => ({ t: 'state', armed: H.inject, gum: H.gumCalls, taps: H.taps, remote_frames: H.remoteFrames, remote_peak: Math.round(H.remotePeak * 1000) / 1000, played: H.played, mic: H.micCtx ? H.micCtx.state : 'none', mic_channels: H.micDest ? H.micDest.channelCount : 0, device_lists: H.deviceLists, mic_asked: H.micAsked,
     tracks_out: H.tracksOut, tracks_ended: H.tracksEnded, tracks_muted: H.tracksMuted, mic_resumes: H.micResumes, connections: H.pcs.length, wa_events: H.waHooked, errors: H.errs,
-    hidden: typeof document !== 'undefined' && !!document.hidden });
+    hidden: isHidden(), hidden_ms: H.hiddenTotal() });
   hinaCall.onmessage = (e) => {
     let m; try { m = JSON.parse(e.data); } catch (err) { return; }
     if (m.t === 'arm') { H.inject = !!m.on; H.forward = !!m.on; if (!m.on) { H.flushMic(); held = []; heldN = 0; } if (m.on) H.startWatch(); else H.endWatchSoon(); log(m.on ? 'armed' : 'disarmed'); post(H.state()); }

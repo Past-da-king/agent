@@ -185,4 +185,89 @@ class CallDiagTest {
         val all = d.json(null)
         for (k in listOf("ended", "timeline", "counters", "page_errors")) assertTrue(k, all.has(k))
     }
+
+    // ---- a hidden page (0.15.36): said truthfully, and a note, not a fault, while sound keeps flowing ----
+
+    private fun page(at: Long, played: Int, frames: Int, sent: Long, got: Long, hidden: Boolean, hiddenMs: Long) = JSONObject().put("at", at).put("played", played).put("remote_frames", frames)
+        .put("bytes_sent", sent).put("bytes_received", got).put("pcs", 2).put("ice", "connected").put("mic", "running").put("hidden", hidden).put("hidden_ms", hiddenMs).put("errors", 0)
+
+    /** The first real call: answered on the same phone, so the page was hidden for most of it and visible again at the end. */
+    @Test fun aPageHiddenWhileSoundKeptFlowingIsANoteNotASign() {
+        val d = diag(); d.add("whatsapp", CallDiag.WA_CONNECTED); val t0 = clock
+        d.add("page", CallDiag.PAGE_HIDDEN, "", t0 + 1_000)
+        d.sample(page(t0 + 5_000, 5, 50, 9_000, 7_000, true, 4_000), 50, 50)
+        d.sample(page(t0 + 10_000, 12, 100, 21_000, 19_000, true, 9_000), 100, 100)
+        d.sample(page(t0 + 15_000, 20, 150, 33_000, 31_000, true, 14_000), 150, 150)
+        d.add("page", CallDiag.PAGE_VISIBLE, "", t0 + 18_000)
+        d.sample(page(t0 + 20_000, 28, 200, 45_000, 43_000, false, 17_000), 200, 200)
+        clock = t0 + 21_000; d.ended(CallDiag.AGENT_END_CALL, "The conversation was finished.", normalEnd)
+        val e = d.ended(JSONObject().put("hidden", false).put("mic", "running").put("wa_events", true))
+        val p = e.getJSONObject("page")
+        assertFalse(p.getBoolean("hidden_now")); assertTrue(p.getBoolean("was_hidden")); assertEquals(17.0, p.getDouble("hidden_seconds"), 0.0)
+        assertFalse("the old key that contradicted the sign is gone", p.has("hidden"))
+        assertEquals("nothing of ours was wrong: " + e.getJSONArray("signs"), 0, e.getJSONArray("signs").length())
+        val note = e.getJSONArray("notes").getString(0)
+        assertTrue(note, note.contains("hidden for about 17 seconds") && note.contains("not a fault") && note.contains("visible again now"))
+        // Each counter line says how long of it the page was hidden.
+        val c = d.counters()
+        assertEquals(4.0, c.getJSONObject(0).getDouble("hidden_seconds"), 0.0); assertEquals(3.0, c.getJSONObject(3).getDouble("hidden_seconds"), 0.0); assertFalse(c.getJSONObject(3).getBoolean("hidden"))
+        assertFalse("the app's own clock stamp is not handed out", c.getJSONObject(0).has("at_ms"))
+        // Still hidden when asked: the note says so, and so does the page block.
+        val still = d.ended(JSONObject().put("hidden", true).put("mic", "running"))
+        assertTrue(still.getJSONObject("page").getBoolean("hidden_now")); assertTrue(still.getJSONArray("notes").getString(0).contains("still hidden now"))
+    }
+
+    @Test fun soundThatStoppedWhileThePageWasHiddenIsASign() {
+        val d = diag(); d.add("whatsapp", CallDiag.WA_CONNECTED); val t0 = clock
+        d.sample(page(t0 + 5_000, 5, 50, 9_000, 7_000, false, 0), 50, 50)
+        d.sample(page(t0 + 10_000, 12, 100, 21_000, 19_000, true, 4_000), 100, 100)
+        // Hidden, and nothing moved: no sound frames in the page, no bytes either way.
+        d.sample(page(t0 + 15_000, 12, 100, 21_000, 19_000, true, 9_000), 100, 100)
+        d.sample(page(t0 + 20_000, 12, 100, 21_000, 19_000, true, 14_000), 100, 100)
+        val e = d.ended(JSONObject().put("hidden", true).put("mic", "running"))
+        val signs = e.getJSONArray("signs").toString()
+        assertTrue(signs, signs.contains("Sound stopped while the page was hidden: 2 counter line(s)") && signs.contains("about 14 seconds"))
+        assertFalse("a fault is not also called 'not a fault'", e.getJSONArray("notes").toString().contains("not a fault"))
+        assertTrue(e.getJSONObject("page").getBoolean("was_hidden")); assertTrue(e.getJSONObject("page").getBoolean("hidden_now"))
+    }
+
+    @Test fun aPageNeverHiddenSaysSoEverywhere() {
+        val d = diag(); d.add("whatsapp", CallDiag.WA_CONNECTED); val t0 = clock
+        for (i in 1..4) d.sample(page(t0 + i * 5_000L, i * 5, i * 50, i * 9_000L, i * 7_000L, false, 0), i * 50, i * 50)
+        val e = d.ended(JSONObject().put("hidden", false).put("mic", "running"))
+        val p = e.getJSONObject("page")
+        assertFalse(p.getBoolean("hidden_now")); assertFalse(p.getBoolean("was_hidden")); assertEquals(0.0, p.getDouble("hidden_seconds"), 0.0)
+        assertEquals(0, e.getJSONArray("signs").length()); assertEquals(0, e.getJSONArray("notes").length())
+    }
+
+    @Test fun hiddenOnlyWhileRingingIsNeverAFault() {
+        // Before the answer no sound flows anyway: a hidden page with quiet counters is only a note.
+        val d = diag(); val t0 = clock
+        d.sample(page(t0 + 5_000, 0, 0, 0, 0, true, 5_000), 0, 0)
+        d.sample(page(t0 + 10_000, 0, 0, 0, 0, true, 10_000), 0, 0)
+        clock = t0 + 12_000; d.add("whatsapp", CallDiag.WA_CONNECTED)
+        d.sample(page(t0 + 15_000, 3, 30, 5_000, 4_000, false, 11_000), 30, 30)
+        val e = d.ended(JSONObject().put("hidden", false).put("mic", "running"))
+        assertEquals(e.getJSONArray("signs").toString(), 0, e.getJSONArray("signs").length())
+        assertTrue(e.getJSONArray("notes").getString(0).contains("about 11 seconds"))
+    }
+
+    @Test fun aPageScriptWithNoHiddenCountStillAddsUp() {
+        // A line without hidden_ms (an older page script): hidden now means hidden for the whole line.
+        val d = diag(); d.add("whatsapp", CallDiag.WA_CONNECTED); val t0 = clock
+        fun old(at: Long, n: Int, hidden: Boolean) = page(at, n, n * 10, n * 1_000L, n * 1_000L, hidden, 0).also { it.remove("hidden_ms") }
+        d.sample(old(t0 + 5_000, 1, false)); d.sample(old(t0 + 10_000, 2, true)); d.sample(old(t0 + 15_000, 3, true))
+        assertEquals(10.0, d.ended(null).getJSONObject("page").getDouble("hidden_seconds"), 0.0)
+        assertTrue(d.ended(null).getJSONObject("page").getBoolean("hidden_now"))
+    }
+    private fun CallDiag.sample(p: JSONObject) = sample(p, p.optInt("remote_frames"), p.optInt("remote_frames"))
+
+    @Test fun counterLinesAreTimedFromTheAnswerEvenWhenTakenBeforeIt() {
+        val d = diag(); val t0 = clock
+        d.sample(page(t0 + 5_000, 0, 0, 0, 0, false, 0), 0, 0)
+        clock = t0 + 8_000; d.add("whatsapp", CallDiag.WA_CONNECTED)
+        d.sample(page(t0 + 10_000, 1, 10, 100, 100, false, 0), 10, 10)
+        assertEquals(-3.0, d.counters().getJSONObject(0).getDouble("s"), 0.0); assertEquals(2.0, d.counters().getJSONObject(1).getDouble("s"), 0.0)
+        val t = d.totals(); assertEquals(2, t.getInt("lines")); assertEquals(100L, t.getLong("bytes_sent")); assertEquals(10, t.getInt("heard_frames"))
+    }
 }

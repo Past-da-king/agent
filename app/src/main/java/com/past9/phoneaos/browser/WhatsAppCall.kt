@@ -229,7 +229,9 @@ class WhatsAppCall(
         /** The switch 'Let the agent speak in WhatsApp calls'. */
         val on: Boolean
         /** Null when the voice is armed, else why not. */
-        suspend fun start(peer: String, goal: String): String?
+        suspend fun start(peer: String, goal: String, minSeconds: Int = 0): String?
+        /** The call was answered: a minimum time counts from here. */
+        fun answered() {}
         val endRequested: Boolean
         val failed: String?
         /** Turns of speech so far. */
@@ -247,9 +249,9 @@ class WhatsAppCall(
     class Result(val outcome: String, val reason: String, val contact: String = "", val chat: String = "", val rangSeconds: Long = 0, val durationSeconds: Long = 0,
                  val endedBy: String = "", val transcript: String = "", val callingOffered: Boolean? = null, val testAccount: String = "", val whatsapp: JSONObject? = null,
                  /** Who or what ended it, a timeline, counters every five seconds and the page's last errors ([CallDiag.json]). */
-                 val diagnostics: JSONObject? = null) {
+                 val diagnostics: JSONObject? = null, val minSeconds: Int = 0) {
         fun json(): JSONObject = JSONObject().put("outcome", outcome).put("reason", reason).put("contact", contact).put("chat", chat)
-            .put("rang_seconds", rangSeconds).put("duration_seconds", durationSeconds).put("ended_by", endedBy)
+            .put("rang_seconds", rangSeconds).put("duration_seconds", durationSeconds).put("ended_by", endedBy).put("min_seconds", minSeconds)
             .put("transcript", transcript).put("saved_to_chat", transcript.isNotBlank())
             .put("calling_offered", callingOffered ?: JSONObject.NULL).put("test_account", testAccount)
             .put("whatsapp", whatsapp ?: JSONObject.NULL)
@@ -262,10 +264,12 @@ class WhatsAppCall(
     private fun failed(why: String, info: Info? = null, gate: CallTestAccounts.Gate? = null, contact: String = "", chat: String = "", raw: JSONObject? = null) =
         Result(FAILED, why, contact, chat, callingOffered = info?.calling, testAccount = gate?.let { CallTestAccounts.why(it) }.orEmpty(), whatsapp = raw).also { phase = "failed" }
 
-    suspend fun run(chat: String, goal: String, maxMinutes: Int = DEFAULT_MINUTES, contact: String = ""): Result {
+    suspend fun run(chat: String, goal: String, maxMinutes: Int = DEFAULT_MINUTES, contact: String = "", minSeconds: Int = 0): Result {
         if (chat.isBlank()) return failed("Say which chat to call: its name, its number or its id.")
         if (!voice.on) return failed("The call voice is off. The user turns it on in Settings > Browser > Let the agent speak in WhatsApp calls. Ask them; do not work around it.")
         val max = maxMinutes.coerceIn(1, MAX_MINUTES) * 60_000L
+        // max_minutes wins: a minimum longer than the limit is the limit.
+        val min = minSeconds.coerceIn(0, (max / 1000).toInt())
 
         // ---- the page: WhatsApp Web, signed in, with the call voice in it ----
         phase = "opening WhatsApp Web"
@@ -301,7 +305,7 @@ class WhatsAppCall(
 
         // ---- the voice first, so WhatsApp is handed the agent's microphone; then the call ----
         phase = "starting the voice"
-        voice.start(who, goal)?.let { return failed(it, info, gate, who, opened.id) }
+        voice.start(who, goal, min)?.let { return failed(it, info, gate, who, opened.id) }
         val before = page.state()
         val placedAt = now()
         if (!page.pressCall()) { voice.stop(); return failed("The voice call button could not be pressed.", info, gate, who, opened.id) }
@@ -328,7 +332,7 @@ class WhatsAppCall(
             silent = 0; last = s
             val newEnded = s.endedId != null && s.endedId != before?.endedId
             if (s.pending || s.connected || newEnded || (s.activeId != null && s.activeId != before?.activeId)) started = true
-            if (s.connected && answeredAt == 0L) { answeredAt = t; phase = "answered" }
+            if (s.connected && answeredAt == 0L) { answeredAt = t; phase = "answered"; voice.answered() }
             if (newEnded) { endedBy = OTHER_SIDE; endedAt = t; break }
             if (answeredAt == 0L) {
                 if (!started && t - placedAt >= START_MS) {
@@ -377,9 +381,9 @@ class WhatsAppCall(
         if (answeredAt == 0L && ended?.optBoolean("wasEverConnected") == true) answeredAt = endedAt - ended.optLong("callDuration", 0) * 1000
         val rang = ((if (answeredAt > 0) answeredAt else endedAt) - placedAt).coerceAtLeast(0) / 1000
         return when {
-            answeredAt > 0 -> Result(ANSWERED, why.ifEmpty { diag?.optJSONObject("ended")?.optString("detail")?.takeIf { it.isNotBlank() } ?: "The call ended on the other side, or it dropped." }, who, opened.id, rang, ((endedAt - answeredAt).coerceAtLeast(0)) / 1000, endedBy, words, info.calling || forced, tested(forced, gate), raw, diag)
-            started -> Result(NO_ANSWER, why.ifEmpty { "The call ended before anyone answered (not answered, declined or unreachable)." }, who, opened.id, rang, 0, endedBy, words, info.calling || forced, tested(forced, gate), raw, diag)
-            else -> Result(FAILED, why.ifEmpty { "The call did not start." }, who, opened.id, rang, 0, endedBy, words, info.calling || forced, tested(forced, gate), raw, diag)
+            answeredAt > 0 -> Result(ANSWERED, why.ifEmpty { diag?.optJSONObject("ended")?.optString("detail")?.takeIf { it.isNotBlank() } ?: "The call ended on the other side, or it dropped." }, who, opened.id, rang, ((endedAt - answeredAt).coerceAtLeast(0)) / 1000, endedBy, words, info.calling || forced, tested(forced, gate), raw, diag, min)
+            started -> Result(NO_ANSWER, why.ifEmpty { "The call ended before anyone answered (not answered, declined or unreachable)." }, who, opened.id, rang, 0, endedBy, words, info.calling || forced, tested(forced, gate), raw, diag, min)
+            else -> Result(FAILED, why.ifEmpty { "The call did not start." }, who, opened.id, rang, 0, endedBy, words, info.calling || forced, tested(forced, gate), raw, diag, min)
         }.also { phase = "done" }
     }
 

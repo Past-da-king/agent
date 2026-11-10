@@ -289,19 +289,23 @@ class SettingsStore(context: Context) {
     // ---- browser: sites that need advanced browser features, and the agent's voice in WhatsApp calls --------------------
 
     /** Sites the browser lets use shared memory (SharedArrayBuffer). Starts as [com.past9.phoneaos.browser.IsolatedOrigins.DEFAULT]; an emptied list stays empty. */
+    // These are written to disk before the call returns (commit, not apply): a switch the user just turned on must
+    // not be lost when the app is killed a moment later, as an update over adb does. Keys, all in the "settings"
+    // preferences file and unchanged since they were added: x_isolated_origins and x_call_bridge_on (0.15.33),
+    // x_call_test_on and x_call_test_numbers (0.15.34). SettingsCarryOverTest pins them.
     fun isolatedOrigins(): List<String> = com.past9.phoneaos.browser.IsolatedOrigins.parse(extra("isolated_origins"))
     /** Adds what the user typed. Returns why not, or null when it was added. */
     fun addIsolatedOrigin(input: String): String? {
         val (list, error) = com.past9.phoneaos.browser.IsolatedOrigins.add(isolatedOrigins(), input)
-        if (error == null) setExtra("isolated_origins", com.past9.phoneaos.browser.IsolatedOrigins.encode(list))
+        if (error == null) setExtraNow("isolated_origins", com.past9.phoneaos.browser.IsolatedOrigins.encode(list))
         return error
     }
     fun removeIsolatedOrigin(origin: String) =
-        setExtra("isolated_origins", com.past9.phoneaos.browser.IsolatedOrigins.encode(com.past9.phoneaos.browser.IsolatedOrigins.remove(isolatedOrigins(), origin)))
+        setExtraNow("isolated_origins", com.past9.phoneaos.browser.IsolatedOrigins.encode(com.past9.phoneaos.browser.IsolatedOrigins.remove(isolatedOrigins(), origin)))
 
     /** Let the agent speak in WhatsApp Web calls (the call audio bridge). Off until the user turns it on. */
     fun callBridgeOn(): Boolean = extra("call_bridge_on") == "true"
-    fun setCallBridgeOn(on: Boolean) = setExtra("call_bridge_on", if (on) "true" else null)
+    fun setCallBridgeOn(on: Boolean) = setExtraNow("call_bridge_on", if (on) "true" else null)
 
     /**
      * Calling switched on for a test account (see [com.past9.phoneaos.browser.CallTestAccounts]). Off until the user
@@ -312,23 +316,26 @@ class SettingsStore(context: Context) {
     /** Turning it on needs a marked number. True when the switch now stands as asked. */
     fun setCallTestOn(on: Boolean): Boolean {
         if (on && callTestNumbers().isEmpty()) return false
-        setExtra("call_test_on", if (on) "true" else null); return true
+        setExtraNow("call_test_on", if (on) "true" else null); return true
     }
     /** Adds what the user typed. Returns why not, or null when it was added. */
     fun addCallTestNumber(input: String): String? {
         val (list, error) = com.past9.phoneaos.browser.CallTestAccounts.add(callTestNumbers(), input)
-        if (error == null) setExtra("call_test_numbers", com.past9.phoneaos.browser.CallTestAccounts.encode(list))
+        if (error == null) setExtraNow("call_test_numbers", com.past9.phoneaos.browser.CallTestAccounts.encode(list))
         return error
     }
     /** Removing the last number turns the switch off with it. */
     fun removeCallTestNumber(number: String) {
         val left = com.past9.phoneaos.browser.CallTestAccounts.remove(callTestNumbers(), number)
-        setExtra("call_test_numbers", if (left.isEmpty()) null else com.past9.phoneaos.browser.CallTestAccounts.encode(left))
-        if (left.isEmpty()) setExtra("call_test_on", null)
+        setExtraNow("call_test_numbers", if (left.isEmpty()) null else com.past9.phoneaos.browser.CallTestAccounts.encode(left))
+        if (left.isEmpty()) setExtraNow("call_test_on", null)
     }
 
     fun extra(key: String): String? = prefs.getString("x_$key", null)
     fun setExtra(key: String, value: String?) { prefs.edit().apply { if (value == null) remove("x_$key") else putString("x_$key", value) }.apply() }
+
+    /** The same store as [setExtra], but on disk before it returns. For the few switches that must survive the app being killed right after. */
+    fun setExtraNow(key: String, value: String?) { prefs.edit().apply { if (value == null) remove("x_$key") else putString("x_$key", value) }.commit() }
 
     fun resetAll() { prefs.edit().clear().apply(); secrets.edit().clear().apply(); _state.value = read() }
 }
