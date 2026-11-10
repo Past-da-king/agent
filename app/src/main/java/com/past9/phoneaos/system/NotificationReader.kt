@@ -19,13 +19,20 @@ import kotlinx.coroutines.launch
 class NotificationReader : NotificationListenerService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    companion object {
+        /** The listener while the system has it bound: how a notification's own buttons are reached. */
+        @Volatile var live: NotificationReader? = null
+    }
+
     override fun onListenerConnected() {
+        live = this
         // Anything posted while the listener was unbound (first grant, a reinstall, the system killing it) is
         // still in the shade: pick it up, but never fire routines for it.
         runCatching { activeNotifications?.forEach { handle(it, live = false) } }
     }
 
     override fun onListenerDisconnected() {
+        live = null
         runCatching { requestRebind(ComponentName(this, NotificationReader::class.java)) }
     }
 

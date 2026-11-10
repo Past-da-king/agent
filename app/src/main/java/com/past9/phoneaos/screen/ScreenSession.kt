@@ -4,11 +4,15 @@ import com.past9.phoneaos.agent.ToolContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+
+/** How long a tool waits for the person's yes. A linked computer gives a phone tool two minutes, so the answer must come back inside that, with the reason. */
+private const val ASK_MS = 80_000L
 
 /** An installed app the agent may open: how the person names it and how to start it. */
 data class AppRef(val pkg: String, val label: String, val component: String)
@@ -49,7 +53,7 @@ data class ScreenState(
 class ScreenBlocked(val pkg: String, message: String) : Exception(message)
 
 /** How a replay of learned steps went. */
-class Replay(val ok: Boolean, val text: String, val failedAt: Int, val tookMs: Long, val stepMs: List<Long>, val skipped: Set<Int>, val usedPicture: Boolean)
+class Replay(val ok: Boolean, val text: String, val failedAt: Int, val tookMs: Long, val stepMs: List<Long>, val skipped: Set<Int>, val usedPicture: Boolean, val approvalMs: Long = 0, val values: JSONObject = JSONObject())
 
 /**
  * The background screen: one hidden display where the agent uses other apps while the person keeps their own screen.
@@ -100,6 +104,14 @@ class ScreenSession(
         fun notReady(why: String) = "The background screen is not ready on this phone: $why. Nothing was done. The setup steps are showing to the user now " +
             "(Settings > Background screen). Until then you can still: use a website with the browser tools, hand an app something with android_intent, or ask the user to do this step."
     }
+
+    /** How long this job has waited for the person's yes, and how many sends, payments or deletes they approved in it. */
+    private var approvalMs = 0L
+    private var approved = 0
+
+    /** The words on the screen as last read, leaving out what sits in text boxes (typed is not the same as sent). */
+    fun screenElements(): List<ScreenElement> = elements
+    fun screenWords(): List<String> = elements.filter { !it.editable && it.label.isNotBlank() }.map { it.label }
 
     /** The steps of the run so far: what a learned app is saved from. */
     val runSteps: List<RunStep> get() = run?.steps ?: emptyList()
@@ -259,7 +271,10 @@ class ScreenSession(
         ScreenRules.Gate.Go -> null
         is ScreenRules.Gate.Refuse -> gate.reason
         is ScreenRules.Gate.Ask -> {
-            val a = ctx.ask("APPROVAL|${gate.what}|${gate.details}", listOf("Approve", "Decline"))
+            val asked = now()
+            val a = withTimeoutOrNull(ASK_MS) { ctx.ask("APPROVAL|${gate.what}|${gate.details}", listOf("Approve", "Decline")) }
+            approvalMs += now() - asked
+            if (a == "Approve") approved++
             log("approval", "${gate.what}: ${when (a) { "Approve" -> "you approved"; null -> "nobody answered"; else -> "you declined" }}", picture = false)
             // Say what really happened: only a tap on Decline is a decline.
             when (a) {
@@ -285,7 +300,7 @@ class ScreenSession(
         val mine = tasks().firstOrNull { it.optString("pkg") == ref.pkg && it.optInt("display") == 0 }
         if (mine != null) {
             if (mine.optBoolean("visible")) {
-                val a = ctx.ask("APPROVAL|Move ${ref.label} to the background screen|${ref.label} is open on your screen right now. Your agent wants to use it in the background, so it will leave your screen until the agent is done, then come back.", listOf("Approve", "Decline"))
+                val a = withTimeoutOrNull(ASK_MS) { ctx.ask("APPROVAL|Move ${ref.label} to the background screen|${ref.label} is open on your screen right now. Your agent wants to use it in the background, so it will leave your screen until the agent is done, then come back.", listOf("Approve", "Decline")) }
                 if (a != "Approve") return if (a == null) "${ref.label} is open on the user's own screen and nobody answered whether it may be moved. Not opened." else "The user wants to keep ${ref.label} on their own screen. Not opened."
             }
             val moved = ask(op("move").put("task", mine.optInt("id")).put("to", "hidden"))
@@ -602,6 +617,21 @@ class ScreenSession(
         } }
     }
 
+    /**
+     * The job is over, but the display and the app stay as they are for a few minutes, so the next job starts warm.
+     * The idle timer closes them. An app that was taken from the person's own screen is never kept: that closes at once.
+     */
+    suspend fun release(): String {
+        if (borrowed.isNotEmpty() || !_state.value.open) return close()
+        return mutex.withLock {
+            jobOwner = ""; ownerLabel = ""; lastUsed = now()
+            _state.value = _state.value.copy(owner = "", step = "Done. Kept ready for a few minutes")
+            note("close", "The job ended; the app is kept ready")
+            run?.finish(); run = null; secrets.clear()
+            "The job is finished and the screen is free for the next one. ${_state.value.app.ifBlank { "The app" }} is kept ready on the background screen for a few minutes so the next job starts fast, then closes by itself (screen_close with now true closes it at once)."
+        }
+    }
+
     /** Close the hidden display. Apps borrowed from the person's screen go back to it; with [keepApp] the app in front does too. */
     suspend fun close(keepApp: Boolean = false): String = mutex.withLock {
         if (displayId == 0 && !_state.value.open) return "The background screen was already closed."
@@ -627,7 +657,10 @@ class ScreenSession(
     suspend fun replay(ctx: ToolContext, ref: AppRef, steps: JSONArray, args: JSONObject): Replay = mutex.withLock {
         val t0 = now()
         val stepMs = ArrayList<Long>(); val skipped = HashSet<Int>(); var usedPicture = false
-        fun fail(i: Int, why: String) = Replay(false, why, i, now() - t0, stepMs, skipped, usedPicture)
+        approvalMs = 0; approved = 0
+        val values = JSONObject()
+        // A step the person approved (a send, a payment) is never done twice: if the run breaks after it, say that it may have gone through.
+        fun fail(i: Int, why: String) = Replay(false, why + if (approved > 0) "\nNOTE: a step you approved was already pressed before this stopped, so it MAY HAVE LANDED. Check before doing it again; this job did not retry it." else "", i, now() - t0, stepMs, skipped, usedPicture, approvalMs)
         try {
             blocked(ctx, needOpen = false)?.let { return fail(-1, it) }
             // Start from the app's front door, so the steps begin where they were learned.
@@ -636,6 +669,12 @@ class ScreenSession(
             val opened = doOpen(ctx, ref, ScreenSkills.fill(first?.optJSONObject("extra")?.optString("link").orEmpty(), args), fresh = true, quick = true,
                 files = door?.let { ScreenSkills.fill(it.optString("files"), args).split('|').filter { f -> f.isNotBlank() } }, words = ScreenSkills.fill(door?.optString("text").orEmpty(), args))
             if (opened != null && !opened.startsWith("!")) return fail(-1, opened)
+            // A share starts clean: words left in a text box by an earlier run that was never sent are not part of this job.
+            if (door != null) {
+                val carried = ScreenSkills.fill(door.optString("text"), args).trim()
+                val stale = elements.filter { it.editable && 'p' !in it.flags && it.text.isNotBlank() && it.text.trim() != carried && it.text != it.hint }
+                if (stale.isNotEmpty()) { stale.forEach { ask(op("text").put("node", it.id).put("text", "").put("append", false)) }; readTree() }
+            }
             suspend fun await(sel: JSONObject, ms: Long): ScreenElement? {
                 val until = now() + ms
                 while (true) {
@@ -647,6 +686,28 @@ class ScreenSession(
             for (i in 0 until steps.length()) {
                 val s = steps.getJSONObject(i); val kind = s.optString("do")
                 if (kind == "open" || kind == "share") { stepMs += 0L; continue }
+                if (kind == "read") {
+                    // A value the job hands back: read off the final screen from where it sits. Empty means the job did not get there.
+                    val st = now(); var got = ""
+                    while (true) {
+                        got = ScreenSkills.readValue(s, elements, args)
+                        if (got.isNotBlank() || now() - st >= 4_000) break
+                        delay(250); readTree()
+                    }
+                    if (got.isBlank()) return fail(i, "The steps ran, but the value \"${s.optString("name")}\" could not be read off the final screen, so the job did NOT reach its end.\n" + read())
+                    values.put(s.optString("name"), got); stepMs += now() - st; continue
+                }
+                if (kind == "check") {
+                    // The end check: the job is only done when the screen shows what it was saved to end with. Words in a text box do not count.
+                    val want = ScreenSkills.fill(s.optString("text"), args)
+                    val until = now() + 4_000
+                    while (true) {
+                        if (want.isBlank() || screenWords().any { it.contains(want, true) }) break
+                        if (now() >= until) return fail(i, "The steps ran, but the job did NOT reach its end: \"${want.take(80)}\" is not on the screen (words still sitting in a text box do not count).\n" + read())
+                        delay(250); readTree()
+                    }
+                    stepMs += now() - (until - 4_000); continue
+                }
                 // A step that is only sometimes needed: the words are already in the field (the door carried them).
                 if (kind == "type" && !extra0(s).optBoolean("submit")) {
                     val want = ScreenSkills.fill(s.optString("text"), args)
@@ -661,6 +722,14 @@ class ScreenSession(
                 val needsTarget = sel != null && (kind == "tap" || kind == "long" || (kind == "type" && sel.optString("kind") == "field") || (kind == "swipe" && sel.optString("res").isNotBlank()))
                 if (needsTarget) {
                     target = await(sel!!, budget)
+                    // A named thing that is not on the screen yet (a contact, a file, a place in a list): scroll for it, a few screens at most.
+                    if (target == null && (kind == "tap" || kind == "long") && listOf("text", "desc", "inside").any { sel.optString(it).contains('{') }) {
+                        var n = 0
+                        while (target == null && n++ < 6) {
+                            if (doSwipe(ctx, "up", null, null, null, null, null, quick = true) != null) break
+                            target = ScreenSkills.find(sel, elements, args)
+                        }
+                    }
                     if (target == null) {
                         // Not there. If the step after it can already be done, this one was not needed (a pop-up that no longer comes).
                         val next = steps.optJSONObject(i + 1)?.optJSONObject("sel")
@@ -693,7 +762,7 @@ class ScreenSession(
             }
             // The last screen is what is handed back: give it a moment to finish drawing, no longer than it needs.
             runCatching { ask(op("idle").put("quiet", 200).put("timeout", 1_500), 4_000) }.onFailure { if (it is ScreenBlocked) throw it }
-            Replay(true, read(), -1, now() - t0, stepMs, skipped, usedPicture)
+            Replay(true, read(), -1, now() - t0, stepMs, skipped, usedPicture, approvalMs, values)
         } catch (e: ScreenBlocked) {
             note("blocked", "Blocked: a banking or money app"); fail(-1, e.message ?: ScreenBlocklist.REASON)
         } catch (e: HelperAbsent) {

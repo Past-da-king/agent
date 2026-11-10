@@ -39,11 +39,16 @@ class ScreenSkillSaveTool(private val l: ScreenLearning) : Tool {
             "name" to str("The tool's name: lower-case letters, digits, underscores, e.g. search or send_message"),
             "description" to str("What it does, what it returns and when to use it, one or two lines"),
             "inputs" to JSONObject().put("type", "object").put("description", "The parts that change each time: {input name: the exact text it had in this run}, e.g. {\"query\": \"weather in Durban\"}. Wherever that text was typed or pressed, the tool takes the input instead."),
-            "read_only" to bool("true when it only looks things up; false when it sends, posts, books or changes anything (default false)")))
+            "read_only" to bool("true when it only looks things up; false when it sends, posts, books or changes anything (default false)"),
+            "expect" to str("Words that must be on the final screen for the job to count as done (an input in braces is allowed, e.g. {text}). Left out: an input that is on the screen now is used. A replay that does not reach it reports failure, never success."),
+            "returns" to JSONObject().put("type", "object").put("description", "Values the tool hands back by name, read off the final screen each time: {name: the exact text that value has on the screen right now}, e.g. {\"rating\": \"4.5\", \"hours\": \"Closes 17:00\"}. The tool then answers RESULT: {json}; an empty value counts as a failed run."),
+            "input_types" to JSONObject().put("type", "object").put("description", "Optional, what each input is: {input name: text | file | contact | place | number | date | choice:a|b|c}. Number, date and choice are checked before the app is touched.")))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val ins = input.optJSONObject("inputs") ?: JSONObject()
         val map = LinkedHashMap<String, String>().apply { ins.keys().forEach { k -> put(k, ins.opt(k)?.toString().orEmpty()) } }
-        return ScreenLearned.save(l.session(), l.store, l.apps, l.blocklist(), ctx, input.optString("name").trim(), input.optString("description"), map, input.optBoolean("read_only", false))
+        return ScreenLearned.save(l.session(), l.store, l.apps, l.blocklist(), ctx, input.optString("name").trim(), input.optString("description"), map, input.optBoolean("read_only", false), expect = input.optString("expect"),
+            returns = LinkedHashMap<String, String>().apply { input.optJSONObject("returns")?.let { o -> o.keys().forEach { k -> put(k, o.opt(k)?.toString().orEmpty()) } } },
+            types = LinkedHashMap<String, String>().apply { input.optJSONObject("input_types")?.let { o -> o.keys().forEach { k -> put(k, o.opt(k)?.toString().orEmpty()) } } })
     }
 }
 
