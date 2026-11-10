@@ -29,7 +29,8 @@ data class WakeWordSettings(
 
 /** Keeps the wake word settings (their own small file, nothing secret in it). */
 class WakeWordStore(context: Context) {
-    private val prefs: SharedPreferences = context.applicationContext.getSharedPreferences("wake_word", Context.MODE_PRIVATE)
+    internal val app: Context = context.applicationContext
+    private val prefs: SharedPreferences = app.getSharedPreferences("wake_word", Context.MODE_PRIVATE)
     private val _state = MutableStateFlow(read())
     val state: StateFlow<WakeWordSettings> = _state
 
@@ -61,6 +62,10 @@ class WakeWordStore(context: Context) {
 
     companion object {
         @Volatile private var one: WakeWordStore? = null
-        fun get(context: Context): WakeWordStore = one ?: synchronized(this) { one ?: WakeWordStore(context).also { one = it } }
+        /** One store per application (a test run makes a new application for every test). */
+        fun get(context: Context): WakeWordStore {
+            val app = context.applicationContext
+            return one?.takeIf { it.app === app } ?: synchronized(this) { one?.takeIf { it.app === app } ?: WakeWordStore(app).also { one = it } }
+        }
     }
 }
