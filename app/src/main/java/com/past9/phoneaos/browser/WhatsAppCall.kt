@@ -238,15 +238,22 @@ class WhatsAppCall(
         fun words(): String
         /** Ends the voice and saves the words to the chat. */
         fun stop()
+        /** How the call ended, for the call's own story: [by] is a [CallDiag] word, empty when the agent did not end it. */
+        fun ended(by: String, why: String, whatsapp: JSONObject?) {}
+        /** The call's own story (who ended it, a timeline, counters, page errors), when the voice keeps one. */
+        fun diagnostics(): JSONObject? = null
     }
 
     class Result(val outcome: String, val reason: String, val contact: String = "", val chat: String = "", val rangSeconds: Long = 0, val durationSeconds: Long = 0,
-                 val endedBy: String = "", val transcript: String = "", val callingOffered: Boolean? = null, val testAccount: String = "", val whatsapp: JSONObject? = null) {
+                 val endedBy: String = "", val transcript: String = "", val callingOffered: Boolean? = null, val testAccount: String = "", val whatsapp: JSONObject? = null,
+                 /** Who or what ended it, a timeline, counters every five seconds and the page's last errors ([CallDiag.json]). */
+                 val diagnostics: JSONObject? = null) {
         fun json(): JSONObject = JSONObject().put("outcome", outcome).put("reason", reason).put("contact", contact).put("chat", chat)
             .put("rang_seconds", rangSeconds).put("duration_seconds", durationSeconds).put("ended_by", endedBy)
             .put("transcript", transcript).put("saved_to_chat", transcript.isNotBlank())
             .put("calling_offered", callingOffered ?: JSONObject.NULL).put("test_account", testAccount)
             .put("whatsapp", whatsapp ?: JSONObject.NULL)
+            .also { o -> diagnostics?.let { d -> for (k in listOf("ended", "timeline", "counters", "page_errors")) if (d.has(k)) o.put(k, d.opt(k)) } }
     }
 
     /** Where the call is, in a word, for anyone asking while it runs. */
@@ -333,13 +340,16 @@ class WhatsAppCall(
             }
             // Answered.
             if (!s.connected) {
-                // Five seconds without a connected call: it is over on the other side. If WhatsApp still shows a call, end that too.
-                if (++lost >= LOST_POLLS) { endedBy = OTHER_SIDE; endedAt = t; if (!s.quiet) hangUp(); break }
+                // Five seconds with no call left on the page: it is over on the other side. While WhatsApp still shows a call
+                // (it is reconnecting), it gets RECONNECT_POLLS seconds to come back before the agent ends it.
+                lost++
+                if (s.quiet && lost >= LOST_POLLS) { endedBy = OTHER_SIDE; endedAt = t; break }
+                if (lost >= RECONNECT_POLLS) { endedBy = "agent"; endedAt = t; why = "The call was not connected for ${RECONNECT_POLLS * POLL_MS / 1000} seconds."; hangUp(); break }
                 continue
             } else lost = 0
             voice.failed?.let { why = "The voice stopped: $it" }
             if (why.isNotEmpty()) { endedBy = "agent"; endedAt = t; hangUp(); break }
-            if (voice.endRequested) { pause(GOODBYE_MS); endedBy = "agent"; endedAt = now(); why = "The conversation was finished."; hangUp(); break }
+            if (voice.endRequested) { pause(GOODBYE_MS); endedBy = "agent"; endedAt = now(); why = FINISHED; hangUp(); break }
             if (t - answeredAt >= max) { endedBy = "max_minutes"; endedAt = t; hangUp(); why = "The call reached its limit of ${max / 60_000} minutes."; break }
             // Connected and nobody has said a word: the voice greets first.
             if (!nudged && voice.turns == 0 && t - answeredAt >= QUIET_MS) { nudged = true; voice.nudge("The call is connected and nobody has spoken yet. Greet them now.") }
@@ -347,17 +357,29 @@ class WhatsAppCall(
 
         phase = "ending"
         val words = voice.words()
+        // Ended on the other side: the page's last words on the call (WhatsApp's own events) get a moment to arrive.
+        if (endedBy == OTHER_SIDE) pause(SETTLE_MS)
+        val asked = voice.endRequested
         voice.stop()
         val end = page.state() ?: last
         val raw = end?.raw
         val ended = raw?.optJSONObject("ended")?.takeIf { it.optString("id") != (before?.endedId ?: "") }
+        voice.ended(when {
+            endedBy == "max_minutes" -> CallDiag.AGENT_MAX_MINUTES
+            endedBy == "page" -> CallDiag.BY_PAGE
+            endedBy == "agent" && why.startsWith("The voice stopped") -> CallDiag.AGENT_VOICE_FAILED
+            endedBy == "agent" && asked && answeredAt > 0 && why == FINISHED -> CallDiag.AGENT_END_CALL
+            endedBy == "agent" -> CallDiag.AGENT_OTHER
+            else -> ""
+        }, why, ended)
+        val diag = runCatching { voice.diagnostics() }.getOrNull()
         // WhatsApp's own word on whether the call was ever connected wins over what the polling happened to see.
         if (answeredAt == 0L && ended?.optBoolean("wasEverConnected") == true) answeredAt = endedAt - ended.optLong("callDuration", 0) * 1000
         val rang = ((if (answeredAt > 0) answeredAt else endedAt) - placedAt).coerceAtLeast(0) / 1000
         return when {
-            answeredAt > 0 -> Result(ANSWERED, why.ifEmpty { "The call ended on the other side, or it dropped." }, who, opened.id, rang, ((endedAt - answeredAt).coerceAtLeast(0)) / 1000, endedBy, words, info.calling || forced, tested(forced, gate), raw)
-            started -> Result(NO_ANSWER, why.ifEmpty { "The call ended before anyone answered (not answered, declined or unreachable)." }, who, opened.id, rang, 0, endedBy, words, info.calling || forced, tested(forced, gate), raw)
-            else -> Result(FAILED, why.ifEmpty { "The call did not start." }, who, opened.id, rang, 0, endedBy, words, info.calling || forced, tested(forced, gate), raw)
+            answeredAt > 0 -> Result(ANSWERED, why.ifEmpty { diag?.optJSONObject("ended")?.optString("detail")?.takeIf { it.isNotBlank() } ?: "The call ended on the other side, or it dropped." }, who, opened.id, rang, ((endedAt - answeredAt).coerceAtLeast(0)) / 1000, endedBy, words, info.calling || forced, tested(forced, gate), raw, diag)
+            started -> Result(NO_ANSWER, why.ifEmpty { "The call ended before anyone answered (not answered, declined or unreachable)." }, who, opened.id, rang, 0, endedBy, words, info.calling || forced, tested(forced, gate), raw, diag)
+            else -> Result(FAILED, why.ifEmpty { "The call did not start." }, who, opened.id, rang, 0, endedBy, words, info.calling || forced, tested(forced, gate), raw, diag)
         }.also { phase = "done" }
     }
 
@@ -402,6 +424,11 @@ class WhatsAppCall(
         const val GOODBYE_MS = 3_000L
         const val QUIET_MS = 4_000L
         const val LOST_POLLS = 5
+        /** A call WhatsApp still shows but that is not connected (it is reconnecting) gets this long to come back. */
+        const val RECONNECT_POLLS = 30
+        /** After the other side ended it: time for the page's last call events to reach the app. */
+        const val SETTLE_MS = 1_500L
+        const val FINISHED = "The conversation was finished."
 
         fun parseInfo(v: JSONObject?): Info? = v?.let {
             Info(it.optBoolean("on"), it.optBoolean("loaded"), it.optBoolean("hooks"), it.optString("me").takeIf { m -> m.isNotBlank() && m != "null" }, it.optBoolean("calling"),

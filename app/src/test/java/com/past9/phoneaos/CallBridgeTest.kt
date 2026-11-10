@@ -1,6 +1,7 @@
 package com.past9.phoneaos
 
 import com.past9.phoneaos.browser.CallBridge
+import com.past9.phoneaos.browser.CallDiag
 import com.past9.phoneaos.browser.CallBridgeJs
 import com.past9.phoneaos.browser.CallBridgeProtocol
 import com.past9.phoneaos.browser.CallBridgeProtocol.FromPage
@@ -130,7 +131,10 @@ class CallBridgeTest {
         // It only runs where the app put the listener, in the top page.
         assertTrue(js.contains("typeof hinaCall === 'undefined'")); assertTrue(js.contains("window.top !== window"))
         // No WhatsApp feature is switched on from here: a call only works if WhatsApp offers it to the account.
-        for (banned in listOf("WAWebABProps", "enable_web_calling", "setGetABPropConfigValueImpl", "require(")) assertFalse(banned, js.contains(banned))
+        for (banned in listOf("WAWebABProps", "enable_web_calling", "setGetABPropConfigValueImpl")) assertFalse(banned, js.contains(banned))
+        // WhatsApp's own modules are reached in one place only, and only these three, to read how a call is going and how it ended.
+        assertEquals(1, Regex("require\\(").findAll(js).count())
+        assertEquals(setOf("WAWebCallCollection", "WAWebVoipHandleNativeCallEvent", "WAWebVoipWaCallEnums"), Regex("req\\('([A-Za-z]+)'\\)").findAll(js).map { it.groupValues[1] }.toSet())
         // Kotlin must not have eaten anything: a raw string would read a dollar sign as a template.
         assertFalse(js.contains("null") && js.contains("\$"))
         assertEquals(CallBridgeProtocol.OBJECT, "hinaCall")
@@ -158,6 +162,8 @@ class CallBridgeTest {
         lateinit var events: (LiveSession.Event) -> Unit
         var saved: Triple<Long, Long, List<Triple<String, String, Long>>>? = null
         var saves = 0; var alive = 0; var clock = 1_000L; var authCalls = 0
+        val holds = ArrayList<Boolean>()
+        var tick: (() -> Unit)? = null; var tickMs = 0L; var tickStops = 0
         val bridge = CallBridge(
             toPage = { m -> if (pageListening) { toPage += JSONObject(m); true } else false },
             auth = { authCalls++; token },
@@ -166,7 +172,11 @@ class CallBridgeTest {
             names = { "Hina" to "Ayanda" },
             keepAlive = { alive++ },
             now = { clock },
+            hold = { holds += it },
+            every = { ms, block -> tickMs = ms; tick = block; { tickStops++; tick = null } },
         )
+        fun ev(kind: String, detail: String = "", at: Long = clock) = pageSays(JSONObject().put("t", "ev").put("k", kind).put("d", detail).put("at", at).toString())
+        fun events(status: JSONObject = bridge.status()) = status.getJSONArray("timeline").let { t -> (0 until t.length()).map { t.getJSONObject(it).getString("event") } }
         fun pageSays(raw: String) = bridge.onPageMessage(raw)
         fun start() = runBlocking { bridge.start("Asanda", "confirm lunch") }
         fun types() = toPage.map { it.getString("t") }
@@ -292,6 +302,155 @@ class CallBridgeTest {
         assertEquals("arm", r.types().last()); assertFalse(r.toPage.last().getBoolean("on")); assertEquals(1, r.saves)
         val r2 = Rig(); r2.pageSays("""{"t":"hello"}"""); r2.start(); r2.events(LiveSession.Event.Closed("closed"))
         assertFalse(r2.bridge.running); assertFalse(r2.bridge.armed)
+        // A voice whose connection closed for good mid-call is a voice that failed: the call must not go on in silence.
+        assertTrue(r2.bridge.failed, r2.bridge.failed!!.contains("closed"))
+        val r3 = Rig(); r3.pageSays("""{"t":"hello"}"""); r3.start(); r3.events(LiveSession.Event.Closed("deadline", 1011))
+        assertTrue(r3.bridge.failed, r3.bridge.failed!!.contains("code 1011 deadline"))
+    }
+
+    // ---- the call's own story ----
+
+    @Test fun thePagesStoryMessagesAreReadAndOddOnesRefused() {
+        val e = CallBridgeProtocol.parse("""{"t":"ev","k":"wa_event","d":"CallTerminateReceived","at":1731240000000}""") as FromPage.Happened
+        assertEquals("wa_event", e.kind); assertEquals("CallTerminateReceived", e.detail); assertEquals(1731240000000L, e.at)
+        assertEquals(600, (CallBridgeProtocol.parse(JSONObject().put("t", "ev").put("k", "x").put("d", "y".repeat(5000)).toString()) as FromPage.Happened).detail.length)
+        for (bad in listOf("""{"t":"ev"}""", """{"t":"ev","k":""}""", """{"t":"ev","k":"<b>"}""", """{"t":"ev","k":"a b"}""")) assertTrue(bad, CallBridgeProtocol.parse(bad) is FromPage.Bad)
+        val err = CallBridgeProtocol.parse(JSONObject().put("t", "err").put("m", "z".repeat(900)).put("at", 5).toString()) as FromPage.PageError
+        assertEquals(300, err.text.length); assertEquals(5L, err.at)
+        assertEquals(7, (CallBridgeProtocol.parse("""{"t":"sample","played":7}""") as FromPage.Sample).json.getInt("played"))
+        assertEquals("sample", JSONObject(CallBridgeProtocol.sample()).getString("t"))
+    }
+
+    @Test fun thePhoneIsHeldAwakeForTheWholeCallVoiceAndLetGoAfter() {
+        val r = Rig(); r.pageSays("""{"t":"hello"}""")
+        assertTrue(r.holds.isEmpty())
+        r.start()
+        assertEquals(listOf(true), r.holds); assertEquals(CallBridge.TICK_MS, r.tickMs); assertEquals(5_000L, CallBridge.TICK_MS)
+        r.bridge.stop(); r.bridge.stop()
+        assertEquals(listOf(true, false), r.holds); assertEquals(1, r.tickStops)
+        // A voice that fails lets go too.
+        val r2 = Rig(); r2.pageSays("""{"t":"hello"}"""); r2.start(); r2.events(LiveSession.Event.Failed("connection failed"))
+        assertEquals(listOf(true, false), r2.holds); assertEquals(1, r2.tickStops)
+        // A page that is not listening: nothing stays held.
+        val r3 = Rig(pageListening = false); r3.pageSays("""{"t":"hello"}"""); r3.start()
+        assertEquals(listOf(true, false), r3.holds)
+    }
+
+    @Test fun everyFiveSecondsTheBrowserIsKeptOpenAndThePageIsAskedForItsCounters() {
+        val r = Rig(); r.pageSays("""{"t":"hello"}"""); r.start(); r.events(LiveSession.Event.SetupComplete)
+        r.ev(CallDiag.WA_CONNECTED)
+        val alive = r.alive; r.toPage.clear()
+        r.tick!!()
+        assertEquals(listOf("sample"), r.types()); assertEquals(alive + 1, r.alive)
+        r.pageSays(pageAudio(ByteArray(3200 * 3)))
+        r.clock += 5_000
+        r.pageSays(JSONObject().put("t", "sample").put("at", r.clock).put("played", 4).put("remote_frames", 30).put("bytes_sent", 9088).put("bytes_received", 7390).put("pcs", 9).put("ice", "connected").put("mic", "running").toString())
+        val c = r.bridge.status().getJSONArray("counters")
+        assertEquals(1, c.length())
+        val line = c.getJSONObject(0)
+        assertEquals(5.0, line.getDouble("s"), 0.0); assertEquals(4, line.getInt("voice_chunks")); assertEquals(3, line.getInt("heard_frames")); assertEquals(3, line.getInt("frames_to_voice"))
+        assertEquals(9088, line.getInt("bytes_sent")); assertEquals(7390, line.getInt("bytes_received")); assertEquals("connected", line.getString("ice"))
+        // Once the voice has stopped, nothing is asked any more.
+        val tick = r.tick!!; r.bridge.stop(); r.toPage.clear(); tick()
+        assertTrue(r.toPage.isEmpty())
+    }
+
+    @Test fun aPageThatStopsAnsweringIsWrittenDownOnceAndBlamedOnlyIfNoEndWasSeen() {
+        val r = Rig(); r.pageSays("""{"t":"hello"}"""); r.start()
+        r.ev(CallDiag.WA_CONNECTED)
+        repeat(CallBridge.SILENT_TICKS - 1) { r.tick!!() }
+        assertFalse(r.events().contains(CallDiag.PAGE_SILENT))
+        repeat(4) { r.tick!!() }
+        val s = r.bridge.status()
+        assertEquals(1, r.events(s).count { it == CallDiag.PAGE_SILENT })
+        assertEquals(CallDiag.BY_PAGE, s.getJSONObject("ended").getString("by")); assertFalse(s.getJSONObject("ended").getJSONObject("page").getBoolean("answering"))
+        // It answers again: said so, and no longer blamed.
+        r.pageSays("""{"t":"sample","played":1}""")
+        val s2 = r.bridge.status()
+        assertTrue(r.events(s2).contains(CallDiag.PAGE_BACK)); assertEquals(CallDiag.NOT_ENDED, s2.getJSONObject("ended").getString("by"))
+        // A page with nobody listening at all.
+        val r2 = Rig(); r2.pageSays("""{"t":"hello"}"""); r2.start(); r2.pageListening = false
+        repeat(CallBridge.SILENT_TICKS) { r2.tick!!() }
+        r2.pageListening = true
+        val t = r2.bridge.status().getJSONArray("timeline")
+        assertTrue((0 until t.length()).any { t.getJSONObject(it).optString("detail") == "No page is listening." })
+    }
+
+    @Test fun statusTellsWhoEndedTheCallWithATimelineInSecondsSinceTheAnswer() {
+        val r = Rig(); r.pageSays("""{"t":"hello"}"""); r.start()
+        assertFalse(r.bridge.status().getJSONObject("ended").getBoolean("answered"))
+        r.events(LiveSession.Event.SetupComplete)
+        r.clock += 10_000; r.ev(CallDiag.WA_CONNECTED)
+        r.clock += 1_000; r.events(LiveSession.Event.Transcript("in", "Hello?")); r.events(LiveSession.Event.Transcript("in", " Hello."))
+        r.clock += 1_000; r.events(LiveSession.Event.Transcript("out", "Hi Asanda"))
+        r.pageSays(JSONObject().put("t", "err").put("m", "voip: [AV] No audio device selected.").put("at", r.clock).toString())
+        r.ev("mic_context", "suspended")
+        r.clock += 18_000; r.ev(CallDiag.WA_EVENT, "CallTerminateReceived"); r.ev(CallDiag.WA_EVENT, "CallEnding {\"result\":5}")
+        r.clock += 200
+        r.ev(CallDiag.WA_ENDED, """{"id":"C1","callOutcome":"Completed","callDuration":20,"wasEverConnected":true,"userEndedCall":false,"callFailedReason":null,"callLogResult":5}""")
+        r.pageSays("""{"t":"state","mic":"running","tracks_out":3,"tracks_ended":0,"wa_events":true}""")
+        val s = r.bridge.status()
+        val e = s.getJSONObject("ended")
+        assertEquals(CallDiag.BY_REMOTE, e.getString("by")); assertTrue(e.getString("detail").contains("CallTerminateReceived"))
+        assertEquals(20.2, e.getDouble("seconds_after_answer"), 0.0)
+        assertEquals("Connected", e.getJSONObject("whatsapp").getString("result")); assertFalse(e.getJSONObject("whatsapp").getBoolean("userEndedCall"))
+        assertEquals("running", e.getJSONObject("microphone").getString("context")); assertTrue(e.getBoolean("whatsapp_events_read"))
+        assertEquals(listOf("voice_armed", "voice_ready", "wa_connected", "first_words_heard", "first_words_spoken", "mic_context", "wa_event", "wa_event", "wa_ended"), r.events(s))
+        val t = s.getJSONArray("timeline")
+        assertEquals(-10.0, t.getJSONObject(0).getDouble("s"), 0.0); assertEquals("app", t.getJSONObject(0).getString("from"))
+        assertEquals(1.0, t.getJSONObject(3).getDouble("s"), 0.0); assertEquals("voice", t.getJSONObject(3).getString("from"))
+        assertEquals("page", t.getJSONObject(5).getString("from")); assertEquals("whatsapp", t.getJSONObject(6).getString("from")); assertEquals(20.0, t.getJSONObject(6).getDouble("s"), 0.0)
+        assertEquals("voip: [AV] No audio device selected.", s.getJSONArray("page_errors").getJSONObject(0).getString("error"))
+        // The story is still there after the voice stops, and the next call starts a new one.
+        r.bridge.stop()
+        val after = r.bridge.status()
+        assertEquals(CallDiag.BY_REMOTE, after.getJSONObject("ended").getString("by")); assertEquals("voice_stopped", r.events(after).last())
+        r.start()
+        val next = r.bridge.status()
+        assertEquals(listOf("voice_armed"), r.events(next)); assertEquals(CallDiag.NOT_ENDED, next.getJSONObject("ended").getString("by")); assertEquals(0, next.getJSONArray("page_errors").length())
+    }
+
+    @Test fun theVoicesOwnEndIsInTheStoryWithItsCloseCode() {
+        val r = Rig(); r.pageSays("""{"t":"hello"}"""); r.start(); r.ev(CallDiag.WA_CONNECTED)
+        r.events(LiveSession.Event.Reconnecting)
+        r.events(LiveSession.Event.ToolCall("c1", "end_call", JSONObject().put("reason", "said goodbye")))
+        r.events(LiveSession.Event.Closed("going away", 1001))
+        val s = r.bridge.status()
+        assertEquals(listOf("voice_armed", "wa_connected", "voice_reconnecting", "end_call_asked", "voice_closed", "voice_stopped"), r.events(s))
+        val v = s.getJSONObject("ended").getJSONObject("voice")
+        assertEquals("code 1001 going away", v.getString("closed")); assertTrue(v.getBoolean("end_call_asked")); assertTrue(v.isNull("failed"))
+        val r2 = Rig(); r2.pageSays("""{"t":"hello"}"""); r2.start(); r2.events(LiveSession.Event.Failed("token expired"))
+        assertEquals("token expired", r2.bridge.status().getJSONObject("ended").getJSONObject("voice").getString("failed"))
+    }
+
+    @Test fun theOneWhoPlacedTheCallCanSayHowItEnded() {
+        val r = Rig(); r.pageSays("""{"t":"hello"}"""); r.start(); r.ev(CallDiag.WA_CONNECTED)
+        r.clock += 300_000
+        r.bridge.callEnded(CallDiag.AGENT_MAX_MINUTES, "The call reached its limit of 5 minutes.", JSONObject().put("id", "C1").put("callLogResult", 5))
+        val d = r.bridge.diagnostics()
+        assertEquals(CallDiag.AGENT_MAX_MINUTES, d.getJSONObject("ended").getString("by")); assertEquals(300.0, d.getJSONObject("ended").getDouble("seconds_after_answer"), 0.0)
+        assertTrue(d.getJSONObject("ended").getString("detail").contains("5 minutes"))
+        for (k in listOf("ended", "timeline", "counters", "page_errors")) assertTrue(k, d.has(k))
+        // Before any call voice there is no story to tell.
+        val fresh = Rig()
+        assertFalse(fresh.bridge.status().has("ended"))
+    }
+
+    @Test fun aPageThatLoadsAgainMidCallIsInTheStory() {
+        val r = Rig(); r.pageSays("""{"t":"hello"}"""); r.start()
+        r.pageSays("""{"t":"hello"}""")
+        assertTrue(r.events().contains("page_loaded_again"))
+    }
+
+    @Test fun thePageScriptKeepsTheMicrophoneAliveAndReadsWithoutChangingWhatsApp() {
+        val js = CallBridgeJs.HOOKS
+        // One unbroken, never perfectly silent stream; restarted when the browser stops it; tracks watched.
+        for (w in listOf("createConstantSource", "ns.loop = true", "onstatechange", "H.micCtx.resume()", "'ended'", "'mute'")) assertTrue(w, js.contains(w))
+        // WhatsApp's call events are read on their way through and always handed on.
+        assertTrue(js.contains("WAWebVoipHandleNativeCallEvent")); assertTrue(js.contains("return orig.apply(this, arguments);"))
+        assertTrue(js.contains("getStats")); assertTrue(js.contains("unhandledrejection"))
+        // It still forces nothing and ends nothing.
+        for (w in listOf("enable_web_calling", "WAWebABProps", "endCall", ".close()")) assertFalse(w, js.contains(w))
     }
 
     @Test fun aReloadedPageIsArmedAgainWhileTheCallVoiceRuns() {
