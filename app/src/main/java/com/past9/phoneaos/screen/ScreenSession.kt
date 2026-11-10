@@ -76,6 +76,8 @@ class ScreenSession(
     private val runs: ScreenRuns? = null,
     /** Paint over these boxes (left, top, right, bottom, in screen pixels) in a picture of a screen [width] wide before it is kept. */
     private val mask: (ByteArray, List<IntArray>, Int) -> ByteArray = { jpeg, _, _ -> jpeg },
+    /** Let this app read these files of the phone: for each, the content address it can open and its type. Done by the app itself, before the helper launches the share (the shell cannot hand out our files). */
+    private val grant: (String, List<String>) -> List<Pair<String, String>> = { _, _ -> emptyList() },
     private val now: () -> Long = { System.currentTimeMillis() },
 ) {
     private val mutex = Mutex()
@@ -259,13 +261,19 @@ class ScreenSession(
         is ScreenRules.Gate.Ask -> {
             val a = ctx.ask("APPROVAL|${gate.what}|${gate.details}", listOf("Approve", "Decline"))
             log("approval", "${gate.what}: ${when (a) { "Approve" -> "you approved"; null -> "nobody answered"; else -> "you declined" }}", picture = false)
-            when (a) { "Approve" -> null; null -> "Needs the user's yes and nobody answered. Not done."; else -> "The user declined. Not done." }
+            // Say what really happened: only a tap on Decline is a decline.
+            when (a) {
+                "Approve" -> null
+                null -> "Not done: this needs the user's yes on the phone (a card in the chat and a notification with Approve), and no answer came in time. It was NOT declined. Ask them to approve, or to set this app to Allow in Settings > Background screen, then try again."
+                "Decline" -> "The user declined. Not done."
+                else -> "Not done: the answer was \"${a.take(40)}\", not Approve."
+            }
         }
     }
 
     // ---- what the tools and a replay both do (the caller holds the lock) ----
 
-    private suspend fun doOpen(ctx: ToolContext, ref: AppRef, link: String, fresh: Boolean, by: String = "agent", quick: Boolean = false): String? {
+    private suspend fun doOpen(ctx: ToolContext, ref: AppRef, link: String, fresh: Boolean, by: String = "agent", quick: Boolean = false, files: List<String>? = null, words: String = ""): String? {
         money(ref.pkg, ref.label)?.let { note("blocked", "Blocked: ${ref.label}"); return it }
         if (rule(ref.pkg) == ScreenRules.Rule.NEVER) return ScreenRules.NEVER_REASON
         helper()?.let { return it }
@@ -285,8 +293,16 @@ class ScreenSession(
             borrowed += ref.pkg
         }
         // A link opens by intent, held to the named app so no other app can take it. A fresh start clears where the app was left.
-        val args = (if (link.isNotBlank()) listOf("-a", "android.intent.action.VIEW", "-d", link, "-p", ref.pkg) else listOf("-n", ref.component)) +
-            if (fresh && ref.pkg !in borrowed) listOf("--activity-clear-task") else emptyList()
+        // A share: the app is handed the file (it was given read access first) and the words in one intent, on the hidden display.
+        val shared = if (files != null) runCatching { grant(ref.pkg, files) }.getOrElse { return "The file could not be handed over: ${it.message}" } else emptyList()
+        if (files != null && files.isNotEmpty() && shared.isEmpty()) return "The file could not be handed over: it was not found on the phone, or cannot be read."
+        val args = when {
+            files != null -> listOf("-a", "android.intent.action.SEND", "-t", shared.firstOrNull()?.second ?: "text/plain", "-p", ref.pkg) +
+                (shared.firstOrNull()?.let { listOf("--eu", "android.intent.extra.STREAM", it.first, "--grant-read-uri-permission") } ?: emptyList()) +
+                (if (words.isNotBlank()) listOf("--es", "android.intent.extra.TEXT", words) else emptyList())
+            link.isNotBlank() -> listOf("-a", "android.intent.action.VIEW", "-d", link, "-p", ref.pkg)
+            else -> listOf("-n", ref.component) + if (fresh && ref.pkg !in borrowed) listOf("--activity-clear-task") else emptyList()
+        }
         val started = ask(op("start").put("args", JSONArray(args)), 30_000)
         if (!started.optBoolean("ok")) return "${ref.label} did not open on the background screen: ${err(started, "no reason given")}."
         if (run == null || run?.pkg != ref.pkg) { run?.finish(); secrets.clear(); run = runs?.begin(ref.pkg, ref.label, ctx.agentLabel) }
@@ -295,7 +311,8 @@ class ScreenSession(
         active(true)
         if (!quick) settle() else settle(150, 1_200)
         runCatching { readTree() }.onFailure { if (it is ScreenBlocked) throw it }
-        log("open", "Opened ${ref.label}", by = by, extra = JSONObject().put("link", link))
+        if (files != null) log("share", "Handed ${ref.label} ${files.joinToString { it.substringAfterLast('/') }.ifBlank { "the words" }}", text = "", by = by, extra = JSONObject().put("files", files.joinToString("|")).put("text", words))
+        else log("open", "Opened ${ref.label}", by = by, extra = JSONObject().put("link", link))
         if (!made.optBoolean("trusted")) return "!Note: this phone only allows a basic background screen, so the keyboard or the focus may show on the user's screen while typing."
         return null
     }
@@ -314,7 +331,9 @@ class ScreenSession(
         // The person may have pressed Stop while the approval card was up.
         blocked(ctx, needOpen = true)?.let { return it }
         val t0 = now()
-        var ok = ask(op("tap").put("x", px).put("y", py).put("ms", if (long) 700 else 60)).optBoolean("ok")
+        // A learned step acts on the element itself, which is quicker and does not depend on where it is drawn; a finger press is the fallback.
+        var ok = quick && target != null && target.clickable && ask(op("act").put("node", target.id).put("action", if (long) "long" else "click")).optBoolean("ok")
+        if (!ok) ok = ask(op("tap").put("x", px).put("y", py).put("ms", if (long) 700 else 60)).optBoolean("ok")
         if (!ok && target != null) ok = ask(op("act").put("node", target.id).put("action", if (long) "long" else "click")).optBoolean("ok")
         if (!ok) return "The press did not go through. Look again (screen_look)."
         val name = inside.ifBlank { under?.label.orEmpty() }.ifBlank { "$px,$py" }.take(60)
@@ -357,7 +376,10 @@ class ScreenSession(
         var said = "Typed. The field now reads: \"$reads\"."
         var submitted = false
         if (submit) {
-            val gate = approve(ctx, ScreenRules.beforePress(apps.label(pkg), rule(pkg), null, "", listOf(if (hidden) "(hidden)" else text), config().extraWords, submit = true))
+            // Submitting a search or a question to the app itself goes nowhere but the app: only a message-like field asks first.
+            val what = ((field ?: was)?.let { it.hint + " " + it.desc + " " + it.res } ?: "").lowercase()
+            val lookup = listOf("search", "find", "filter", "query", "ask", "prompt", "url", "address", "look up").any { it in what }
+            val gate = if (lookup) null else approve(ctx, ScreenRules.beforePress(apps.label(pkg), rule(pkg), null, "", listOf(if (hidden) "(hidden)" else text), config().extraWords, submit = true))
             if (gate != null) {
                 log("type", "Typed ${if (hidden) "(hidden)" else "\"${text.take(80)}\""}", sel, text, hidden, by, JSONObject().put("append", append).put("submit", false), now() - t0)
                 return null to "$said\nNot submitted: $gate"
@@ -416,10 +438,27 @@ class ScreenSession(
         return null
     }
 
-    private suspend fun doWait(text: String, gone: Boolean, seconds: Int): Pair<Boolean, String> {
-        val secs = seconds.coerceIn(1, 60)
+    private suspend fun doWait(text: String, gone: Boolean, seconds: Int, stable: Int = 0): Pair<Boolean, String> {
+        val secs = seconds.coerceIn(1, 120)
         val until = now() + secs * 1000L
         val t0 = now()
+        if (stable > 0 && text.isBlank()) {
+            // An answer that is still being written: done when the words on the screen have not changed for [stable] seconds.
+            var last = ""; var since = now()
+            while (true) {
+                lastUsed = now()
+                readTree()
+                val sig = elements.joinToString("|") { it.text }
+                if (sig != last) { last = sig; since = now() }
+                else if (now() - since >= stable * 1000L) {
+                    log("wait", "Waited until the screen stopped changing", extra = JSONObject().put("stable", stable).put("seconds", secs), took = now() - t0)
+                    return true to "The screen has not changed for $stable s."
+                }
+                if (now() >= until) return false to "Waited $secs s and the screen was still changing."
+                delay(350)
+                if (_state.value.stopped) return false to STOPPED
+            }
+        }
         while (true) {
             lastUsed = now()
             readTree()
@@ -482,7 +521,7 @@ class ScreenSession(
         if (displayId == 0) return CLOSED
         val target = when {
             element != null -> elements.firstOrNull { it.id == element } ?: return "There is no element [$element] on the screen as you last saw it. Look again (screen_look)."
-            words.isNotBlank() -> ScreenTree.find(elements, words) ?: run { readTree(); ScreenTree.find(elements, words) } ?: return "Nothing on the screen says \"$words\". Look again (screen_look), or scroll."
+            words.isNotBlank() -> ScreenTree.find(elements, words) ?: run { readTree(); ScreenTree.find(elements, words) } ?: return "Nothing on the screen says \"$words\". Closest: ${ScreenFuzzy.closest(elements, words).joinToString { "\"$it\"" }.ifBlank { "nothing" }}. Look again (screen_look), or scroll."
             x != null && y != null -> null
             else -> return "Say what to press: element (its number), text (its words) or x and y."
         }
@@ -523,17 +562,42 @@ class ScreenSession(
         "Pressed ${name.lowercase()}.\n" + read()
     } }
 
+    private fun extra0(s: JSONObject) = s.optJSONObject("extra") ?: JSONObject()
+
+    /** Hand an app files and words through its own share door, on the hidden display. */
+    suspend fun share(ctx: ToolContext, app: String, files: List<String>, words: String, owner: String = ""): String = mutex.withLock { safely {
+        blocked(ctx, needOpen = false)?.let { return it }
+        val ref = apps.find(app) ?: return "No app called \"$app\" is installed. Use android_apps to see what is installed and what each accepts."
+        val who = owner.trim().take(40).ifBlank { ctx.agentLabel }
+        val cur = _state.value
+        if (cur.open && cur.owner.isNotBlank() && cur.owner != who && cur.owner != "you" && now() - lastUsed < BUSY_MS)
+            return "The background screen is busy with ${cur.owner}, doing ${cur.app.ifBlank { "a job" }}. One job at a time: try again when it is closed."
+        jobOwner = who; ownerLabel = ctx.agentLabel
+        val out = doOpen(ctx, ref, "", fresh = false, files = files, words = words)
+        if (out != null && !out.startsWith("!")) return out
+        "${ref.label} was handed ${files.joinToString { it.substringAfterLast('/') }.ifBlank { "the words" }} on the background screen. The user's own screen was not touched.\n" + read()
+    } }
+
+    /** The full words on the screen (the list cuts long ones), or of one element, a page at a time. */
+    suspend fun fullText(ctx: ToolContext, element: Int?, page: Int): String = mutex.withLock { safely {
+        blocked(ctx, needOpen = true)?.let { return it }
+        helper()?.let { return it }
+        if (displayId == 0) return CLOSED
+        readTree()
+        ScreenTree.fullText(elements, element, page)
+    } }
+
     /** Wait until [text] shows (or, with [gone], is no longer there), or until the screen stops changing. */
-    suspend fun waitFor(ctx: ToolContext, text: String, gone: Boolean, seconds: Int): String {
+    suspend fun waitFor(ctx: ToolContext, text: String, gone: Boolean, seconds: Int, stable: Int = 0): String {
         // While the person has the screen, waiting means waiting for them, without holding the lock they need.
-        val until = now() + seconds.coerceIn(1, 60) * 1000L
+        val until = now() + seconds.coerceIn(1, 120) * 1000L
         while (_state.value.takenOver && now() < until) delay(500)
         return mutex.withLock { safely {
             blocked(ctx, needOpen = true)?.let { return it }
             helper()?.let { return it }
             if (displayId == 0) return CLOSED
-            if (text.isBlank()) settle()
-            val (_, said) = doWait(text, gone, ((until - now()) / 1000).toInt().coerceAtLeast(1))
+            if (text.isBlank() && stable <= 0) settle()
+            val (_, said) = doWait(text, gone, ((until - now()) / 1000).toInt().coerceAtLeast(1), stable)
             (if (said.isBlank()) "" else said + "\n") + read()
         } }
     }
@@ -567,8 +631,10 @@ class ScreenSession(
         try {
             blocked(ctx, needOpen = false)?.let { return fail(-1, it) }
             // Start from the app's front door, so the steps begin where they were learned.
-            val first = steps.optJSONObject(0)?.takeIf { it.optString("do") == "open" }
-            val opened = doOpen(ctx, ref, ScreenSkills.fill(first?.optJSONObject("extra")?.optString("link").orEmpty(), args), fresh = true, quick = true)
+            val first = steps.optJSONObject(0)?.takeIf { it.optString("do") == "open" || it.optString("do") == "share" }
+            val door = first?.takeIf { it.optString("do") == "share" }?.optJSONObject("extra")
+            val opened = doOpen(ctx, ref, ScreenSkills.fill(first?.optJSONObject("extra")?.optString("link").orEmpty(), args), fresh = true, quick = true,
+                files = door?.let { ScreenSkills.fill(it.optString("files"), args).split('|').filter { f -> f.isNotBlank() } }, words = ScreenSkills.fill(door?.optString("text").orEmpty(), args))
             if (opened != null && !opened.startsWith("!")) return fail(-1, opened)
             suspend fun await(sel: JSONObject, ms: Long): ScreenElement? {
                 val until = now() + ms
@@ -580,7 +646,12 @@ class ScreenSession(
             }
             for (i in 0 until steps.length()) {
                 val s = steps.getJSONObject(i); val kind = s.optString("do")
-                if (kind == "open") { stepMs += 0L; continue }
+                if (kind == "open" || kind == "share") { stepMs += 0L; continue }
+                // A step that is only sometimes needed: the words are already in the field (the door carried them).
+                if (kind == "type" && !extra0(s).optBoolean("submit")) {
+                    val want = ScreenSkills.fill(s.optString("text"), args)
+                    if (want.isNotBlank() && elements.any { it.editable && it.text.trim() == want.trim() }) { skipped += i; stepMs += 0L; continue }
+                }
                 blocked(ctx, needOpen = true)?.let { return fail(i, it) }
                 val st = now()
                 val sel = s.optJSONObject("sel"); val extra = s.optJSONObject("extra") ?: JSONObject()
@@ -614,7 +685,7 @@ class ScreenSession(
                     "type" -> doType(ctx, ScreenSkills.fill(s.optString("text"), args), target, extra.optBoolean("append"), extra.optBoolean("submit"), secret = s.optString("text").startsWith("{secret"), quick = true).first
                     "swipe" -> doSwipe(ctx, extra.optString("dir"), target, extra.optInt("x1"), extra.optInt("y1"), extra.optInt("x2"), extra.optInt("y2"), quick = true)
                     "key" -> doKey(ctx, extra.optString("key"), quick = true)
-                    "wait" -> doWait(ScreenSkills.fill(s.optString("text"), args), extra.optBoolean("gone"), extra.optInt("seconds", 20)).let { (ok, said) -> if (ok) null else said }
+                    "wait" -> doWait(ScreenSkills.fill(s.optString("text"), args), extra.optBoolean("gone"), extra.optInt("seconds", 20), extra.optInt("stable")).let { (ok, said) -> if (ok) null else said }
                     else -> null
                 }
                 if (why != null) return fail(i, "Step ${i + 1} of ${steps.length()} (${ScreenSkills.say(s)}) stopped: $why\n" + runCatching { read() }.getOrDefault(""))

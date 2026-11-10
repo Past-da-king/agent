@@ -45,7 +45,7 @@ object DeviceTools {
         "notifications_read", "notifications_wait_code", "phone_files", "photos_recent", "ask_user", "request_approval", "notify_user", "phone_location",
         "android_intent", "android_apps", "macrodroid_run",
         "screen_open_app", "screen_look", "screen_tap", "screen_type", "screen_swipe", "screen_key", "screen_wait", "screen_close", "screen_status",
-        "screen_skill_save", "screen_skill_list", "screen_skill_run", "screen_skill_undo",
+        "screen_skill_save", "screen_skill_list", "screen_skill_run", "screen_skill_undo", "app_share",
     )
 
     /** Tools that stay on the phone on purpose, each with why. */
