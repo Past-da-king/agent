@@ -252,6 +252,14 @@ object HelperMain {
                 if (Tasks.all().none { it.taskId == task && it.displayId == d.id }) return ScreenProtocol.fail("That app is not on the hidden display.")
                 return JSONObject().put("ok", Tasks.remove(task))
             }
+            "launch" -> {
+                // The fallback when a task will not move between displays: open the app's front door there instead.
+                val d = need(); val p = q.optString("pkg"); val main = q.optString("where") == "main"
+                if (!main && whyBlocked(p) != null) return blockedReply(p)
+                val r = Sys.exec("am", "start", "--display", if (main) "0" else d.id.toString(), "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER", "-p", p, timeoutMs = 20_000)
+                val bad = r.code != 0 || r.out.contains("Error:") || r.out.contains("Exception")
+                return JSONObject().put("ok", !bad).put("out", r.out.trim().takeLast(300))
+            }
             "tree" -> {
                 val d = need()
                 val t = Tree.dump(d.id, q.optInt("max", 300))

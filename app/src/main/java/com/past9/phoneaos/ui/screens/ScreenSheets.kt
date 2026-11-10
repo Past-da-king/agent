@@ -4,6 +4,7 @@ import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.view.MotionEvent
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -288,7 +289,11 @@ fun ScreenSetupSheet(info: ScreenSetupInfo, actions: ScreenSetupActions, onDismi
 fun ScreenSheetsHost(agentName: String) {
     val which by ScreenUi.show.collectAsStateWithLifecycle()
     when (which) {
-        ScreenUi.PEEK -> PeekHost(agentName) { ScreenUi.show.value = null }
+        ScreenUi.PEEK -> {
+            // The watch view is its own small task, so leaving it lands him back where he was, not in this app.
+            val context = LocalContext.current
+            LaunchedEffect(Unit) { com.past9.phoneaos.screen.ScreenWatchActivity.open(context); ScreenUi.show.value = null }
+        }
         ScreenUi.SETUP -> SetupHost { ScreenUi.show.value = null }
         ScreenUi.RUNS -> RunsHost { ScreenUi.show.value = null }
         ScreenUi.BLOCKED -> BlockedHost { ScreenUi.show.value = ScreenUi.SETUP }
@@ -384,4 +389,70 @@ private object QuietScreenContext : com.past9.phoneaos.agent.ToolContext {
     override suspend fun updateActivity(id: Long, text: String, meta: org.json.JSONObject) {}
     override suspend fun ask(question: String, options: List<String>): String? = "Approve"
     override suspend fun notify(title: String, body: String) {}
+}
+
+/**
+ * Watching the background screen: the hidden display fills the whole phone, as if he were in that app, with a soft
+ * glowing edge in the accent colour that says the agent is at work. At the bottom, what it is doing right now, a big
+ * Take over (the real app moves onto his own screen) and Stop.
+ */
+@Composable
+fun ScreenWatchFull(state: ScreenState, picture: ImageBitmap?, agentName: String, onTakeOver: () -> Unit, onStop: () -> Unit, onClose: () -> Unit, recent: List<String> = emptyList()) {
+    val cs = MaterialTheme.colorScheme
+    val glow by androidx.compose.animation.core.rememberInfiniteTransition(label = "screen-glow").animateFloat(0.35f, 1f,
+        androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(1400), androidx.compose.animation.core.RepeatMode.Reverse), label = "screen-glow")
+    run {
+        Box(Modifier.fillMaxSize().background(cs.scrim)) {
+            if (picture != null) Image(picture, "The app your agent is using", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+            else Text("Waiting for the picture", style = MaterialTheme.typography.bodyLarge, color = cs.inverseOnSurface, modifier = Modifier.align(Alignment.Center))
+            Box(Modifier.fillMaxSize().border(12.dp, cs.primary.copy(alpha = glow * 0.22f), MaterialTheme.shapes.extraLarge).border(3.dp, cs.primary.copy(alpha = glow), MaterialTheme.shapes.extraLarge))
+            Surface(Modifier.align(Alignment.BottomCenter).fillMaxWidth(), shape = com.past9.phoneaos.ui.SheetShape, color = cs.surfaceContainerLow, contentColor = cs.onSurface) {
+                Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 20.dp).navigationBarsPadding()) {
+                    com.past9.phoneaos.ui.SheetHandle(Modifier.align(Alignment.CenterHorizontally))
+                    // Whose job it is: the agent, or the helper that said its name when it opened the app.
+                    val who = state.owner.takeIf { it.isNotBlank() && it != "main" && it != "linked computer" } ?: agentName
+                    Text((who + " \u00b7 " + state.app.ifBlank { "background screen" }).uppercase(), style = com.past9.phoneaos.ui.theme.Eyebrow, color = cs.primary)
+                    // What it has just done, oldest first, the newest in full weight.
+                    recent.dropLast(1).takeLast(3).forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, modifier = Modifier.padding(top = 2.dp)) }
+                    Text(if (state.stopped) "Stopped" else recent.lastOrNull() ?: state.step.ifBlank { "Working" }, style = MaterialTheme.typography.titleMedium, maxLines = 2, modifier = Modifier.padding(top = 4.dp))
+                    Spacer(Modifier.height(16.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Button(onClick = onStop, modifier = Modifier.weight(1f).height(64.dp), shapes = ButtonDefaults.shapes(), colors = ButtonDefaults.buttonColors(containerColor = cs.error, contentColor = cs.onError)) {
+                            Icon(Icons.Rounded.Stop, null); Spacer(Modifier.width(8.dp)); Text("Stop", style = MaterialTheme.typography.titleMedium)
+                        }
+                        Button(onClick = onTakeOver, enabled = state.open && !state.stopped, modifier = Modifier.weight(1.6f).height(64.dp), shapes = ButtonDefaults.shapes()) {
+                            Text("Take over", style = MaterialTheme.typography.titleMedium)
+                        }
+                    }
+                    TextButton(onClick = onClose, modifier = Modifier.align(Alignment.CenterHorizontally).heightIn(min = 48.dp)) { Text("Hide. It keeps working") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun WatchHost(agentName: String, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val session = remember { Screens.session(context) }
+    val link = remember { Screens.preview(context) }
+    val state by session.state.collectAsStateWithLifecycle()
+    var picture by remember { mutableStateOf<ImageBitmap?>(null) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(state.open, state.takenOver) {
+        // Nothing to watch once it is closed, or once the app is on his own screen.
+        if (!state.open || state.takenOver) { onDismiss(); return@LaunchedEffect }
+        var seq = -1L
+        while (true) {
+            val m = runCatching { link.call(op("frame").put("max", 720).put("q", 70).put("after", seq), 4_000) }.getOrNull()
+            val bin = m?.bin
+            if (bin != null) { seq = m.json.optLong("seq"); BitmapFactory.decodeByteArray(bin, 0, bin.size)?.let { picture = it.asImageBitmap() } }
+            delay(if (m == null) 1_000 else 200)
+        }
+    }
+    ScreenWatchFull(state, picture, agentName,
+        onTakeOver = { scope.launch { val said = session.userTakeOverReal(); if (said.isNotBlank()) com.past9.phoneaos.ui.AppNotice.say(said.take(90)) } },
+        onStop = { session.userStop(); scope.launch { runCatching { session.close() } }; onDismiss() },
+        onClose = onDismiss,
+        recent = remember(state.step, state.steps) { session.runSteps.filter { it.kind != "look" }.takeLast(4).map { it.say } })
 }

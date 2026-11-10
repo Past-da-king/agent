@@ -559,6 +559,10 @@
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="The user's agent browses websites in the background on their behalf" />
         </service>
         <!-- Background screen: keeps the app awake while the agent uses another app on a hidden display (screen/Screens.kt). -->
+        <!-- The full-screen watch view: its own task, never in recents, gone when left, so the app he was in comes back as it was. -->
+        <activity android:name=".screen.ScreenWatchActivity" android:exported="false" android:taskAffinity="com.past9.phoneaos.screenwatch"
+            android:excludeFromRecents="true" android:noHistory="true" android:launchMode="singleTask" android:theme="@style/Theme.App"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
         <service android:name=".screen.ScreenService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="The user's agent uses another app in the background on their behalf, on a hidden display, while they keep their own screen" />
         </service>
