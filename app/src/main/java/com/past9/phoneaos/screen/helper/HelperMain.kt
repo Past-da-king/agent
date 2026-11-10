@@ -5,6 +5,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.view.MotionEvent
 import com.past9.phoneaos.screen.ScreenBlocklist
+import com.past9.phoneaos.screen.ScreenLanding
 import com.past9.phoneaos.screen.ScreenProtocol
 import org.json.JSONArray
 import org.json.JSONObject
@@ -159,6 +160,31 @@ object HelperMain {
         JSONObject().put("id", t.taskId).put("display", t.displayId).put("pkg", t.top?.packageName.orEmpty()).put("cls", t.top?.className.orEmpty()).put("visible", t.visible)
     })
 
+    private fun landing(): List<ScreenLanding.Task> = Tasks.all().map { ScreenLanding.Task(it.taskId, it.displayId, it.top?.packageName.orEmpty(), it.visible) }
+
+    /** The app the agent wants is the one the person has in front: it is theirs, and is not launched, moved or touched. */
+    private fun inFront(before: List<ScreenLanding.Task>, pkg: String): JSONObject? =
+        if (ScreenLanding.before(before, pkg) is ScreenLanding.Decision.Refuse)
+            ScreenProtocol.fail("${label(pkg).ifBlank { pkg }} is open on the user's own screen right now, so it was left alone. Wait until they have left it, or ask them to hand it over.").put("in_front", true)
+        else null
+
+    /**
+     * After a launch: anything of ours that came up on the person's screen goes to the hidden display at once (or is
+     * closed when it will not move), and what they had in front is put back. True when something had to be moved.
+     */
+    private fun keepOffTheirScreen(before: List<ScreenLanding.Task>, pkg: String, hidden: Int): Boolean {
+        var moved = false
+        for (pause in longArrayOf(0, 250, 500)) {
+            if (pause > 0) Thread.sleep(pause)
+            val fix = ScreenLanding.after(before, runCatching { landing() }.getOrDefault(emptyList()), pkg) as? ScreenLanding.Decision.Fix ?: continue
+            for (t in fix.move) runCatching { Tasks.move(t, hidden) }.onFailure { Tasks.remove(t) }
+            fix.restore?.let { Tasks.toFront(it) }
+            moved = true
+            println("screen helper: $pkg came up on the main screen and was moved to the hidden display")
+        }
+        return moved
+    }
+
     /** Close the hidden display. Apps named in [moveBack] go to the person's screen; the rest are closed. */
     private fun release(moveBack: Set<String>) {
         val d = display ?: return
@@ -230,11 +256,14 @@ object HelperMain {
                 // An app must be named, so it can be checked. A bare link that any app might take is refused.
                 val target = targetOf(args) ?: return ScreenProtocol.fail("Name the app to open.")
                 if (whyBlocked(target) != null) return blockedReply(target)
+                val before = landing()
+                inFront(before, target)?.let { return it }
                 val r = Sys.exec("am", "start", "-W", "--display", d.id.toString(), *args.toTypedArray(), timeoutMs = 20_000)
+                val moved = keepOffTheirScreen(before, target, d.id)
                 val bad = r.code != 0 || r.out.contains("Error:") || r.out.contains("Exception")
                 // What opened may not be what was named (an app that hands straight over to another).
                 sweep()?.let { return blockedReply(it) }
-                return JSONObject().put("ok", !bad).put("out", r.out.trim().takeLast(600)).apply { if (bad) put("error", r.out.trim().lines().lastOrNull { it.isNotBlank() } ?: "The app did not start.") }
+                return JSONObject().put("ok", !bad).put("moved", moved).put("out", r.out.trim().takeLast(600)).apply { if (bad) put("error", r.out.trim().lines().lastOrNull { it.isNotBlank() } ?: "The app did not start.") }
             }
             "move" -> {
                 val d = need(); val to = if (q.optString("to") == "main") 0 else d.id
@@ -244,6 +273,8 @@ object HelperMain {
                 if (row.displayId != 0 && row.displayId != d.id) return ScreenProtocol.fail("That app is on another display.")
                 val p = row.top?.packageName.orEmpty()
                 if (to != 0 && whyBlocked(p) != null) return blockedReply(p)
+                // What the person has in front is never taken from them.
+                if (to != 0 && row.displayId == 0 && row.visible) return ScreenProtocol.fail("${label(p).ifBlank { p }} is open on the user's own screen right now, so it was left alone.").put("in_front", true)
                 Tasks.move(task, to)
                 return ScreenProtocol.ok()
             }
@@ -256,9 +287,12 @@ object HelperMain {
                 // The fallback when a task will not move between displays: open the app's front door there instead.
                 val d = need(); val p = q.optString("pkg"); val main = q.optString("where") == "main"
                 if (!main && whyBlocked(p) != null) return blockedReply(p)
+                val before = landing()
+                if (!main) inFront(before, p)?.let { return it }
                 val r = Sys.exec("am", "start", "--display", if (main) "0" else d.id.toString(), "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER", "-p", p, timeoutMs = 20_000)
                 val bad = r.code != 0 || r.out.contains("Error:") || r.out.contains("Exception")
-                return JSONObject().put("ok", !bad).put("out", r.out.trim().takeLast(300))
+                val moved = !main && keepOffTheirScreen(before, p, d.id)
+                return JSONObject().put("ok", !bad).put("moved", moved).put("out", r.out.trim().takeLast(300))
             }
             "tree" -> {
                 val d = need()

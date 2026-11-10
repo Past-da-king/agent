@@ -299,10 +299,8 @@ class ScreenSession(
         // Most apps have one window. If it is on the person's own screen, taking it would pull it out from under them.
         val mine = tasks().firstOrNull { it.optString("pkg") == ref.pkg && it.optInt("display") == 0 }
         if (mine != null) {
-            if (mine.optBoolean("visible")) {
-                val a = withTimeoutOrNull(ASK_MS) { ctx.ask("APPROVAL|Move ${ref.label} to the background screen|${ref.label} is open on your screen right now. Your agent wants to use it in the background, so it will leave your screen until the agent is done, then come back.", listOf("Approve", "Decline")) }
-                if (a != "Approve") return if (a == null) "${ref.label} is open on the user's own screen and nobody answered whether it may be moved. Not opened." else "The user wants to keep ${ref.label} on their own screen. Not opened."
-            }
+            // The app they have in front is theirs: it is never moved, relaunched or touched.
+            if (mine.optBoolean("visible")) return "${ref.label} is open on the user's own screen right now, so it was left alone and nothing was opened. Wait until they have left it, or ask them to hand it over."
             val moved = ask(op("move").put("task", mine.optInt("id")).put("to", "hidden"))
             if (!moved.optBoolean("ok")) return "${ref.label} is open on the user's screen and could not be moved to the background screen (${err(moved, "refused")}). Not opened."
             borrowed += ref.pkg
@@ -319,7 +317,12 @@ class ScreenSession(
             else -> listOf("-n", ref.component) + if (fresh && ref.pkg !in borrowed) listOf("--activity-clear-task") else emptyList()
         }
         val started = ask(op("start").put("args", JSONArray(args)), 30_000)
-        if (!started.optBoolean("ok")) return "${ref.label} did not open on the background screen: ${err(started, "no reason given")}."
+        if (!started.optBoolean("ok")) return if (started.optBoolean("in_front")) err(started, "It is open on the user's own screen.") + " Nothing was opened." else "${ref.label} did not open on the background screen: ${err(started, "no reason given")}."
+        // Where did it land? Only our own display counts. Anything of this app on the user's screen now is a failure, not something to tap on.
+        val landed = tasks()
+        if (landed.any { it.optString("pkg") == ref.pkg && it.optInt("display") == 0 && it.optBoolean("visible") } || landed.none { it.optInt("display") == displayId })
+            return "${ref.label} did not come up on the background screen (it is not on that display), so nothing was done with it. Try again; if it repeats, the app refuses to run there."
+        val wasMoved = started.optBoolean("moved")
         if (run == null || run?.pkg != ref.pkg) { run?.finish(); secrets.clear(); run = runs?.begin(ref.pkg, ref.label, ctx.agentLabel) }
         _state.value = _state.value.copy(open = true, pkg = ref.pkg, app = ref.label, width = made.optInt("width"), height = made.optInt("height"))
         touch(ctx.agentLabel, "Opened ${ref.label}")
@@ -328,6 +331,7 @@ class ScreenSession(
         runCatching { readTree() }.onFailure { if (it is ScreenBlocked) throw it }
         if (files != null) log("share", "Handed ${ref.label} ${files.joinToString { it.substringAfterLast('/') }.ifBlank { "the words" }}", text = "", by = by, extra = JSONObject().put("files", files.joinToString("|")).put("text", words))
         else log("open", "Opened ${ref.label}", by = by, extra = JSONObject().put("link", link))
+        if (wasMoved) return "!Note: ${ref.label} first came up on the user's own screen and was moved to the background screen at once; what they had in front was put back."
         if (!made.optBoolean("trusted")) return "!Note: this phone only allows a basic background screen, so the keyboard or the focus may show on the user's screen while typing."
         return null
     }
@@ -622,7 +626,7 @@ class ScreenSession(
      * The idle timer closes them. An app that was taken from the person's own screen is never kept: that closes at once.
      */
     suspend fun release(): String {
-        if (borrowed.isNotEmpty() || !_state.value.open) return close()
+        if (!_state.value.open) return close()
         return mutex.withLock {
             jobOwner = ""; ownerLabel = ""; lastUsed = now()
             _state.value = _state.value.copy(owner = "", step = "Done. Kept ready for a few minutes")
@@ -635,7 +639,8 @@ class ScreenSession(
     /** Close the hidden display. Apps borrowed from the person's screen go back to it; with [keepApp] the app in front does too. */
     suspend fun close(keepApp: Boolean = false): String = mutex.withLock {
         if (displayId == 0 && !_state.value.open) return "The background screen was already closed."
-        val back = LinkedHashSet(borrowed)
+        // An app that was only in their recents is closed with the display: putting it back would bring it up over what they are doing.
+        val back = LinkedHashSet<String>()
         if (keepApp) _state.value.pkg.takeIf { it.isNotBlank() }?.let { back += it }
         note("close", "Closed the background screen")
         val r = runCatching { backend.call(op("release").put("move_back", JSONArray(back.toList()))) }.getOrNull()
@@ -892,7 +897,7 @@ class ScreenSession(
         val f = runCatching { front() }.getOrNull() ?: return false
         val ok = runCatching { ask(op("move").put("task", f.taskId).put("to", "main")).optBoolean("ok") }.getOrDefault(false)
         if (ok) {
-            runCatching { backend.call(op("release").put("move_back", JSONArray(borrowed.toList()))) }
+            runCatching { backend.call(op("release").put("move_back", JSONArray())) }
             val stopped = _state.value.stopped
             forget(); _state.value = ScreenState(stopped = stopped); active(false)
         }

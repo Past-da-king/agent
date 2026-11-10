@@ -316,6 +316,11 @@ internal object Tasks {
         try { m.invoke(atm, taskId, displayId) } catch (e: java.lang.reflect.InvocationTargetException) { throw e.targetException }
     }
 
+    /** Bring a task back to the front of its own display (what the person had open). */
+    fun toFront(taskId: Int): Boolean = runCatching {
+        atm.javaClass.getMethod("startActivityFromRecents", Int::class.javaPrimitiveType, android.os.Bundle::class.java).invoke(atm, taskId, null); true
+    }.getOrDefault(false)
+
     fun remove(taskId: Int): Boolean = runCatching {
         atm.javaClass.getMethod("removeTask", Int::class.javaPrimitiveType).invoke(atm, taskId) as? Boolean ?: true
     }.getOrDefault(false)
