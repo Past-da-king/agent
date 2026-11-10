@@ -162,6 +162,12 @@ class MainActivity : ComponentActivity() {
             }
             return
         }
+        // The background screen's notification, or adb: am start -n <pkg>/.MainActivity --es open screen | screen_setup | screen_runs
+        when (i.getStringExtra("open")) {
+            "screen" -> { com.past9.phoneaos.screen.ScreenUi.show.value = com.past9.phoneaos.screen.ScreenUi.PEEK; return }
+            "screen_setup" -> { com.past9.phoneaos.screen.ScreenUi.show.value = com.past9.phoneaos.screen.ScreenUi.SETUP; return }
+            "screen_runs" -> { com.past9.phoneaos.screen.ScreenUi.show.value = com.past9.phoneaos.screen.ScreenUi.RUNS; return }
+        }
         if (i.getStringExtra("open") == "testnotify") {
             App.graph(this).phone.notify("Checking in", "This is how my messages look on your phone.")
             moveTaskToBack(true); return
@@ -335,6 +341,8 @@ class MainActivity : ComponentActivity() {
             if (open != null) runCatching { nav.navigate(open) }
             if (text != null || open != null) incoming.value = null to null
         }
+        // The background screen's sheets (peek, setup, recordings): slide-up, drawn once here.
+        com.past9.phoneaos.ui.screens.ScreenSheetsHost(settings.agentName.ifBlank { "Your agent" })
         // Read new replies aloud when the user asked for that.
         // Only replies that arrive from now on are read out; the history never is.
         var primed by remember { mutableStateOf(false) }
@@ -689,6 +697,7 @@ class MainActivity : ComponentActivity() {
                         profile = profileActions,
                         onTrustLearned = { id, on -> g.runtime.learned.setTrusted(id, on) },
                         onRemoveLearned = { id -> g.runtime.learned.remove(id) },
+                        learnedEdit = com.past9.phoneaos.ui.screens.LearnedEdit({ id, name -> g.runtime.learned.rename(id, name) }, { id, tool, with -> g.runtime.learned.replaceTool(id, tool, with) }),
                         onTeach = { what -> g.runtime.send("Teach yourself this web app so you can use it without clicking through it every time: $what. Read webapp_guide first, check webapp_list, then map it in the browser and save the tools you write with webapp_save."); nav.navigate("chat") },
                         onKeepOne = { keep, remove -> scope.launch {
                             val ck = g.settings.composioKey()?.trim()

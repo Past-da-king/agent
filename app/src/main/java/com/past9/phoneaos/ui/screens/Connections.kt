@@ -83,6 +83,8 @@ data class ConnectionsActions(
     /** Let a learned app's tools that change things run without asking. Only here, never by the agent. */
     val onTrustLearned: (id: String, on: Boolean) -> Unit = { _, _ -> },
     val onRemoveLearned: (id: String) -> Unit = {},
+    /** A learned app for an app on the phone itself: rename it, and open, undo or delete each tool. */
+    val learnedEdit: LearnedEdit = LearnedEdit(),
     /** Ask the agent to learn this site or app (opens the chat so the user can watch). */
     val onTeach: (String) -> Unit = {},
     /** Linked to a computer: the Add panel opened, so read the apps it can connect. */
@@ -435,7 +437,7 @@ private fun LearnedTile(a: com.past9.phoneaos.connections.LearnedApp, expanded: 
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(a.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(a.host + " \u00b7 " + a.tools.size + (if (a.tools.size == 1) " tool" else " tools"),
+                    Text((if (a.isScreen) "App on this phone" else a.host) + " \u00b7 " + a.tools.size + (if (a.tools.size == 1) " tool" else " tools"),
                         style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 // A small mark when the app has tools that send, post or delete (it asks first unless trusted).
@@ -444,13 +446,14 @@ private fun LearnedTile(a: com.past9.phoneaos.connections.LearnedApp, expanded: 
             }
             if (expanded) Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp)) {
                 if (a.about.isNotBlank()) Text(a.about, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 10.dp)) {
+                if (a.isScreen && !remote) ScreenLearnedDetails(a, actions.learnedEdit)
+                else FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 10.dp)) {
                     a.tools.forEach { t -> Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(50), color = if (t.readOnly) cs.surfaceContainerHighest else cs.tertiaryContainer) {
                         Text(t.name.replace('_', ' '), Modifier.padding(horizontal = 10.dp, vertical = 5.dp), style = MaterialTheme.typography.labelMedium, color = if (t.readOnly) cs.onSurfaceVariant else cs.onTertiaryContainer) } }
                 }
                 // Linked: trusting or removing one is done on the computer itself (it decides what may run without asking).
                 if (remote) Text(if (a.trusted) "Runs changes without asking (set on your computer)" else "Asks before it sends, posts or deletes", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
-                if (!remote && a.writes > 0) Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (!remote && a.writes > 0 && !a.isScreen) Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Change things without asking", style = MaterialTheme.typography.titleSmall)
                         Text(if (a.trusted) "Sending, posting and deleting run straight away" else "It asks you each time before it sends, posts or deletes", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)

@@ -30,8 +30,8 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 object DeviceTools {
     /** group -> on by default. Shell (run_code) is never lent. */
-    val GROUPS = linkedMapOf("browser" to true, "notifications" to true, "files" to true, "approval" to true, "phone" to true, "location" to true, "automation" to true)
-    val LABELS = mapOf("browser" to "Browser", "notifications" to "Notifications it can read", "files" to "Files", "approval" to "Questions and approvals", "phone" to "Notifications to you", "location" to "Your location (asked once)", "automation" to "Other apps: intents and macros (asks unless allowed)")
+    val GROUPS = linkedMapOf("browser" to true, "notifications" to true, "files" to true, "approval" to true, "phone" to true, "location" to true, "automation" to true, "screen" to true)
+    val LABELS = mapOf("browser" to "Browser", "notifications" to "Notifications it can read", "files" to "Files", "approval" to "Questions and approvals", "phone" to "Notifications to you", "location" to "Your location (asked once)", "automation" to "Other apps: intents and macros (asks unless allowed)", "screen" to "Background screen: other apps on a hidden display (asks before it sends)")
 
     fun groupOf(name: String): String? = when {
         name.startsWith("browser_") || name == "site_probe" || name == "site_catalog" || name == "place_whatsapp_call" -> "browser"
@@ -41,6 +41,7 @@ object DeviceTools {
         name == "notify_user" -> "phone"
         name == "phone_location" -> "location"
         name == "macrodroid_run" || name == "android_intent" || name == "android_apps" -> "automation"
+        name.startsWith("screen_") || name.startsWith("app_") -> "screen"
         else -> null
     }
 
@@ -58,7 +59,7 @@ object DeviceTools {
             com.past9.phoneaos.tools.PhoneLocationTool(context),
             com.past9.phoneaos.automation.AndroidIntentTool(context, g.settings.intentSettings), com.past9.phoneaos.automation.AndroidAppsTool(context),
             com.past9.phoneaos.automation.MacroDroidRunTool(context, g.settings.macroSettings),
-        )
+        ) + com.past9.phoneaos.tools.screenTools(context) + com.past9.phoneaos.tools.screenLearnedTools(context)
     }
 
     /** The tools this phone offers right now (only switched-on groups). */
@@ -70,7 +71,7 @@ object DeviceTools {
     /** DeviceTool[] for hello: { name, description, params, group, readOnly }. */
     fun catalogue(context: Context): JSONArray = JSONArray(tools(context).map { (t, group) ->
         JSONObject().put("name", t.spec.name).put("description", t.spec.description).put("params", t.spec.schema).put("group", group)
-            .put("readOnly", group == "notifications" || group == "location" || t.spec.name == "android_apps" || READS.any { t.spec.name.contains(it) })
+            .put("readOnly", group == "notifications" || group == "location" || t.spec.name == "android_apps" || t.spec.name == "screen_status" || t.spec.name == "screen_recordings" || t.spec.name == "screen_flow_list" || READS.any { t.spec.name.contains(it) })
     })
 
     /** Run one lent tool. Returns (ok, value or error); a value with pictures is a list of text and image parts. */

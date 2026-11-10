@@ -214,7 +214,7 @@ class AgentRuntime(
     val composio = ComposioClient({ settings.composioKey() }, settings.installId())
     /** Web apps the agent taught itself (WhatsApp Web, Reddit...): the tools it wrote for each, run in the signed-in browser. */
     val learned = com.past9.phoneaos.connections.LearnedStore(settings)
-    private val pageRunner = com.past9.phoneaos.connections.EnginePageRunner(context)
+    val pageRunner = com.past9.phoneaos.connections.EnginePageRunner(context)
     /** Profiles (parts of the user's life, each a set of connected accounts) and each account's rules. */
     val profiles = com.past9.phoneaos.data.ProfileStore(context)
     /** The profile each helper was handed (helper id -> profile id): it may only use that profile's accounts. */
@@ -420,6 +420,7 @@ class AgentRuntime(
         list += AskUserTool(); list += ApprovalTool(); list += NotifyTool()
         list += com.past9.phoneaos.automation.AndroidIntentTool(context, settings.intentSettings); list += com.past9.phoneaos.automation.AndroidAppsTool(context)
         list += com.past9.phoneaos.automation.MacroDroidRunTool(context, settings.macroSettings)
+        list += com.past9.phoneaos.tools.screenTools(context) + com.past9.phoneaos.tools.screenSkillTools(context)
         list += SkillFindTool(db.memory()); list += SkillSaveTool(db.memory())
         list += com.past9.phoneaos.cards.CardGuideTool(context)
         list += com.past9.phoneaos.cards.CardSaveTool(context, cards, settings, db.chat()) { c -> com.past9.phoneaos.cards.CardScripts.schedule(context, c, onRoutineChanged, onRoutineDeleted) }

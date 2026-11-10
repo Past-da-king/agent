@@ -160,6 +160,11 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
                 Line(Icons.Rounded.SmartToy, "Agent talks to your apps",
                     MacroRulesUi.allowedLine(actions.macro.allowlist(), actions.macro.intents())) { macroSheet = true }
             }
+            SectionHeader("Background screen", "Other apps, while you keep your screen", Modifier.padding(start = 4.dp, top = 12.dp))
+            AppCard(padding = PaddingValues(vertical = 4.dp)) {
+                Line(Icons.Rounded.Layers, "Background screen", "Your agent uses an app on a hidden screen. Setup, rules and blocked apps") { com.past9.phoneaos.screen.ScreenUi.show.value = com.past9.phoneaos.screen.ScreenUi.SETUP }
+                Line(Icons.Rounded.Movie, "Recordings and saved flows", "Watch what it did there, and the flows you showed it") { com.past9.phoneaos.screen.ScreenUi.show.value = com.past9.phoneaos.screen.ScreenUi.RUNS }
+            }
             SectionHeader("Browser", "The browser your agent uses", Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 // Read again each time the sheet closes, so the line says what the sheet just changed.
