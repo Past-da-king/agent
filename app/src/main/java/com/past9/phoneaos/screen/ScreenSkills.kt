@@ -12,7 +12,7 @@ import org.json.JSONObject
  */
 object ScreenSkills {
     /** Kinds of step in a run that are part of doing the job. Looking, asking and notes are not. */
-    val DOING = setOf("open", "tap", "long", "type", "swipe", "key", "wait")
+    val DOING = setOf("open", "share", "tap", "long", "type", "swipe", "key", "wait")
     const val DEFAULT_WAIT_MS = 6_000L
 
     /** How to find [e] again: by what it is, not by where it happened to be. */
@@ -65,7 +65,8 @@ object ScreenSkills {
             if (!hasWords && r == 0 && h == 0 && (k == 0 || res.isNotBlank() && all.any { it.res == res })) return@mapNotNull null
             e to (w + r + h + k)
         }
-        if (scored.isEmpty()) return null
+        // No exact or partial match: the closest words on the screen, when one is clearly it (a file or a contact named a little differently).
+        if (scored.isEmpty()) return if (hasWords) ScreenFuzzy.best(all, text.ifBlank { desc }, 0.8) else null
         val best = scored.maxOf { it.second }
         val top = scored.filter { it.second == best }.map { it.first }
         // Several alike (rows of a list, a row of icons): the same place among them as when it was learned.
@@ -82,9 +83,9 @@ object ScreenSkills {
         for (s in run) {
             if (s.kind !in DOING) continue
             // A wait with no words was only "let it settle": on a replay each step waits for its own element instead.
-            if (s.kind == "wait" && s.text.isBlank()) continue
+            if (s.kind == "wait" && s.text.isBlank() && (s.extra?.optInt("stable") ?: 0) <= 0) continue
             // Opening the app again mid-run starts it over: only what came after the last open is the way in.
-            if (s.kind == "open") { while (out.length() > 0) out.remove(0) }
+            if (s.kind == "open" || s.kind == "share") { while (out.length() > 0) out.remove(0) }
             val o = JSONObject().put("do", s.kind)
             s.sel?.let { sel ->
                 val c = JSONObject(sel.toString())
@@ -93,7 +94,7 @@ object ScreenSkills {
             }
             if (s.secret) { secrets++; o.put("text", "{secret$secrets}"); notes += "A hidden text was typed: it is the input secret$secrets and is never stored." }
             else if (s.text.isNotBlank()) o.put("text", templatize(s.text, params))
-            s.extra?.let { o.put("extra", JSONObject(it.toString()).apply { if (has("link")) put("link", templatize(optString("link"), params)) }) }
+            s.extra?.let { o.put("extra", JSONObject(it.toString()).apply { for (k in listOf("link", "files", "text")) if (has(k)) put(k, templatize(optString(k), params)) }) }
             o.put("ms", DEFAULT_WAIT_MS)
             out.put(o)
         }
@@ -104,7 +105,7 @@ object ScreenSkills {
     fun inputs(steps: JSONArray): List<String> = (0 until steps.length()).flatMap { i ->
         val s = steps.getJSONObject(i)
         inputsIn(s.optString("text")) + inputsIn(s.optJSONObject("sel")?.optString("text").orEmpty()) + inputsIn(s.optJSONObject("sel")?.optString("desc").orEmpty()) +
-            inputsIn(s.optJSONObject("extra")?.optString("link").orEmpty())
+            listOf("link", "files", "text").flatMap { k -> inputsIn(s.optJSONObject("extra")?.optString(k).orEmpty()) }
     }.distinct()
 
     /** The package the steps open, from their open step. */
@@ -112,6 +113,7 @@ object ScreenSkills {
         val sel = step.optJSONObject("sel"); val words = sel?.let { it.optString("text").ifBlank { it.optString("desc").ifBlank { it.optString("hint").ifBlank { it.optString("res") } } } }.orEmpty()
         return when (step.optString("do")) {
             "open" -> "Open the app" + step.optJSONObject("extra")?.optString("link")?.takeIf { it.isNotBlank() }?.let { " at $it" }.orEmpty()
+            "share" -> "Hand the app ${step.optJSONObject("extra")?.optString("files").orEmpty().ifBlank { "nothing" }}" + step.optJSONObject("extra")?.optString("text")?.takeIf { it.isNotBlank() }?.let { " with the words \"$it\"" }.orEmpty()
             "tap" -> "Press \"$words\""
             "long" -> "Press and hold \"$words\""
             "type" -> "Type \"${step.optString("text")}\"" + (if (words.isNotBlank()) " in \"$words\"" else "") + if (step.optJSONObject("extra")?.optBoolean("submit") == true) " and submit" else ""

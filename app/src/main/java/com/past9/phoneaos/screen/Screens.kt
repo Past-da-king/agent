@@ -122,6 +122,18 @@ object Screens {
         s.setExtra(BLOCKED, blockAdded(context).filter { it.substringBefore('|').trim() != pkg }.joinToString("\n"))
     }
 
+    /** Copy each file where our file provider may serve it, and let [pkg] read it. The address and the type of each. */
+    fun grantFiles(context: Context, pkg: String, paths: List<String>): List<Pair<String, String>> = paths.map { path ->
+        val src = File(path.replace("/sdcard/", "/storage/emulated/0/"))
+        if (!src.isFile || !src.canRead()) throw IllegalStateException("${src.name} was not found on the phone or cannot be read (give a full path on the phone)")
+        val dir = File(context.cacheDir, "share").apply { mkdirs() }
+        val copy = File(dir, src.name).also { if (it.absolutePath != src.absolutePath) src.copyTo(it, overwrite = true) }
+        val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".files", copy)
+        context.grantUriPermission(pkg, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        val type = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(src.extension.lowercase()) ?: "application/octet-stream"
+        uri.toString() to type
+    }
+
     fun runs(context: Context): ScreenRuns = runsStore ?: synchronized(this) { runsStore ?: ScreenRuns(File(context.applicationContext.filesDir, "screen-runs")).also { runsStore = it } }
 
     /** Paint black over boxes given in screen pixels, in a picture of a screen [screenWidth] wide. */
@@ -168,6 +180,7 @@ object Screens {
                 findInPicture = { path, words -> com.past9.phoneaos.tools.Ocr.find(path, words) },
                 runs = runs(app),
                 mask = { jpeg, boxes, width -> maskJpeg(jpeg, boxes, width) },
+                grant = { pkg, paths -> grantFiles(app, pkg, paths) },
             ).also { made = it }
         }
     }

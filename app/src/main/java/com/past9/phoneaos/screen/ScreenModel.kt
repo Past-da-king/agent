@@ -81,12 +81,22 @@ object ScreenTree {
         return sb.toString().trimEnd()
     }
 
+    /** Every word on the screen, uncut, [page] by [page] (one page fits a linked computer's limit). With [only] set: that element's full text. */
+    fun fullText(elements: List<ScreenElement>, only: Int? = null, page: Int = 0, pageChars: Int = 9000): String {
+        val all = if (only != null) elements.filter { it.id == only }.joinToString("\n") { it.text.ifBlank { it.desc } }
+            else elements.filter { it.text.isNotBlank() || it.desc.isNotBlank() }.joinToString("\n") { "[${it.id}] " + it.text.ifBlank { it.desc } }
+        if (all.isEmpty()) return if (only != null) "There is no element [$only] with text on the screen." else "The screen has no text."
+        val pages = (all.length + pageChars - 1) / pageChars
+        val p = page.coerceIn(0, pages - 1)
+        return all.substring(p * pageChars, minOf(all.length, (p + 1) * pageChars)) + if (pages > 1) "\n(page ${p + 1} of $pages: ask for page ${p + 1} to read on)".takeIf { p + 1 < pages }.orEmpty() else ""
+    }
+
     /** The element the agent means by these words: an exact label first, then one that contains them; pressable ones win. */
     fun find(elements: List<ScreenElement>, words: String): ScreenElement? {
         val w = words.trim(); if (w.isEmpty()) return null
         val exact = elements.filter { it.label.equals(w, true) || it.text.equals(w, true) || it.desc.equals(w, true) }
         val pool = exact.ifEmpty { elements.filter { it.label.contains(w, true) || it.desc.contains(w, true) } }
-        return pool.sortedWith(compareByDescending<ScreenElement> { it.clickable || it.editable }.thenBy { it.area }).firstOrNull()
+        return pool.sortedWith(compareByDescending<ScreenElement> { it.clickable || it.editable }.thenBy { it.area }).firstOrNull() ?: ScreenFuzzy.best(elements, w)
     }
 
     /** What is under a point: the smallest element that holds it, a pressable one when there is one. */
@@ -172,4 +182,51 @@ object ScreenRules {
         }
         return Gate.Ask("$name in $appLabel", details)
     }
+}
+
+/**
+ * Finding the thing someone means among what is on the screen, on the phone, with no model: the words are made
+ * plain (case, accents, punctuation), then compared whole, by shared words, and by how few letters differ.
+ * A weak match or a tie is not an answer: the caller is told what came closest instead.
+ */
+object ScreenFuzzy {
+    fun norm(s: String): String = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD).replace(Regex("[\\p{Mn}]"), "")
+        .lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
+
+    private fun edits(a: String, b: String): Int {
+        if (a == b) return 0
+        var prev = IntArray(b.length + 1) { it }
+        for (i in 1..a.length) {
+            val cur = IntArray(b.length + 1); cur[0] = i
+            for (j in 1..b.length) cur[j] = minOf(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + if (a[i - 1] == b[j - 1]) 0 else 1)
+            prev = cur
+        }
+        return prev[b.length]
+    }
+
+    /** 0 to 1: how well [have] (words on the screen) answers [want]. */
+    fun score(want: String, have: String): Double {
+        val w = norm(want); val h = norm(have)
+        if (w.isEmpty() || h.isEmpty()) return 0.0
+        if (w == h) return 1.0
+        if (h.contains(w)) return 0.92
+        val wt = w.split(' ').toSet(); val ht = h.split(' ').toSet()
+        val shared = wt.count { it in ht }.toDouble() / wt.size
+        val close = 1.0 - edits(w, h.take(w.length + 8)).toDouble() / maxOf(w.length, minOf(h.length, w.length + 8))
+        return maxOf(shared * 0.9, close)
+    }
+
+    fun ranked(elements: List<ScreenElement>, words: String): List<Pair<ScreenElement, Double>> =
+        elements.filter { it.label.isNotBlank() }.map { it to maxOf(score(words, it.label), if (it.desc.isNotBlank()) score(words, it.desc) else 0.0) }.sortedByDescending { it.second }
+
+    /** The one clear match at or above [min], or null when the best is weak or two are as good as each other. */
+    fun best(elements: List<ScreenElement>, words: String, min: Double = 0.72): ScreenElement? {
+        val r = ranked(elements, words); val top = r.firstOrNull() ?: return null
+        if (top.second < min) return null
+        val rival = r.drop(1).firstOrNull { it.first.label != top.first.label }
+        if (rival != null && top.second - rival.second < 0.04) return null
+        return top.first
+    }
+
+    fun closest(elements: List<ScreenElement>, words: String, n: Int = 3): List<String> = ranked(elements, words).map { it.first.label.take(50) }.distinct().take(n)
 }

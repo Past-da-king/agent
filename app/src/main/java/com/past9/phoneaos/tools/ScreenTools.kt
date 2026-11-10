@@ -48,8 +48,13 @@ class ScreenLookTool(private val session: () -> ScreenSession) : Tool {
             "mode 'image' or 'both' also gives you the picture (for layouts, images, charts, or an app that gives no list); x,y on the picture are the screen's own. Numbers are only good until the next look.",
         schema(emptyList(),
             "mode" to enumOf("What to return, default tree", "tree", "image", "both"),
-            "filter" to str("Only elements whose words contain this")))
-    override suspend fun run(input: JSONObject, ctx: ToolContext): String = session().look(ctx, input.optString("mode"), input.optString("filter"))
+            "filter" to str("Only elements whose words contain this"),
+            "full" to bool("true: the complete words on the screen instead of the short list (the list cuts long texts). For reading an answer or an article"),
+            "element" to int("With full: only this element's complete text"),
+            "page" to int("With full: which page, from 0, when the text is long")))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String =
+        if (input.optBoolean("full") || input.has("element")) session().fullText(ctx, input.intOrNull("element"), input.optInt("page", 0))
+        else session().look(ctx, input.optString("mode"), input.optString("filter"))
 }
 
 class ScreenTapTool(private val session: () -> ScreenSession) : Tool {
@@ -99,9 +104,10 @@ class ScreenKeyTool(private val session: () -> ScreenSession) : Tool {
 
 class ScreenWaitTool(private val session: () -> ScreenSession) : Tool {
     override val spec = ToolSpec("screen_wait", "Wait on the background screen until some words appear (or, with gone true, are no longer there), up to 30 seconds. With no text it just reads the screen once it has settled. Also how you wait while the user has taken over.",
-        schema(emptyList(), "text" to str("The words to wait for"), "gone" to bool("Wait until they are gone instead (default false)"), "seconds" to int("How long at most, default 10")))
+        schema(emptyList(), "text" to str("The words to wait for"), "gone" to bool("Wait until they are gone instead (default false)"), "seconds" to int("How long at most, default 10, up to 120"),
+            "stable_seconds" to int("Instead of words: wait until the screen has not changed for this many seconds (an answer that is still being written)")))
     override suspend fun run(input: JSONObject, ctx: ToolContext): String =
-        session().waitFor(ctx, input.optString("text"), input.optBoolean("gone"), input.optInt("seconds", 10))
+        session().waitFor(ctx, input.optString("text"), input.optBoolean("gone"), input.optInt("seconds", 10), input.optInt("stable_seconds", 0))
 }
 
 class ScreenCloseTool(private val session: () -> ScreenSession) : Tool {
@@ -116,6 +122,25 @@ class ScreenStatusTool(private val session: () -> ScreenSession) : Tool {
 }
 
 fun screenTools(session: () -> ScreenSession): List<Tool> = listOf(ScreenOpenAppTool(session), ScreenLookTool(session), ScreenTapTool(session), ScreenTypeTool(session),
-    ScreenSwipeTool(session), ScreenKeyTool(session), ScreenWaitTool(session), ScreenCloseTool(session), ScreenStatusTool(session))
+    ScreenSwipeTool(session), ScreenKeyTool(session), ScreenWaitTool(session), ScreenCloseTool(session), ScreenStatusTool(session), AppShareTool(session))
 
 fun screenTools(context: Context): List<Tool> = screenTools { Screens.session(context) }
+
+/** The share door: the quickest way to start a job that begins with a file or some words. */
+class AppShareTool(private val session: () -> ScreenSession) : Tool {
+    override val spec = ToolSpec("app_share",
+        "Hand an app on this phone a file and/or some words through its own Share door, on the background screen (the user's screen is not touched). TRY THIS FIRST when a job starts with a file or a text: " +
+            "the app opens with it already attached, so the file picker and the typing are skipped. android_apps says what each app accepts. Then carry on with the screen tools (look, tap its send button, wait, read), and screen_skill_save keeps it as a job with inputs. " +
+            "Files are paths ON THE PHONE (e.g. /sdcard/Download/x.pdf, or a file sent to the phone with the device file tools). Banking and money apps are refused.",
+        schema(listOf("package"),
+            "package" to str("The app: its package name, or its name as the user knows it"),
+            "files" to com.past9.phoneaos.agent.strList("Paths of files on the phone. One file per share for now"),
+            "text" to str("Words to hand over with it (the question, the message)"),
+            "owner" to str("Your own name when you are a helper or a routine")))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String {
+        val a = input.optJSONArray("files")
+        val files = (0 until (a?.length() ?: 0)).map { a!!.getString(it) }.filter { it.isNotBlank() }
+        if (files.isEmpty() && input.optString("text").isBlank()) return "Give files, text, or both."
+        return session().share(ctx, input.optString("package").trim(), files, input.optString("text"), input.optString("owner"))
+    }
+}
