@@ -73,6 +73,8 @@ class MainActivity : ComponentActivity() {
         com.past9.phoneaos.remote.RemoteHub.init(this)
         // Mini-apps from the linked computer (miniapps/MiniApps.kt): listed slim, opened in a locked-down WebView.
         com.past9.phoneaos.miniapps.MiniAppsHub.start(g.scope)
+        // "Talk" on a long press of the app's icon opens the assist sheet (assist/AssistEntry.kt).
+        com.past9.phoneaos.assist.AssistShortcuts.publish(this)
         setContent {
             val st by g.settings.state.collectAsStateWithLifecycle()
             AppTheme(accent = st.accent, mascot = st.mascot) {

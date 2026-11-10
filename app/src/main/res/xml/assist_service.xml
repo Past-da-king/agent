@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What makes the app selectable as the phone's digital assistant: the session that opens the assist sheet, and the
+     recogniser every assistant must name (it passes speech on to the phone's own). -->
+<voice-interaction-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:sessionService="com.past9.phoneaos.assist.AssistSessionService"
+    android:recognitionService="com.past9.phoneaos.assist.AssistRecognitionService"
+    android:supportsAssist="true"
+    android:supportsLaunchVoiceAssistFromKeyguard="true"
+    android:supportsLocalInteraction="true" />
