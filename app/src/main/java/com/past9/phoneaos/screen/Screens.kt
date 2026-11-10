@@ -71,17 +71,34 @@ object Screens {
     const val RECORD = "screen_record"
     /** The whole feature's switch. Off by default: with it off there are no screen tools, no service and no setup prompts. */
     const val ON = "screen_on"
+
+    /** The loopback port the helper listens on and the secret both sides must know: made once on this phone, kept in the app's own settings. */
+    fun port(context: Context): Int {
+        val s = App.graph(context).settings
+        s.extra("screen_port")?.toIntOrNull()?.let { return it }
+        return (20_000..60_000).random().also { s.setExtra("screen_port", it.toString()) }
+    }
+    fun token(context: Context): String {
+        val s = App.graph(context).settings
+        s.extra("screen_token")?.takeIf { it.length >= 32 }?.let { return it }
+        val bytes = ByteArray(24).also { java.security.SecureRandom().nextBytes(it) }
+        return bytes.joinToString("") { "%02x".format(it) }.also { s.setExtra("screen_token", it) }
+    }
     fun on(context: Context): Boolean = runCatching { App.graph(context).settings.extra(ON) == "1" }.getOrDefault(false)
 
     /** The person switches the background screen on or off (Settings). Off also closes whatever is open on it. */
     fun setOn(context: Context, on: Boolean) {
         val app = context.applicationContext
         App.graph(app).settings.setExtra(ON, if (on) "1" else "0")
+        // The start script (with this phone's port and secret) is written where a computer's adb can run it.
+        if (on) ScreenStarter.writeScript(app)
         // Shizuku's door into the app only exists while the feature is on.
         runCatching {
             app.packageManager.setComponentEnabledSetting(android.content.ComponentName(app, "rikka.shizuku.ShizukuProvider"),
                 if (on) android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED else android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT, android.content.pm.PackageManager.DONT_KILL_APP)
         }
+        // A linked computer holds the tool list it was given at hello: say hello again, so the screen tools appear or go at once.
+        runCatching { com.past9.phoneaos.remote.RemoteHub.session.value?.factsChangedForce() }
         if (!on) made?.let { s -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch { runCatching { s.close() } } }
     }
     @Volatile private var builtIn: String? = null
@@ -135,8 +152,10 @@ object Screens {
     fun session(context: Context): ScreenSession = made ?: synchronized(this) {
         made ?: run {
             val app = context.applicationContext
+            // In remote mode the phone runs no agent of its own, so this is the place that is always reached before a screen tool runs.
+            com.past9.phoneaos.connections.learnedChanged = { runCatching { com.past9.phoneaos.remote.RemoteHub.session.value?.factsChangedForce() } }
             ScreenSession(
-                backend = SocketBackend(app.packageName),
+                backend = SocketBackend({ port(app) }, { token(app) }),
                 apps = InstalledApps(app),
                 config = { config(app) },
                 pictures = File(app.cacheDir, "screen"),
@@ -152,7 +171,7 @@ object Screens {
     }
 
     /** A second line to the helper for the live picture and the person's own touches, so they never wait behind the agent. */
-    fun preview(context: Context): ScreenBackend = previewLink ?: synchronized(this) { previewLink ?: SocketBackend(context.packageName).also { previewLink = it } }
+    fun preview(context: Context): ScreenBackend = previewLink ?: synchronized(this) { previewLink ?: SocketBackend({ port(context.applicationContext) }, { token(context.applicationContext) }).also { previewLink = it } }
 
     /** Start the helper with what this phone has. Null when it was started; otherwise why it could not be. */
     fun start(context: Context): String? {
@@ -163,6 +182,7 @@ object Screens {
     }
 
     private fun askForSetup(context: Context, why: String) {
+        ScreenStarter.writeScript(context)
         ScreenUi.reason.value = why
         if (com.past9.phoneaos.system.ChatOnScreen.resumed) { ScreenUi.show.value = ScreenUi.SETUP; return }
         // Not looking at the app: a quiet notification that opens the steps. Never a pop-up.

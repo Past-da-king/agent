@@ -85,6 +85,9 @@ data class LearnedApp(
     }
 }
 
+/** Called when the learned apps change, so a linked computer is told the new tool list. Set by the app. */
+var learnedChanged: () -> Unit = {}
+
 /** The apps the agent has learned. */
 class LearnedStore(private val settings: SettingsStore) {
     private val _apps = MutableStateFlow(load())
@@ -94,7 +97,7 @@ class LearnedStore(private val settings: SettingsStore) {
         val a = JSONArray(settings.extra("learned_apps") ?: "[]"); (0 until a.length()).map { LearnedApp.fromJson(a.getJSONObject(it)) }
     }.getOrDefault(emptyList())
 
-    private fun persist(list: List<LearnedApp>) { settings.setExtra("learned_apps", JSONArray().apply { list.forEach { put(it.toJson()) } }.toString()); _apps.value = list }
+    private fun persist(list: List<LearnedApp>) { settings.setExtra("learned_apps", JSONArray().apply { list.forEach { put(it.toJson()) } }.toString()); _apps.value = list; runCatching { learnedChanged() } }
 
     fun find(ref: String): LearnedApp? = _apps.value.firstOrNull { it.id == ref } ?: _apps.value.firstOrNull { it.name.equals(ref.trim(), true) || it.id == LearnedApp.slug(ref) }
     /** Saving over an app of the same id replaces its tools but keeps what the user decided about trust. */

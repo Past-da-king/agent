@@ -27,6 +27,8 @@ class ScreenOpenAppTool(private val session: () -> ScreenSession) : Tool {
         "Open an installed app on the BACKGROUND SCREEN: a hidden display where you use the app while the user keeps using their own screen, which is never touched. " +
             "Use it for a task inside an app that has no website, no connected-app tool and no intent that does it. Returns what is on the app's screen as a numbered list; " +
             "then use screen_tap, screen_type, screen_swipe, screen_key, screen_look and screen_wait, and screen_close when the task is done. " +
+            "HOW TO USE IT (also from a linked computer, through this phone's device tools): 1. screen_open_app. 2. Read the list: each line is [number] kind \"words\" at x,y; the number is only good until the next answer, and every action answers with the fresh list. " +
+            "3. Act with screen_tap (element number, or its words), screen_type, screen_swipe, screen_key. 4. If what you need is not listed, screen_look again (mode image sends you the picture) or swipe. 5. screen_close. " +
             "There are no ready-made actions for any app: you work the job out by reading the screen and pressing, like a person would. For example, with no search tool, open a search or assistant app, type the question, wait, and read the answer off the screen. " +
             "When a job worked, save it with screen_skill_save so it becomes one quick tool next time; check screen_skill_list first for one that exists. " +
             "Anything that sends, pays, deletes or posts asks the user first by itself. Banking and money apps are never opened here. If the background screen is not set up, the answer says so and the user is shown the steps.",
