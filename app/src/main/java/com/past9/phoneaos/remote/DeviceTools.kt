@@ -41,10 +41,11 @@ object DeviceTools {
         name == "notify_user" -> "phone"
         name == "phone_location" -> "location"
         name == "macrodroid_run" || name == "android_intent" || name == "android_apps" -> "automation"
+        name.startsWith("screen_") || name.startsWith("app_") -> "screen"
         else -> null
     }
 
-    fun allowed(context: Context, group: String): Boolean =
+    fun allowed(context: Context, group: String): Boolean = if (group == "screen") com.past9.phoneaos.screen.Screens.on(context) else
         App.graph(context).settings.extra("remote_share_$group")?.let { it == "1" } ?: (GROUPS[group] ?: false)
 
     fun setAllowed(context: Context, group: String, on: Boolean) = App.graph(context).settings.setExtra("remote_share_$group", if (on) "1" else "0")
@@ -58,7 +59,7 @@ object DeviceTools {
             com.past9.phoneaos.tools.PhoneLocationTool(context),
             com.past9.phoneaos.automation.AndroidIntentTool(context, g.settings.intentSettings), com.past9.phoneaos.automation.AndroidAppsTool(context),
             com.past9.phoneaos.automation.MacroDroidRunTool(context, g.settings.macroSettings),
-        )
+        ) + (if (com.past9.phoneaos.screen.Screens.on(context)) com.past9.phoneaos.tools.screenTools(context) + com.past9.phoneaos.tools.screenLearnedTools(context) else emptyList())
     }
 
     /** The tools this phone offers right now (only switched-on groups). */
@@ -70,7 +71,7 @@ object DeviceTools {
     /** DeviceTool[] for hello: { name, description, params, group, readOnly }. */
     fun catalogue(context: Context): JSONArray = JSONArray(tools(context).map { (t, group) ->
         JSONObject().put("name", t.spec.name).put("description", t.spec.description).put("params", t.spec.schema).put("group", group)
-            .put("readOnly", group == "notifications" || group == "location" || t.spec.name == "android_apps" || READS.any { t.spec.name.contains(it) })
+            .put("readOnly", group == "notifications" || group == "location" || t.spec.name == "android_apps" || t.spec.name == "screen_status" || t.spec.name == "screen_recordings" || t.spec.name == "screen_flow_list" || READS.any { t.spec.name.contains(it) })
     })
 
     /** Run one lent tool. Returns (ok, value or error); a value with pictures is a list of text and image parts. */

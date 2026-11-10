@@ -1,0 +1,310 @@
+# Background screen: apps the agent may never open, see or touch.
+# Banking, wallets, payments, cards, crypto and investing. Money stays in the person's own hands.
+#
+# The rules in this file are built in: nobody can switch them off, not the person, not the agent.
+# People can only ADD apps (Settings > Background screen > Blocked apps).
+#
+# One rule per line:
+#   com.example.app          an exact package
+#   com.example.*            a package pattern (* is any run of characters)
+#   word:bank                any package with a dot-separated part that contains this word
+#   edge:pay                 any package with a part that starts or ends with this word
+#   label:capitec            any app whose name on the phone has this word (whole words)
+#   screen:available balance words that mark a money screen when the app also hides its screen from being seen
+#
+# To extend it: add a line. Unit tests (ScreenBlocklistTest) check every line parses.
+
+# ---- words in a package name ----
+word:bank
+word:wallet
+word:crypto
+word:bitcoin
+word:payment
+word:billing
+word:invest
+word:trading
+word:forex
+word:money
+word:fintech
+word:finance
+word:remit
+word:broker
+word:wealth
+word:equities
+word:stocks
+word:loan
+word:coin
+word:cash
+word:pesa
+word:paisa
+edge:pay
+
+# ---- bank and money brand names in a package name ----
+word:capitec
+word:nedbank
+word:tymebank
+word:investec
+word:oldmutual
+word:paypal
+word:revolut
+word:snapscan
+word:zapper
+word:payshap
+word:binance
+word:coinbase
+word:easyequities
+word:luno
+word:valr
+word:mpesa
+word:vodapay
+word:barclays
+word:santander
+word:hsbc
+
+# ---- words in an app's name ----
+label:bank
+label:banking
+label:wallet
+label:pay
+label:payments
+label:money
+label:crypto
+label:bitcoin
+label:invest
+label:investing
+label:trading
+label:forex
+label:loans
+label:stokvel
+label:capitec
+label:fnb
+label:absa
+label:nedbank
+label:tymebank
+label:investec
+label:paypal
+label:revolut
+label:snapscan
+label:zapper
+label:payshap
+label:luno
+label:valr
+label:binance
+label:yoco
+label:easyequities
+label:coinbase
+label:mpesa
+label:m-pesa
+label:vodapay
+label:ewallet
+
+# ---- South African banks and money apps ----
+capitecbank.remote.prd
+capitec.acuity.mobile.prod
+capitec.*
+za.co.capitecbank.*
+za.co.fnb.*
+com.fnb.*
+com.rmb.*
+com.sbg.mobile.phone
+com.standardbank.*
+za.co.standardbank.*
+com.barclays.africa
+com.absa.*
+za.co.absa.*
+za.co.nedbank
+za.co.nedbank.*
+com.nedbank.*
+za.co.tymebank.*
+com.tymebank.*
+za.co.discovery.bank
+za.co.discovery.*
+za.co.africanbank.*
+com.africanbank.*
+za.co.investec.*
+com.investec.*
+com.oldmutual.*
+za.co.oldmutual.*
+com.bankzero.*
+za.co.bankzero.*
+za.co.bidvestbank.*
+za.co.sasfin.*
+za.co.mercantile.*
+com.fireid.snapscan
+za.co.snapscan.*
+com.snapscan.*
+com.zapper.*
+za.co.zapper.*
+za.co.yoco
+za.co.yoco.*
+com.yoco.*
+com.easyequities.*
+za.co.easyequities.*
+co.bitx.android.wallet
+com.luno.*
+com.valr.*
+com.vodacom.vodapay
+com.vodapay.*
+com.mtn.momo
+com.mtn.momo.*
+za.co.payfast.*
+com.payfast.*
+com.ozow.*
+za.co.ozow.*
+com.peachpayments.*
+com.ikhokha.*
+za.co.ikhokha.*
+com.twentytwoseven.*
+za.co.satrix.*
+za.co.sanlam.*
+com.sanlam.*
+za.co.allangray.*
+com.mukuru.*
+com.hellopaisa.*
+za.co.shoprite.moneymarket
+za.co.spot.money
+com.spotmoney.*
+
+# ---- International banks ----
+com.chase.sig.android
+com.infonow.bofa
+com.wf.wellsfargomobile
+com.citi.citimobile
+com.citibank.*
+com.usaa.mobile.android.usaa
+com.usbank.mobilebanking
+com.schwab.mobile
+com.htsu.hsbcpersonalbanking
+uk.co.hsbc.*
+com.barclays.*
+com.grppl.android.shell.*
+com.rbs.mobile.android.*
+uk.co.santander.*
+com.santander.*
+co.uk.getmondo
+com.monzo.*
+com.starlingbank.android
+de.number26.android
+com.n26.*
+com.revolut.revolut
+com.revolut.*
+com.transferwise.android
+com.wise.*
+com.bunq.android
+com.ing.*
+com.db.*
+com.bnpparibas.*
+com.sc.*
+com.dbs.*
+com.icicibank.*
+com.snapwork.hdfc
+com.sbi.*
+com.csam.icici.bank.imobile
+com.axis.mobile
+com.unionbankph.online
+com.bdo.*
+com.gtbank.*
+com.zenithbank.*
+com.accessbank.*
+com.kcb.*
+com.equitybank.*
+com.ecobank.*
+
+# ---- Wallets and payments ----
+com.google.android.apps.walletnfcrel
+com.google.android.apps.nbu.paisa.user
+com.google.android.apps.nbu.paisa.merchant
+com.samsung.android.spay
+com.samsung.android.spayfw
+com.samsung.android.spaylite
+com.samsung.android.samsungpay.*
+com.samsung.android.spaymini
+com.paypal.*
+com.venmo
+com.squareup.cash
+com.squareup
+com.squareup.*
+com.zellepay.zelle
+com.moneybookers.skrillpayments
+com.skrill.*
+com.neteller.*
+com.payoneer.android
+com.stripe.*
+com.eg.android.AlipayGphone
+com.alipay.*
+com.phonepe.app
+net.one97.paytm
+com.paytm.*
+in.amazon.mShop.android.shopping.pay
+com.safaricom.mpesa.lifestyle
+com.safaricom.*
+com.westernunion.*
+com.moneygram.*
+com.remitly.*
+com.worldremit.*
+com.klarna.*
+com.afterpay.*
+com.affirm.*
+com.payflex.*
+com.curve.*
+com.sumup.*
+com.izettle.*
+
+# ---- Crypto ----
+com.binance.dev
+com.binance.*
+com.coinbase.android
+com.coinbase.*
+org.toshi
+com.kraken.*
+co.mona.android
+com.crypto.*
+io.metamask
+com.wallet.crypto.trustapp
+com.bybit.app
+com.okinc.okex.gp
+com.okx.*
+com.kucoin.*
+com.bitstamp.*
+com.gemini.android.app
+piuk.blockchain.android
+com.ledger.live
+io.trezor.*
+com.exodus.*
+app.phantom
+com.bitpay.*
+
+# ---- Investing and trading ----
+com.robinhood.android
+com.etoro.openbook
+com.etoro.*
+com.trading212.*
+atws.app
+com.interactivebrokers.*
+com.fidelity.android
+com.vanguard
+com.vanguard.*
+com.tdameritrade.*
+com.plus500.*
+com.avatrade.*
+com.xm.*
+net.metaquotes.metatrader4
+net.metaquotes.metatrader5
+com.tradingview.tradingviewapp
+com.webull.*
+com.degiro.*
+com.freetrade.*
+
+# ---- words that mark a money screen, when the app also hides its screen ----
+screen:available balance
+screen:account balance
+screen:current balance
+screen:card number
+screen:cvv
+screen:beneficiary
+screen:iban
+screen:account number
+screen:enter your pin
+screen:banking pin
+screen:transfer funds
+screen:pay now
