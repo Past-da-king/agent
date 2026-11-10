@@ -177,9 +177,11 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
                 val screenCtx = androidx.compose.ui.platform.LocalContext.current
                 var screenOn by remember { mutableStateOf(com.past9.phoneaos.screen.Screens.on(screenCtx)) }
                 // Off by default: it is new and still being proven on real phones. Switched off, nothing of it exists in the app.
-                Line(Icons.Rounded.Layers, "Background screen", if (screenOn) "On. Setup, rules and blocked apps" else "Off. Experimental: your agent uses other apps on a hidden screen while you keep yours",
+                val screenState = if (screenOn) com.past9.phoneaos.screen.Screens.session(screenCtx).state.value else null
+                Line(Icons.Rounded.Layers, "Background screen", if (screenState?.stopped == true) "Stopped by you. Tap to allow your agent to use it again" else if (screenOn) "On. Setup, rules and blocked apps" else "Off. Experimental: your agent uses other apps on a hidden screen while you keep yours",
                     trailing = { Switch(screenOn, { on -> screenOn = on; com.past9.phoneaos.screen.Screens.setOn(screenCtx, on) }) }) {
-                    if (screenOn) com.past9.phoneaos.screen.ScreenUi.show.value = com.past9.phoneaos.screen.ScreenUi.SETUP
+                    if (screenState?.stopped == true) { com.past9.phoneaos.screen.Screens.session(screenCtx).userAllow(); com.past9.phoneaos.ui.AppNotice.say("Your agent can use the background screen again") }
+                    else if (screenOn) com.past9.phoneaos.screen.ScreenUi.show.value = com.past9.phoneaos.screen.ScreenUi.SETUP
                 }
                 if (screenOn) Line(Icons.Rounded.Movie, "Recordings and learned apps", "Watch what it did there, and teach it a job yourself") { com.past9.phoneaos.screen.ScreenUi.show.value = com.past9.phoneaos.screen.ScreenUi.RUNS }
             }

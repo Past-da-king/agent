@@ -92,7 +92,7 @@ class ScreenSession(
     private val secrets = ArrayList<String>()
 
     companion object {
-        const val STOPPED = "The user pressed Stop on the background screen. Nothing more may be done there until they allow it again. Do not try another way; tell them it is stopped."
+        const val STOPPED = "The user pressed Stop on the background screen. Nothing more may be done there until they allow it again. Do not try another way; tell them it is stopped, and that they clear it in Settings > Background screen (tap the row, or switch it off and on); it also clears by itself two minutes after the screen closed."
         const val TAKEN = "The user has taken over the background screen and is using it themselves. Wait for them (screen_wait), or carry on with other work. Nothing was done."
         const val CLOSED = "Nothing is open on the background screen. Start with screen_open_app."
         fun notReady(why: String) = "The background screen is not ready on this phone: $why. Nothing was done. The setup steps are showing to the user now " +

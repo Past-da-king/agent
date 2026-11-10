@@ -92,6 +92,8 @@ object Screens {
         App.graph(app).settings.setExtra(ON, if (on) "1" else "0")
         // The start script (with this phone's port and secret) is written where a computer's adb can run it.
         if (on) ScreenStarter.writeScript(app)
+        // Switching it on is also the person saying "carry on": an earlier Stop is cleared.
+        if (on) made?.userAllow()
         // Shizuku's door into the app only exists while the feature is on.
         runCatching {
             app.packageManager.setComponentEnabledSetting(android.content.ComponentName(app, "rikka.shizuku.ShizukuProvider"),
