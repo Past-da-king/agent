@@ -121,6 +121,8 @@ object Rearm {
         // Wake-ups: the booked ones ring from the saved snapshot even before the computer is reached again.
         runCatching { com.past9.phoneaos.wakeup.WakeHub.evaluate(context) }
         runCatching { com.past9.phoneaos.wakeup.WakeChannel.ensure(context) }
+        // The wake word listener, if it is switched on. If Android will not start it from here, it says so in a notification.
+        runCatching { com.past9.phoneaos.wakeword.WakeWord.sync(context) }
         runCatching { com.past9.phoneaos.triggers.Routines.catchUp(context) }
     }
 }

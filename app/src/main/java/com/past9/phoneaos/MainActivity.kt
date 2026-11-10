@@ -94,6 +94,8 @@ class MainActivity : ComponentActivity() {
         // Results of jobs handed to the user's machines: caught up and awaited only while the app is on screen.
         com.past9.phoneaos.handoff.Handoffs.onScreen(this)
         com.past9.phoneaos.remote.RemoteHub.onForeground()
+        // The wake word listener starts (or tries again) while the app is on screen, which is when Android always allows it.
+        runCatching { com.past9.phoneaos.wakeword.WakeWord.sync(this) }
     }
 
     override fun onResume() {

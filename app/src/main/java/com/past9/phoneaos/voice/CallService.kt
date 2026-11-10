@@ -71,7 +71,9 @@ class CallService : Service() {
         private const val ID = 77
         private const val CHANNEL = "calls_live"
         private const val ACTION_END = "end"
-        fun start(context: Context): Boolean = ForegroundGuard.start(context, CallService::class.java)
-        fun stop(context: Context) = ForegroundGuard.stop(context, CallService::class.java)
+        /** The wake word listener lets go of the microphone first ([com.past9.phoneaos.wakeword.MicUse]) and takes it back when the call ends. */
+        fun start(context: Context): Boolean { com.past9.phoneaos.wakeword.MicUse.hold(MIC); return ForegroundGuard.start(context, CallService::class.java).also { if (!it) com.past9.phoneaos.wakeword.MicUse.release(MIC) } }
+        fun stop(context: Context) { ForegroundGuard.stop(context, CallService::class.java); com.past9.phoneaos.wakeword.MicUse.release(MIC) }
+        private const val MIC = "call"
     }
 }

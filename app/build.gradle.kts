@@ -32,6 +32,9 @@ android {
   // The runtimes (node, Claude Code, Codex, Antigravity) are not in the APK: they download on first use (runtime/RuntimePacks.kt).
   packaging {
     resources { excludes += setOf("META-INF/versions/9/OSGI-INF/MANIFEST.MF", "META-INF/DEPENDENCIES", "META-INF/INDEX.LIST") }
+    // Native libraries are compressed inside the APK (and unpacked by Android at install). Stored uncompressed, the wake
+    // word engine alone would add 24 MB to the download; compressed it adds 9, and the OCR library shrinks too.
+    jniLibs { useLegacyPackaging = true }
   }
 
   signingConfigs {
@@ -85,6 +88,9 @@ android {
         // Without this Roborazzi writes nothing and the run still passes green.
         it.systemProperty("roborazzi.test.record", "true")
         it.maxHeapSize = "3g"
+        // The wake word accuracy run (docs/wake-word.md) loads the engine's Linux library; unset, those tests skip themselves.
+        System.getenv("WAKE_NATIVE_DIR")?.let { dir -> it.systemProperty("java.library.path", dir); it.environment("WAKE_NATIVE_DIR", dir) }
+        listOf("WAKE_EVAL_DIR", "WAKE_EVAL_OUT", "WAKE_EVAL_ARGS").forEach { k -> System.getenv(k)?.let { v -> it.environment(k, v) } }
         // Live provider tests run only when a key is passed in the environment (never stored in the repo).
         it.environment("DEEPSEEK_KEY", System.getenv("DEEPSEEK_KEY") ?: "")
         it.environment("OPENCODE_KEY", System.getenv("OPENCODE_KEY") ?: "")
@@ -152,6 +158,8 @@ dependencies {
   implementation("dev.rikka.shizuku:api:13.1.5")
   implementation("dev.rikka.shizuku:provider:13.1.5")
   implementation(libs.kotlinx.coroutines.android)
+  // Wake word: on-device keyword spotting (sherpa-onnx with onnxruntime linked in, one .so, arm64 only). No network, no key.
+  implementation("com.k2fsa.sherpa.onnx:sherpa-onnx-static-link-onnxruntime:2.0.1@aar")
   implementation(libs.androidx.credentials)
   implementation(libs.androidx.credentials.play.services)
   implementation(libs.googleid)

@@ -565,6 +565,8 @@
         <provider android:name="rikka.shizuku.ShizukuProvider" android:authorities="${applicationId}.shizuku" android:multiprocess="false"
             android:enabled="false" android:exported="true" android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
         <service android:name=".voice.CallService" android:exported="false" android:foregroundServiceType="microphone|mediaPlayback" />
+        <!-- Wake word: hears "Hey <the agent's name>" on the phone itself (docs/wake-word.md). Off until switched on in Settings. -->
+        <service android:name=".wakeword.WakeWordService" android:exported="false" android:foregroundServiceType="microphone" />
         <service android:name=".voice.DictationService" android:exported="false" android:foregroundServiceType="microphone" />
         <service android:name=".system.WorkService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="The user's agent finishes a task they asked for after they leave the app" />
