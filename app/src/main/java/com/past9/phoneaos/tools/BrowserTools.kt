@@ -15,6 +15,7 @@ import com.past9.phoneaos.browser.SiteAdapt
 import com.past9.phoneaos.browser.SiteCatalog
 import com.past9.phoneaos.browser.SiteHealth
 import com.past9.phoneaos.App
+import kotlinx.coroutines.async
 import org.json.JSONObject
 
 /** The browser tools share one engine; they start the background service on first use. */
@@ -184,28 +185,74 @@ class BrowserUploadTool(c: Context) : BrowserTool(c) {
     }
 }
 
-fun browserTools(c: Context): List<Tool> = listOf(BrowserUploadTool(c), BrowserOpenTool(c), SiteProbeTool(c), SiteCatalogTool(c), BrowserReadTool(c), BrowserClickTool(c), BrowserTypeTool(c), BrowserKeyTool(c), BrowserWaitTool(c), BrowserScrollTool(c), BrowserBackTool(c), BrowserScreenshotTool(c), BrowserLookTool(c), BrowserHandoffTool(c), BrowserEvalTool(c), BrowserNetworkTool(c), BrowserConsoleTool(c), BrowserCallVoiceTool(c))
+fun browserTools(c: Context): List<Tool> = listOf(BrowserUploadTool(c), BrowserOpenTool(c), SiteProbeTool(c), SiteCatalogTool(c), BrowserReadTool(c), BrowserClickTool(c), BrowserTypeTool(c), BrowserKeyTool(c), BrowserWaitTool(c), BrowserScrollTool(c), BrowserBackTool(c), BrowserScreenshotTool(c), BrowserLookTool(c), BrowserHandoffTool(c), BrowserEvalTool(c), BrowserNetworkTool(c), BrowserConsoleTool(c), BrowserCallVoiceTool(c), PlaceWhatsAppCallTool(c))
 
 /** The agent's own voice in a WhatsApp Web call it places in this browser (the call audio bridge). Off unless the user switched it on. */
 class BrowserCallVoiceTool(c: Context) : BrowserTool(c) {
-    override val spec = ToolSpec("browser_call_voice", "Speak in a WhatsApp Web voice call placed in this browser, with a live voice that listens and answers. Works only when the user switched on 'Let the agent speak in WhatsApp calls' in Settings > Browser, on web.whatsapp.com. Order: open the chat, action 'start' with who you are calling and why, THEN press the voice call button in the page; 'status' shows whether the voice is ready, what was heard and the words so far; after you hang up in the page, 'stop' ends the voice and saves the words to the chat. Calling someone goes out in the user's name: get request_approval first. This phone's own microphone and speaker are not used.",
-        schema(listOf("action"), "action" to enumOf("What to do", "start", "status", "stop"), "peer" to str("Who is being called, by name (for start)"), "goal" to str("Why you are calling and what to say, in a sentence or two (for start)")))
+    override val spec = ToolSpec("browser_call_voice", "Speak in a WhatsApp Web voice call placed in this browser, with a live voice that listens and answers. Works only when the user switched on 'Let the agent speak in WhatsApp calls' in Settings > Browser, on web.whatsapp.com. To place a whole call in one step use place_whatsapp_call instead. By hand: open the chat, action 'start' with who you are calling and why, THEN press the voice call button from page script (browser_eval, element.click(); a tap does not start it); 'status' shows whether the voice is ready, what was heard, the words so far, and how a call placed with place_whatsapp_call is going or went; after you hang up in the page, 'stop' ends the voice and saves the words to the chat. Calling someone goes out in the user's name: get request_approval first. This phone's own microphone and speaker are not used.",
+        schema(listOf("action"), "action" to enumOf("What to do", "start", "status", "stop"), "peer" to str("Who is being called, by name (for start). Left out: the name of the chat that is open"), "goal" to str("Why you are calling and what to say, in a sentence or two (for start)")))
+    private companion object {
+        /** The name on the chat that is open in WhatsApp Web. */
+        const val OPEN_CHAT_NAME = "(function(){var h=document.querySelector('#main header');if(!h)return '';var s=h.querySelector('span[dir=auto]');return String((s&&s.innerText)||'').trim().slice(0,80)})()"
+    }
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val e = engine(ctx)
-        val b = e.callBridge ?: return if (App.graph(context).settings.callBridgeOn())
-            "The call voice was switched on after this browser opened, or this phone's browser is too old for it. Let the browser close (a few minutes idle), open https://web.whatsapp.com again, then start."
+        val b = e.ensureCallBridge() ?: return if (App.graph(context).settings.callBridgeOn()) "This phone's browser is too old for the call voice (Android System WebView needs an update)."
         else "The call voice is off. The user turns it on in Settings > Browser > Let the agent speak in WhatsApp calls. Ask them; do not work around it."
         return when (input.optString("action")) {
             "start" -> {
+                if (e.callRun?.isActive == true) return "A call placed with place_whatsapp_call is running. Check it with action status."
                 if (!e.page.value.url.startsWith("https://web.whatsapp.com")) return "Open https://web.whatsapp.com and the chat first."
-                b.start(input.optString("peer").trim(), input.optString("goal").trim()).also { ctx.activity("Got the call voice ready", JSONObject().put("tool", "browser")) }
+                // A browser that opened before the switch was turned on gets the page script now: the page loads again to take it.
+                if (!b.pageReady) { e.goto(e.page.value.url); repeat(40) { if (b.pageReady) return@repeat; kotlinx.coroutines.delay(250) } }
+                var peer = input.optString("peer").trim()
+                if (peer.isEmpty()) peer = com.past9.phoneaos.connections.PageJs.text(e.js(OPEN_CHAT_NAME)).takeIf { it != "timeout" && it != "null" && !it.startsWith("ERR ") }.orEmpty().trim()
+                b.start(peer, input.optString("goal").trim()).also { ctx.activity("Got the call voice ready", JSONObject().put("tool", "browser")) }
             }
             "stop" -> b.stop()
-            else -> { val s = b.status(); kotlinx.coroutines.delay(300); s.put("page", b.pageState ?: JSONObject.NULL).toString(2) }
+            else -> {
+                val s = b.status(); kotlinx.coroutines.delay(300)
+                s.put("page", b.pageState ?: JSONObject.NULL)
+                    .put("call", if (e.callRun?.isActive == true) JSONObject().put("running", true).put("phase", e.callNow?.phase ?: "") else e.lastCall ?: JSONObject.NULL)
+                    .toString(2)
+            }
         }
     }
 }
 
+/**
+ * A whole WhatsApp voice call in one step: open the chat, arm the voice, press Voice call, talk, hang up, hand back
+ * the words. The call runs on the app's own scope, so it is not cut off when the one who asked stops waiting (a
+ * linked computer waits a few minutes at most): browser_call_voice status shows it, and how it went.
+ */
+class PlaceWhatsAppCallTool(c: Context) : BrowserTool(c) {
+    override val spec = ToolSpec("place_whatsapp_call", "Place a WhatsApp voice call from WhatsApp Web in this browser and hold the conversation with a live voice, in one step. It opens WhatsApp Web and the chat, checks that the chat has a voice call button, arms the voice, presses Voice call, waits for an answer, talks towards the goal, hangs up when the conversation is done or after max_minutes, saves the words to the chat and returns JSON: outcome ('answered', 'no_answer' or 'failed'), reason, contact, chat, rang_seconds, duration_seconds, ended_by, transcript, calling_offered, test_account, whatsapp. Needs the user's switch 'Let the agent speak in WhatsApp calls' (Settings > Browser). When WhatsApp does not offer calling to the signed-in account it says so and places no call, unless the user marked that number as a test account in Settings > Browser. Calling someone goes out in the user's name: get request_approval first. This phone's own microphone and speaker are not used.",
+        schema(listOf("chat", "goal"), "chat" to str("Who to call: the chat's exact name, the number with its country code, or the chat id"),
+            "goal" to str("Why you are calling and what to say or find out, in a sentence or two"),
+            "max_minutes" to com.past9.phoneaos.agent.int("Hang up after this many minutes of conversation. Default 5, at most 30"),
+            "contact" to str("What to call the person, when the chat's name is not what they are called. Left out: the chat's name"),
+            "wait" to bool("false returns at once while the call goes on; check it with browser_call_voice status. Default true")))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String {
+        val g = App.graph(context)
+        val e = engine(ctx)
+        e.callRun?.takeIf { it.isActive }?.let { return "A call is already running (${e.callNow?.phase}). Check it with browser_call_voice status." }
+        val bridge = e.ensureCallBridge()
+        if (bridge?.running == true) return "A call voice is already running. Stop it first (browser_call_voice stop)."
+        val call = com.past9.phoneaos.browser.WhatsAppCall(e.callPage(), e.callVoice(bridge), test = { g.settings.callTestOn() to g.settings.callTestNumbers() })
+        val chat = input.optString("chat").trim(); val goal = input.optString("goal").trim()
+        val id = ctx.activity("Calling $chat on WhatsApp", JSONObject().put("tool", "browser"))
+        val run = g.scope.async {
+            val r = runCatching { call.run(chat, goal, input.optInt("max_minutes", com.past9.phoneaos.browser.WhatsAppCall.DEFAULT_MINUTES), input.optString("contact")) }
+                .getOrElse { runCatching { bridge?.stop() }; com.past9.phoneaos.browser.WhatsAppCall.Result(com.past9.phoneaos.browser.WhatsAppCall.FAILED, it.message ?: it::class.java.simpleName) }
+            e.lastCall = r.json().put("at", System.currentTimeMillis()); r
+        }
+        e.callNow = call; e.callRun = run
+        if (input.has("wait") && !input.optBoolean("wait", true)) return "The call is being placed. Check it with browser_call_voice status: 'call' shows the phase, then the result."
+        val r = run.await()
+        ctx.updateActivity(id, when (r.outcome) { "answered" -> "Called ${r.contact.ifBlank { chat }} on WhatsApp (${r.durationSeconds} s)"; "no_answer" -> "Called ${r.contact.ifBlank { chat }} on WhatsApp: no answer"; else -> "WhatsApp call not placed" }, JSONObject().put("tool", "browser"))
+        return r.json().toString(2)
+    }
+}
 
 /** Run JavaScript in the page the agent is looking at: read its structure and storage, call the site's own endpoints, test a tool body. */
 class BrowserEvalTool(c: Context) : BrowserTool(c) {

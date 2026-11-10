@@ -303,6 +303,30 @@ class SettingsStore(context: Context) {
     fun callBridgeOn(): Boolean = extra("call_bridge_on") == "true"
     fun setCallBridgeOn(on: Boolean) = setExtra("call_bridge_on", if (on) "true" else null)
 
+    /**
+     * Calling switched on for a test account (see [com.past9.phoneaos.browser.CallTestAccounts]). Off until the user
+     * turns it on, and never on without a number: the numbers are the user's own, typed in Settings > Browser.
+     */
+    fun callTestNumbers(): List<String> = com.past9.phoneaos.browser.CallTestAccounts.parse(extra("call_test_numbers"))
+    fun callTestOn(): Boolean = extra("call_test_on") == "true" && callTestNumbers().isNotEmpty()
+    /** Turning it on needs a marked number. True when the switch now stands as asked. */
+    fun setCallTestOn(on: Boolean): Boolean {
+        if (on && callTestNumbers().isEmpty()) return false
+        setExtra("call_test_on", if (on) "true" else null); return true
+    }
+    /** Adds what the user typed. Returns why not, or null when it was added. */
+    fun addCallTestNumber(input: String): String? {
+        val (list, error) = com.past9.phoneaos.browser.CallTestAccounts.add(callTestNumbers(), input)
+        if (error == null) setExtra("call_test_numbers", com.past9.phoneaos.browser.CallTestAccounts.encode(list))
+        return error
+    }
+    /** Removing the last number turns the switch off with it. */
+    fun removeCallTestNumber(number: String) {
+        val left = com.past9.phoneaos.browser.CallTestAccounts.remove(callTestNumbers(), number)
+        setExtra("call_test_numbers", if (left.isEmpty()) null else com.past9.phoneaos.browser.CallTestAccounts.encode(left))
+        if (left.isEmpty()) setExtra("call_test_on", null)
+    }
+
     fun extra(key: String): String? = prefs.getString("x_$key", null)
     fun setExtra(key: String, value: String?) { prefs.edit().apply { if (value == null) remove("x_$key") else putString("x_$key", value) }.apply() }
 

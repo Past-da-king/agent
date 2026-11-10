@@ -192,7 +192,7 @@ The agent on a linked computer can use `android_intent`, `android_apps` and `mac
 
 ## Sites that need advanced browser features
 
-WhatsApp Web calls, in-browser editors and models that run in the page need shared memory (SharedArrayBuffer), which Android's WebView hides unless the app names the site. Settings, Browser, *Sites that need advanced browser features* is your list: `https://web.whatsapp.com` to start with, exact https sites only, no wildcards. In the same sheet, **Let the agent speak in WhatsApp calls** (off by default) lets the agent's live voice go into a WhatsApp Web call it places, with `browser_call_voice`. Details and the check to run on the phone: [docs/browser-advanced-features.md](docs/browser-advanced-features.md).
+WhatsApp Web calls, in-browser editors and models that run in the page need shared memory (SharedArrayBuffer), which Android's WebView hides unless the app names the site. Settings, Browser, *Sites that need advanced browser features* is your list: `https://web.whatsapp.com` to start with, exact https sites only, no wildcards. In the same sheet, **Let the agent speak in WhatsApp calls** (off by default) lets the agent's live voice go into a WhatsApp Web call it places: `place_whatsapp_call` places a whole call and returns what was said, `browser_call_voice` does the steps by hand. **Turn on calling for a test account** (off by default, with a ban-risk warning) is for a test number WhatsApp has not given calling to, never your main number. Details and the check to run on the phone: [docs/browser-advanced-features.md](docs/browser-advanced-features.md).
 
 ## Build from source
 

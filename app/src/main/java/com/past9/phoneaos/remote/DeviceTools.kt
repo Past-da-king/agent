@@ -34,7 +34,7 @@ object DeviceTools {
     val LABELS = mapOf("browser" to "Browser", "notifications" to "Notifications it can read", "files" to "Files", "approval" to "Questions and approvals", "phone" to "Notifications to you", "location" to "Your location (asked once)", "automation" to "Other apps: intents and macros (asks unless allowed)")
 
     fun groupOf(name: String): String? = when {
-        name.startsWith("browser_") || name == "site_probe" || name == "site_catalog" -> "browser"
+        name.startsWith("browser_") || name == "site_probe" || name == "site_catalog" || name == "place_whatsapp_call" -> "browser"
         name.startsWith("notifications") -> "notifications"
         name == "phone_files" -> "files"
         name == "ask_user" || name == "request_approval" -> "approval"

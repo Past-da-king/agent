@@ -188,18 +188,8 @@ class BrowserEngine(private val context: Context, val profile: String = "Persona
         if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT))
             runCatching { androidx.webkit.WebViewCompat.addDocumentStartJavaScript(this, WebNotifications.SHIM, setOf("*")); androidx.webkit.WebViewCompat.addDocumentStartJavaScript(this, com.past9.phoneaos.connections.PageJs.NET_SHIM, setOf("*")) }
         // The agent's voice in a WhatsApp Web call: only when the user switched it on, only on that site, and the hooks
-        // pass everything through until a call voice is started (browser_call_voice).
-        if (runCatching { com.past9.phoneaos.App.graph(context).settings.callBridgeOn() }.getOrDefault(false) &&
-            androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.WEB_MESSAGE_LISTENER) &&
-            androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)) runCatching {
-            val bridge = callBridge ?: newCallBridge().also { callBridge = it }
-            androidx.webkit.WebViewCompat.addWebMessageListener(this, CallBridgeProtocol.OBJECT, setOf(CallBridgeProtocol.ORIGIN)) { _, message, origin, isMainFrame, reply ->
-                if (!isMainFrame || origin.toString().trimEnd('/') != CallBridgeProtocol.ORIGIN) return@addWebMessageListener
-                callReply = reply
-                bridge.onPageMessage(message.data)
-            }
-            androidx.webkit.WebViewCompat.addDocumentStartJavaScript(this, CallBridgeJs.HOOKS, setOf(CallBridgeProtocol.ORIGIN))
-        }.onFailure { android.util.Log.w("AgentBrowser", "call bridge not installed", it) }
+        // pass sound through until a call voice is started (browser_call_voice, place_whatsapp_call).
+        if (runCatching { com.past9.phoneaos.App.graph(context).settings.callBridgeOn() }.getOrDefault(false)) installCallBridge(this)
         webViewClient = object : WebViewClient() {
             // Links into other apps (intent://, market://, mailto:) used to load as a blank error page.
             override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
@@ -250,6 +240,89 @@ class BrowserEngine(private val context: Context, val profile: String = "Persona
     @Volatile var callBridge: CallBridge? = null; private set
     /** The WhatsApp Web page that last said hello: messages for the page go here. */
     @Volatile private var callReply: androidx.webkit.JavaScriptReplyProxy? = null
+
+    /** The page script each window carries while the switch is on, kept so it can be taken out again. */
+    private val callScripts = java.util.WeakHashMap<WebView, androidx.webkit.ScriptHandler>()
+    private fun canBridge() = androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.WEB_MESSAGE_LISTENER) &&
+        androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)
+
+    /** Main thread. Gives one window the listener and the page script, once. They take effect on its next page load. */
+    private fun installCallBridge(w: WebView) {
+        if (!canBridge() || callScripts.containsKey(w)) return
+        runCatching {
+            val bridge = callBridge ?: newCallBridge().also { callBridge = it }
+            androidx.webkit.WebViewCompat.addWebMessageListener(w, CallBridgeProtocol.OBJECT, setOf(CallBridgeProtocol.ORIGIN)) { _, message, origin, isMainFrame, reply ->
+                if (!isMainFrame || origin.toString().trimEnd('/') != CallBridgeProtocol.ORIGIN) return@addWebMessageListener
+                callReply = reply
+                // The switch may have been turned off and on again since this window got its listener: speak to the bridge of now.
+                (callBridge ?: bridge).onPageMessage(message.data)
+            }
+            callScripts[w] = androidx.webkit.WebViewCompat.addDocumentStartJavaScript(w, CallBridgeJs.HOOKS, setOf(CallBridgeProtocol.ORIGIN))
+        }.onFailure { android.util.Log.w("AgentBrowser", "call bridge not installed", it) }
+    }
+
+    /**
+     * The switch changed in Settings (or a tool found it on in a browser that opened before it was): this browser
+     * takes it now. Before 0.15.34 the switch was only read when a browser opened, so after turning it on the
+     * browser had to sit idle until its service closed it (minutes) and be opened again. A WhatsApp Web page that is
+     * open is loaded again, because the page script only goes into a page as it loads.
+     */
+    fun applyCallBridge(on: Boolean) = main.post {
+        if (on) {
+            if (!canBridge()) return@post
+            val fresh = stack.any { !callScripts.containsKey(it) }
+            stack.forEach(::installCallBridge)
+            if (fresh) web?.let { w -> if ((w.url ?: "").startsWith(CallBridgeProtocol.ORIGIN)) w.reload() }
+        } else {
+            if (callScripts.isEmpty() && callBridge == null) return@post
+            runCatching { callBridge?.stop() }
+            stack.forEach { w ->
+                callScripts.remove(w)?.let { runCatching { it.remove() } }
+                runCatching { androidx.webkit.WebViewCompat.removeWebMessageListener(w, CallBridgeProtocol.OBJECT) }
+            }
+            callBridge = null; callReply = null
+            web?.let { w -> if ((w.url ?: "").startsWith(CallBridgeProtocol.ORIGIN)) w.reload() }
+        }
+    }
+
+    /** The call bridge, put in now when the switch is on and this browser opened before it was. Null when the switch is off or the WebView can't carry it. */
+    suspend fun ensureCallBridge(): CallBridge? {
+        callBridge?.let { return it }
+        if (!runCatching { com.past9.phoneaos.App.graph(context).settings.callBridgeOn() }.getOrDefault(false)) return null
+        onMain<Unit> { _, cb -> stack.forEach(::installCallBridge); cb(Unit) }
+        return callBridge
+    }
+
+    /** A WhatsApp call the agent placed with place_whatsapp_call that is still going, and how the last one went. */
+    @Volatile var callRun: kotlinx.coroutines.Deferred<WhatsAppCall.Result>? = null
+    @Volatile var callNow: WhatsAppCall? = null
+    @Volatile var lastCall: JSONObject? = null
+
+    /** The open page as [WhatsAppCall] sees it: its scripts run in the page, and every look keeps the browser from closing for being idle. */
+    fun callPage(): WhatsAppCall.Page = object : WhatsAppCall.Page {
+        private suspend fun run(js: String, args: JSONObject = JSONObject(), timeoutMs: Long = 15_000): JSONObject? { touch(); return WhatsAppCall.value(runAsync(js, args, timeoutMs)) }
+        override suspend fun info() = WhatsAppCall.parseInfo(run(WhatsAppCallJs.INFO))
+        override suspend fun open() { goto(CallBridgeProtocol.ORIGIN + "/") }
+        override suspend fun enableCalling(number: String) = run(WhatsAppCallJs.ENABLE_CALLING, JSONObject().put("number", number)).let { WhatsAppCall.Chat(it?.optBoolean("ok") == true, why = it?.optString("why") ?: "The page did not answer.") }
+        override suspend fun openChat(chat: String, reopen: Boolean) = WhatsAppCall.parseChat(run(WhatsAppCallJs.OPEN_CHAT, JSONObject().put("chat", chat).put("reopen", reopen), 20_000))
+        override suspend fun hasCallButton() = run(WhatsAppCallJs.HAS_BUTTON)?.let { it.optBoolean("button") && !it.optBoolean("disabled") } ?: false
+        override suspend fun pressCall() = run(WhatsAppCallJs.PRESS_CALL)?.optBoolean("ok") ?: false
+        override suspend fun state() = WhatsAppCall.parseState(run(WhatsAppCallJs.STATE, timeoutMs = 8_000))
+        override suspend fun hangUp() = run(WhatsAppCallJs.HANG_UP)?.optBoolean("ok") ?: false
+        override suspend fun leave() { goto("about:blank") }
+    }
+
+    /** The call voice as [WhatsAppCall] sees it. */
+    fun callVoice(bridge: CallBridge?): WhatsAppCall.Voice = object : WhatsAppCall.Voice {
+        override val on get() = bridge != null
+        override suspend fun start(peer: String, goal: String): String? { val b = bridge ?: return "The call voice is off."; val said = b.start(peer, goal); return if (b.running) null else said }
+        override val endRequested get() = bridge?.endRequested ?: false
+        override val failed get() = bridge?.failed
+        override val turns get() = bridge?.turns ?: 0
+        override fun nudge(text: String) { bridge?.nudge(text) }
+        override fun words() = bridge?.words().orEmpty()
+        override fun stop() { bridge?.stop() }
+    }
 
     /** The real wiring of [CallBridge]: the voice as phone calls get it (the computer's one-use token, or this phone's key), the words saved as a call. */
     private fun newCallBridge(): CallBridge {

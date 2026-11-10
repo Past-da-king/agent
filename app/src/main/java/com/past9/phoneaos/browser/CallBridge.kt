@@ -69,11 +69,40 @@ object CallBridgeProtocol {
         .put("description", "The call is over. Call this only after you have said goodbye and the other person has finished.")
         .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject().put("reason", JSONObject().put("type", "STRING")))))))
 
-    fun system(agentName: String, userName: String, peer: String, goal: String): String =
-        "You are ${agentName.ifBlank { "an assistant" }}, speaking on a WhatsApp voice call on behalf of ${userName.ifBlank { "the person you work for" }}. " +
-            "You are talking to ${peer.ifBlank { "the person who answered" }}. Say who you are and who you are calling for in your first sentence. " +
-            "Why you are calling: ${goal.ifBlank { "to pass on a short message" }}. Speak plainly and briefly, one thought at a time, and listen. " +
-            "Never invent facts, never agree to anything about money, and when the reason for the call is done, say goodbye and call end_call."
+    /** Two names for one person: the same words, or one is the other's first name ("Sam" and "Sam Jones"). */
+    fun sameName(a: String, b: String): Boolean {
+        val x = a.trim().lowercase().split(' ', '\t').filter { it.isNotEmpty() }
+        val y = b.trim().lowercase().split(' ', '\t').filter { it.isNotEmpty() }
+        if (x.isEmpty() || y.isEmpty()) return false
+        return x == y || (x.size == 1 && x[0] == y[0]) || (y.size == 1 && y[0] == x[0])
+    }
+
+    private fun first(name: String) = name.trim().substringBefore(' ')
+
+    /**
+     * What the voice is told before the call: who it is, for whom it calls, who will answer, to greet that person by
+     * name first, why it calls, and to end politely. When the person called IS the user, it greets them as its own
+     * person and does not say it calls on anyone's behalf.
+     */
+    fun system(agentName: String, userName: String, peer: String, goal: String): String {
+        val me = agentName.trim().ifEmpty { "an assistant" }
+        val user = userName.trim()
+        val who = peer.trim()
+        val self = sameName(user, who)
+        return buildString {
+            append(if (agentName.isBlank()) "You are an Ai assistant on a WhatsApp voice call that you placed " else "You are $me, an Ai assistant, on a WhatsApp voice call that you placed ")
+            append(when { self -> "to $user, the person you work for. "; user.isEmpty() -> "for the person you work for. "; else -> "for $user. " })
+            append(when {
+                self -> "The person who answers is $user. Greet them by name first, like \"Hi ${first(user)}, it's $me\". You are calling them directly, so do not say you are calling for anyone. "
+                who.isNotEmpty() -> "The person who answers will be $who. Greet them by name first, like \"Hi ${first(who)}\", then say that you are $me" +
+                    (if (user.isEmpty()) "" else ", calling for $user") + ". If someone else answers, ask for ${first(who)}. "
+                else -> "You do not know who will answer. Say hello first, then say that you are $me" + (if (user.isEmpty()) "" else ", calling for $user") + ". "
+            })
+            append("Why you are calling: ${goal.trim().trimEnd('.').ifEmpty { "to pass on a short message" }}. ")
+            append("Let them say hello first when they do. Speak plainly and briefly, one thought at a time, listen, and answer in the language they speak. ")
+            append("Never invent facts and never agree to anything about money. When the reason for the call is done, say a polite goodbye, let them answer, then call end_call.")
+        }
+    }
 }
 
 /**
@@ -114,6 +143,12 @@ class CallBridge(
     @Volatile var pageState: JSONObject? = null; private set
     val pageLog = java.util.concurrent.ConcurrentLinkedDeque<String>()
     val running: Boolean get() = synchronized(lock) { link != null }
+    /** Turns of speech so far, either side. */
+    val turns: Int get() = synchronized(lock) { lines.size }
+    /** The words so far, as they will be saved. */
+    fun words(): String = transcript(synchronized(lock) { lines.toList() })
+    /** A line only the voice hears, from the app: "the call is connected, greet them now". Nothing when no voice runs. */
+    fun nudge(text: String): Boolean = synchronized(lock) { link }?.let { runCatching { it.announce(text) }.isSuccess } ?: false
 
     /** Every message the page posts lands here (any thread). */
     fun onPageMessage(raw: String?) {
@@ -143,7 +178,7 @@ class CallBridge(
      */
     suspend fun start(peer: String, goal: String): String {
         synchronized(lock) { if (link != null) return "A call voice is already running. Stop it first." }
-        if (!pageReady) return "WhatsApp Web has not loaded with the call bridge yet. Open https://web.whatsapp.com in a new tab (the switch applies to new tabs), then start again."
+        if (!pageReady) return "WhatsApp Web has not loaded with the call bridge yet. Open https://web.whatsapp.com (or reload it), then start again."
         val token = runCatching { auth() }.getOrElse { LiveAuth.Token.No(it.message ?: "The voice could not start.", false) }
         val ok = token as? LiveAuth.Token.Ok ?: return "The voice could not start: " + (token as LiveAuth.Token.No).why
         val (agent, user) = names()
@@ -219,14 +254,26 @@ class CallBridge(
  * What runs in WhatsApp Web at document start, on that site only and only when the user switched the call voice on.
  * It wraps the two places a call touches sound: getUserMedia (the microphone WhatsApp is given) and
  * AudioNode.connect (what WhatsApp sends to the speaker). While disarmed both pass straight through, so chats,
- * voice notes and a call the user places by hand behave as they always did. It changes no WhatsApp setting and
- * forces no feature: a call only works if WhatsApp itself offers calling to the account.
+ * voice notes and a call the user places by hand behave as they always did.
+ *
+ * It also answers the two questions WhatsApp asks before it captures a microphone, because this browser answers
+ * them in a way that makes WhatsApp send no sound at all (seen on a real call, 10 Nov 2026): the device list
+ * comes back without ids, and the microphone permission reads "prompt". So, on this site and with the switch on:
+ * enumerateDevices lists one microphone with a stable id ([MIC_ID], "Agent mic") and leaves speakers as they are,
+ * permissions.query says "granted" for the microphone only, and the made-up microphone is mono at 48 kHz.
+ * With the switch off this script is not installed, so nothing is changed.
+ *
+ * It changes no WhatsApp setting and forces no feature: that is [WhatsAppCallJs.ENABLE_CALLING], which only runs
+ * for a number the user marked as a test account.
  */
 object CallBridgeJs {
+    const val MIC_ID = "default"
+    const val MIC_LABEL = "Agent mic"
+    const val MIC_GROUP = "agent-audio"
     val HOOKS = """
 (() => {
   if (window.__hina || window.top !== window || typeof hinaCall === 'undefined') return;
-  const H = window.__hina = { log: [], gumCalls: 0, taps: 0, inject: false, muteRemote: true, forward: false, remoteFrames: 0, remotePeak: 0, played: 0 };
+  const H = window.__hina = { log: [], gumCalls: 0, taps: 0, inject: false, muteRemote: true, forward: false, remoteFrames: 0, remotePeak: 0, played: 0, deviceLists: 0, micAsked: 0 };
   const post = (o) => { try { hinaCall.postMessage(JSON.stringify(o)); } catch (e) {} };
   const log = H.L = (...a) => { const line = a.join(' '); H.log.push(line); if (H.log.length > 200) H.log.shift(); post({ t: 'log', m: line }); };
   const origConnect = AudioNode.prototype.connect;
@@ -242,6 +289,8 @@ object CallBridgeJs {
         H.micCtx = new AudioContext({ sampleRate: 48000 });
         H.micCtx.__hinaOwn = true;
         H.micDest = H.micCtx.createMediaStreamDestination();
+        // One channel: WhatsApp captures a mono microphone at 48 kHz.
+        try { H.micDest.channelCount = 1; H.micDest.channelCountMode = 'explicit'; H.micDest.channelInterpretation = 'speakers'; } catch (e) {}
         H.micGain = H.micCtx.createGain(); H.micGain.gain.value = 1;
         origConnect.call(H.micGain, H.micDest);
         const cs = H.micCtx.createConstantSource(); cs.offset.value = 0; origConnect.call(cs, H.micGain); cs.start();
@@ -256,7 +305,50 @@ object CallBridgeJs {
         const s = H.ensureMic();
         return new MediaStream(s.getAudioTracks().map(t => t.clone()));
       }
-      return origGUM(c);
+      return origGUM(H.realMic(c));
+    };
+  }
+
+  // ---- what WhatsApp asks before it captures: which microphones are there, and may the page use one ----
+  const MIC_ID = 'default';
+  H.micInfo = () => {
+    const d = { kind: 'audioinput', deviceId: MIC_ID, label: 'Agent mic', groupId: 'agent-audio' };
+    Object.defineProperty(d, 'toJSON', { value: () => ({ deviceId: d.deviceId, kind: d.kind, label: d.label, groupId: d.groupId }) });
+    return d;
+  };
+  // A request that names the made-up microphone while no call voice runs goes to the phone's real one.
+  H.realMic = (c) => {
+    try {
+      const a = c && c.audio;
+      if (a && typeof a === 'object' && a.deviceId !== undefined) {
+        const id = a.deviceId; const v = (id && typeof id === 'object' && !Array.isArray(id)) ? (id.exact !== undefined ? id.exact : id.ideal) : id;
+        if (v === MIC_ID || (Array.isArray(v) && v.includes(MIC_ID))) { const b = Object.assign({}, a); delete b.deviceId; return Object.assign({}, c, { audio: b }); }
+      }
+    } catch (e) {}
+    return c;
+  };
+  if (md && md.enumerateDevices) {
+    const origEnum = md.enumerateDevices.bind(md);
+    H.origEnum = origEnum;
+    md.enumerateDevices = async function () {
+      H.deviceLists++;
+      let real = []; try { real = Array.from(await origEnum()); } catch (e) {}
+      // One microphone with an id that stays the same. Speakers and cameras are handed back untouched, so
+      // WhatsApp keeps its default speaker and never asks for one by a made-up id.
+      return [H.micInfo()].concat(real.filter(d => d && d.kind !== 'audioinput'));
+    };
+  }
+  const perms = navigator.permissions;
+  if (perms && perms.query) {
+    const origQuery = perms.query.bind(perms);
+    H.origQuery = origQuery;
+    perms.query = function (d) {
+      if (d && d.name === 'microphone') {
+        H.micAsked++;
+        const st = new EventTarget(); st.name = 'microphone'; st.state = 'granted'; st.onchange = null;
+        return Promise.resolve(st);
+      }
+      return origQuery(d);
     };
   }
   // 16-bit PCM (base64) at `rate`, queued end to end into the fake microphone
@@ -311,7 +403,7 @@ object CallBridgeJs {
     return origConnect.call(this, dest, ...r);
   };
 
-  H.state = () => ({ t: 'state', armed: H.inject, gum: H.gumCalls, taps: H.taps, remote_frames: H.remoteFrames, remote_peak: Math.round(H.remotePeak * 1000) / 1000, played: H.played, mic: H.micCtx ? H.micCtx.state : 'none' });
+  H.state = () => ({ t: 'state', armed: H.inject, gum: H.gumCalls, taps: H.taps, remote_frames: H.remoteFrames, remote_peak: Math.round(H.remotePeak * 1000) / 1000, played: H.played, mic: H.micCtx ? H.micCtx.state : 'none', mic_channels: H.micDest ? H.micDest.channelCount : 0, device_lists: H.deviceLists, mic_asked: H.micAsked });
   hinaCall.onmessage = (e) => {
     let m; try { m = JSON.parse(e.data); } catch (err) { return; }
     if (m.t === 'arm') { H.inject = !!m.on; H.forward = !!m.on; if (!m.on) { H.flushMic(); held = []; heldN = 0; } log(m.on ? 'armed' : 'disarmed'); post(H.state()); }

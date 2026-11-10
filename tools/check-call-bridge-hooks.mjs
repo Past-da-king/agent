@@ -1,6 +1,8 @@
 // Runs the WhatsApp call page script (CallBridgeJs.HOOKS in app/.../browser/CallBridge.kt) against a made-up page,
 // in Node, with no browser: disarmed it must pass everything through; armed it must hand out the fake microphone,
-// tap the speaker, send 16 kHz frames to the app and play what the app sends.
+// tap the speaker, send 16 kHz frames to the app and play what the app sends. Installed (the switch is on) it must
+// list one named microphone, say the microphone permission is granted and make the fake microphone mono at 48 kHz;
+// not installed (the switch is off) it must change nothing.
 //   node tools/check-call-bridge-hooks.mjs
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
@@ -14,7 +16,7 @@ const posted = [];
 const realConnects = [];
 class AudioNode { constructor(ctx) { this.context = ctx; } connect(dest) { realConnects.push([this.constructor.name, dest.constructor.name]); return dest; } }
 class AudioDestinationNode extends AudioNode {}
-class MediaStreamAudioDestinationNode extends AudioNode { constructor(ctx) { super(ctx); this.stream = { getAudioTracks: () => [{ clone: () => ({ kind: 'audio', fake: true }) }] }; } }
+class MediaStreamAudioDestinationNode extends AudioNode { constructor(ctx) { super(ctx); this.channelCount = 2; this.channelCountMode = 'explicit'; this.stream = { getAudioTracks: () => [{ clone: () => ({ kind: 'audio', fake: true }) }] }; } }
 class GainNode extends AudioNode { constructor(ctx) { super(ctx); this.gain = { value: 1 }; } }
 class ConstantSourceNode extends AudioNode { constructor(ctx) { super(ctx); this.offset = { value: 1 }; } start() {} }
 class ScriptProcessorNode extends AudioNode {}
@@ -35,7 +37,29 @@ let realGum = 0;
 const g = globalThis;
 g.window = g; g.top = g;
 Object.assign(g, { AudioNode, AudioDestinationNode, MediaStreamAudioDestinationNode, AudioContext, MediaStream });
-Object.defineProperty(g, 'navigator', { value: { mediaDevices: { getUserMedia: async () => { realGum++; return 'REAL'; } } }, configurable: true });
+// What Android's WebView hands a page: devices without ids or names, and a microphone permission that reads "prompt".
+const anonymous = [
+  { kind: 'audioinput', deviceId: '', label: '', groupId: '' }, { kind: 'audioinput', deviceId: '', label: '', groupId: '' },
+  { kind: 'videoinput', deviceId: '', label: '', groupId: '' }, { kind: 'audiooutput', deviceId: '', label: '', groupId: '' },
+];
+const realGumArgs = [];
+const realQueries = [];
+const realEnumerate = async () => anonymous.map(d => ({ ...d }));
+const realQuery = async (d) => { realQueries.push(d.name); return { name: d.name, state: 'prompt', onchange: null }; };
+Object.defineProperty(g, 'navigator', { value: {
+  mediaDevices: { getUserMedia: async (c) => { realGum++; realGumArgs.push(c); return 'REAL'; }, enumerateDevices: realEnumerate },
+  permissions: { query: realQuery },
+}, configurable: true });
+
+// ---- the switch is off: the app adds no listener, so the script does nothing at all ----
+(0, eval)(js);
+assert.equal(g.__hina, undefined, 'switch off: nothing installed');
+assert.equal(navigator.mediaDevices.enumerateDevices, realEnumerate, 'switch off: the device list is the browser as it is');
+assert.equal(navigator.permissions.query, realQuery, 'switch off: permissions are the browser as it is');
+assert.deepEqual(await navigator.mediaDevices.enumerateDevices(), anonymous);
+assert.equal((await navigator.permissions.query({ name: 'microphone' })).state, 'prompt');
+realQueries.length = 0;
+
 g.hinaCall = { postMessage: (s) => posted.push(JSON.parse(s)), onmessage: null };
 const toPage = (o) => g.hinaCall.onmessage({ data: JSON.stringify(o) });
 const of = (t) => posted.filter(m => m.t === t);
@@ -45,8 +69,33 @@ assert.deepEqual(posted.map(m => m.t), ['hello'], 'says hello once');
 (0, eval)(js);
 assert.equal(of('hello').length, 1, 'installs once');
 
+// ---- the switch is on: what WhatsApp asks before it captures a microphone ----
+const devices = await navigator.mediaDevices.enumerateDevices();
+const mics = devices.filter(d => d.kind === 'audioinput');
+assert.equal(mics.length, 1, 'one microphone');
+assert.deepEqual({ ...mics[0] }, { kind: 'audioinput', deviceId: 'default', label: 'Agent mic', groupId: 'agent-audio' }, 'a named microphone with an id');
+assert.deepEqual(JSON.parse(JSON.stringify(mics[0])), { deviceId: 'default', kind: 'audioinput', label: 'Agent mic', groupId: 'agent-audio' });
+assert.equal((await navigator.mediaDevices.enumerateDevices())[0].deviceId, mics[0].deviceId, 'the id stays the same');
+assert.deepEqual(devices.filter(d => d.kind === 'audiooutput'), [{ kind: 'audiooutput', deviceId: '', label: '', groupId: '' }], 'speakers are left as the browser gives them');
+assert.equal(devices.filter(d => d.kind === 'videoinput').length, 1, 'cameras are left alone');
+const perm = await navigator.permissions.query({ name: 'microphone' });
+assert.equal(perm.state, 'granted'); assert.equal(perm.name, 'microphone'); assert.equal(perm.onchange, null);
+assert.ok(perm instanceof EventTarget && typeof perm.addEventListener === 'function', 'a status WhatsApp can listen to');
+assert.equal((await navigator.permissions.query({ name: 'camera' })).state, 'prompt', 'other permissions are the browser as it is answer');
+assert.equal((await navigator.permissions.query({ name: 'notifications' })).state, 'prompt');
+assert.deepEqual(realQueries, ['camera', 'notifications'], 'the microphone question never reaches the browser');
+assert.equal(window.__hina.state().device_lists, 2); assert.equal(window.__hina.state().mic_asked, 1);
+
 // ---- disarmed: everything passes through ----
 assert.equal(await navigator.mediaDevices.getUserMedia({ audio: true }), 'REAL');
+// A request that names the made-up microphone while no call voice runs reaches the phone's real one, without the made-up id.
+await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: 'default' }, echoCancellation: true } });
+assert.deepEqual(realGumArgs.at(-1), { audio: { echoCancellation: true } });
+await navigator.mediaDevices.getUserMedia({ audio: { deviceId: 'default' } });
+assert.deepEqual(realGumArgs.at(-1), { audio: {} });
+await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: 'other' } } });
+assert.deepEqual(realGumArgs.at(-1), { audio: { deviceId: { exact: 'other' } } }, 'any other id is passed on as asked');
+realGum = 1;
 const callCtx = new AudioContext({ sampleRate: 48000 });
 const playback = new GainNode(callCtx);
 playback.connect(callCtx.destination);
@@ -61,6 +110,11 @@ assert.equal(of('state').at(-1).armed, true);
 const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true } });
 assert.ok(mic instanceof MediaStream && mic.tracks[0].fake, 'armed: WhatsApp gets the fake microphone');
 assert.equal(realGum, 1, 'the real microphone was not opened again');
+assert.ok((await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: 'default' } } })).tracks[0].fake, 'armed: asking for the listed microphone by id gets the fake one');
+assert.equal(window.__hina.micCtx.sampleRate, 48000, 'the fake microphone runs at 48 kHz');
+assert.equal(window.__hina.micDest.channelCount, 1, 'the fake microphone is mono');
+assert.equal(window.__hina.micDest.channelCountMode, 'explicit');
+assert.equal(window.__hina.state().mic_channels, 1);
 assert.equal(await navigator.mediaDevices.getUserMedia({ audio: true, video: true }), 'REAL', 'a video request is left alone');
 
 const before = realConnects.length;

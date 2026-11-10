@@ -70,7 +70,59 @@ class CallBridgeTest {
         assertFalse(CallBridgeProtocol.system("", "", "", "").contains("  "))
     }
 
+    @Test fun theVoiceIsToldWhoWillAnswerAndToGreetThemByNameFirst() {
+        val s = CallBridgeProtocol.system("Hina", "Ayanda", "Sam Jones", "confirm Saturday lunch.")
+        assertTrue(s, s.contains("The person who answers will be Sam Jones")); assertTrue(s.contains("Greet them by name first")); assertTrue(s.contains("\"Hi Sam\""))
+        assertTrue(s.contains("you are Hina, calling for Ayanda")); assertTrue(s.contains("Why you are calling: confirm Saturday lunch. "))
+        assertTrue(s.contains("polite goodbye")); assertTrue(s.contains("end_call")); assertTrue(s.contains("Ai assistant")); assertFalse(s.contains("AI"))
+        assertFalse(s.contains("\u2014")); assertFalse(s.contains("  "))
+    }
+
+    @Test fun whenThePersonCalledIsTheUserTheVoiceGreetsThemAndDoesNotCallOnTheirBehalf() {
+        for (peer in listOf("Ayanda", "ayanda ", "Ayanda Phaketsi")) {
+            val s = CallBridgeProtocol.system("Hina", "Ayanda", peer, "a test call")
+            assertTrue(s, s.contains("The person who answers is Ayanda")); assertTrue(s.contains("\"Hi Ayanda, it's Hina\""))
+            assertTrue(s.contains("do not say you are calling for anyone")); assertFalse(s.contains("calling for Ayanda"))
+        }
+        assertTrue(CallBridgeProtocol.sameName("Sam", "sam jones")); assertTrue(CallBridgeProtocol.sameName("Sam Jones", "Sam"))
+        assertFalse(CallBridgeProtocol.sameName("Sam Jones", "Sam Smith")); assertFalse(CallBridgeProtocol.sameName("", "Sam")); assertFalse(CallBridgeProtocol.sameName("Sam", " "))
+        // Nobody named: it says hello first and still says who it is.
+        val unknown = CallBridgeProtocol.system("Hina", "Ayanda", "", "a test call")
+        assertTrue(unknown.contains("You do not know who will answer")); assertTrue(unknown.contains("you are Hina, calling for Ayanda"))
+    }
+
+    @Test fun theCallIsStartedWithTheContactAndTheUsersName() {
+        val r = Rig(); r.pageSays("""{"t":"hello"}"""); runBlocking { r.bridge.start("Sam Jones", "confirm lunch") }
+        val system = r.opened!![3]
+        assertTrue(system.contains("Sam Jones")); assertTrue(system.contains("Ayanda")); assertTrue(system.contains("Hina")); assertTrue(system.contains("confirm lunch"))
+    }
+
+    @Test fun theWordsSoFarAndANudgeAreThereWhileACallRuns() {
+        val r = Rig(); assertFalse(r.bridge.nudge("x")); assertEquals(0, r.bridge.turns); assertEquals("", r.bridge.words())
+        r.pageSays("""{"t":"hello"}"""); r.start()
+        assertTrue(r.bridge.nudge("The call is connected.")); assertEquals(listOf("The call is connected."), r.link.said)
+        r.events(LiveSession.Event.Transcript("in", "Hello?")); r.events(LiveSession.Event.Transcript("out", "Hi Sam"))
+        assertEquals(2, r.bridge.turns); assertEquals("Them: Hello?\nVoice: Hi Sam", r.bridge.words())
+    }
+
     // ---- the page script ----
+
+    @Test fun thePageScriptListsOneNamedMicrophoneGrantsItAndMakesItMono() {
+        val js = CallBridgeJs.HOOKS
+        // Nothing in it runs unless the app gave this page the listener, which it only does with the switch on.
+        assertTrue(js.indexOf("typeof hinaCall === 'undefined') return") in 0 until js.indexOf("enumerateDevices"))
+        assertTrue(js.contains("md.enumerateDevices = async function"))
+        assertTrue(js.contains("kind: 'audioinput', deviceId: MIC_ID, label: '${CallBridgeJs.MIC_LABEL}', groupId: '${CallBridgeJs.MIC_GROUP}'"))
+        assertTrue(js.contains("const MIC_ID = '${CallBridgeJs.MIC_ID}'"))
+        // Speakers are handed back as the browser gives them: only microphones are replaced.
+        assertTrue(js.contains("d.kind !== 'audioinput'")); assertFalse(js.contains("setSinkId")); assertFalse(js.contains("kind: 'audiooutput'"))
+        // Only the microphone permission is answered; anything else goes to the browser.
+        assertTrue(js.contains("d.name === 'microphone'")); assertTrue(js.contains("st.state = 'granted'")); assertTrue(js.contains("return origQuery(d)"))
+        assertTrue(js.contains("new EventTarget()"))
+        for (other in listOf("'camera'", "'geolocation'", "'notifications'")) assertFalse(other, js.contains(other))
+        // Mono, 48 kHz.
+        assertTrue(js.contains("new AudioContext({ sampleRate: 48000 })")); assertTrue(js.contains("H.micDest.channelCount = 1")); assertTrue(js.contains("channelCountMode = 'explicit'"))
+    }
 
     @Test fun thePageScriptStartsDisarmedAndForcesNothing() {
         val js = CallBridgeJs.HOOKS
