@@ -112,8 +112,10 @@ class ScreenWaitTool(private val session: () -> ScreenSession) : Tool {
 
 class ScreenCloseTool(private val session: () -> ScreenSession) : Tool {
     override val spec = ToolSpec("screen_close", "Close the background screen when the task is done: the apps on it are closed and nothing is left running. keep_app true hands the app in front to the user's own screen instead of closing it.",
-        schema(emptyList(), "keep_app" to bool("Move the app to the user's screen instead of closing it (default false)")))
-    override suspend fun run(input: JSONObject, ctx: ToolContext): String = session().close(input.optBoolean("keep_app"))
+        schema(emptyList(), "keep_app" to bool("Move the app to the user's screen instead of closing it (default false)"),
+            "now" to bool("Close the display and the app at once. Left out: the job ends and the app is kept ready for a few minutes so the next job starts fast, then closes by itself")))
+    override suspend fun run(input: JSONObject, ctx: ToolContext): String =
+        if (input.optBoolean("now") || input.optBoolean("keep_app")) session().close(input.optBoolean("keep_app")) else session().release()
 }
 
 class ScreenStatusTool(private val session: () -> ScreenSession) : Tool {

@@ -16,8 +16,8 @@ android {
     applicationId = "com.past9.phoneaos"
     minSdk = 28
     targetSdk = 28
-    versionCode = 147
-    versionName = "0.15.44"
+    versionCode = 148
+    versionName = "0.15.45"
     // Android never lets an installed app rename itself or change the icon Samsung shows on
     // notifications, so a personal build bakes the owner's agent in: -PagentName=Hina -PagentIcon=ic_app_heart_red
     resValue("string", "app_name", (project.findProperty("agentName") as String?) ?: "Agent")

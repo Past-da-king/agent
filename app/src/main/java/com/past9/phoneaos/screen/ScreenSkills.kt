@@ -118,6 +118,8 @@ object ScreenSkills {
         return when (step.optString("do")) {
             "open" -> "Open the app" + step.optJSONObject("extra")?.optString("link")?.takeIf { it.isNotBlank() }?.let { " at $it" }.orEmpty()
             "share" -> "Hand the app ${step.optJSONObject("extra")?.optString("files").orEmpty().ifBlank { "nothing" }}" + step.optJSONObject("extra")?.optString("text")?.takeIf { it.isNotBlank() }?.let { " with the words \"$it\"" }.orEmpty()
+            "read" -> "Read \"${step.optString("name")}\" off the screen and hand it back"
+            "check" -> "Make sure \"${step.optString("text")}\" is on the screen at the end"
             "tap" -> "Press \"$words\""
             "long" -> "Press and hold \"$words\""
             "type" -> "Type \"${step.optString("text")}\"" + (if (words.isNotBlank()) " in \"$words\"" else "") + if (step.optJSONObject("extra")?.optBoolean("submit") == true) " and submit" else ""
@@ -126,6 +128,49 @@ object ScreenSkills {
             "wait" -> "Wait until \"${step.optString("text")}\" ${if (step.optJSONObject("extra")?.optBoolean("gone") == true) "is gone" else "shows"}"
             else -> step.optString("do")
         }
+    }
+
+    /** How to read a value off the final screen again: where it sits (its id in the app, or the words just before it), never what it said that day. */
+    fun readStep(name: String, value: String, all: List<ScreenElement>, params: Map<String, String>): JSONObject? {
+        if (value.isBlank()) return null
+        val shown = all.filter { !it.editable && it.label.isNotBlank() }
+        val e = shown.firstOrNull { it.label.equals(value, true) } ?: shown.filter { it.label.contains(value, true) }.minByOrNull { it.label.length } ?: return null
+        val at = e.label.indexOf(value, ignoreCase = true).coerceAtLeast(0)
+        val like = shown.filter { it.res == e.res && it.cls == e.cls }
+        return JSONObject().put("do", "read").put("name", name).put("res", e.res).put("cls", e.cls).put("nth", like.indexOf(e).coerceAtLeast(0))
+            .put("after", templatize(shown.getOrNull(shown.indexOf(e) - 1)?.label?.take(80).orEmpty(), params))
+            .put("pre", e.label.take(at)).put("post", e.label.substring((at + value.length).coerceAtMost(e.label.length)))
+    }
+
+    fun readValue(step: JSONObject, all: List<ScreenElement>, args: JSONObject = JSONObject()): String {
+        val res = step.optString("res"); val cls = step.optString("cls"); val after = fill(step.optString("after"), args)
+        val shown = all.filter { !it.editable && it.label.isNotBlank() }
+        val e = (if (res.isNotBlank()) shown.filter { it.res == res && it.cls == cls }.let { it.getOrNull(step.optInt("nth")) ?: it.firstOrNull() } else null)
+            ?: (if (after.isNotBlank()) shown.indexOfFirst { it.label.equals(after, true) }.takeIf { it >= 0 }?.let { shown.getOrNull(it + 1) } else null)
+            ?: return ""
+        var v = e.label
+        val pre = step.optString("pre"); val post = step.optString("post")
+        if (pre.isNotBlank() && v.startsWith(pre, true)) v = v.substring(pre.length)
+        if (post.isNotBlank() && v.endsWith(post, true)) v = v.substring(0, v.length - post.length)
+        return v.trim()
+    }
+
+    /** What an input may be. Null when [value] is fine for [kind], else what is wrong with it. */
+    fun badInput(kind: String, value: String): String? = when {
+        kind == "number" && value.trim().toDoubleOrNull() == null -> "must be a number, got \"${value.take(30)}\""
+        kind == "date" && runCatching { java.time.LocalDate.parse(value.trim().take(10)) }.isFailure -> "must be a date like 2026-11-15, got \"${value.take(30)}\""
+        kind.startsWith("choice:") && kind.substringAfter(':').split('|').none { it.trim().equals(value.trim(), true) } -> "must be one of ${kind.substringAfter(':').split('|').joinToString { it.trim() }}"
+        else -> null
+    }
+
+    fun inputHelp(kind: String): String = when {
+        kind == "contact" -> "A person or chat by name, as the app shows it. The closest name is used; if two are equally close the job stops instead of guessing. "
+        kind == "place" -> "A place name or an address. "
+        kind == "file" -> "The full path of a file on the phone. "
+        kind == "number" -> "A number. "
+        kind == "date" -> "A date, 2026-11-15 style. "
+        kind.startsWith("choice:") -> "One of: ${kind.substringAfter(':').split('|').joinToString { it.trim() }}. "
+        else -> ""
     }
 
     fun describe(steps: JSONArray): String = (0 until steps.length()).joinToString("\n") { "${it + 1}. ${say(steps.getJSONObject(it))}" }
