@@ -322,6 +322,35 @@ class BrowserEngine(private val context: Context, val profile: String = "Persona
         override fun nudge(text: String) { bridge?.nudge(text) }
         override fun words() = bridge?.words().orEmpty()
         override fun stop() { bridge?.stop() }
+        override fun ended(by: String, why: String, whatsapp: JSONObject?) { bridge?.callEnded(by, why, whatsapp) }
+        override fun diagnostics() = bridge?.diagnostics()
+    }
+
+    /** Longer than the longest call the agent may place, ringing included. */
+    private val CALL_HOLD_MS = 45 * 60_000L
+    private var callWake: android.os.PowerManager.WakeLock? = null
+    private var callWifi: android.net.wifi.WifiManager.WifiLock? = null
+
+    /**
+     * While the agent speaks in a call, the phone stays awake and on Wi-Fi with the screen off: a call that goes on
+     * in a pocket must not be put to sleep. Let go the moment the voice stops, and by itself after [CALL_HOLD_MS].
+     */
+    private fun holdForCall(on: Boolean) = synchronized(this) {
+        runCatching {
+            if (on) {
+                val wake = callWake ?: (context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager)
+                    .newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "agent:whatsapp-call").apply { setReferenceCounted(false) }.also { callWake = it }
+                wake.acquire(CALL_HOLD_MS)
+                @Suppress("DEPRECATION")
+                val wifi = callWifi ?: (context.applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager)
+                    .createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "agent:whatsapp-call").apply { setReferenceCounted(false) }.also { callWifi = it }
+                wifi.acquire()
+            } else {
+                callWake?.takeIf { it.isHeld }?.release()
+                callWifi?.takeIf { it.isHeld }?.release()
+            }
+        }
+        Unit
     }
 
     /** The real wiring of [CallBridge]: the voice as phone calls get it (the computer's one-use token, or this phone's key), the words saved as a call. */
@@ -354,6 +383,7 @@ class BrowserEngine(private val context: Context, val profile: String = "Persona
             },
             names = { g.settings.state.value.let { (it.agentName.takeIf { n -> n != "Your agent" } ?: "") to it.userName } },
             keepAlive = ::touch,
+            hold = ::holdForCall,
         )
     }
 

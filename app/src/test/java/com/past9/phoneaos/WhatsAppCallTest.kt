@@ -1,6 +1,7 @@
 package com.past9.phoneaos
 
 import androidx.test.core.app.ApplicationProvider
+import com.past9.phoneaos.browser.CallDiag
 import com.past9.phoneaos.browser.CallBridgeJs
 import com.past9.phoneaos.browser.CallTestAccounts
 import com.past9.phoneaos.browser.CallTestAccounts.Gate
@@ -158,6 +159,11 @@ class WhatsAppCallTest {
         override fun nudge(text: String) { nudges += text }
         override fun words() = if (started != null) said else ""
         override fun stop() { stops++ }
+        var endedBy: String? = null; var endedWhy = ""; var endedWhatsApp: JSONObject? = null; var endedAfterStop = false
+        var story: JSONObject? = JSONObject().put("ended", JSONObject().put("by", "remote_hangup").put("detail", "WhatsApp reported that the other side ended the call (CallTerminateReceived)."))
+            .put("timeline", org.json.JSONArray().put(JSONObject().put("s", 0).put("event", "wa_connected"))).put("counters", org.json.JSONArray()).put("page_errors", org.json.JSONArray())
+        override fun ended(by: String, why: String, whatsapp: JSONObject?) { endedBy = by; endedWhy = why; endedWhatsApp = whatsapp; endedAfterStop = stops > 0 }
+        override fun diagnostics(): JSONObject? = story
     }
 
     private val ringing = State(true, false, "call1", "old", true)
@@ -346,6 +352,53 @@ class WhatsAppCallTest {
         val r2 = rig(mapOf(0 to ringing, 2 to talking, 10 to gone))
         val out = r2.run()
         assertEquals(WhatsAppCall.ANSWERED, out.outcome); assertEquals(WhatsAppCall.OTHER_SIDE, out.endedBy); assertEquals((8 + WhatsAppCall.LOST_POLLS - 1).toLong(), out.durationSeconds)
+    }
+
+    @Test fun aCallWhatsAppIsReconnectingIsGivenTimeBeforeTheAgentEndsIt() {
+        // Not connected, but WhatsApp still shows the call (its End call button is there): it is reconnecting.
+        val reconnecting = State(false, false, "call1", "old", true)
+        val r = rig(mapOf(0 to ringing, 2 to talking, 10 to reconnecting, 30 to talking, 50 to over))
+        val out = r.run()
+        assertEquals(48, out.durationSeconds); assertEquals(WhatsAppCall.OTHER_SIDE, out.endedBy); assertFalse(r.page.log.contains("hangup"))
+        // It never comes back: the agent ends it, and says why.
+        val r2 = rig(mapOf(0 to ringing, 2 to talking, 10 to reconnecting))
+        val out2 = r2.run()
+        assertEquals("agent", out2.endedBy); assertTrue(out2.reason, out2.reason.contains("not connected for 30 seconds")); assertTrue(r2.page.log.contains("hangup"))
+        assertEquals((8 + WhatsAppCall.RECONNECT_POLLS - 1).toLong(), out2.durationSeconds)
+        assertEquals(CallDiag.AGENT_OTHER, r2.voice.endedBy)
+        assertTrue(WhatsAppCall.RECONNECT_POLLS > WhatsAppCall.LOST_POLLS)
+    }
+
+    @Test fun theCallSaysWhoEndedItAndHandsBackItsStory() {
+        // The other side: the agent claims nothing, WhatsApp's own record of the end is passed on, and the story's verdict is the reason.
+        val a = rig(mapOf(0 to ringing, 8 to talking, 30 to over)); val outA = a.run()
+        assertEquals("", a.voice.endedBy); assertEquals("Completed", a.voice.endedWhatsApp!!.getString("callOutcome")); assertTrue(a.voice.endedAfterStop)
+        assertTrue(outA.reason, outA.reason.contains("CallTerminateReceived"))
+        val j = outA.json()
+        for (k in listOf("ended", "timeline", "counters", "page_errors")) assertTrue(k, j.has(k))
+        assertEquals("remote_hangup", j.getJSONObject("ended").getString("by")); assertEquals(1, j.getJSONArray("timeline").length())
+        // The voice finished the conversation.
+        val b = rig(mapOf(0 to ringing, 5 to talking)) { rig, t -> if (rig.page.pressedAt > 0 && t - rig.page.pressedAt >= 20_000) rig.voice.endRequested = true }
+        b.run(); assertEquals(CallDiag.AGENT_END_CALL, b.voice.endedBy)
+        // The limit.
+        val c = rig(mapOf(0 to ringing, 5 to talking)); c.run(max = 1)
+        assertEquals(CallDiag.AGENT_MAX_MINUTES, c.voice.endedBy); assertTrue(c.voice.endedWhy.contains("1 minutes"))
+        // The voice broke.
+        val d = rig(mapOf(0 to ringing, 5 to talking)) { rig, t -> if (rig.page.pressedAt > 0 && t - rig.page.pressedAt >= 20_000) rig.voice.failed = "token expired" }
+        d.run(); assertEquals(CallDiag.AGENT_VOICE_FAILED, d.voice.endedBy); assertTrue(d.voice.endedWhy.contains("token expired"))
+        // Nobody answered: the agent hung up, but not because the conversation was done.
+        val e = rig(mapOf(0 to ringing)); e.run(); assertEquals(CallDiag.AGENT_OTHER, e.voice.endedBy)
+        // A voice that keeps no story: the result is as before.
+        val f = rig(mapOf(0 to ringing, 8 to talking, 30 to over)); f.voice.story = null
+        val outF = f.run(); assertFalse(outF.json().has("ended")); assertTrue(outF.reason.contains("other side"))
+    }
+
+    @Test fun nothingButTheLimitTheAgentWasGivenEndsALongQuietCall() {
+        // Half an hour connected, not a word said, the voice alive: only max_minutes ends it.
+        val r = rig(mapOf(0 to ringing, 3 to talking))
+        val out = r.run(max = 30)
+        assertEquals("max_minutes", out.endedBy); assertEquals(30 * 60L, out.durationSeconds)
+        for (limit in listOf(WhatsAppCall.START_MS, WhatsAppCall.RING_MS)) assertTrue(limit <= 60_000L)
     }
 
     @Test fun aPageThatStopsAnsweringEndsTheCallInsteadOfHanging() {
