@@ -19,6 +19,8 @@ interface Dictating {
     fun cancel()
 }
 
+private const val MIC = "system_dictation"
+
 /**
  * Voice-to-text for the composer with the phone's own speech recogniser: the one the keyboard and the assistant use
  * (on most phones Google's), in the phone's language, with live partial results into the message box.
@@ -51,6 +53,8 @@ class SystemDictation(
 
     fun start() { main.post {
         if (ended) return@post
+        // The wake word listener stands aside while the recogniser has the microphone.
+        com.past9.phoneaos.wakeword.MicUse.hold(MIC)
         val r = runCatching { service(context)?.let { SpeechRecognizer.createSpeechRecognizer(context, it) } ?: SpeechRecognizer.createSpeechRecognizer(context) }.getOrNull()
         if (r == null) { end("This phone's speech recogniser could not start."); return@post }
         r.setRecognitionListener(listener)
@@ -138,6 +142,7 @@ class SystemDictation(
     }
 
     private fun release() {
+        com.past9.phoneaos.wakeword.MicUse.release(MIC)
         main.removeCallbacksAndMessages(null)
         runCatching { sr?.cancel() }
         runCatching { sr?.destroy() }

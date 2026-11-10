@@ -155,6 +155,10 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
                 var wakeups by remember { mutableStateOf(false) }
                 Line(Icons.Rounded.Alarm, "Wake-ups", "Rings through Do Not Disturb until you answer: permissions and a test") { wakeups = true }
                 if (wakeups) WakeupsSheet { wakeups = false }
+                var wakeWord by remember { mutableStateOf(false) }
+                val wakeWordOn by com.past9.phoneaos.wakeword.WakeWord.store(androidx.compose.ui.platform.LocalContext.current).state.collectAsState()
+                Line(Icons.Rounded.RecordVoiceOver, "Wake word", if (wakeWordOn.enabled) "Listening for \"" + wakeWordOn.customPhrase.ifBlank { com.past9.phoneaos.wakeword.WakePhrase.defaultFor(s.agentName) } + "\"" else "Off. Say your agent's name to open it from anywhere") { wakeWord = true }
+                if (wakeWord) WakeWordSheet { wakeWord = false }
                 Line(Icons.Rounded.BatteryChargingFull, "Battery: unrestricted", "Samsung and others stop background apps. Allow this one to keep working.") { actions.onBattery() }
             }
             SectionHeader("Automation", "Other apps, both ways", Modifier.padding(start = 4.dp, top = 12.dp))

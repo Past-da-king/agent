@@ -19,6 +19,13 @@ dependencyResolutionManagement {
   repositories {
     google()
     mavenCentral()
+    // The wake word engine (sherpa-onnx, Apache-2.0) is published as an AAR on its GitHub release, not on Maven Central.
+    ivy {
+      url = uri("https://github.com/k2-fsa/sherpa-onnx/releases/download")
+      patternLayout { artifact("v[revision]/[module]-[revision].[ext]") }
+      metadataSources { artifact() }
+      content { includeGroup("com.k2fsa.sherpa.onnx") }
+    }
   }
 }
 

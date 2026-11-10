@@ -23,6 +23,9 @@
 -dontwarn org.ietf.jgss.**
 -dontwarn sun.security.x509.X509Key
 
+# Wake word (sherpa-onnx): its native library reads and fills these classes' fields by name.
+-keep class com.k2fsa.sherpa.onnx.** { *; }
+
 # ML Kit (on-device OCR) finds its components by class name from the manifest: keep them whole.
 -keep class com.google.mlkit.** { *; }
 -keep class com.google.android.gms.internal.mlkit_** { *; }

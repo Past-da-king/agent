@@ -111,6 +111,8 @@ class Dictation(
 
     private fun startMic() {
         if (rec != null) return
+        // The wake word listener stands aside while dictation has the microphone.
+        com.past9.phoneaos.wakeword.MicUse.hold("dictation_stream")
         try {
             val min = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
             @Suppress("MissingPermission")
@@ -150,6 +152,7 @@ class Dictation(
     }
 
     private fun close() {
+        com.past9.phoneaos.wakeword.MicUse.release("dictation_stream")
         running.set(false); ready.set(false)
         runCatching { rec?.stop(); rec?.release() }; rec = null
         runCatching { ws?.close(1000, "done") }; ws = null

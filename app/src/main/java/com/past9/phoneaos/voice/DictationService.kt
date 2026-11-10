@@ -57,7 +57,9 @@ class DictationService : Service() {
         private const val ID = 79
         private const val CHANNEL = "dictation"
         private const val ACTION_STOP = "stop"
-        fun start(context: Context): Boolean = ForegroundGuard.start(context, DictationService::class.java)
-        fun stop(context: Context) = ForegroundGuard.stop(context, DictationService::class.java)
+        /** The wake word listener lets go of the microphone first ([com.past9.phoneaos.wakeword.MicUse]) and takes it back when dictation stops. */
+        fun start(context: Context): Boolean { com.past9.phoneaos.wakeword.MicUse.hold(MIC); return ForegroundGuard.start(context, DictationService::class.java).also { if (!it) com.past9.phoneaos.wakeword.MicUse.release(MIC) } }
+        fun stop(context: Context) { ForegroundGuard.stop(context, DictationService::class.java); com.past9.phoneaos.wakeword.MicUse.release(MIC) }
+        private const val MIC = "dictation"
     }
 }
