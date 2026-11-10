@@ -20,6 +20,8 @@ object ScreenSkills {
         val like = all.filter { it.res == e.res && it.kind == e.kind && it.cls == e.cls }
         return JSONObject().put("res", e.res).put("text", e.text.take(120)).put("desc", e.desc.take(120)).put("hint", e.hint.take(80)).put("kind", e.kind).put("cls", e.cls)
             .put("nth", like.indexOf(e).coerceAtLeast(0))
+            // Many apps put a button's words in a child element and leave the button itself bare: those words are how it is known.
+            .put("inside", if (e.label.isBlank()) ScreenTree.wordsInside(all, e).take(120) else "")
             // Where it was, as parts of the screen: only for the last resort, when nothing else finds it.
             .put("fx", if (width > 0) e.centerX.toDouble() / width else 0.5).put("fy", if (height > 0) e.centerY.toDouble() / height else 0.5)
     }
@@ -45,17 +47,19 @@ object ScreenSkills {
     fun find(sel: JSONObject, all: List<ScreenElement>, args: JSONObject = JSONObject()): ScreenElement? {
         val res = sel.optString("res"); val text = fill(sel.optString("text"), args); val desc = fill(sel.optString("desc"), args)
         val hint = sel.optString("hint"); val kind = sel.optString("kind"); val nth = sel.optInt("nth", 0)
+        val inside = fill(sel.optString("inside"), args)
         // A text field's words are what was typed last time, not what it is: find fields by id, hint and place.
         val field = kind == "field"
         fun wordsMatch(e: ScreenElement): Int = when {
             field -> 0
+            inside.isNotBlank() && e.label.isBlank() && ScreenTree.wordsInside(all, e).equals(inside, true) -> 4
             text.isNotBlank() && (e.text.equals(text, true) || e.label.equals(text, true)) -> 4
             desc.isNotBlank() && e.desc.equals(desc, true) -> 4
             text.isNotBlank() && e.label.contains(text, true) -> 2
             desc.isNotBlank() && e.desc.contains(desc, true) -> 2
             else -> 0
         }
-        val hasWords = !field && (text.isNotBlank() || desc.isNotBlank())
+        val hasWords = !field && (text.isNotBlank() || desc.isNotBlank() || inside.isNotBlank())
         val scored = all.mapNotNull { e ->
             val w = wordsMatch(e)
             val r = if (res.isNotBlank() && e.res == res) 4 else 0
@@ -89,7 +93,7 @@ object ScreenSkills {
             val o = JSONObject().put("do", s.kind)
             s.sel?.let { sel ->
                 val c = JSONObject(sel.toString())
-                c.put("text", templatize(c.optString("text"), params)); c.put("desc", templatize(c.optString("desc"), params))
+                c.put("text", templatize(c.optString("text"), params)); c.put("desc", templatize(c.optString("desc"), params)); c.put("inside", templatize(c.optString("inside"), params))
                 o.put("sel", c)
             }
             if (s.secret) { secrets++; o.put("text", "{secret$secrets}"); notes += "A hidden text was typed: it is the input secret$secrets and is never stored." }
@@ -110,7 +114,7 @@ object ScreenSkills {
 
     /** The package the steps open, from their open step. */
     fun say(step: JSONObject): String {
-        val sel = step.optJSONObject("sel"); val words = sel?.let { it.optString("text").ifBlank { it.optString("desc").ifBlank { it.optString("hint").ifBlank { it.optString("res") } } } }.orEmpty()
+        val sel = step.optJSONObject("sel"); val words = sel?.let { it.optString("text").ifBlank { it.optString("desc").ifBlank { it.optString("inside") }.ifBlank { it.optString("hint").ifBlank { it.optString("res") } } } }.orEmpty()
         return when (step.optString("do")) {
             "open" -> "Open the app" + step.optJSONObject("extra")?.optString("link")?.takeIf { it.isNotBlank() }?.let { " at $it" }.orEmpty()
             "share" -> "Hand the app ${step.optJSONObject("extra")?.optString("files").orEmpty().ifBlank { "nothing" }}" + step.optJSONObject("extra")?.optString("text")?.takeIf { it.isNotBlank() }?.let { " with the words \"$it\"" }.orEmpty()
