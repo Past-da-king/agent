@@ -80,7 +80,7 @@ object HelperMain {
 
     private fun uidOf(pkg: String): Int {
         val out = Sys.exec("cmd", "package", "list", "packages", "-U", pkg).out
-        return Regex("""package:${Regex.escape(pkg)}\s+uid:(\d+)""").find(out)?.groupValues?.get(1)?.toIntOrNull() ?: -1
+        return out.lineSequence().map { it.trim() }.firstOrNull { it.startsWith("package:$pkg ") }?.substringAfter("uid:")?.trim()?.takeWhile { it.isDigit() }?.toIntOrNull() ?: -1
     }
 
     private fun <T> onMain(block: () -> T): T {
