@@ -83,6 +83,8 @@ class WakeWordService : Service() {
             combine(WakeWord.store(this@WakeWordService).state, g.settings.state.map { it.agentName to it.mascot }.distinctUntilChanged(), MicUse.held) { _, _, _ -> Unit }
                 .collect { recompute() }
         }
+        // The assist sheet has the microphone while it listens; the wake word stands aside and comes back after.
+        scope.launch { com.past9.phoneaos.assist.AssistEntry.listening.collect { if (it) MicUse.hold(ASSIST) else MicUse.release(ASSIST) } }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -190,7 +192,7 @@ class WakeWordService : Service() {
 
     /** The phrase was heard: a short sound, then the assistant. The microphone is free for it before it opens. */
     private fun heard() {
-        if (state != WakeState.Listening) return
+        if (state != WakeState.Listening || com.past9.phoneaos.assist.AssistEntry.isOpen.value) return
         WakeWord.hit()
         MicUse.hold(HIT)
         cue()
@@ -228,6 +230,7 @@ class WakeWordService : Service() {
         const val ACTION_RESUME = "resume"
         const val ACTION_POKE = "poke"
         private const val HIT = "wake_hit"
+        private const val ASSIST = "assist"
         private const val HIT_HOLD_MS = 4000L
         /** MediaRecorder.AudioSource.HOTWORD, which the SDK does not name for apps. */
         private const val HOTWORD_SOURCE = 1999

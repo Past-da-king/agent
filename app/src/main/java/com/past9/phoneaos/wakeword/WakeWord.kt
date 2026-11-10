@@ -95,28 +95,23 @@ object WakeWord {
 /**
  * Where a heard wake phrase goes: the assistant's voice sheet.
  *
- * The contract with the assistant: an explicit intent inside this app, action [ACTION], extra "source" = "wake_word".
- * If nothing in the app answers that action (a build without the assist sheet), the app's voice screen opens instead,
- * so a wake word never opens nothing.
+ * The contract with the assistant: AssistEntry.open(context, "wake_word"). The listener lets go of the microphone
+ * while AssistEntry.listening is true and does not fire while the sheet is open.
  */
 object WakeTarget {
     const val ACTION = "com.past9.phoneaos.action.ASSIST"
     const val SOURCE = "wake_word"
     private const val HEARD_ID = 84
 
-    fun intent(context: Context): Intent {
-        val assist = Intent(ACTION).setPackage(context.packageName).putExtra("source", SOURCE)
-        val found = context.packageManager.resolveActivity(assist, 0) != null
-        val i = if (found) assist else Intent(context, MainActivity::class.java).putExtra("open", "call").putExtra("source", SOURCE)
-        return i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-    }
+    fun intent(context: Context): Intent = com.past9.phoneaos.assist.AssistEntry.intent(context, SOURCE)
 
-    /**
-     * Open it. Android only lets an app that is not on screen open a screen when it may appear on top of other apps;
-     * without that the person gets a heads-up notification to tap instead. False when neither could be done.
-     */
-    fun open(context: Context): Boolean {
-        val i = intent(context)
+    /** Open the assist sheet through its one way in. It picks the route itself (assistant session, its screen, or a notification to tap). */
+    fun open(context: Context): Boolean = runCatching { com.past9.phoneaos.assist.AssistEntry.open(context, SOURCE); true }
+        .getOrElse { Log.w("WakeTarget", "the assist sheet did not open: ${it.message}"); fallback(context) }
+
+    /** Only if the assist sheet itself failed: the app's voice screen, so a wake word never opens nothing. */
+    private fun fallback(context: Context): Boolean {
+        val i = Intent(context, MainActivity::class.java).putExtra("open", "call").putExtra("source", SOURCE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         val mayOpen = onScreen(context) || Settings.canDrawOverlays(context)
         val started = runCatching { context.startActivity(i); true }.getOrElse { Log.w("WakeTarget", "could not open: ${it.message}"); false }
         if (started && mayOpen) return true
