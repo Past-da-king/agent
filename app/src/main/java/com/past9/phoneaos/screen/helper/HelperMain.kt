@@ -52,6 +52,8 @@ object HelperMain {
         val server = try { java.net.ServerSocket(port, 16, java.net.InetAddress.getByName("127.0.0.1")) } catch (e: java.io.IOException) {
             println("screen helper: already running for $pkg (or port $port is taken)"); return
         }
+        // Made here, on the main thread with its looper, before any caller needs it.
+        runCatching { Sys.systemContext }.onFailure { System.err.println("screen helper: no system context: $it") }
         builtIn = readBuiltIn()
         blocklist = ScreenBlocklist(builtIn)
         if (blocklist.rules < 50) { System.err.println("screen helper: the list of blocked money apps could not be read, so nothing will be opened"); }
