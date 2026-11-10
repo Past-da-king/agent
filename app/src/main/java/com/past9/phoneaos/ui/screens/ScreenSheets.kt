@@ -6,6 +6,10 @@ import android.net.Uri
 import android.view.MotionEvent
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.Image
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -405,16 +409,25 @@ fun ScreenWatchFull(state: ScreenState, picture: ImageBitmap?, agentName: String
         Box(Modifier.fillMaxSize().background(cs.scrim)) {
             if (picture != null) Image(picture, "The app your agent is using", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
             else Text("Waiting for the picture", style = MaterialTheme.typography.bodyLarge, color = cs.inverseOnSurface, modifier = Modifier.align(Alignment.Center))
-            Box(Modifier.fillMaxSize().border(12.dp, cs.primary.copy(alpha = glow * 0.22f), MaterialTheme.shapes.extraLarge).border(3.dp, cs.primary.copy(alpha = glow), MaterialTheme.shapes.extraLarge))
+            // The glow: the accent colour fading in from each edge and breathing slowly. Light, not a drawn line.
+            val accent = cs.primary
+            Box(Modifier.fillMaxSize().drawBehind {
+                val d = 36.dp.toPx(); val c = accent.copy(alpha = 0.6f * glow); val clear = accent.copy(alpha = 0f)
+                drawRect(Brush.verticalGradient(listOf(c, clear), 0f, d), size = Size(size.width, d))
+                drawRect(Brush.verticalGradient(listOf(clear, c), size.height - d, size.height), topLeft = Offset(0f, size.height - d), size = Size(size.width, d))
+                drawRect(Brush.horizontalGradient(listOf(c, clear), 0f, d), size = Size(d, size.height))
+                drawRect(Brush.horizontalGradient(listOf(clear, c), size.width - d, size.width), topLeft = Offset(size.width - d, 0f), size = Size(d, size.height))
+            })
             Surface(Modifier.align(Alignment.BottomCenter).fillMaxWidth(), shape = com.past9.phoneaos.ui.SheetShape, color = cs.surfaceContainerLow, contentColor = cs.onSurface) {
                 Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 20.dp).navigationBarsPadding()) {
                     com.past9.phoneaos.ui.SheetHandle(Modifier.align(Alignment.CenterHorizontally))
+                    Spacer(Modifier.height(8.dp))
                     // Whose job it is: the agent, or the helper that said its name when it opened the app.
                     val who = state.owner.takeIf { it.isNotBlank() && it != "main" && it != "linked computer" } ?: agentName
                     Text((who + " \u00b7 " + state.app.ifBlank { "background screen" }).uppercase(), style = com.past9.phoneaos.ui.theme.Eyebrow, color = cs.primary)
                     // What it has just done, oldest first, the newest in full weight.
                     recent.dropLast(1).takeLast(3).forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, modifier = Modifier.padding(top = 2.dp)) }
-                    Text(if (state.stopped) "Stopped" else recent.lastOrNull() ?: state.step.ifBlank { "Working" }, style = MaterialTheme.typography.titleMedium, maxLines = 2, modifier = Modifier.padding(top = 4.dp))
+                    Text(if (state.stopped) "Stopped" else recent.lastOrNull() ?: state.step.ifBlank { "Working" }, style = MaterialTheme.typography.titleLarge, maxLines = 2, modifier = Modifier.padding(top = 4.dp))
                     Spacer(Modifier.height(16.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Button(onClick = onStop, modifier = Modifier.weight(1f).height(64.dp), shapes = ButtonDefaults.shapes(), colors = ButtonDefaults.buttonColors(containerColor = cs.error, contentColor = cs.onError)) {
