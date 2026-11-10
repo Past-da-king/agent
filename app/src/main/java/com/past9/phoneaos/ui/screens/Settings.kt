@@ -53,6 +53,8 @@ data class SettingsActions(
     val setAutomationAllowed: (Boolean) -> Unit = {},
     /** A fresh token; every macro holding the old one stops working. */
     val rotateAutomationToken: () -> String = { "" },
+    /** Settings > Automation, the other direction: macros the agent may run without asking, the test and the webhook. */
+    val macro: MacroActions = MacroActions(),
     val linkedLine: String = "Use the agent on your computer from this phone",
 )
 
@@ -62,6 +64,23 @@ data class AutomationInfo(
     val token: String = "",
     val allowed: Boolean = false,
     val running: Boolean = false,
+)
+
+/** The agent runs MacroDroid and Tasker macros: what the sheet reads and writes. */
+data class MacroActions(
+    val allowlist: () -> String = { "" },
+    val setAllowlist: (String) -> Unit = {},
+    val webhookOn: () -> Boolean = { false },
+    val setWebhookOn: (Boolean) -> Unit = {},
+    val webhookId: () -> String = { "" },
+    val setWebhookId: (String) -> Unit = {},
+    /** Allowed app intents, one "action | package" per line. */
+    val intents: () -> String = { "" },
+    val setIntents: (String) -> Unit = {},
+    /** Opens Google Maps on a place through android_intent's own path, as a second app to try. */
+    val testMaps: () -> String = { "failed: not available here" },
+    /** Sends the test macro now and returns "sent" or "failed: why". */
+    val test: (String) -> String = { "failed: not available here" },
 )
 
 data class RuntimeInfo(val available: Boolean, val installedBytes: Long, val signedIn: Boolean, val note: String)
@@ -74,6 +93,7 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
     var pickSub by remember { mutableStateOf(false) }
     var voiceSheet by remember { mutableStateOf(false) }
     var automationSheet by remember { mutableStateOf(false) }
+    var macroSheet by remember { mutableStateOf(false) }
     // The sheet keeps what it shows, so a flip of the switch or a new token lands without re-reading Settings.
     var automationAllowedNow by remember { mutableStateOf(automation.allowed) }
     var automationTokenNow by remember { mutableStateOf(automation.token) }
@@ -126,7 +146,7 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
                 if (wakeups) WakeupsSheet { wakeups = false }
                 Line(Icons.Rounded.BatteryChargingFull, "Battery: unrestricted", "Samsung and others stop background apps. Allow this one to keep working.") { actions.onBattery() }
             }
-            SectionHeader("Automation from other apps", "MacroDroid and Tasker can fire a routine", Modifier.padding(start = 4.dp, top = 12.dp))
+            SectionHeader("Automation", "Other apps, both ways", Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 Line(Icons.Rounded.Bolt, "Automation from other apps",
                     when {
@@ -134,6 +154,8 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
                         automationAllowedNow -> "On \u00b7 ${automation.url}"
                         else -> "Off \u00b7 tap to set it up"
                     }) { automationSheet = true }
+                Line(Icons.Rounded.SmartToy, "Agent talks to your apps",
+                    MacroRulesUi.allowedLine(actions.macro.allowlist(), actions.macro.intents())) { macroSheet = true }
             }
             SectionHeader("Linked devices", "Your computers and servers", Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
@@ -168,6 +190,7 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
         onRotate = { automationTokenNow = actions.rotateAutomationToken() },
         onDismiss = { automationSheet = false },
     )
+    if (macroSheet) MacroSheet(actions.macro) { macroSheet = false }
     if (confirmReset) com.past9.phoneaos.ui.ConfirmSheet(androidx.compose.material.icons.Icons.Rounded.DeleteForever, "This phone", "Reset everything?",
         "This deletes your keys, memory, tasks, routines and the conversation from this phone. It can't be undone.",
         confirm = "Reset everything", onConfirm = { confirmReset = false; actions.onResetAll() }, onDismiss = { confirmReset = false }, cancel = "Keep my stuff", destructive = true)
@@ -212,7 +235,7 @@ private fun AutomationSheet(
     com.past9.phoneaos.ui.AgentSheet(onDismiss) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 24.dp).navigationBarsPadding()) {
             com.past9.phoneaos.ui.SheetHead(Icons.Rounded.Bolt, "Settings", "Automation from other apps",
-                "Let MacroDroid or Tasker fire one of your routines and read the result. It works only on this phone, and only while the app is running. Anything that needs your approval is refused.")
+                "Let MacroDroid, Tasker or any app on this phone fire one of your routines, over the address below or by intent. Anything that needs your approval is refused.")
             Spacer(Modifier.height(20.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 Line(Icons.Rounded.Link, "Address", info.url) {}
@@ -255,7 +278,20 @@ private fun AutomationSheet(
                     Switch(allowed, onAllowed)
                 }
             }
-            Text("Only this phone can reach the address, and only while the app is running. If the app is force-stopped, open it once.",
+            Spacer(Modifier.height(12.dp))
+            AppCard(padding = PaddingValues(vertical = 4.dp)) {
+                val intentRecipe = com.past9.phoneaos.automation.IntentTriggers.recipe(token)
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Send, null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(16.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Or by intent", style = MaterialTheme.typography.titleSmall)
+                        Text("Works when the app is closed. Same token, same switch.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    OutlinedButton(onClick = { clip.setText(AnnotatedString(intentRecipe)); com.past9.phoneaos.ui.AppNotice.say("Recipe copied") }) { Text("Copy", style = MaterialTheme.typography.labelLarge) }
+                }
+            }
+            Text("Only this phone can reach the address, and only while the app is running. The intent works when it is closed too.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp))
         }

@@ -556,6 +556,13 @@
         <receiver android:name=".remote.RemoteAnswerReceiver" android:exported="false" />
         <receiver android:name=".system.AlarmReceiver" android:exported="false" />
         <receiver android:name=".triggers.ReminderActionReceiver" android:exported="false" />
+        <!-- Intents in: any app fires a routine or sends an instruction. Exported on purpose; the token extra is the lock. -->
+        <receiver android:name=".automation.IntentTriggerReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="com.past9.phoneaos.RUN_ROUTINE" />
+                <action android:name="com.past9.phoneaos.INSTRUCT" />
+            </intent-filter>
+        </receiver>
         <receiver android:name=".system.BootReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

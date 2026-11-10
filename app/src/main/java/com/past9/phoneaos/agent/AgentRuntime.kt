@@ -418,6 +418,8 @@ class AgentRuntime(
             list += AppsConnectTool(composio) { _, url -> openSignIn(url) }
         }
         list += AskUserTool(); list += ApprovalTool(); list += NotifyTool()
+        list += com.past9.phoneaos.automation.AndroidIntentTool(context, settings.intentSettings); list += com.past9.phoneaos.automation.AndroidAppsTool(context)
+        list += com.past9.phoneaos.automation.MacroDroidRunTool(context, settings.macroSettings)
         list += SkillFindTool(db.memory()); list += SkillSaveTool(db.memory())
         list += com.past9.phoneaos.cards.CardGuideTool(context)
         list += com.past9.phoneaos.cards.CardSaveTool(context, cards, settings, db.chat()) { c -> com.past9.phoneaos.cards.CardScripts.schedule(context, c, onRoutineChanged, onRoutineDeleted) }

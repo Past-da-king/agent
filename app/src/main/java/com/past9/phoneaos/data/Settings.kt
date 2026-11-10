@@ -254,6 +254,34 @@ class SettingsStore(context: Context) {
 
     fun setAutomationPort(port: Int) = setExtra("automation_port", port.toString())
 
+    // ---- the agent runs MacroDroid and Tasker macros (the other direction of issue #18) ---------------------------------
+
+    /** Macros the agent may run without asking, one per line, as the user typed them. Empty: every macro asks. */
+    fun macroAllowlistText(): String = extra("macro_allowlist").orEmpty()
+    fun setMacroAllowlistText(text: String) = setExtra("macro_allowlist", text.trim().ifEmpty { null })
+    fun macroAllowlist(): List<String> = com.past9.phoneaos.automation.MacroRules.parseAllowlist(macroAllowlistText())
+
+    /** MacroDroid's cloud webhook, for when the agent is on another device. Off until the user turns it on. */
+    fun macroWebhookOn(): Boolean = extra("macro_webhook_on") == "true"
+    fun setMacroWebhookOn(on: Boolean) = setExtra("macro_webhook_on", if (on) "true" else null)
+    /** The device id from MacroDroid's webhook address (https://trigger.macrodroid.com/<id>/...). Kept encrypted. */
+    fun macroWebhookId(): String = secrets.getString("macro_webhook_id", null).orEmpty()
+    fun setMacroWebhookId(id: String) { secrets.edit().apply { val v = id.trim(); if (v.isEmpty()) remove("macro_webhook_id") else putString("macro_webhook_id", v) }.apply() }
+
+    /** Intents the agent may send without asking: one "action | package" per line, "*" for any app. */
+    fun intentAllowlistText(): String = extra("intent_allowlist").orEmpty()
+    fun setIntentAllowlistText(text: String) = setExtra("intent_allowlist", text.trim().ifEmpty { null })
+    val intentSettings: com.past9.phoneaos.automation.IntentSettings get() = object : com.past9.phoneaos.automation.IntentSettings {
+        override fun intentAllowlist() = com.past9.phoneaos.automation.IntentRules.parseAllowlist(intentAllowlistText())
+    }
+
+    /** The same, in the shape the macrodroid_run tool reads. */
+    val macroSettings: com.past9.phoneaos.automation.MacroSettings get() = object : com.past9.phoneaos.automation.MacroSettings {
+        override fun macroAllowlist() = this@SettingsStore.macroAllowlist()
+        override fun macroWebhookOn() = this@SettingsStore.macroWebhookOn()
+        override fun macroWebhookId() = this@SettingsStore.macroWebhookId()
+    }
+
     /** Encrypted storage for other secrets (machine passwords and keys). */
     fun secret(key: String): String? = secrets.getString("s_$key", null)
     fun setSecret(key: String, value: String?) { secrets.edit().apply { if (value.isNullOrEmpty()) remove("s_$key") else putString("s_$key", value) }.apply() }

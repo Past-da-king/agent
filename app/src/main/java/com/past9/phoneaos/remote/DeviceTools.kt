@@ -30,8 +30,8 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 object DeviceTools {
     /** group -> on by default. Shell (run_code) is never lent. */
-    val GROUPS = linkedMapOf("browser" to true, "notifications" to true, "files" to true, "approval" to true, "phone" to true, "location" to true)
-    val LABELS = mapOf("browser" to "Browser", "notifications" to "Notifications it can read", "files" to "Files", "approval" to "Questions and approvals", "phone" to "Notifications to you", "location" to "Your location (asked once)")
+    val GROUPS = linkedMapOf("browser" to true, "notifications" to true, "files" to true, "approval" to true, "phone" to true, "location" to true, "automation" to true)
+    val LABELS = mapOf("browser" to "Browser", "notifications" to "Notifications it can read", "files" to "Files", "approval" to "Questions and approvals", "phone" to "Notifications to you", "location" to "Your location (asked once)", "automation" to "Other apps: intents and macros (asks unless allowed)")
 
     fun groupOf(name: String): String? = when {
         name.startsWith("browser_") || name == "site_probe" || name == "site_catalog" -> "browser"
@@ -40,6 +40,7 @@ object DeviceTools {
         name == "ask_user" || name == "request_approval" -> "approval"
         name == "notify_user" -> "phone"
         name == "phone_location" -> "location"
+        name == "macrodroid_run" || name == "android_intent" || name == "android_apps" -> "automation"
         else -> null
     }
 
@@ -55,6 +56,8 @@ object DeviceTools {
             com.past9.phoneaos.tools.PhoneFilesTool(context),
             com.past9.phoneaos.tools.AskUserTool(), com.past9.phoneaos.tools.ApprovalTool(), com.past9.phoneaos.tools.NotifyTool(),
             com.past9.phoneaos.tools.PhoneLocationTool(context),
+            com.past9.phoneaos.automation.AndroidIntentTool(context, g.settings.intentSettings), com.past9.phoneaos.automation.AndroidAppsTool(context),
+            com.past9.phoneaos.automation.MacroDroidRunTool(context, g.settings.macroSettings),
         )
     }
 
@@ -67,7 +70,7 @@ object DeviceTools {
     /** DeviceTool[] for hello: { name, description, params, group, readOnly }. */
     fun catalogue(context: Context): JSONArray = JSONArray(tools(context).map { (t, group) ->
         JSONObject().put("name", t.spec.name).put("description", t.spec.description).put("params", t.spec.schema).put("group", group)
-            .put("readOnly", group == "notifications" || group == "location" || READS.any { t.spec.name.contains(it) })
+            .put("readOnly", group == "notifications" || group == "location" || t.spec.name == "android_apps" || READS.any { t.spec.name.contains(it) })
     })
 
     /** Run one lent tool. Returns (ok, value or error); a value with pictures is a list of text and image parts. */
