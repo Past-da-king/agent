@@ -16,7 +16,8 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.past9.phoneaos.assist.AssistActions
 import com.past9.phoneaos.assist.AssistPhase
@@ -159,9 +160,13 @@ open class AssistShotsTest(private val dark: Boolean) {
         rule.mainClock.autoAdvance = false
         rule.setContent { AppTheme(dark = dark) { SettingsScreen(AgentSettings(onboarded = true, agentName = "Nova"), RuntimeInfo(false, 0, false, ""), "0.0.0", SettingsActions()) } }
         rule.mainClock.advanceTimeBy(800)
-        rule.onNodeWithText("Default assistant").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Default assistant").assertExists()
         // Not the phone's assistant in a test: the row says off and how to turn it on.
-        rule.onNodeWithText(AssistRole.line(false)).assertIsDisplayed()
+        rule.onNodeWithText(AssistRole.line(false)).assertExists()
+        // Bring the Voice section up the screen for the picture.
+        rule.onRoot().performTouchInput { swipeUp(startY = height * 0.7f, endY = height * 0.45f, durationMillis = 300) }
+        rule.mainClock.advanceTimeBy(1500)
+        rule.onNodeWithText("Default assistant").assertIsDisplayed()
         rule.onRoot().captureRoboImage(file("13-settings-row"))
     }
 }
