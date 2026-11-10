@@ -191,6 +191,7 @@ fun WakeWordSheetContent(v: WakeWordView, a: WakeWordActions, onDismiss: () -> U
     AppSheet(Icons.Rounded.RecordVoiceOver, "Settings", "Wake word", onDismiss = onDismiss, primary = "Done", primaryEnabled = true, onPrimary = onDismiss) {
         Text("Say \"${v.phrase}\" and your agent opens, from any screen, with the app closed or the screen off.",
             style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+        Text("Early: may miss or mishear.", style = MaterialTheme.typography.bodySmall, color = cs.tertiary, modifier = Modifier.padding(top = 6.dp))
         Spacer(Modifier.height(12.dp))
         SwitchRow(Icons.Rounded.Hearing, "Listen for it", when {
             !s.enabled -> "Off"
