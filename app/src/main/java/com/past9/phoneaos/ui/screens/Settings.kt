@@ -133,6 +133,14 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 Line(Icons.Rounded.RecordVoiceOver, "Voice",
                     mapOf("system" to "Phone voice", "gemini" to "Google voice", "openai" to "OpenAI voice", "elevenlabs" to "ElevenLabs voice")[s.ttsProvider] ?: "Phone voice") { voiceSheet = true }
+                // The phone's digital assistant: on or off, and a sheet that walks through the two taps in the phone's Settings.
+                val actx = androidx.compose.ui.platform.LocalContext.current
+                var assistant by remember { mutableStateOf(false) }
+                var assistTick by remember { mutableIntStateOf(0) }
+                androidx.lifecycle.compose.LifecycleResumeEffect(Unit) { assistTick++; onPauseOrDispose { } }
+                val assistHeld = remember(assistant, assistTick) { com.past9.phoneaos.assist.AssistRole.held(actx) }
+                Line(Icons.Rounded.Assistant, "Default assistant", com.past9.phoneaos.assist.AssistRole.line(assistHeld)) { assistant = true }
+                if (assistant) AssistantSheet(s.agentName, onDismiss = { assistant = false })
             }
             SectionHeader("Background", "So routines and browsing keep going", Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {

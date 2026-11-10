@@ -17,6 +17,9 @@ object ChatOnScreen {
     /** The screen on top, as the navigation graph names it. */
     @Volatile var route: String? = null
 
+    /** The assist sheet is up over another app: it shows the reply itself. */
+    @Volatile var assistShowing = false
+
     /** The chat is open in front of the user, so a reply that lands now is already being read. */
-    fun showing(): Boolean = resumed && route == "chat"
+    fun showing(): Boolean = (resumed && route == "chat") || assistShowing
 }
