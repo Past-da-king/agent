@@ -17,10 +17,14 @@ import java.util.Base64
  *                 {"t":"pcm","rate":16000,"d":"<b64>"}  what the other person said, PCM16 mono
  *                 {"t":"state", ...}                    counters, answering {"t":"status"}
  *                 {"t":"log","m":"..."}
+ *                 {"t":"ev","k":"wa_connected","d":"","at":1731240000000}   something the call's story needs
+ *                 {"t":"err","m":"...","at":...}       a page error during a call
+ *                 {"t":"sample", ...}                   cumulative counters, answering {"t":"sample"}
  *   app to page   {"t":"arm","on":true}                 only while a call runs: fake microphone and speaker tap
  *                 {"t":"play","rate":24000,"d":"<b64>"} the agent's voice, into the fake microphone
  *                 {"t":"flush"}                         drop the voice not yet played (the person talked over it)
  *                 {"t":"status"}
+ *                 {"t":"sample"}                        every five seconds while a call voice runs
  */
 object CallBridgeProtocol {
     const val OBJECT = "hinaCall"
@@ -35,6 +39,9 @@ object CallBridgeProtocol {
         class Audio(val pcm: ByteArray, val rate: Int) : FromPage
         data class State(val json: JSONObject) : FromPage
         data class Log(val text: String) : FromPage
+        data class Happened(val kind: String, val detail: String, val at: Long) : FromPage
+        data class PageError(val text: String, val at: Long) : FromPage
+        data class Sample(val json: JSONObject) : FromPage
         data class Bad(val why: String) : FromPage
     }
 
@@ -53,6 +60,9 @@ object CallBridgeProtocol {
             }
             "state" -> FromPage.State(o)
             "log" -> FromPage.Log(o.optString("m").take(300))
+            "ev" -> o.optString("k").take(40).let { k -> if (k.isEmpty() || k.any { !(it.isLetterOrDigit() || it == '_') }) FromPage.Bad("event") else FromPage.Happened(k, o.optString("d").take(600), o.optLong("at")) }
+            "err" -> FromPage.PageError(o.optString("m").take(300), o.optLong("at"))
+            "sample" -> FromPage.Sample(o)
             else -> FromPage.Bad("unknown")
         }
     }
@@ -62,6 +72,7 @@ object CallBridgeProtocol {
         JSONObject().put("t", "play").put("rate", rate).put("d", Base64.getEncoder().encodeToString(Pcm.even(pcm))).toString()
     fun flush(): String = """{"t":"flush"}"""
     fun status(): String = """{"t":"status"}"""
+    fun sample(): String = """{"t":"sample"}"""
 
     /** The one tool the voice has in a call: it says when the conversation is over. Hanging up is the agent's click. */
     fun tools(): JSONArray = JSONArray().put(JSONObject().put("functionDeclarations", JSONArray().put(JSONObject()
@@ -124,9 +135,19 @@ class CallBridge(
     /** The browser is in use: its service must not close it for being idle. */
     private val keepAlive: () -> Unit = {},
     private val now: () -> Long = System::currentTimeMillis,
+    /** True while a call voice runs: the phone must stay awake and on the network, screen on or off. */
+    private val hold: (Boolean) -> Unit = {},
+    /** Runs a block again and again, that many milliseconds apart, until the returned stop is called. */
+    private val every: (Long, () -> Unit) -> (() -> Unit) = { ms, block -> timer(ms, block) },
 ) {
     private val lock = Any()
     private var link: LiveLink? = null
+    /** The call's own story: who ended it, a timeline, counters. Kept after the voice stops, until the next one starts. */
+    val diag = CallDiag(now)
+    private var stopTick: (() -> Unit)? = null
+    @Volatile private var unanswered = 0
+    @Volatile private var saidIn = false
+    @Volatile private var saidOut = false
     private var startedAt = 0L
     private val lines = ArrayList<Triple<String, String, Long>>()
     private var lastWho = ""
@@ -155,6 +176,7 @@ class CallBridge(
         when (val m = CallBridgeProtocol.parse(raw)) {
             is CallBridgeProtocol.FromPage.Hello -> {
                 // A fresh page (a reload): it starts disarmed, so a running call arms it again.
+                if (armed) diag.add("page", "page_loaded_again", "WhatsApp Web loaded again during the call voice: any call in it is gone.")
                 pageReady = true
                 if (armed) toPage(CallBridgeProtocol.arm(true))
             }
@@ -168,6 +190,13 @@ class CallBridge(
             }
             is CallBridgeProtocol.FromPage.State -> pageState = m.json
             is CallBridgeProtocol.FromPage.Log -> { pageLog.add(m.text); while (pageLog.size > 60) pageLog.pollFirst() }
+            is CallBridgeProtocol.FromPage.Happened -> diag.add(if (m.kind.startsWith("wa_")) "whatsapp" else "page", m.kind, m.detail, m.at)
+            is CallBridgeProtocol.FromPage.PageError -> diag.error(m.text, m.at)
+            is CallBridgeProtocol.FromPage.Sample -> {
+                if (unanswered >= SILENT_TICKS) diag.add("app", CallDiag.PAGE_BACK, "The page answers again.")
+                unanswered = 0
+                diag.sample(m.json, heardFrames, sentFrames)
+            }
             is CallBridgeProtocol.FromPage.Bad -> Unit
         }
     }
@@ -187,6 +216,10 @@ class CallBridge(
             if (link != null) { runCatching { l.stop() }; return "A call voice is already running. Stop it first." }
             link = l; startedAt = now(); lines.clear(); lastWho = ""; frames.drain()
             ready = false; endRequested = false; failed = null; heardFrames = 0; sentFrames = 0; playedChunks = 0; heardPeak = 0f
+            unanswered = 0; saidIn = false; saidOut = false
+            diag.reset(); diag.add("app", "voice_armed")
+            runCatching { hold(true) }
+            stopTick = runCatching { every(TICK_MS, ::tick) }.getOrNull()
         }
         armed = true
         if (!toPage(CallBridgeProtocol.arm(true))) { stop(); return "The WhatsApp Web page is not listening. Reload it, then start again." }
@@ -199,20 +232,49 @@ class CallBridge(
         return "The call voice is armed. Now place the WhatsApp call (press the voice call button in the chat). The voice speaks when the other person answers. Check with action status, and end with action stop after you hang up."
     }
 
+    /**
+     * Every [TICK_MS] while the voice runs: the browser is in use, and the page is asked for its counters. A page
+     * that stops answering (frozen, reloaded, closed) is written into the call's story once.
+     */
+    fun tick() {
+        if (!running) return
+        keepAlive()
+        val sent = toPage(CallBridgeProtocol.sample())
+        if (++unanswered == SILENT_TICKS) diag.add("app", CallDiag.PAGE_SILENT, if (sent) "The page has not answered the app for ${SILENT_TICKS * TICK_MS / 1000} seconds." else "No page is listening.")
+    }
+
+    /** The one who placed the call says how it ended ([by] is a CallDiag word, empty when it did not end it itself). */
+    fun callEnded(by: String, why: String, whatsapp: JSONObject?) {
+        diag.ended(by, why, whatsapp)
+        if (by.isNotEmpty()) diag.add("app", "agent_ended", "$by: $why".trim().trimEnd(':'))
+    }
+
+    /** The call's story so far: who or what ended it, a timeline, counters every five seconds, the page's last errors. */
+    fun diagnostics(): JSONObject = diag.json(pageState)
+
     private fun onEvent(e: LiveSession.Event) {
         when (e) {
-            is LiveSession.Event.SetupComplete -> ready = true
+            is LiveSession.Event.SetupComplete -> { ready = true; diag.add("voice", "voice_ready") }
+            is LiveSession.Event.Reconnecting -> diag.add("voice", "voice_reconnecting", "The voice's connection went and is being opened again.")
             is LiveSession.Event.Transcript -> synchronized(lock) {
+                if (e.who == "in" && !saidIn) { saidIn = true; diag.add("voice", "first_words_heard") }
+                if (e.who != "in" && !saidOut) { saidOut = true; diag.add("voice", "first_words_spoken") }
                 // The words arrive in pieces: one line per turn of speech, as on a phone call.
                 if (lastWho == e.who && lines.isNotEmpty()) { val last = lines.removeAt(lines.size - 1); lines += Triple(last.first, last.second + e.text, last.third) }
                 else { lines += Triple(e.who, e.text, now()); lastWho = e.who }
             }
             is LiveSession.Event.ToolCall -> {
-                if (e.name == "end_call") endRequested = true
+                if (e.name == "end_call") { endRequested = true; diag.add("voice", CallDiag.END_CALL, e.args.optString("reason")) }
                 synchronized(lock) { link }?.sendToolResult(e.id, e.name, JSONObject().put("ok", true))
             }
-            is LiveSession.Event.Failed -> { failed = e.error; stop() }
-            is LiveSession.Event.Closed -> stop()
+            is LiveSession.Event.Failed -> { failed = e.error; diag.add("voice", CallDiag.VOICE_FAILED, e.error); stop() }
+            is LiveSession.Event.Closed -> {
+                // The voice's connection closed for good in the middle of a call: the call has no voice left, so whoever
+                // placed it must know (it used to go on in silence until max_minutes).
+                val said = (if (e.code != 0) "code ${e.code} " else "") + e.reason
+                if (!endRequested) failed = "The voice's connection closed ($said)."
+                diag.add("voice", CallDiag.VOICE_CLOSED, said); stop()
+            }
             else -> Unit
         }
     }
@@ -222,6 +284,9 @@ class CallBridge(
         val (l, words, began) = synchronized(lock) {
             val l = link ?: return if (armed) { armed = false; toPage(CallBridgeProtocol.arm(false)); "Stopped." } else "No call voice is running."
             link = null
+            runCatching { stopTick?.invoke() }; stopTick = null
+            runCatching { hold(false) }
+            diag.add("app", "voice_stopped")
             Triple(l, lines.map { Triple(it.first, it.second.trim(), it.third) }.filter { it.second.isNotEmpty() }, startedAt).also { lines.clear(); lastWho = "" }
         }
         armed = false; ready = false
@@ -241,10 +306,21 @@ class CallBridge(
             .put("voice_chunks_played", playedChunks)
             .put("page", pageState ?: JSONObject.NULL).put("page_log", JSONArray(pageLog.toList().takeLast(15)))
             .put("transcript", transcript(words.takeLast(30)))
+            .also { s -> if (diag.started) { val d = diagnostics(); for (k in listOf("ended", "timeline", "counters", "page_errors")) s.put(k, d.opt(k)) } }
     }
 
     companion object {
         const val DEFAULT_MODEL = "gemini-3.1-flash-live-preview"
+        const val TICK_MS = 5_000L
+        /** This many counter requests in a row without an answer: the page is gone or frozen. */
+        const val SILENT_TICKS = 3
+
+        /** A daemon timer: [block] every [ms], until the returned stop is called. */
+        fun timer(ms: Long, block: () -> Unit): () -> Unit {
+            val t = java.util.Timer("aos-call-diag", true)
+            t.scheduleAtFixedRate(object : java.util.TimerTask() { override fun run() { runCatching { block() } } }, ms, ms)
+            return { t.cancel() }
+        }
         fun transcript(words: List<Triple<String, String, Long>>): String =
             words.joinToString("\n") { (w, t, _) -> (if (w == "in") "Them: " else "Voice: ") + t.trim() }
     }
@@ -263,6 +339,11 @@ class CallBridge(
  * permissions.query says "granted" for the microphone only, and the made-up microphone is mono at 48 kHz.
  * With the switch off this script is not installed, so nothing is changed.
  *
+ * While a call voice runs it also keeps the call's own story for the app ([CallDiag]): page errors, the traffic on
+ * the call's connections, the state of the made-up microphone (restarted if the browser stops it, and never
+ * perfectly silent), and the names of WhatsApp's own call events (the other side hung up, traffic stopped, the
+ * call broke), which it reads on their way to WhatsApp and passes on untouched.
+ *
  * It changes no WhatsApp setting and forces no feature: that is [WhatsAppCallJs.ENABLE_CALLING], which only runs
  * for a number the user marked as a test account.
  */
@@ -273,9 +354,11 @@ object CallBridgeJs {
     val HOOKS = """
 (() => {
   if (window.__hina || window.top !== window || typeof hinaCall === 'undefined') return;
-  const H = window.__hina = { log: [], gumCalls: 0, taps: 0, inject: false, muteRemote: true, forward: false, remoteFrames: 0, remotePeak: 0, played: 0, deviceLists: 0, micAsked: 0 };
+  const H = window.__hina = { log: [], gumCalls: 0, taps: 0, inject: false, muteRemote: true, forward: false, remoteFrames: 0, remotePeak: 0, played: 0, deviceLists: 0, micAsked: 0, tracksOut: 0, tracksEnded: 0, tracksMuted: 0, micResumes: 0, errs: 0, pcs: [], watch: false, waHooked: false, waSeen: {} };
   const post = (o) => { try { hinaCall.postMessage(JSON.stringify(o)); } catch (e) {} };
   const log = H.L = (...a) => { const line = a.join(' '); H.log.push(line); if (H.log.length > 200) H.log.shift(); post({ t: 'log', m: line }); };
+  // Something the call's own story needs (who ended it, what broke), stamped with this phone's clock.
+  const ev = H.ev = (k, d) => post({ t: 'ev', k: k, d: d === undefined || d === null ? '' : String(d).slice(0, 600), at: Date.now() });
   const origConnect = AudioNode.prototype.connect;
   H.origConnect = origConnect;
 
@@ -288,22 +371,45 @@ object CallBridgeJs {
       if (!H.micCtx) {
         H.micCtx = new AudioContext({ sampleRate: 48000 });
         H.micCtx.__hinaOwn = true;
+        // A microphone that stops mid-call is a dead line to the other person: say so, and start it again.
+        H.micCtx.onstatechange = () => {
+          const st = H.micCtx.state; ev('mic_context', st);
+          if (H.inject && st !== 'running' && st !== 'closed') { H.micResumes++; H.micCtx.resume().catch(() => {}); }
+        };
         H.micDest = H.micCtx.createMediaStreamDestination();
         // One channel: WhatsApp captures a mono microphone at 48 kHz.
         try { H.micDest.channelCount = 1; H.micDest.channelCountMode = 'explicit'; H.micDest.channelInterpretation = 'speakers'; } catch (e) {}
         H.micGain = H.micCtx.createGain(); H.micGain.gain.value = 1;
         origConnect.call(H.micGain, H.micDest);
         const cs = H.micCtx.createConstantSource(); cs.offset.value = 0; origConnect.call(cs, H.micGain); cs.start();
+        // A real microphone is never perfectly silent. Between the voice's sentences WhatsApp gets a steady hiss far
+        // too quiet to hear (about -80 dB) instead of exact zeros, for the whole call, so nothing reads it as a dead microphone.
+        try {
+          const nb = H.micCtx.createBuffer(1, 48000, 48000); const nd = new Float32Array(48000);
+          for (let i = 0; i < nd.length; i++) nd[i] = (Math.random() * 2 - 1) * 0.0001;
+          nb.copyToChannel(nd, 0);
+          const ns = H.micCtx.createBufferSource(); ns.buffer = nb; ns.loop = true; origConnect.call(ns, H.micGain); ns.start(); H.noise = ns;
+        } catch (e) {}
         H.playHead = 0; H.sources = new Set();
       }
       if (H.micCtx.state !== 'running') H.micCtx.resume().catch(() => {});
       return H.micDest.stream;
     };
+    // Each microphone track handed to WhatsApp is watched: one that ends or goes mute by itself is written down.
+    H.watchTrack = (t) => {
+      H.tracksOut++;
+      try {
+        t.addEventListener('ended', () => { H.tracksEnded++; ev('mic_track', 'ended'); });
+        t.addEventListener('mute', () => { H.tracksMuted++; ev('mic_track', 'mute'); });
+        t.addEventListener('unmute', () => ev('mic_track', 'unmute'));
+      } catch (e) {}
+      return t;
+    };
     md.getUserMedia = async function (c) {
       if (H.inject && c && c.audio && !c.video) {
         H.gumCalls++; log('getUserMedia: fake microphone');
         const s = H.ensureMic();
-        return new MediaStream(s.getAudioTracks().map(t => t.clone()));
+        return new MediaStream(s.getAudioTracks().map(t => H.watchTrack(t.clone())));
       }
       return origGUM(H.realMic(c));
     };
@@ -389,6 +495,8 @@ object CallBridgeJs {
       origConnect.call(sp, mute); origConnect.call(mute, ctx.destination);
       sp.onaudioprocess = (e) => { try { onRemote(e.inputBuffer.getChannelData(0), ctx.sampleRate); } catch (err) {} };
       ctx.__hinaTap = sp; H.taps++;
+      // WhatsApp's own sound for the call: if the browser stops it mid-call, say so and start it again.
+      try { ctx.addEventListener('statechange', () => { ev('call_context', ctx.state); if (H.inject && ctx.state !== 'running' && ctx.state !== 'closed') ctx.resume().catch(() => {}); }); } catch (e) {}
       log('speaker tap at ' + ctx.sampleRate + ' Hz');
     }
     origConnect.call(node, ctx.__hinaTap);
@@ -403,13 +511,115 @@ object CallBridgeJs {
     return origConnect.call(this, dest, ...r);
   };
 
-  H.state = () => ({ t: 'state', armed: H.inject, gum: H.gumCalls, taps: H.taps, remote_frames: H.remoteFrames, remote_peak: Math.round(H.remotePeak * 1000) / 1000, played: H.played, mic: H.micCtx ? H.micCtx.state : 'none', mic_channels: H.micDest ? H.micDest.channelCount : 0, device_lists: H.deviceLists, mic_asked: H.micAsked });
+  // ---- the call's own story: page errors, the call's connections, WhatsApp's own call events ----
+  // Only while a call voice runs (H.watch). Nothing here changes what WhatsApp does: it reads and passes on.
+  const onErr = (m) => { H.errs++; if (H.watch) post({ t: 'err', m: String(m).slice(0, 300), at: Date.now() }); };
+  if (typeof addEventListener === 'function') {
+    addEventListener('error', (e) => onErr((e && e.message) || 'error'));
+    addEventListener('unhandledrejection', (e) => { const r = e && e.reason; onErr((r && r.message) || r || 'unhandled rejection'); });
+  }
+  // The connections WhatsApp opens for a call, so their traffic can be counted. Each call passes straight on.
+  const PC = window.RTCPeerConnection;
+  if (PC && PC.prototype) {
+    const note = (pc) => { try { if (H.watch && !H.pcs.includes(pc)) { H.pcs.push(pc); if (H.pcs.length > 24) H.pcs.shift(); } } catch (e) {} };
+    for (const m of ['createDataChannel', 'setLocalDescription', 'setRemoteDescription']) {
+      const o = PC.prototype[m]; if (typeof o !== 'function') continue;
+      PC.prototype[m] = function (...a) { note(this); return o.apply(this, a); };
+    }
+  }
+  // Cumulative counters, answering the app every five seconds. The connection that carries the call is the busiest one.
+  H.sample = async () => {
+    const o = { t: 'sample', at: Date.now(), played: H.played, remote_frames: H.remoteFrames, mic: H.micCtx ? H.micCtx.state : 'none', tracks_ended: H.tracksEnded,
+      hidden: typeof document !== 'undefined' && !!document.hidden, pcs: 0, bytes_sent: 0, bytes_received: 0, ice: '', errors: H.errs };
+    let best = -1;
+    for (const pc of H.pcs.slice()) {
+      try {
+        if (pc.connectionState === 'closed' || pc.signalingState === 'closed') continue;
+        o.pcs++;
+        let ts = 0, tr = 0, ps = 0, pr = 0;
+        (await pc.getStats()).forEach((x) => {
+          if (x.type === 'transport') { ts += x.bytesSent || 0; tr += x.bytesReceived || 0; }
+          else if (x.type === 'candidate-pair' && (x.nominated || x.selected)) { ps += x.bytesSent || 0; pr += x.bytesReceived || 0; }
+        });
+        const sent = Math.max(ts, ps), got = Math.max(tr, pr);
+        if (sent + got > best) { best = sent + got; o.bytes_sent = sent; o.bytes_received = got; o.ice = String(pc.iceConnectionState || ''); }
+      } catch (e) {}
+    }
+    post(o);
+  };
+  const req = (n) => { try { return typeof window.require === 'function' ? window.require(n) : null; } catch (e) { return null; } };
+  const waCalls = () => { const m = req('WAWebCallCollection'); return m ? (m.CallCollection || m.default || m) : null; };
+  const callId = (c) => { try { const id = c.id; return String((id && (id._serialized || id.id)) || id || ''); } catch (e) { return ''; } };
+  const callBrief = (c) => {
+    const o = { id: callId(c) };
+    for (const k of ['callOutcome', 'callDuration', 'wasEverConnected', 'userEndedCall', 'callFailedReason', 'callLogResult']) { try { const v = c[k]; if (v !== undefined && (v === null || typeof v !== 'object')) o[k] = v; } catch (e) {} }
+    return o;
+  };
+  // WhatsApp's call engine reports every call event (the other side hung up, traffic stopped, the call broke) to one
+  // function. While a call voice runs its name is written down, then it goes on to WhatsApp untouched.
+  const WA_ALWAYS = ['CallStateChanged', 'CallTerminateReceived', 'CallRejectReceived', 'CallEnding', 'CallFatal', 'RxTimeout', 'TxTimeout', 'RxTrafficStopped', 'RxTrafficStarted', 'RTCPByeReceived',
+    'RelayBindsFailed', 'DataChannelConnectionTimeout', 'DataChannelReady', 'MediaStreamError', 'MediaStreamStartError', 'AudioInitError', 'AudioDriverRestart', 'SoundPortCreateFailed',
+    'NoSamplingRatesForAudioRecord', 'P2PTransportCreateFailed', 'RelayElectionSendFailed', 'MissingRelayInfo', 'CallCaptureEnded', 'InterruptionStateChanged', 'AudioStreamStarted', 'AudioTxStarted'];
+  const WA_DATA = ['CallEnding', 'CallFatal', 'AudioDriverRestart', 'CallStateChanged', 'InterruptionStateChanged'];
+  H.hookWa = () => {
+    if (H.waHooked) return true;
+    const M = req('WAWebVoipHandleNativeCallEvent');
+    if (!M || typeof M.handleWAWebVoipNativeCallEvent !== 'function') return false;
+    const orig = M.handleWAWebVoipNativeCallEvent;
+    const wrapped = function (type, data) {
+      try {
+        if (H.watch) {
+          let n = String(type);
+          try { const E = req('WAWebVoipWaCallEnums'); n = (E && E.CallEvent && E.CallEvent.getName(type)) || n; } catch (e) {}
+          const seen = H.waSeen[n] = (H.waSeen[n] || 0) + 1;
+          // The events that decide how a call ended are always written down; the chatty ones three times each.
+          if (WA_ALWAYS.includes(n) ? seen <= 40 : seen <= 3) {
+            let d = '';
+            if (WA_DATA.includes(n)) { try { d = typeof data === 'string' ? data : (data && typeof data === 'object' ? JSON.stringify(data) : ''); } catch (e) {} }
+            ev('wa_event', d ? n + ' ' + d.slice(0, 400) : n);
+          }
+        }
+      } catch (e) {}
+      return orig.apply(this, arguments);
+    };
+    try { M.handleWAWebVoipNativeCallEvent = wrapped; H.waHooked = M.handleWAWebVoipNativeCallEvent === wrapped; } catch (e) {}
+    if (H.waHooked) log('reading WhatsApp call events');
+    return H.waHooked;
+  };
+  // Once a second while a call voice runs: is the call connected, and has it ended (with what WhatsApp wrote down).
+  H.watchTick = () => {
+    try {
+      H.hookWa();
+      // A microphone the browser stopped without saying so (no statechange) is started again here.
+      if (H.inject && H.micCtx && H.micCtx.state !== 'running' && H.micCtx.state !== 'closed') { H.micResumes++; H.micCtx.resume().catch(() => {}); }
+      const col = waCalls(); if (!col) return;
+      const conn = !!col.isInConnectedCall;
+      if (conn !== H.waConn) { H.waConn = conn; ev(conn ? 'wa_connected' : 'wa_not_connected'); }
+      const e = col.lastEndedCall; const id = e ? callId(e) : '';
+      if (id && id !== H.waEndedId) { H.waEndedId = id; ev('wa_ended', JSON.stringify(callBrief(e))); if (!H.inject) H.stopWatch(); }
+    } catch (err) {}
+  };
+  H.startWatch = () => {
+    H.watch = true; H.waConn = false; H.waSeen = {}; H.waEndedId = '';
+    try { const c = waCalls(); const e = c && c.lastEndedCall; H.waEndedId = e ? callId(e) : ''; } catch (e) {}
+    if (H.offTimer) { clearTimeout(H.offTimer); H.offTimer = null; }
+    if (!H.watchTimer) H.watchTimer = setInterval(H.watchTick, 1000);
+    H.watchTick();
+  };
+  H.stopWatch = () => { H.watch = false; if (H.watchTimer) { clearInterval(H.watchTimer); H.watchTimer = null; } if (H.offTimer) { clearTimeout(H.offTimer); H.offTimer = null; } H.pcs = []; };
+  // The voice stopped: the end of the call may still be on its way, so the page keeps looking a little longer.
+  H.endWatchSoon = () => { if (!H.watch || H.offTimer) return; H.offTimer = setTimeout(() => { H.offTimer = null; if (!H.inject) H.stopWatch(); }, 20000); };
+
+  H.state = () => ({ t: 'state', armed: H.inject, gum: H.gumCalls, taps: H.taps, remote_frames: H.remoteFrames, remote_peak: Math.round(H.remotePeak * 1000) / 1000, played: H.played, mic: H.micCtx ? H.micCtx.state : 'none', mic_channels: H.micDest ? H.micDest.channelCount : 0, device_lists: H.deviceLists, mic_asked: H.micAsked,
+    tracks_out: H.tracksOut, tracks_ended: H.tracksEnded, tracks_muted: H.tracksMuted, mic_resumes: H.micResumes, connections: H.pcs.length, wa_events: H.waHooked, errors: H.errs,
+    hidden: typeof document !== 'undefined' && !!document.hidden });
   hinaCall.onmessage = (e) => {
     let m; try { m = JSON.parse(e.data); } catch (err) { return; }
-    if (m.t === 'arm') { H.inject = !!m.on; H.forward = !!m.on; if (!m.on) { H.flushMic(); held = []; heldN = 0; } log(m.on ? 'armed' : 'disarmed'); post(H.state()); }
+    if (m.t === 'arm') { H.inject = !!m.on; H.forward = !!m.on; if (!m.on) { H.flushMic(); held = []; heldN = 0; } if (m.on) H.startWatch(); else H.endWatchSoon(); log(m.on ? 'armed' : 'disarmed'); post(H.state()); }
     else if (m.t === 'play') { if (H.inject) H.playPcm(m.d, m.rate); }
     else if (m.t === 'flush') H.flushMic();
     else if (m.t === 'status') post(H.state());
+    else if (m.t === 'sample') { if (H.watch) H.sample(); }
   };
   post({ t: 'hello' });
 })();

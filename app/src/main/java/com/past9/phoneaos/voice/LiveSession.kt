@@ -67,7 +67,8 @@ class LiveSession(
         data class ToolCall(val id: String, val name: String, val args: JSONObject) : Event()
         /** The connection went and a new one is being opened on the same conversation. */
         object Reconnecting : Event()
-        data class Closed(val reason: String) : Event()
+        /** [code] is the WebSocket close code when the server closed it (0 when not known). */
+        data class Closed(val reason: String, val code: Int = 0) : Event()
         data class Failed(val error: String) : Event()
     }
 
@@ -155,7 +156,7 @@ class LiveSession(
                 if (code == 1007 && resumeFields && !ready.get()) { resumeFields = false; resumeHandle = null; if (tryReconnect("setup refused: $reason")) return }
                 if (!tryReconnect("closed $code $reason")) {
                     // Closed before the call ever got going (a bad key, a refused model): say why, not a bare "Call ended".
-                    onEvent(if (!everReady) Event.Failed(reason.ifBlank { "The call could not start." }) else Event.Closed(reason.ifBlank { "closed" })); stop()
+                    onEvent(if (!everReady) Event.Failed(reason.ifBlank { "The call could not start." }) else Event.Closed(reason.ifBlank { "closed" }, code)); stop()
                 }
             }
         })

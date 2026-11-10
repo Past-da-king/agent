@@ -135,9 +135,71 @@ typed into the page by hand. In unit tests and against made-up pages in Node: th
 and the sheet. Not yet proven on a phone: 0.15.34 itself, so the answers as shipped in the app,
 `place_whatsapp_call` end to end, hanging up by the End call button, and the switch taking effect at once.
 
+### Why a call ended: the call's own story (0.15.35)
+
+The first real calls (10 Nov 2026) ended 10 and 25 seconds after the answer, and nothing could say why. WhatsApp
+logged both as `Completed`, result 5, not ended here, no failure reason. Reading WhatsApp's source showed that
+result 5 is `CallLogResult.Connected`: it only says the call was connected, never who ended it. Sound flowed both
+ways until the last second, the two calls ended at different times, and nothing in the app runs on a clock near 20
+seconds, so the likely cause is that the person hung up. It could not be proven from what was kept.
+
+So every call now explains itself. `browser_call_voice status` and the result of `place_whatsapp_call` carry:
+
+- `ended`: `by` and `detail`, then what each part said.
+  - `agent_end_call`: the voice called `end_call` and the agent hung up. `max_minutes`: the limit. `voice_failed`:
+    the voice broke, so the agent hung up. `agent`: any other hangup by the agent (nobody answered, the call
+    stayed disconnected for 30 seconds).
+  - `remote_hangup`: WhatsApp's call engine reported `CallTerminateReceived` (or `RTCPByeReceived`): the other
+    side ended it.
+  - `whatsapp_failure`: WhatsApp reported `RxTimeout`, `TxTimeout`, `CallFatal`, `RelayBindsFailed` and the like,
+    a `callFailedReason`, or result `Failed`. The call broke; the names are in `detail`.
+  - `ended_in_this_browser`: `userEndedCall` is true (End call was pressed here).
+  - `page`: the page stopped answering the app (reloaded, frozen, closed).
+  - `unknown`: WhatsApp logged a normal end and none of the above was seen. `whatsapp_events_read` says whether
+    WhatsApp's own call events could be read in this WhatsApp build; when it is false, a hangup and a silent drop
+    cannot be told apart.
+  - `whatsapp` (the fields of `lastEndedCall`, with `result` as a name), `voice` (failed, closed with its close
+    code, end_call asked), `microphone` (the state of its audio context, tracks handed out, ended, muted, and how
+    often it had to be started again), `page` (answering, hidden, errors), `seconds_after_answer`.
+  - `signs`: what looked wrong on our own side, in plain words, whatever the verdict: the voice failed or its
+    connection closed (with the close code), a microphone track ended, the microphone's audio context was not
+    running or had to be started again, the page loaded again, stopped answering or was hidden, nothing arrived or
+    nothing was sent in the last counter lines. An empty list with `unknown` or `remote_hangup` points away from us.
+- `timeline`: the events that matter, each with `s`, the seconds since the answer (negative before it): voice
+  armed, ready, reconnecting, closed; first words heard and spoken; `wa_connected`, `wa_not_connected`,
+  `wa_ended`; each WhatsApp call event by name (`wa_event`); microphone and track changes; page loaded again.
+- `counters`: one line every 5 seconds: voice chunks played into the microphone, frames heard, bytes sent and
+  received on the busiest of the call's connections (`getStats`), how many connections are open, the ICE state,
+  the microphone's state, whether the page is hidden. A long call keeps its first minute and its last four.
+- `page_errors`: the page's last 20 errors, with their second.
+
+The story stays readable after the call, until the next call voice starts.
+
+How to read the next call. `remote_hangup` with steady counters to the end: the person hung up. Counters where
+`bytes_received` goes to 0 for two or three lines and then `RxTimeout` or `RxTrafficStopped`: the network or
+WhatsApp's relay dropped it. `voice_chunks` at 0 while the transcript shows the voice speaking, `mic_context` not
+`running`, or a `mic_track ended`: our microphone died. `page_silent` or `page_loaded_again`: the page went away.
+
+What else changed so that a call is not lost on our side:
+
+- The made-up microphone is one unbroken stream for the whole call and is never perfectly silent: between the
+  voice's sentences WhatsApp gets a hiss far too quiet to hear instead of exact zeros. If the browser stops its
+  audio context mid-call it is started again, and the same for WhatsApp's own call sound.
+- While a call voice runs the phone holds a wake lock and a Wi-Fi lock (let go when the voice stops), and the
+  browser's service is kept from closing every 5 seconds, sound or no sound.
+- A voice whose connection closes for good mid-call (after its own reconnects) now counts as failed, so
+  `place_whatsapp_call` hangs up and says so instead of leaving the person on a silent line until `max_minutes`.
+- The microphone's audio context is also checked once a second and started again if the browser stopped it
+  without saying so.
+- `place_whatsapp_call` no longer ends a call that WhatsApp is reconnecting after 5 seconds: while WhatsApp still
+  shows the call it gets 30 seconds to come back. The only limits are 20 seconds for the call to start, 60
+  seconds of ringing and `max_minutes`.
+- Reading WhatsApp's call events wraps one function of WhatsApp Web (`handleWAWebVoipNativeCallEvent`) while a
+  call voice runs. Each event is handed on untouched. Nothing is changed, forced or ended by it.
+
 ## Tests
 
-- `IsolatedOriginsTest`, `BrowserSheetTest`, `PcmTest`, `CallBridgeTest`, `WhatsAppCallTest` run on any machine: `./gradlew :app:testDebugUnitTest`.
+- `IsolatedOriginsTest`, `BrowserSheetTest`, `PcmTest`, `CallBridgeTest`, `CallDiagTest`, `WhatsAppCallTest` run on any machine: `./gradlew :app:testDebugUnitTest`.
 - The page scripts run in Node: `node tools/check-call-bridge-hooks.mjs` and `node tools/check-whatsapp-call-scripts.mjs`.
 - `CrossOriginIsolationDeviceTest` needs a real WebView, so a phone or an emulator:
   `./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.past9.phoneaos.CrossOriginIsolationDeviceTest`
