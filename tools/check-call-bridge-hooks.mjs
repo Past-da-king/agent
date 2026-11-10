@@ -72,6 +72,10 @@ class MediaStream { constructor(tracks) { this.tracks = tracks; } }
 let realGum = 0;
 const g = globalThis;
 g.window = g; g.top = g;
+// The page's document, as far as the script reads it: is it hidden, and tell me when that changes.
+const docListeners = {};
+const fakeDoc = { hidden: false, addEventListener: (k, f) => { docListeners[k] = f; } };
+g.document = fakeDoc;
 Object.assign(g, { AudioNode, AudioDestinationNode, MediaStreamAudioDestinationNode, AudioContext, MediaStream });
 // What Android's WebView hands a page: devices without ids or names, and a microphone permission that reads "prompt".
 const anonymous = [
@@ -236,6 +240,27 @@ const sample = of('sample').at(-1);
 assert.equal(sample.pcs, 2, 'closed connections are not counted');
 assert.equal(sample.bytes_sent, 9088); assert.equal(sample.bytes_received, 7390); assert.equal(sample.ice, 'connected');
 assert.equal(sample.played, 2); assert.equal(sample.remote_frames, 7); assert.equal(sample.mic, 'running'); assert.equal(sample.tracks_ended, 1); assert.equal(sample.errors, 3);
+
+// ---- armed: a hidden page is counted and said, and nothing else is done about it (0.15.36) ----
+assert.equal(sample.hidden, false); assert.equal(sample.hidden_ms, 0, 'never hidden so far');
+assert.equal(typeof docListeners.visibilitychange, 'function', 'the script listens for the page being hidden');
+{
+  const realNow = Date.now;
+  try {
+    Date.now = () => 1_000_000; fakeDoc.hidden = true; docListeners.visibilitychange();
+    assert.equal(evs('page_hidden').length, 1, 'going hidden is written down once');
+    docListeners.visibilitychange(); assert.equal(evs('page_hidden').length, 1);
+    Date.now = () => 1_004_000; toPage({ t: 'sample' }); for (let i = 0; i < 20; i++) await null;
+    assert.equal(of('sample').at(-1).hidden, true); assert.equal(of('sample').at(-1).hidden_ms, 4000, 'hidden time runs while it is hidden');
+    assert.equal(H.state().hidden, true); assert.equal(H.state().hidden_ms, 4000);
+    // The page came back without telling (no event): the once-a-second look notices.
+    Date.now = () => 1_006_000; fakeDoc.hidden = false; intervals[0].f();
+    assert.equal(evs('page_visible').length, 1); assert.ok(evs('page_visible')[0].d.startsWith('6 s'), evs('page_visible')[0].d);
+    Date.now = () => 1_010_000; toPage({ t: 'sample' }); for (let i = 0; i < 20; i++) await null;
+    assert.equal(of('sample').at(-1).hidden, false); assert.equal(of('sample').at(-1).hidden_ms, 6000, 'and stops when it is visible again');
+    assert.equal(H.state().hidden, false); assert.equal(H.state().hidden_ms, 6000);
+  } finally { Date.now = realNow; }
+}
 
 assert.equal(intervals.length, 1); assert.equal(intervals[0].ms, 1000, 'the call is looked at once a second');
 assert.equal(H.state().wa_events, true, "WhatsApp's call events are read");

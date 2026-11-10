@@ -315,7 +315,8 @@ class BrowserEngine(private val context: Context, val profile: String = "Persona
     /** The call voice as [WhatsAppCall] sees it. */
     fun callVoice(bridge: CallBridge?): WhatsAppCall.Voice = object : WhatsAppCall.Voice {
         override val on get() = bridge != null
-        override suspend fun start(peer: String, goal: String): String? { val b = bridge ?: return "The call voice is off."; val said = b.start(peer, goal); return if (b.running) null else said }
+        override suspend fun start(peer: String, goal: String, minSeconds: Int): String? { val b = bridge ?: return "The call voice is off."; val said = b.start(peer, goal, minSeconds); return if (b.running) null else said }
+        override fun answered() { bridge?.answered() }
         override val endRequested get() = bridge?.endRequested ?: false
         override val failed get() = bridge?.failed
         override val turns get() = bridge?.turns ?: 0

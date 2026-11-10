@@ -31,13 +31,26 @@ class CallDiag(private val now: () -> Long = System::currentTimeMillis) {
     private var last: JSONObject? = null
     private var lastHeard = 0
     private var lastSent = 0
+    private var minSeconds = 0
+    private var refused = 0
+    private var hiddenSeen = false
 
     /** A new call voice starts: everything from the call before is forgotten. */
     fun reset() = synchronized(lock) {
         events.clear(); samples.clear(); errors.clear(); dropped = 0
         startedAt = now(); answeredAt = 0; endedAt = 0; whatsapp = null; agent = ""; agentWhy = ""
         voiceFailed = null; voiceClosed = null; endAsked = false; pageSilent = false; last = null; lastHeard = 0; lastSent = 0
+        minSeconds = 0; refused = 0; hiddenSeen = false
     }
+
+    /** When the call was answered on this phone's clock, 0 while it has not been. */
+    fun answeredAtMs(): Long = synchronized(lock) { answeredAt }
+
+    /** The one who placed the call saw the answer itself: used when the page's own word on it has not arrived. */
+    fun answer(at: Long = now()) = synchronized(lock) { if (startedAt > 0 && answeredAt == 0L) answeredAt = if (at <= 0L) now() else at }
+
+    /** The shortest conversation asked for (min_seconds), for the story. */
+    fun minimum(seconds: Int) = synchronized(lock) { minSeconds = seconds.coerceAtLeast(0) }
 
     val started: Boolean get() = synchronized(lock) { startedAt > 0 }
     val answered: Boolean get() = synchronized(lock) { answeredAt > 0 }
@@ -53,6 +66,8 @@ class CallDiag(private val now: () -> Long = System::currentTimeMillis) {
             VOICE_FAILED -> voiceFailed = detail
             VOICE_CLOSED -> voiceClosed = detail
             END_CALL -> endAsked = true
+            END_REFUSED -> refused++
+            PAGE_HIDDEN -> hiddenSeen = true
             PAGE_SILENT -> pageSilent = true
             PAGE_BACK -> pageSilent = false
         }
@@ -84,12 +99,16 @@ class CallDiag(private val now: () -> Long = System::currentTimeMillis) {
         val at = page.optLong("at").takeIf { it > 0 } ?: now()
         val p = last
         fun d(k: String) = (page.optLong(k) - (p?.optLong(k) ?: 0L)).coerceAtLeast(0)
-        val o = JSONObject().put("s", seconds(at))
+        // How long the page was hidden since the line before: the page's own count, else the whole gap when it is hidden now.
+        val gap = (at - (p?.optLong("at")?.takeIf { it > 0 } ?: startedAt)).coerceIn(1, 60_000)
+        val hiddenMs = if (page.has("hidden_ms")) d("hidden_ms").coerceAtMost(gap) else if (page.optBoolean("hidden")) gap else 0L
+        if (hiddenMs > 0 || page.optBoolean("hidden")) hiddenSeen = true
+        val o = JSONObject().put(AT, at).put("s", seconds(at))
             .put("voice_chunks", d("played")).put("heard_frames", (heard - lastHeard).coerceAtLeast(0)).put("frames_to_voice", (sent - lastSent).coerceAtLeast(0))
             .put("page_frames", d("remote_frames")).put("bytes_sent", d("bytes_sent")).put("bytes_received", d("bytes_received"))
             .put("bytes_sent_total", page.optLong("bytes_sent")).put("bytes_received_total", page.optLong("bytes_received"))
             .put("connections", page.optInt("pcs")).put("ice", page.optString("ice")).put("mic", page.optString("mic"))
-            .put("hidden", page.optBoolean("hidden")).put("errors", page.optInt("errors"))
+            .put("hidden", page.optBoolean("hidden")).put("hidden_seconds", Math.round(hiddenMs / 100.0) / 10.0).put("errors", page.optInt("errors"))
         last = page; lastHeard = heard; lastSent = sent
         samples += o
         // The start and the end of a call are what explain it: the middle of a long one is thinned out.
@@ -103,7 +122,17 @@ class CallDiag(private val now: () -> Long = System::currentTimeMillis) {
         JSONArray().also { a -> events.sortedBy { it.at }.forEach { e -> a.put(JSONObject().put("s", seconds(e.at)).put("from", e.from).put("event", e.kind).also { o -> if (e.detail.isNotEmpty()) o.put("detail", e.detail) }) } }
     }
 
-    fun counters(): JSONArray = synchronized(lock) { JSONArray(samples.toList()) }
+    /** The counter lines, timed like the timeline (seconds since the answer once there is one). */
+    fun counters(): JSONArray = synchronized(lock) { JSONArray(lines()) }
+
+    private fun lines(): List<JSONObject> = samples.map { s -> JSONObject(s.toString()).also { c -> if (c.has(AT)) { c.put("s", seconds(c.optLong(AT))); c.remove(AT) } } }
+
+    /** The counters added up over the whole call: small enough for a summary. */
+    fun totals(): JSONObject = synchronized(lock) {
+        JSONObject().put("lines", samples.size).put("voice_chunks", last?.optLong("played") ?: 0L).put("heard_frames", lastHeard).put("frames_to_voice", lastSent)
+            .put("page_frames", last?.optLong("remote_frames") ?: 0L).put("bytes_sent", last?.optLong("bytes_sent") ?: 0L).put("bytes_received", last?.optLong("bytes_received") ?: 0L)
+            .put("page_errors", errors.size)
+    }
 
     fun pageErrors(): JSONArray = synchronized(lock) { JSONArray().also { a -> errors.forEach { (at, m) -> a.put(JSONObject().put("s", seconds(at)).put("error", m)) } } }
 
@@ -115,17 +144,26 @@ class CallDiag(private val now: () -> Long = System::currentTimeMillis) {
         val names = events.filter { it.kind == WA_EVENT }.map { it.detail.substringBefore(' ') }
         val reading = pageState?.optBoolean("wa_events") ?: false
         val v = verdict(agent, agentWhy, names, whatsapp, voiceFailed, pageSilent, endedAt > 0, reading)
+        val all = lines()
+        // The lines that cover the conversation itself: whole five seconds after the answer, up to the end.
+        val inCall = if (answeredAt == 0L) emptyList() else samples.filter { it.optLong(AT) >= answeredAt + SAMPLE_MS && (endedAt == 0L || it.optLong(AT) <= endedAt + 1_000) }
+        // Hidden right now is the page's newest word on itself; hidden at some time is anything seen since the voice was armed.
+        val hiddenNow = pageState?.takeIf { it.has("hidden") }?.optBoolean("hidden") ?: (last?.optBoolean("hidden") ?: false)
+        val hiddenFor = hiddenSeconds(all)
+        val wasHidden = hiddenSeen || hiddenFor > 0 || all.any { it.optBoolean("hidden") }
         val wa = whatsapp?.let { w -> JSONObject(w.toString()).also { c -> if (w.has("callLogResult") && !w.isNull("callLogResult")) c.put("result", resultName(w.optInt("callLogResult", -1))) } }
         JSONObject().put("by", v.first).put("detail", v.second)
             .put("seconds_after_answer", if (answeredAt > 0 && endedAt > 0) Math.round((endedAt - answeredAt) / 100.0) / 10.0 else JSONObject.NULL)
             .put("answered", answeredAt > 0)
             .put("whatsapp", wa ?: JSONObject.NULL)
             .put("whatsapp_events_read", reading)
-            .put("voice", JSONObject().put("failed", voiceFailed ?: JSONObject.NULL).put("closed", voiceClosed ?: JSONObject.NULL).put("end_call_asked", endAsked))
+            .put("voice", JSONObject().put("failed", voiceFailed ?: JSONObject.NULL).put("closed", voiceClosed ?: JSONObject.NULL).put("end_call_asked", endAsked)
+                .put("end_call_refused", refused).put("min_seconds", minSeconds))
             .put("microphone", JSONObject().put("context", pageState?.optString("mic") ?: "").put("tracks", pageState?.optInt("tracks_out") ?: 0)
                 .put("tracks_ended", pageState?.optInt("tracks_ended") ?: 0).put("tracks_muted", pageState?.optInt("tracks_muted") ?: 0).put("context_resumed", pageState?.optInt("mic_resumes") ?: 0))
-            .put("page", JSONObject().put("answering", !pageSilent).put("hidden", pageState?.optBoolean("hidden") ?: false).put("errors", errors.size))
-            .put("signs", JSONArray(signs(voiceFailed, voiceClosed, pageSilent, pageState, samples, events.any { it.kind == "page_loaded_again" })))
+            .put("page", JSONObject().put("answering", !pageSilent).put("hidden_now", hiddenNow).put("was_hidden", wasHidden).put("hidden_seconds", hiddenFor).put("errors", errors.size))
+            .put("signs", JSONArray(signs(voiceFailed, voiceClosed, pageSilent, pageState, all, events.any { it.kind == "page_loaded_again" }, inCall)))
+            .put("notes", JSONArray(notes(wasHidden, hiddenFor, hiddenNow, stalledWhileHidden(inCall), refused, minSeconds)))
             .put("events_left_out", dropped)
             .put("timed_from", if (answeredAt > 0) "answer" else "voice armed")
     }
@@ -141,6 +179,9 @@ class CallDiag(private val now: () -> Long = System::currentTimeMillis) {
         /** Five seconds apart: the first minute and the last four are kept whole. */
         const val MAX_SAMPLES = 60
         const val KEEP_FIRST = 12
+        /** Counter lines are this far apart. */
+        const val SAMPLE_MS = 5_000L
+        private const val AT = "at_ms"
 
         const val WA_CONNECTED = "wa_connected"
         const val WA_ENDED = "wa_ended"
@@ -150,6 +191,10 @@ class CallDiag(private val now: () -> Long = System::currentTimeMillis) {
         const val END_CALL = "end_call_asked"
         const val PAGE_SILENT = "page_silent"
         const val PAGE_BACK = "page_back"
+        /** The voice asked to end the call before min_seconds had passed, and was told to go on. */
+        const val END_REFUSED = "end_call_refused"
+        const val PAGE_HIDDEN = "page_hidden"
+        const val PAGE_VISIBLE = "page_visible"
 
         const val AGENT_END_CALL = "agent_end_call"
         const val AGENT_MAX_MINUTES = "max_minutes"
@@ -170,16 +215,18 @@ class CallDiag(private val now: () -> Long = System::currentTimeMillis) {
 
         private fun decides(kind: String, detail: String): Boolean = when (kind) {
             WA_EVENT -> detail.substringBefore(' ').let { it in FAILURES || it in REMOTE || it == "CallEnding" }
-            WA_CONNECTED, WA_ENDED, VOICE_FAILED, VOICE_CLOSED, END_CALL, PAGE_SILENT, "voice_stopped", "agent_ended" -> true
+            WA_CONNECTED, WA_ENDED, VOICE_FAILED, VOICE_CLOSED, END_CALL, END_REFUSED, PAGE_SILENT, "voice_stopped", "agent_ended" -> true
             else -> false
         }
 
         /**
          * Things on our own side that were not as they should be, in plain words, whatever the verdict: a voice that
          * closed, a microphone that ended or stopped, a page that went away, traffic that stopped before the end.
-         * Empty when nothing of ours looks wrong.
+         * Empty when nothing of ours looks wrong. A page that was hidden is NOT one of them while sound kept flowing
+         * (that is a note, see [notes]); it is one only when the counters taken while it was hidden show no sound.
+         * [inCall] are the counter lines that cover the conversation itself.
          */
-        fun signs(voiceFailed: String?, voiceClosed: String?, pageSilent: Boolean, pageState: JSONObject?, samples: List<JSONObject>, reloaded: Boolean): List<String> {
+        fun signs(voiceFailed: String?, voiceClosed: String?, pageSilent: Boolean, pageState: JSONObject?, samples: List<JSONObject>, reloaded: Boolean, inCall: List<JSONObject> = samples): List<String> {
             val out = ArrayList<String>()
             voiceFailed?.let { out += "The voice failed: $it" }
             voiceClosed?.let { out += "The voice's connection closed: $it" }
@@ -196,7 +243,40 @@ class CallDiag(private val now: () -> Long = System::currentTimeMillis) {
             val tail = live.takeLast(2)
             if (live.size >= 3 && tail.all { it.optLong("bytes_received") == 0L }) out += "Nothing arrived from the other side in the last ${tail.size * 5} seconds of counters."
             if (live.size >= 3 && tail.all { it.optLong("bytes_sent") == 0L }) out += "Nothing was sent to the other side in the last ${tail.size * 5} seconds of counters."
-            if (live.any { it.optBoolean("hidden") }) out += "The page was hidden during the call."
+            val stalled = stalledWhileHidden(inCall)
+            if (stalled > 0) out += "Sound stopped while the page was hidden: $stalled counter line(s) taken while it was hidden show no sound (hidden for about ${whole(hiddenSeconds(samples))} seconds in all)."
+            return out
+        }
+
+        private fun whole(seconds: Double): Long = Math.round(seconds)
+
+        /** Was the page hidden for any part of this counter line? */
+        private fun hiddenIn(line: JSONObject): Boolean = line.optBoolean("hidden") || line.optDouble("hidden_seconds", 0.0) > 0.0
+
+        /** Seconds the page was hidden, added up over the counter lines (a line with no count of its own is taken as hidden for all of it). */
+        fun hiddenSeconds(samples: List<JSONObject>): Double =
+            Math.round(samples.sumOf { if (it.has("hidden_seconds")) it.optDouble("hidden_seconds", 0.0) else if (it.optBoolean("hidden")) SAMPLE_MS / 1000.0 else 0.0 } * 10) / 10.0
+
+        /**
+         * How many counter lines taken while the page was hidden, with the call's connections still up, show no sound:
+         * no sound frames from the call in the page, or nothing sent, or nothing received.
+         */
+        fun stalledWhileHidden(samples: List<JSONObject>): Int = samples.count { s ->
+            hiddenIn(s) && s.optInt("connections") > 0 &&
+                ((s.has("page_frames") && s.optLong("page_frames") == 0L) || s.optLong("bytes_sent") == 0L || s.optLong("bytes_received") == 0L)
+        }
+
+        /**
+         * Things worth knowing that are not faults. A page that was hidden while sound kept flowing (the call was
+         * answered on this same phone, another app was opened, the screen locked) is one: said with for how long and
+         * whether it is hidden now, so it can never contradict the page's own word.
+         */
+        fun notes(wasHidden: Boolean, hiddenSeconds: Double, hiddenNow: Boolean, stalled: Int, refused: Int = 0, minSeconds: Int = 0): List<String> {
+            val out = ArrayList<String>()
+            if (wasHidden && stalled == 0) out += "The page was hidden for " + (if (hiddenSeconds > 0) "about ${whole(hiddenSeconds)} seconds" else "a moment") +
+                " while the call voice ran (another app or the lock screen was in front, as when the call is answered on this same phone). Sound kept flowing, so this is not a fault. " +
+                (if (hiddenNow) "It is still hidden now." else "It is visible again now.")
+            if (refused > 0) out += "The voice asked to end the call $refused time(s) before the minimum of $minSeconds seconds had passed and was told to go on."
             return out
         }
 

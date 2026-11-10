@@ -485,4 +485,77 @@ class CallBridgeTest {
         assertEquals("audio/pcm;rate=16000", audio.getString("mimeType"))
         assertArrayEquals(frame, Base64.getDecoder().decode(audio.getString("data")))
     }
+
+    // ---- min_seconds (0.15.36): an end_call before the minimum is not carried out ----
+
+    private fun minRig(min: Int): Rig { val r = Rig(); r.pageSays("""{"t":"hello"}"""); runBlocking { r.bridge.start("Asanda", "talk about the weekend", min) }; return r }
+
+    @Test fun theVoiceIsToldTheMinimumBeforeTheCall() {
+        val r = minRig(65)
+        assertTrue(r.opened!![3], r.opened!![3].contains("at least 65 seconds")); assertTrue(r.opened!![3].contains("end_call before that is not carried out"))
+        assertEquals(65, r.bridge.minSeconds); assertEquals(65, r.bridge.status().getInt("min_seconds"))
+        // With no minimum the instruction says nothing about one.
+        val plain = Rig(); plain.pageSays("""{"t":"hello"}"""); plain.start()
+        assertFalse(plain.opened!![3].contains("at least")); assertEquals(0, plain.bridge.minSeconds)
+    }
+
+    @Test fun anEarlyEndCallIsRefusedAndTheVoiceIsToldHowLongIsLeft() {
+        val r = minRig(65); r.ev(CallDiag.WA_CONNECTED)
+        r.clock += 42_400
+        r.events(LiveSession.Event.ToolCall("c1", "end_call", JSONObject().put("reason", "said goodbye")))
+        assertFalse("the call goes on", r.bridge.endRequested); assertTrue(r.bridge.running); assertEquals(1, r.bridge.endRefused)
+        val said = r.link.results.single().third
+        assertFalse(said.getBoolean("ok")); assertTrue(said.getBoolean("call_continues")); assertEquals(23, said.getInt("seconds_left"))
+        assertTrue(said.getString("instruction").contains("23 more seconds")); assertTrue(said.getString("instruction").contains("naturally"))
+        // The story keeps it, with when and how long was left.
+        val s = r.bridge.status()
+        val refused = (0 until s.getJSONArray("timeline").length()).map { s.getJSONArray("timeline").getJSONObject(it) }.single { it.getString("event") == CallDiag.END_REFUSED }
+        assertEquals(42.4, refused.getDouble("s"), 0.0); assertTrue(refused.getString("detail"), refused.getString("detail").contains("23 s left") && refused.getString("detail").contains("42.4 s after the answer"))
+        val ended = s.getJSONObject("ended")
+        assertEquals(1, ended.getJSONObject("voice").getInt("end_call_refused")); assertEquals(65, ended.getJSONObject("voice").getInt("min_seconds")); assertFalse(ended.getJSONObject("voice").getBoolean("end_call_asked"))
+        assertTrue(ended.getJSONArray("notes").toString().contains("before the minimum of 65 seconds"))
+        assertEquals(23, s.getInt("min_seconds_left"))
+
+        // Once the minimum has passed the voice is told so, once, and the next end_call is carried out.
+        r.clock += 23_000; r.tick!!(); r.tick!!()
+        assertEquals(1, r.link.said.count { it.contains("minimum call time has passed") })
+        r.clock += 5_000
+        r.events(LiveSession.Event.ToolCall("c2", "end_call", JSONObject().put("reason", "done")))
+        assertTrue(r.bridge.endRequested); assertTrue(r.link.results.last().third.getBoolean("ok")); assertEquals(1, r.bridge.endRefused)
+        assertTrue(r.events().containsAll(listOf(CallDiag.END_REFUSED, "min_seconds_reached", CallDiag.END_CALL)))
+    }
+
+    @Test fun beforeTheAnswerTheWholeMinimumIsStillToCome() {
+        val r = minRig(30)
+        r.events(LiveSession.Event.ToolCall("c1", "end_call", JSONObject()))
+        assertFalse(r.bridge.endRequested); assertEquals(30, r.link.results.single().third.getInt("seconds_left"))
+        // The one who placed the call saw the answer before the page said so: the minimum counts from there.
+        r.bridge.answered(); r.clock += 30_000
+        assertEquals(0, r.bridge.minSecondsLeft())
+        r.events(LiveSession.Event.ToolCall("c2", "end_call", JSONObject()))
+        assertTrue(r.bridge.endRequested)
+    }
+
+    @Test fun withNoMinimumEndCallIsCarriedOutAtOnceAsBefore() {
+        val r = minRig(0); r.ev(CallDiag.WA_CONNECTED); r.clock += 2_000
+        r.events(LiveSession.Event.ToolCall("c1", "end_call", JSONObject()))
+        assertTrue(r.bridge.endRequested); assertEquals(0, r.bridge.endRefused); assertTrue(r.link.results.single().third.getBoolean("ok"))
+        assertFalse(r.events().contains(CallDiag.END_REFUSED))
+    }
+
+    @Test fun theMinimumIsNeverLongerThanTheLongestCall() {
+        val r = minRig(100_000)
+        assertEquals(CallBridgeProtocol.MAX_MIN_SECONDS, r.bridge.minSeconds)
+        val neg = minRig(-5); assertEquals(0, neg.bridge.minSeconds)
+    }
+
+    @Test fun theWordsOfTheCallStayReadableAfterTheVoiceStops() {
+        val r = Rig(); r.pageSays("""{"t":"hello"}"""); r.start()
+        r.events(LiveSession.Event.Transcript("in", "Hello")); r.events(LiveSession.Event.Transcript("out", "Hi Asanda"))
+        r.bridge.stop()
+        assertEquals("Them: Hello\nVoice: Hi Asanda", r.bridge.status().getString("transcript"))
+        // The next call starts clean.
+        r.start()
+        assertEquals("", r.bridge.status().getString("transcript"))
+    }
 }

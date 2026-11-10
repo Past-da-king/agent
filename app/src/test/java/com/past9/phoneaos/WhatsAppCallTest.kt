@@ -155,7 +155,9 @@ class WhatsAppCallTest {
         override var failed: String? = null
         override var turns = 0
         var said = "Them: Hello\nVoice: Hi Sam"
-        override suspend fun start(peer: String, goal: String): String? { if (startError != null) return startError; started = peer to goal; return null }
+        var min = -1; var answeredCalls = 0
+        override fun answered() { answeredCalls++ }
+        override suspend fun start(peer: String, goal: String, minSeconds: Int): String? { if (startError != null) return startError; started = peer to goal; min = minSeconds; return null }
         override fun nudge(text: String) { nudges += text }
         override fun words() = if (started != null) said else ""
         override fun stop() { stops++ }
@@ -173,7 +175,7 @@ class WhatsAppCallTest {
 
     private class Rig(val page: FakePage, val voice: FakeVoice, val clock: Clock, testOn: Boolean = false, marked: List<String> = emptyList(), onTick: (Long) -> Unit = {}) {
         val call = WhatsAppCall(page, voice, test = { testOn to marked }, now = { clock.t }, pause = { ms -> clock.t += ms; onTick(clock.t) })
-        fun run(chat: String = "Sam Jones", goal: String = "confirm Saturday lunch", max: Int = 5, contact: String = "") = runBlocking { call.run(chat, goal, max, contact) }
+        fun run(chat: String = "Sam Jones", goal: String = "confirm Saturday lunch", max: Int = 5, contact: String = "", min: Int = 0) = runBlocking { call.run(chat, goal, max, contact, min) }
     }
 
     private fun rig(script: Map<Int, State> = emptyMap(), testOn: Boolean = false, marked: List<String> = emptyList(), voice: FakeVoice = FakeVoice(), onTick: (Rig, Long) -> Unit = { _, _ -> }): Rig {
@@ -425,5 +427,29 @@ class WhatsAppCallTest {
         assertTrue(s.pending); assertEquals("A1", s.activeId); assertNull(s.endedId); assertFalse(s.quiet)
         assertTrue(WhatsAppCall.parseState(JSONObject("""{"pending":false,"connected":false,"end_button":false}"""))!!.quiet)
         assertFalse(WhatsAppCall.parseChat(null).ok); assertEquals("Sam", WhatsAppCall.parseChat(JSONObject("""{"ok":true,"id":"1@c.us","name":"Sam"}""")).name)
+    }
+
+    // ---- min_seconds (0.15.36) ----
+
+    @Test fun theMinimumTimeIsHandedToTheVoiceAndTheAnswerIsToldToIt() {
+        val r = rig(mapOf(0 to ringing, 8 to talking, 30 to over))
+        val out = r.run(min = 65)
+        assertEquals(65, r.voice.min); assertEquals(1, r.voice.answeredCalls)
+        assertEquals(65, out.minSeconds); assertEquals(65, out.json().getInt("min_seconds"))
+        // The other side hung up at 22 s, well before the minimum: the call ends at once all the same.
+        assertEquals(WhatsAppCall.ANSWERED, out.outcome); assertEquals(WhatsAppCall.OTHER_SIDE, out.endedBy); assertEquals(22, out.durationSeconds)
+    }
+
+    @Test fun maxMinutesWinsOverALongerMinimum() {
+        val r = rig(mapOf(0 to ringing, 5 to talking))
+        val out = r.run(max = 1, min = 600)
+        assertEquals(60, r.voice.min)
+        assertEquals("max_minutes", out.endedBy)
+    }
+
+    @Test fun withNoMinimumNothingChanges() {
+        val r = rig(mapOf(0 to ringing, 8 to talking, 30 to over))
+        r.run()
+        assertEquals(0, r.voice.min)
     }
 }
