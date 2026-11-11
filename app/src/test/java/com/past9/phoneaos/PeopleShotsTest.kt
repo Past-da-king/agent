@@ -8,12 +8,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.past9.phoneaos.agent.AgentStatus
 import com.past9.phoneaos.people.GiftIdea
 import com.past9.phoneaos.people.ImportantDate
 import com.past9.phoneaos.people.Person
 import com.past9.phoneaos.people.PersonLog
 import com.past9.phoneaos.ui.screens.AddGiftSheet
 import com.past9.phoneaos.ui.screens.AddPersonSheet
+import com.past9.phoneaos.ui.screens.HomeActions
+import com.past9.phoneaos.ui.screens.HomeScreen
+import com.past9.phoneaos.ui.screens.HomeState
 import com.past9.phoneaos.ui.screens.AddDateSheet
 import com.past9.phoneaos.ui.screens.LogSheet
 import com.past9.phoneaos.ui.screens.PeopleActions
@@ -90,6 +94,12 @@ class PeopleShotsTest(private val dark: Boolean) {
 
     @Test fun personNoEntries() {
         shot("person-no-entries") { PersonScreen(Person(id = 9, name = "Nomsa", createdAt = now, updatedAt = now), emptyList(), PersonActions(), now = now) }
+    }
+
+    @Test fun homeRowThatLeadsToPeople() {
+        val state = HomeState("Your agent", "Sam", AgentStatus(), emptyList(), emptyList(), emptyList(), emptyList(), now = now,
+            people = listOf(thandi, sipho, mana))
+        shot("home-people-row") { HomeScreen(state, HomeActions()) }
     }
 
     @Test fun addPersonSheet() {
