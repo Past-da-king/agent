@@ -98,6 +98,8 @@ class LiveAssistant(
                 Earcon.play(context)
             }
             is LiveSession.Event.SetupComplete -> { setupDone = true }
+            // The voice's loudness drives the face's mouth. Only the voice (not the microphone) and only real changes.
+            is LiveSession.Event.Level -> if (!e.mine && core.level(e.value)) push()
             is LiveSession.Event.Transcript -> { core.caption(e.who, e.text); push() }
             is LiveSession.Event.Speaking -> {
                 if (!e.on) Log.i(TAG, "turn: you=\"${core.current.you.take(160)}\" agent=\"${core.current.agent.take(160)}\"")

@@ -80,6 +80,17 @@ class LiveFastTest {
         assertEquals(0, BubbleMath.clamp(10, 2000, 1080))
     }
 
+    @Test fun theVoicesLoudnessDrivesTheFaceAndFallsToZeroWhenItStops() {
+        val c = LiveAssistCore(); c.connected()
+        assertTrue(c.level(0.6f)); assertEquals(0.6f, c.current.level, 0f)
+        assertFalse("a tiny change is not worth a redraw", c.level(0.62f))
+        assertTrue(c.level(0.9f))
+        assertTrue(c.level(5f)); assertEquals(1f, c.current.level, 0f)
+        c.speaking(true); c.speaking(false)
+        assertEquals(0f, c.current.level, 0f)
+        assertFalse(c.level(0f))
+    }
+
     @Test fun aMinimisedSessionWaitsLongerBeforeLettingGo() {
         var now = 1_000L
         val c = LiveAssistCore { now }; c.connected()

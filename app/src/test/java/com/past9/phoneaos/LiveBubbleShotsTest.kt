@@ -55,10 +55,10 @@ open class LiveBubbleShotsTest(private val dark: Boolean) {
     private fun file(name: String) = File("$outDir/$name-${if (dark) "dark" else "light"}.png").also { it.parentFile?.mkdirs() }.path
 
     /** Another app's screen behind, with the bubble floating on it. */
-    private fun floating(name: String, view: LiveView, content: @androidx.compose.runtime.Composable () -> Unit = {}, after: () -> Unit = {}) {
+    private fun floating(name: String, view: LiveView, content: @androidx.compose.runtime.Composable () -> Unit = {}, mascot: String = "scout", after: () -> Unit = {}) {
         rule.mainClock.autoAdvance = false
         rule.setContent {
-            AppTheme(dark = dark) {
+            AppTheme(dark = dark, mascot = mascot) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.padding(24.dp)) {
                         Spacer(Modifier.height(40.dp))
@@ -66,7 +66,7 @@ open class LiveBubbleShotsTest(private val dark: Boolean) {
                         Spacer(Modifier.height(8.dp))
                         androidx.compose.material3.Text("The live bubble floats over whatever you are doing.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Box(Modifier.align(Alignment.TopStart).padding(start = 16.dp, top = 120.dp)) { LiveBubbleContent(view, onMute = {}, onClose = {}) }
+                    Box(Modifier.align(Alignment.TopStart).padding(start = 16.dp, top = 120.dp)) { LiveBubbleContent(view, onMute = {}, onClose = {}, animate = false) }
                     content()
                 }
             }
@@ -76,8 +76,11 @@ open class LiveBubbleShotsTest(private val dark: Boolean) {
         rule.onRoot().captureRoboImage(file(name))
     }
 
-    @Test fun bubbleListening() = floating("01-bubble-listening", LiveView(LivePhase.LISTENING)) { rule.onNodeWithText("LIVE").assertIsDisplayed(); rule.onNodeWithContentDescription("Mute").assertIsDisplayed() }
-    @Test fun bubbleSpeaking() = floating("02-bubble-speaking", LiveView(LivePhase.SPEAKING))
+    @Test fun bubbleListening() = floating("01-bubble-listening", LiveView(LivePhase.LISTENING), after = { rule.onNodeWithText("LIVE").assertIsDisplayed(); rule.onNodeWithContentDescription("Mute").assertIsDisplayed() })
+    @Test fun bubbleSpeaking() = floating("02-bubble-speaking", LiveView(LivePhase.SPEAKING, level = 0.7f))
+    @Test fun bubbleListeningOtherFace() = floating("10-bubble-listening-bun", LiveView(LivePhase.LISTENING), mascot = "bun")
+    @Test fun bubbleSpeakingOtherFace() = floating("11-bubble-speaking-bun", LiveView(LivePhase.SPEAKING, level = 0.7f), mascot = "bun")
+    @Test fun bubbleMutedOtherFace() = floating("12-bubble-muted-bun", LiveView(LivePhase.LISTENING, muted = true), mascot = "bun")
     @Test fun bubbleWorking() = floating("03-bubble-working", LiveView(LivePhase.WORKING, label = "Sending a message"))
     @Test fun bubbleNeedsYou() = floating("04-bubble-needs-you", LiveView(LivePhase.NEEDS_YOU)) { rule.onNodeWithText("Needs you").assertIsDisplayed() }
     @Test fun bubbleMuted() = floating("05-bubble-muted", LiveView(LivePhase.LISTENING, muted = true)) { rule.onNodeWithContentDescription("Unmute").assertIsDisplayed() }
