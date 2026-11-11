@@ -162,7 +162,7 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
         if (hand == null) {
             hand = AssistCore().also { it.listen(); it.finished(request); it.sent(lastIdBefore) }
         }
-        publish { it.copy(label = "Working on it") }
+        publish { it.copy(label = "") } // the sheet shows its own "Working on it" for a blank label
         return request.trim()
     }
 
@@ -197,8 +197,8 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
                 publish { it.copy(card = null, label = "") }
                 return out
             }
-            AssistPhase.ACTING -> publish { it.copy(card = null, label = v.label.ifBlank { "Working on it" }) }
-            else -> publish { it.copy(card = null, label = it.label.ifBlank { "Working on it" }) }
+            AssistPhase.ACTING -> publish { it.copy(card = null, label = v.label) }
+            else -> publish { it.copy(card = null) }
         }
         return out
     }

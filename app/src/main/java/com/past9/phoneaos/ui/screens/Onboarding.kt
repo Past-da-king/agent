@@ -392,15 +392,15 @@ private fun PowerStep(available: (SubKind) -> Boolean, onLink: (() -> Unit)?, on
         }
         if (onLink != null) {
             Spacer(Modifier.height(24.dp))
-            Text("OR USE THE AGENT ON YOUR COMPUTER", style = Eyebrow, color = cs.onSurfaceVariant)
+            Text(stringResource(R.string.onb_use_on_computer_eyebrow), style = Eyebrow, color = cs.onSurfaceVariant)
             Spacer(Modifier.height(10.dp))
             Surface(onClick = onLink, shape = MaterialTheme.shapes.extraLarge, color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.QrCodeScanner, null, tint = cs.primary)
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Use the agent on my computer", style = MaterialTheme.typography.titleMedium)
-                        Text("Scan the code in the Agent app on your computer or server. No keys on this phone.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                        Text(stringResource(R.string.onb_use_on_computer), style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.onb_use_on_computer_sub), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     }
                     Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = cs.onSurfaceVariant)
                 }

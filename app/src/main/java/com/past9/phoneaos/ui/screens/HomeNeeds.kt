@@ -8,6 +8,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.past9.phoneaos.R
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -107,9 +109,14 @@ object Needs {
         else -> null
     }?.toInstant()?.toEpochMilli()
 
-    fun kindLabel(n: Need) = when (n.kind) {
-        "approval" -> "Approval"; "connect" -> "Connect an app"; "blocked" -> "Blocked step"; "todo" -> "Your to-do"
-        else -> if (n.helper.isNotBlank()) "A helper asks" else "Question"
+    /** English without a context (tests), the app's language with one. */
+    fun kindLabel(n: Need, ctx: android.content.Context? = null): String {
+        fun t(id: Int, en: String) = ctx?.getString(id) ?: en
+        return when (n.kind) {
+            "approval" -> t(R.string.home_need_approval, "Approval"); "connect" -> t(R.string.home_need_connect, "Connect an app")
+            "blocked" -> t(R.string.home_need_blocked, "Blocked step"); "todo" -> t(R.string.home_need_todo, "Your to-do")
+            else -> if (n.helper.isNotBlank()) t(R.string.home_need_helper_asks, "A helper asks") else t(R.string.home_need_question, "Question")
+        }
     }
 
     /** The rows of the card's sheet: open it, tick it off (tasks only), put it off, or clear it. */
@@ -183,10 +190,11 @@ object TaskFocus {
 @Composable
 fun NeedSwipe(label: String, onCleared: () -> Unit, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val state = rememberSwipeToDismissBoxState()
+    val swipeCd = stringResource(R.string.home_need_swipe_cd, label)
     val cs = MaterialTheme.colorScheme
     SwipeToDismissBox(
         state = state,
-        modifier = modifier.semantics { contentDescription = "$label. Swipe to clear it, hold for more" },
+        modifier = modifier.semantics { contentDescription = swipeCd },
         onDismiss = { onCleared() },
         backgroundContent = {
             val toStart = state.dismissDirection == SwipeToDismissBoxValue.EndToStart
@@ -195,7 +203,7 @@ fun NeedSwipe(label: String, onCleared: () -> Unit, modifier: Modifier = Modifie
                 Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = if (toStart) Arrangement.End else Arrangement.Start) {
                     Icon(Icons.Rounded.Close, null, Modifier.size(20.dp), tint = cs.onSurfaceVariant)
                     Spacer(Modifier.width(8.dp))
-                    Text("Clear", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
+                    Text(stringResource(R.string.home_need_clear), style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
                 }
             }
         },
@@ -211,10 +219,10 @@ fun GoneNeedCard(title: String, line: String, onDismiss: () -> Unit) {
             Icon(Icons.Rounded.TaskAlt, null, Modifier.size(22.dp), tint = cs.onSurfaceVariant)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(line, style = MaterialTheme.typography.titleSmall, color = cs.onSurface)
+                Text(when (line) { Needs.HANDLED -> stringResource(R.string.home_need_handled); Needs.MISSING -> stringResource(R.string.home_need_missing); else -> line }, style = MaterialTheme.typography.titleSmall, color = cs.onSurface)
                 if (title.isNotBlank()) Text(title, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("Dismiss") }
+            TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.camera_dismiss)) }
         }
     }
 }
@@ -226,11 +234,11 @@ fun BlockedNeedCard(t: TaskRow, onMore: () -> Unit) {
     Surface(shape = MaterialTheme.shapes.large, color = cs.tertiaryContainer, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("BLOCKED", style = Eyebrow, color = cs.onTertiaryContainer)
+                Text(stringResource(R.string.home_blocked_eyebrow), style = Eyebrow, color = cs.onTertiaryContainer)
                 Text(t.title, style = MaterialTheme.typography.titleSmall, color = cs.onTertiaryContainer, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text("Needs: ${t.blocker}", style = MaterialTheme.typography.bodyMedium, color = cs.onTertiaryContainer, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                Text(stringResource(R.string.home_needs, t.blocker), style = MaterialTheme.typography.bodyMedium, color = cs.onTertiaryContainer, maxLines = 4, overflow = TextOverflow.Ellipsis)
             }
-            IconButton(onClick = onMore) { Icon(Icons.Rounded.MoreVert, "More", tint = cs.onTertiaryContainer) }
+            IconButton(onClick = onMore) { Icon(Icons.Rounded.MoreVert, stringResource(R.string.home_more_label), tint = cs.onTertiaryContainer) }
         }
     }
 }
@@ -242,13 +250,26 @@ fun NothingNeedsYou(modifier: Modifier = Modifier) {
     Row(modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Rounded.CheckCircle, null, Modifier.size(18.dp), tint = cs.onSurfaceVariant)
         Spacer(Modifier.width(10.dp))
-        Text("Nothing needs you right now.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+        Text(stringResource(R.string.home_need_nothing), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
     }
 }
 
 /** The slide-up sheet of one Home card: open it, tick it off, snooze it, or clear it. */
 @Composable
 fun NeedSheet(n: Need, onPick: (String) -> Unit, onDismiss: () -> Unit) {
-    ChoiceSheet(if (n.isTask) Icons.Rounded.TaskAlt else Icons.Rounded.NotificationsActive, Needs.kindLabel(n), n.title.let { if (it.length > 60) it.take(57).trimEnd() + "..." else it },
-        Needs.choices(n), onPick = { onPick(it.id) }, onDismiss = onDismiss)
+    ChoiceSheet(if (n.isTask) Icons.Rounded.TaskAlt else Icons.Rounded.NotificationsActive, Needs.kindLabel(n, androidx.compose.ui.platform.LocalContext.current), n.title.let { if (it.length > 60) it.take(57).trimEnd() + "..." else it },
+        Needs.choices(n).map { localChoice(it, n) }, onPick = { onPick(it.id) }, onDismiss = onDismiss)
+}
+
+/** [Needs.choices] in the phone's language: its ids and English stay as they are for the logic and its tests. */
+@Composable
+private fun localChoice(c: SheetChoice, n: Need): SheetChoice = when (c.id) {
+    "open" -> c.copy(title = stringResource(R.string.ui_open), line = stringResource(when { n.kind == "todo" -> R.string.home_need_open_todo; n.kind == "blocked" -> R.string.home_need_open_blocked; else -> R.string.home_need_open_chat }))
+    "project" -> c.copy(title = stringResource(R.string.home_need_project), line = stringResource(R.string.home_need_project_line))
+    "done" -> c.copy(title = stringResource(R.string.tasks_done), line = stringResource(R.string.home_need_tick))
+    "hour" -> c.copy(title = stringResource(R.string.home_need_snooze_hour), line = stringResource(R.string.home_need_snooze_hour_line))
+    "evening" -> c.copy(title = stringResource(R.string.home_need_snooze_evening), line = stringResource(R.string.home_need_back_at, "18:00"))
+    "morning" -> c.copy(title = stringResource(R.string.home_need_snooze_morning), line = stringResource(R.string.home_need_back_at, "08:00"))
+    "drop" -> c.copy(title = stringResource(R.string.home_need_drop), line = stringResource(if (n.isTask) R.string.home_need_drop_task else R.string.home_need_drop_question))
+    else -> c
 }

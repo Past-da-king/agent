@@ -144,18 +144,18 @@ fun TaskLine(t: TaskRow, actions: TaskActions) {
 internal fun TaskSheet(t: TaskRow, actions: TaskActions, onDismiss: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val done = t.status == "done"
-    com.past9.phoneaos.ui.AppSheet(Icons.Rounded.TaskAlt, if (t.owner == "user") "Your list" else "Your agent's step", t.title, onDismiss,
-        primary = if (done) "Open it again" else "Mark done", primaryEnabled = true, onPrimary = { actions.onToggle(t); onDismiss() },
+    com.past9.phoneaos.ui.AppSheet(Icons.Rounded.TaskAlt, if (t.owner == "user") stringResource(R.string.tasks_your_list) else stringResource(R.string.tasks_agent_step), t.title, onDismiss,
+        primary = if (done) stringResource(R.string.tasks_reopen) else stringResource(R.string.tasks_mark_done), primaryEnabled = true, onPrimary = { actions.onToggle(t); onDismiss() },
         shape = MaterialShapes.Cookie7Sided,
         secondary = {
             if (!done && t.owner == "user") TextButton(onClick = { actions.onAsk("Help me with task #${t.id}: ${t.title}"); onDismiss() }, modifier = Modifier.fillMaxWidth().height(52.dp)) {
-                Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Ask your agent to do this")
+                Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.tasks_ask_agent))
             }
         }) {
         val lines = listOfNotNull(
-            "Done".takeIf { done }, t.dueAt?.let { "Due ${dueLabel(it)}" },
-            t.blocker.takeIf { t.status == "blocked" && it.isNotBlank() }?.let { "Needs: $it" }, t.notes.takeIf { it.isNotBlank() })
-        if (lines.isEmpty()) Text("No date and no notes.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+            stringResource(R.string.rt_done).takeIf { done }, t.dueAt?.let { stringResource(R.string.home_due, dueLabel(it)) },
+            t.blocker.takeIf { t.status == "blocked" && it.isNotBlank() }?.let { stringResource(R.string.tasks_needs, it) }, t.notes.takeIf { it.isNotBlank() })
+        if (lines.isEmpty()) Text(stringResource(R.string.tasks_no_date_notes), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
         lines.forEach { Text(it, style = MaterialTheme.typography.bodyLarge, color = cs.onSurface, modifier = Modifier.padding(bottom = 8.dp)) }
     }
 }

@@ -18,6 +18,9 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import com.past9.phoneaos.R
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -52,40 +55,40 @@ fun ScreenRunsSheet(runs: List<RunInfo>, learned: List<LearnedApp>, recordOn: Bo
     var confirm by remember { mutableStateOf(false) }
     AgentSheet(onDismiss) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 24.dp).navigationBarsPadding()) {
-            SheetHead(Icons.Rounded.Movie, "Background screen", "Recordings and learned apps",
-                "Everything your agent does on the hidden screen is kept here as a recording you can watch, on this phone only. A job that worked can be saved as a learned app, so next time it is one quick step.")
+            SheetHead(Icons.Rounded.Movie, stringResource(R.string.screen_bg), stringResource(R.string.screen_runs_title),
+                stringResource(R.string.screen_runs_body))
             Spacer(Modifier.height(20.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.Hub, null, tint = cs.primary); Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Learned phone apps", style = MaterialTheme.typography.titleSmall)
-                        Text(if (learned.isEmpty()) "None yet. They show with your other learned apps, in Connections."
-                            else learned.joinToString(", ") { "${it.name} (${it.tools.size})" } + ". Open, rename or remove them in Connections.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                        Text(stringResource(R.string.screen_learned_phone_apps), style = MaterialTheme.typography.titleSmall)
+                        Text(if (learned.isEmpty()) stringResource(R.string.screen_learned_none)
+                            else stringResource(R.string.screen_learned_list, learned.joinToString(", ") { "${it.name} (${it.tools.size})" }), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     }
                 }
                 Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.TouchApp, null, tint = cs.primary); Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Show it a job yourself", style = MaterialTheme.typography.titleSmall)
-                        Text("Do it once by hand on the hidden screen. Your agent learns the steps and can repeat them.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                        Text(stringResource(R.string.screen_show_job_yourself), style = MaterialTheme.typography.titleSmall)
+                        Text(stringResource(R.string.screen_show_job_sub), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     }
                     Spacer(Modifier.width(8.dp))
-                    OutlinedButton(onClick = onShow) { Text("Show", style = MaterialTheme.typography.labelLarge) }
+                    OutlinedButton(onClick = onShow) { Text(stringResource(R.string.screen_show), style = MaterialTheme.typography.labelLarge) }
                 }
                 Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.FiberManualRecord, null, tint = cs.primary); Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Keep recordings", style = MaterialTheme.typography.titleSmall)
-                        Text("Passwords and anything typed as private are painted over. Old ones are cleared by themselves.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                        Text(stringResource(R.string.screen_keep_recordings), style = MaterialTheme.typography.titleSmall)
+                        Text(stringResource(R.string.screen_keep_recordings_sub), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     }
                     Spacer(Modifier.width(8.dp))
                     Switch(recordOn, onRecord)
                 }
             }
             Spacer(Modifier.height(20.dp))
-            Text("RECORDINGS", style = com.past9.phoneaos.ui.theme.Eyebrow, color = cs.primary, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
-            if (runs.isEmpty()) Text("Nothing yet. When your agent uses an app in the background, the run shows up here.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
+            Text(stringResource(R.string.screen_recordings_eyebrow), style = com.past9.phoneaos.ui.theme.Eyebrow, color = cs.primary, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+            if (runs.isEmpty()) Text(stringResource(R.string.screen_recordings_empty), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 4.dp))
             else {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -95,7 +98,7 @@ fun ScreenRunsSheet(runs: List<RunInfo>, learned: List<LearnedApp>, recordOn: Bo
                                 Icon(Icons.Rounded.PlayCircle, null, tint = cs.primary); Spacer(Modifier.width(16.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(r.app.ifBlank { r.pkg }, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(whenText(r.startedAt) + " · " + r.steps + (if (r.steps == 1) " step" else " steps") + " · " + size(r.bytes) + (if (r.owner == "you") " · shown by you" else ""),
+                                    Text(whenText(r.startedAt) + " · " + pluralStringResource(R.plurals.screen_steps, r.steps, r.steps) + " · " + size(r.bytes) + (if (r.owner == "you") " · " + stringResource(R.string.screen_shown_by_you) else ""),
                                         style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                             }
@@ -103,11 +106,11 @@ fun ScreenRunsSheet(runs: List<RunInfo>, learned: List<LearnedApp>, recordOn: Bo
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                if (!confirm) TextButton(onClick = { confirm = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Delete all recordings", color = cs.error) }
+                if (!confirm) TextButton(onClick = { confirm = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.screen_delete_all_recordings), color = cs.error) }
                 else Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(onClick = { confirm = false }, shapes = ButtonDefaults.shapes(), modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("Keep") }
+                    OutlinedButton(onClick = { confirm = false }, shapes = ButtonDefaults.shapes(), modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text(stringResource(R.string.conn_keep)) }
                     Button(onClick = { confirm = false; onDeleteAll() }, shapes = ButtonDefaults.shapes(), colors = ButtonDefaults.buttonColors(containerColor = cs.error, contentColor = cs.onError),
-                        modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("Delete all") }
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text(stringResource(R.string.screen_delete_all)) }
                 }
             }
         }
@@ -128,30 +131,30 @@ fun ScreenRunPlayerSheet(info: RunInfo, steps: List<RunStep>, picture: (Int) -> 
     val img = remember(step?.frame) { step?.let { picture(it.frame) } }
     AgentSheet(onDismiss) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 20.dp).navigationBarsPadding()) {
-            SheetHead(Icons.Rounded.PlayCircle, "Recording", info.app.ifBlank { info.pkg }, whenText(info.startedAt) + " · kept on this phone only")
+            SheetHead(Icons.Rounded.PlayCircle, stringResource(R.string.screen_recording), info.app.ifBlank { info.pkg }, whenText(info.startedAt) + " · " + stringResource(R.string.screen_kept_on_phone))
             Spacer(Modifier.height(16.dp))
             Box(Modifier.fillMaxWidth().weight(1f, fill = false), contentAlignment = Alignment.Center) {
                 Box(Modifier.heightIn(max = 420.dp).aspectRatio(0.45f).clip(MaterialTheme.shapes.large).background(cs.surfaceContainerHighest), contentAlignment = Alignment.Center) {
-                    if (img != null) Image(img, "What the hidden screen showed", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-                    else Text(if (shown.isEmpty()) "This run has no pictures" else "Picture not kept", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    if (img != null) Image(img, stringResource(R.string.screen_run_picture_cd), Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                    else Text(if (shown.isEmpty()) stringResource(R.string.screen_run_no_pictures) else stringResource(R.string.screen_picture_not_kept), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 }
             }
             Spacer(Modifier.height(12.dp))
             Surface(color = cs.surfaceContainerHigh, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                    Text(if (shown.isEmpty()) "No steps" else "Step ${at + 1} of ${shown.size}" + if (step?.by == "you") " · by you" else "", style = com.past9.phoneaos.ui.theme.Eyebrow, color = cs.primary)
+                    Text(if (shown.isEmpty()) stringResource(R.string.screen_no_steps) else stringResource(R.string.screen_step_of, at + 1, shown.size) + if (step?.by == "you") " · " + stringResource(R.string.screen_by_you) else "", style = com.past9.phoneaos.ui.theme.Eyebrow, color = cs.primary)
                     Text(step?.say ?: steps.lastOrNull()?.say.orEmpty(), style = MaterialTheme.typography.bodyLarge, color = cs.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
             if (shown.size > 1) Slider(at.toFloat(), { at = it.toInt().coerceIn(0, shown.size - 1); playing = false }, valueRange = 0f..(shown.size - 1).toFloat(), steps = (shown.size - 2).coerceAtLeast(0))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = { playing = false; if (at > 0) at-- }, enabled = at > 0, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) { Icon(Icons.Rounded.SkipPrevious, "Step back") }
+                OutlinedButton(onClick = { playing = false; if (at > 0) at-- }, enabled = at > 0, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) { Icon(Icons.Rounded.SkipPrevious, stringResource(R.string.screen_step_back)) }
                 Button(onClick = { if (at >= shown.size - 1) at = 0; playing = !playing }, enabled = shown.size > 1, modifier = Modifier.weight(1.4f).height(56.dp), shapes = ButtonDefaults.shapes()) {
-                    Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null); Spacer(Modifier.width(8.dp)); Text(if (playing) "Pause" else "Play", style = MaterialTheme.typography.titleMedium)
+                    Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null); Spacer(Modifier.width(8.dp)); Text(if (playing) stringResource(R.string.share_pause) else stringResource(R.string.share_play), style = MaterialTheme.typography.titleMedium)
                 }
-                OutlinedButton(onClick = { playing = false; if (at < shown.size - 1) at++ }, enabled = at < shown.size - 1, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) { Icon(Icons.Rounded.SkipNext, "Step on") }
+                OutlinedButton(onClick = { playing = false; if (at < shown.size - 1) at++ }, enabled = at < shown.size - 1, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) { Icon(Icons.Rounded.SkipNext, stringResource(R.string.screen_step_on)) }
             }
-            TextButton(onClick = onDelete, modifier = Modifier.heightIn(min = 48.dp)) { Text("Delete this recording", color = cs.error) }
+            TextButton(onClick = onDelete, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.screen_delete_recording), color = cs.error) }
         }
     }
 }
@@ -160,21 +163,21 @@ fun ScreenRunPlayerSheet(info: RunInfo, steps: List<RunStep>, picture: (Int) -> 
 @Composable
 fun ScreenBlockedSheet(builtInHere: List<String>, added: List<Pair<String, String>>, onAdd: () -> Unit, onRemove: (String) -> Unit, onDismiss: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    AppSheet(Icons.Rounded.Shield, "Background screen", "Blocked apps", onDismiss, primary = "Block another app", primaryEnabled = true, onPrimary = onAdd) {
-        Text("Banking, wallet, payment, card, crypto and investing apps are never opened, shown or touched on the hidden screen. That is built in and cannot be switched off, by you or by your agent. You can add any other app.",
+    AppSheet(Icons.Rounded.Shield, stringResource(R.string.screen_bg), stringResource(R.string.screen_blocked_apps), onDismiss, primary = stringResource(R.string.screen_block_another), primaryEnabled = true, onPrimary = onAdd) {
+        Text(stringResource(R.string.screen_blocked_body),
             style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(16.dp))
-        Text("ALWAYS BLOCKED ON THIS PHONE", style = com.past9.phoneaos.ui.theme.Eyebrow, color = cs.primary, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+        Text(stringResource(R.string.screen_always_blocked), style = com.past9.phoneaos.ui.theme.Eyebrow, color = cs.primary, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
         Surface(color = cs.surfaceContainerHigh, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
             Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Lock, null, tint = cs.onSurfaceVariant); Spacer(Modifier.width(16.dp))
-                Text(if (builtInHere.isEmpty()) "No banking or money app was found on this phone. Any you install later is blocked too." else builtInHere.joinToString(", "),
+                Text(if (builtInHere.isEmpty()) stringResource(R.string.screen_no_money_apps) else builtInHere.joinToString(", "),
                     style = MaterialTheme.typography.bodyMedium, color = cs.onSurface)
             }
         }
         Spacer(Modifier.height(16.dp))
-        Text("ALSO BLOCKED BY YOU", style = com.past9.phoneaos.ui.theme.Eyebrow, color = cs.primary, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
-        if (added.isEmpty()) Text("None added.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
+        Text(stringResource(R.string.screen_blocked_by_you), style = com.past9.phoneaos.ui.theme.Eyebrow, color = cs.primary, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+        if (added.isEmpty()) Text(stringResource(R.string.screen_none_added), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
         else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             added.forEach { (pkg, label) ->
                 Surface(color = cs.surfaceContainerHigh, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
@@ -183,7 +186,7 @@ fun ScreenBlockedSheet(builtInHere: List<String>, added: List<Pair<String, Strin
                             Text(label.ifBlank { pkg }, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(pkg, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
-                        TextButton(onClick = { onRemove(pkg) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Unblock") }
+                        TextButton(onClick = { onRemove(pkg) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.screen_unblock)) }
                     }
                 }
             }
@@ -199,23 +202,23 @@ fun ScreenSaveSkillSheet(app: String, steps: List<String>, typed: List<String>, 
     var what by remember { mutableStateOf("") }
     val on = remember { mutableStateMapOf<Int, Boolean>().apply { typed.indices.forEach { put(it, true) } } }
     val slug = LearnedApp.slug(name)
-    AppSheet(Icons.Rounded.AutoAwesome, "Learned app", "Save this for $app", onDismiss, primary = "Save", primaryEnabled = slug.length >= 2 && what.isNotBlank(),
+    AppSheet(Icons.Rounded.AutoAwesome, stringResource(R.string.screen_learned_app), stringResource(R.string.screen_save_for, app), onDismiss, primary = stringResource(R.string.machines_save), primaryEnabled = slug.length >= 2 && what.isNotBlank(),
         onPrimary = { onSave(slug, what.trim(), typed.withIndex().filter { on[it.index] == true }.associate { (i, t) -> (if (typed.size == 1) "text" else "text${i + 1}") to t }) }) {
-        Text("Your agent will be able to do these ${steps.size} steps again by itself, also from your computer. A step that sends, pays or deletes still asks you every time.",
+        Text(pluralStringResource(R.plurals.screen_save_body, steps.size, steps.size),
             style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(16.dp))
-        SheetField(name, { name = it }, "What to call it", "search, send a message, add a note", singleLine = true, keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.None))
+        SheetField(name, { name = it }, stringResource(R.string.screen_call_it), stringResource(R.string.screen_call_it_hint), singleLine = true, keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.None))
         Spacer(Modifier.height(12.dp))
-        SheetField(what, { what = it }, "What it does", "One line your agent reads to know when to use it", minLines = 2, keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences))
+        SheetField(what, { what = it }, stringResource(R.string.screen_what_it_does), stringResource(R.string.screen_what_it_does_hint), minLines = 2, keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences))
         if (typed.isNotEmpty()) {
             Spacer(Modifier.height(16.dp))
-            Text("WHAT CHANGES EACH TIME", style = com.past9.phoneaos.ui.theme.Eyebrow, color = cs.primary, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+            Text(stringResource(R.string.screen_changes_eyebrow), style = com.past9.phoneaos.ui.theme.Eyebrow, color = cs.primary, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 typed.forEachIndexed { i, t ->
                     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("“" + t.take(60) + "”", style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(if (on[i] == true) "Your agent fills this in each time" else "Always these exact words", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                            Text(if (on[i] == true) stringResource(R.string.screen_fills_in) else stringResource(R.string.screen_exact_words), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
                         Switch(on[i] == true, { on[i] = it })
                     }
@@ -223,7 +226,7 @@ fun ScreenSaveSkillSheet(app: String, steps: List<String>, typed: List<String>, 
             }
         }
         Spacer(Modifier.height(16.dp))
-        Text("THE STEPS", style = com.past9.phoneaos.ui.theme.Eyebrow, color = cs.primary, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+        Text(stringResource(R.string.screen_the_steps), style = com.past9.phoneaos.ui.theme.Eyebrow, color = cs.primary, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
         Text(steps.mapIndexed { i, s -> "${i + 1}. $s" }.joinToString("\n"), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
         if (error.isNotBlank()) Text(error, style = MaterialTheme.typography.bodyMedium, color = cs.error, modifier = Modifier.padding(top = 12.dp))
     }
@@ -234,13 +237,13 @@ fun ScreenSaveSkillSheet(app: String, steps: List<String>, typed: List<String>, 
 fun ScreenTypeSheet(onType: (String, Boolean) -> Unit, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf("") }
     var secret by remember { mutableStateOf(false) }
-    AppSheet(Icons.Rounded.Keyboard, "Background screen", "Type into the app", onDismiss, primary = "Type it", primaryEnabled = text.isNotEmpty(), onPrimary = { onType(text, secret) }) {
-        SheetField(text, { text = it }, "Goes into the field you pressed", "", minLines = 2, keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences))
+    AppSheet(Icons.Rounded.Keyboard, stringResource(R.string.screen_bg), stringResource(R.string.screen_type_into), onDismiss, primary = stringResource(R.string.screen_type_it), primaryEnabled = text.isNotEmpty(), onPrimary = { onType(text, secret) }) {
+        SheetField(text, { text = it }, stringResource(R.string.screen_type_field), "", minLines = 2, keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences))
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Private", style = MaterialTheme.typography.titleSmall)
-                Text("A password or a PIN: painted over in the recording and never kept.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.screen_private), style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.screen_private_sub), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(secret, { secret = it })
         }
@@ -269,13 +272,13 @@ internal fun RunsHost(onDismiss: () -> Unit) {
         choose -> {
             val block = remember { Screens.config(context).blocklist }
             val apps = remember { InstalledApps(context).everything().filter { block.blocked(it.pkg, it.label) == null }.sortedBy { it.label.lowercase() } }
-            ChoiceSheet(Icons.Rounded.TouchApp, "Show it a job", "Which app?", apps.map { SheetChoice(it.pkg, it.label, it.pkg) }, onPick = { c ->
+            ChoiceSheet(Icons.Rounded.TouchApp, stringResource(R.string.screen_show_job), stringResource(R.string.screen_which_app), apps.map { SheetChoice(it.pkg, it.label, it.pkg) }, onPick = { c ->
                 choose = false
                 scope.launch {
                     val why = session.userShow(c.id)
                     if (why == null) ScreenUi.show.value = ScreenUi.PEEK else com.past9.phoneaos.ui.AppNotice.say(why.substringBefore('.').take(90))
                 }
-            }, onDismiss = { choose = false }, line = "It opens on the hidden screen with the picture in your hands. Do the job, then save it.")
+            }, onDismiss = { choose = false }, line = stringResource(R.string.screen_show_job_line))
         }
         else -> ScreenRunsSheet(list, learned.filter { it.isScreen }, record, onOpen = { open = it }, onDeleteAll = { runs.deleteAll(); list = runs.list() },
             onRecord = { on -> record = on; g.settings.setExtra(Screens.RECORD, if (on) "1" else "0") }, onShow = { choose = true },
@@ -291,9 +294,9 @@ internal fun BlockedHost(onDismiss: () -> Unit) {
     val installed = remember { InstalledApps(context).everything() }
     val builtIn = remember { com.past9.phoneaos.screen.ScreenBlocklist(Screens.builtInBlocklist(context)) }
     val added = remember(tick) { Screens.blockAdded(context).map { it.substringBefore('|').trim() to it.substringAfter('|', "").trim() } }
-    if (choose) ChoiceSheet(Icons.Rounded.Shield, "Blocked apps", "Block which app?",
+    if (choose) ChoiceSheet(Icons.Rounded.Shield, stringResource(R.string.screen_blocked_apps), stringResource(R.string.screen_block_which),
         installed.filter { a -> builtIn.blocked(a.pkg, a.label) == null && added.none { it.first == a.pkg } }.sortedBy { it.label.lowercase() }.map { SheetChoice(it.pkg, it.label, it.pkg) },
-        onPick = { c -> Screens.blockAdd(context, c.id, c.title); tick++; choose = false }, onDismiss = { choose = false }, line = "Your agent will not open, see or touch it on the hidden screen.")
+        onPick = { c -> Screens.blockAdd(context, c.id, c.title); tick++; choose = false }, onDismiss = { choose = false }, line = stringResource(R.string.screen_block_line))
     else ScreenBlockedSheet(installed.filter { builtIn.blocked(it.pkg, it.label) != null }.map { it.label }.distinct().sorted(), added, onAdd = { choose = true },
         onRemove = { Screens.blockRemoveAdded(context, it); tick++ }, onDismiss = onDismiss)
 }
@@ -312,7 +315,7 @@ internal fun SaveSkillHost(onDismiss: () -> Unit) {
     ScreenSaveSkillSheet(session.state.collectAsState().value.app, doing.map { it.say }, typed, error, onSave = { name, what, inputs ->
         scope.launch {
             val out = ScreenLearned.save(session, g.runtime.learned, InstalledApps(context), Screens.config(context).blocklist, YesContext, name, what, inputs, readOnly = false, by = "you")
-            if (out.startsWith("Saved")) { com.past9.phoneaos.ui.AppNotice.say("Saved as a learned app"); onDismiss() } else error = out
+            if (out.startsWith("Saved")) { com.past9.phoneaos.ui.AppNotice.say(context.getString(R.string.screen_saved_learned)); onDismiss() } else error = out
         }
     }, onDismiss = onDismiss)
 }

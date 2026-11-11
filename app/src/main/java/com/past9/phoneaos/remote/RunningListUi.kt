@@ -24,6 +24,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import com.past9.phoneaos.R
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -145,11 +147,12 @@ fun RunningHeader(n: RunCounts, collapsed: Boolean, onToggle: () -> Unit, modifi
                   container: Color = MaterialTheme.colorScheme.surfaceContainerHigh, content: Color = MaterialTheme.colorScheme.onSurface) {
     val cs = MaterialTheme.colorScheme
     val line = RunningList.header(n)
+    val desc = stringResource(if (collapsed) R.string.link_running_show_list else R.string.link_running_hide_list, line)
     Surface(onClick = onToggle, shape = RoundedCornerShape(Radius.md), color = container, contentColor = content,
-        modifier = modifier.fillMaxWidth().heightIn(min = 48.dp).semantics { contentDescription = line + if (collapsed) ". Show the list" else ". Hide the list" }) {
+        modifier = modifier.fillMaxWidth().heightIn(min = 48.dp).semantics { contentDescription = desc }) {
         Row(Modifier.padding(start = 14.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("RUNNING", style = Eyebrow, color = if (n.needsYou > 0) cs.tertiary else cs.primary)
+                Text(stringResource(R.string.link_running), style = Eyebrow, color = if (n.needsYou > 0) cs.tertiary else cs.primary)
                 Text(line, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             val up = if (opensUp) collapsed else !collapsed
@@ -164,8 +167,9 @@ private fun GroupHead(g: RunGroup, folded: Boolean, onToggle: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val n = g.counts
     val line = if (n.running == 0 && n.needsYou == 0) "" else RunningList.header(n)
+    val desc = stringResource(if (folded) R.string.link_group_show else R.string.link_group_hide, g.name + (if (line.isBlank()) "" else ", $line"))
     Surface(onClick = onToggle, shape = RoundedCornerShape(Radius.sm), color = Color.Transparent, contentColor = cs.onSurface,
-        modifier = Modifier.fillMaxWidth().semantics { contentDescription = g.name + (if (line.isBlank()) "" else ", $line") + if (folded) ". Show" else ". Hide" }) {
+        modifier = Modifier.fillMaxWidth().semantics { contentDescription = desc }) {
         Row(Modifier.padding(start = 4.dp, end = 6.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             if (g.isMain || g.key == RunningList.OTHER) Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) { AgentAvatar(working = false, size = 20.dp) }
             else {
@@ -227,7 +231,7 @@ fun RunningBlock(ui: LiveCardsUi, modifier: Modifier = Modifier, current: String
         key(c.row) {
             Column(if (sub) Modifier.padding(start = 22.dp) else Modifier) {
                 // Whoever needs him says so, through any fold.
-                if (RunningList.needsYou(c, st)) StatusPill("Needs you", cs.tertiaryContainer, cs.onTertiaryContainer, Modifier.padding(start = 4.dp, bottom = 4.dp))
+                if (RunningList.needsYou(c, st)) StatusPill(stringResource(R.string.home_needs_you), cs.tertiaryContainer, cs.onTertiaryContainer, Modifier.padding(start = 4.dp, bottom = 4.dp))
                 LiveSwipeCard(c, onSwiped = { ui.dismiss(c) }) {
                     HelperCard(ui.view(c), onClick = {
                         when (val t = tapOf(c)) {
@@ -267,7 +271,7 @@ fun RunningBlock(ui: LiveCardsUi, modifier: Modifier = Modifier, current: String
             }
             val more = RunningList.finishedCount(groups, st)
             if (more > 0 && counts.running > 0) TextButton(onClick = { showFinished = !showFinished }, modifier = Modifier.padding(start = 4.dp)) {
-                Text(if (showFinished) "Hide finished" else "$more finished", style = MaterialTheme.typography.labelLarge)
+                Text(if (showFinished) stringResource(R.string.link_hide_finished) else stringResource(R.string.link_more_finished, more), style = MaterialTheme.typography.labelLarge)
             }
         }
     }
@@ -301,14 +305,14 @@ fun HomeRunning(modifier: Modifier = Modifier, cards: List<LiveCard>? = null, pr
             Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(g.name, style = MaterialTheme.typography.bodyMedium, color = cs.onPrimaryContainer, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
-                Text("${g.working} working", style = MaterialTheme.typography.labelMedium, color = cs.onPrimaryContainer.copy(alpha = 0.75f), maxLines = 1)
+                Text(stringResource(R.string.link_working_count, g.working), style = MaterialTheme.typography.labelMedium, color = cs.onPrimaryContainer.copy(alpha = 0.75f), maxLines = 1)
             }
         }
         RunningList.shown(groups, true, st).forEach { c ->
             Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(c.ownerName.ifBlank { c.label }, style = MaterialTheme.typography.bodyMedium, color = cs.onPrimaryContainer, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
-                Text("Needs you", style = MaterialTheme.typography.labelMedium, color = cs.onPrimaryContainer, maxLines = 1)
+                Text(stringResource(R.string.home_needs_you), style = MaterialTheme.typography.labelMedium, color = cs.onPrimaryContainer, maxLines = 1)
             }
         }
     }

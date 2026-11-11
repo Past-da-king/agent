@@ -85,11 +85,11 @@ fun BrowserScreen(engines: Map<String, BrowserEngine>, profiles: List<String>, a
     }
     if (adding) {
         var name by remember { mutableStateOf("") }
-        com.past9.phoneaos.ui.AppSheet(androidx.compose.material.icons.Icons.Rounded.Language, "Browser", "New browser profile", { adding = false }, primary = "Add profile", primaryEnabled = name.isNotBlank(),
+        com.past9.phoneaos.ui.AppSheet(androidx.compose.material.icons.Icons.Rounded.Language, stringResource(R.string.ui_nav_browser), stringResource(R.string.browser_new_profile), { adding = false }, primary = stringResource(R.string.browser_add_profile), primaryEnabled = name.isNotBlank(),
             onPrimary = { actions.onAddProfile(name.trim()); adding = false }) {
-            Text("A separate set of signed-in accounts, e.g. Work. Sign in once here; your agent can then use it.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.browser_new_profile_body), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(16.dp))
-            com.past9.phoneaos.ui.SheetField(name, { name = it }, "Name", "Work", singleLine = true)
+            com.past9.phoneaos.ui.SheetField(name, { name = it }, stringResource(R.string.browser_name), stringResource(R.string.browser_name_hint), singleLine = true)
         }
     }
 }

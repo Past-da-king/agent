@@ -108,14 +108,15 @@ fun ProfileScreen(home: HomeState, memories: List<MemoryRow>, actions: ProfileAc
         }
         items(running, key = { "h${it.id}" }) { h ->
             // Any card left here can be swiped away, either way: it is stopped if it still runs and it leaves every list.
+            val swipeCd = stringResource(R.string.profile_helper_swipe, h.label)
             if (dismiss == null) HelperCard(h, onClick = { openHelper = h.id }, modifier = Modifier.padding(horizontal = 16.dp), now = home.now)
             else SwipeToDismissBox(state = rememberSwipeToDismissBoxState(), onDismiss = { dismiss(h.id) },
-                modifier = Modifier.padding(horizontal = 16.dp).animateItem().semantics { contentDescription = "${h.label}. Swipe to stop and dismiss it" },
+                modifier = Modifier.padding(horizontal = 16.dp).animateItem().semantics { contentDescription = swipeCd },
                 backgroundContent = {
                     Surface(shape = MaterialTheme.shapes.extraLarge, color = cs.errorContainer, modifier = Modifier.fillMaxSize()) {
                         Row(Modifier.fillMaxSize().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Dismiss", style = MaterialTheme.typography.labelLarge, color = cs.onErrorContainer)
-                            Text("Dismiss", style = MaterialTheme.typography.labelLarge, color = cs.onErrorContainer)
+                            Text(stringResource(R.string.camera_dismiss), style = MaterialTheme.typography.labelLarge, color = cs.onErrorContainer)
+                            Text(stringResource(R.string.camera_dismiss), style = MaterialTheme.typography.labelLarge, color = cs.onErrorContainer)
                         }
                     }
                 }) { HelperCard(h, onClick = { openHelper = h.id }, now = home.now) }

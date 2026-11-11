@@ -19,10 +19,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.past9.phoneaos.R
 import com.past9.phoneaos.remote.RemoteHub
 import com.past9.phoneaos.remote.RemoteRows
 import com.past9.phoneaos.remote.RemoteSession
@@ -58,6 +61,7 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
     var problem by remember { mutableStateOf("") }
     var working by remember { mutableStateOf(false) }
     val box = remember(chat) { com.past9.phoneaos.ui.ComposerBoxes.box("chat:$chat") }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     val appScope = com.past9.phoneaos.App.graph(androidx.compose.ui.platform.LocalContext.current).scope
     val tools = com.past9.phoneaos.ui.LocalComposerTools.current
     var more by remember { mutableStateOf(false) }
@@ -77,7 +81,7 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
     suspend fun load(s: RemoteSession) {
         runCatching { page(s, null) to s.chatRunning(chat) }
             .onSuccess { (r, w) -> if (!loaded) more = r.size >= PAGE; rows = com.past9.phoneaos.remote.Mentions.merge(rows, r); working = w; problem = ""; loaded = true }
-            .onFailure { problem = "Couldn't read this chat from your computer: ${it.message}"; loaded = true }
+            .onFailure { problem = ctx.getString(R.string.proj_chat_read_failed, it.message); loaded = true }
     }
     suspend fun loadOlder(s: RemoteSession) {
         if (loadingOlder || !more) return
@@ -85,7 +89,7 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
         val oldest = rows.minOfOrNull { it.optLong("createdAt") } ?: 0L
         runCatching { page(s, oldest) }
             .onSuccess { r -> more = r.size >= PAGE; rows = com.past9.phoneaos.remote.Mentions.merge(rows, r); android.util.Log.i("Mentions", "older page: ${r.size} rows") }
-            .onFailure { problem = "Couldn't load earlier messages: ${it.message}" }
+            .onFailure { problem = ctx.getString(R.string.proj_chat_older_failed, it.message) }
         loadingOlder = false
     }
     // Scrolled up to the top: the page above.
@@ -119,7 +123,7 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
         topBar = {
             Column(Modifier.fillMaxWidth().statusBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to the chat") }
+                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.proj_back_to_chat)) }
                 // The title opens the project switcher (ui/ProjectSwitcher.kt): the main chat, or another project's newest chat.
                 com.past9.phoneaos.ui.SwitcherTitle(chat, { c, n -> if (c == com.past9.phoneaos.remote.RunningList.MAIN) onBack() else live?.openChat?.invoke(c, n) }, Modifier.weight(1f)) {
                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -127,11 +131,11 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(if (working) "Working on it" else "Project chat on your computer", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(if (working) stringResource(R.string.svc_work_on_it) else stringResource(R.string.proj_chat_on_computer), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 }
                 }
-                IconButton(onClick = { askNewChat = true }) { Icon(Icons.Rounded.RestartAlt, "New chat in this project") }
+                IconButton(onClick = { askNewChat = true }) { Icon(Icons.Rounded.RestartAlt, stringResource(R.string.proj_new_chat_here_cd)) }
             }
             }
         },
@@ -139,11 +143,11 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
             // THE message box (the main chat's): photos, documents, camera, mic, '@' another project. Its sends carry
             // their pictures (sendTo uploads each first; before 0.15.11 this box was text only and sent none).
             val acts = com.past9.phoneaos.ui.composerActionsFor(box, tools, working, appScope, send = { text, pics, files ->
-                val s = session ?: throw java.io.IOException("Not linked to a computer.")
+                val s = session ?: throw java.io.IOException(ctx.getString(R.string.chat_not_linked))
                 s.sendTo(chat, text, pics, files)
                 scope.launch { load(s) }
             }, stop = { session?.let { s -> scope.launch { runCatching { s.call("chat.stop", listOf(chat), 15_000) } } } },
-                onFailed = { problem = "Couldn't send that: $it. Your words are still in the box." })
+                onFailed = { problem = ctx.getString(R.string.proj_send_failed, it) })
             Column {
             if (live != null && agentsFolded) Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(start = 16.dp, end = 16.dp, top = 6.dp)) {
                 com.past9.phoneaos.remote.AgentsPill(live, onOpen = {
@@ -151,22 +155,22 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
                     scope.launch { delay(120); list.animateScrollToItem(list.layoutInfo.totalItemsCount.coerceAtLeast(1) - 1) }
                 })
             }
-            MessageComposer(box.draft, { box.draft = it }, working, acts, box.attachments, box.docs.keys.toList(), tools?.listening(box) == true, placeholder = "Message $name", dictationOwner = box, sending = box.sending,
+            MessageComposer(box.draft, { box.draft = it }, working, acts, box.attachments, box.docs.keys.toList(), tools?.listening(box) == true, placeholder = stringResource(R.string.proj_message_to, name), dictationOwner = box, sending = box.sending,
                 failed = box.failed, onRetry = box.retry)
             }
         },
     ) { pad ->
         LazyColumn(state = list, modifier = Modifier.fillMaxSize().padding(pad), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (more) item(key = "older") { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { TextButton(onClick = { session?.let { s -> scope.launch { loadOlder(s) } } }, enabled = !loadingOlder) { Text(if (loadingOlder) "Loading..." else "Earlier messages") } } }
+            if (more) item(key = "older") { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { TextButton(onClick = { session?.let { s -> scope.launch { loadOlder(s) } } }, enabled = !loadingOlder) { Text(if (loadingOlder) stringResource(R.string.chat_loading) else stringResource(R.string.chat_earlier_messages)) } } }
             if (problem.isNotEmpty()) item(key = "problem") { Text(problem, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
             if (!loaded) item(key = "loading") { Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { LoadingIndicator() } }
-            else if (rows.isEmpty() && problem.isEmpty()) item(key = "empty") { Text("Nothing in this chat yet.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            else if (rows.isEmpty() && problem.isEmpty()) item(key = "empty") { Text(stringResource(R.string.proj_chat_empty), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             items(rows, key = { it.optString("id") }) { row ->
                 when (row.optString("kind")) {
                     "user" -> {
                         val via = runCatching { JSONObject(row.optString("meta").ifBlank { "{}" }).optJSONObject("via") }.getOrNull()
                         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
-                            if (via != null) Text("From ${via.optString("name").ifBlank { "another chat" }}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (via != null) Text(stringResource(R.string.proj_from, via.optString("name").ifBlank { stringResource(R.string.proj_another_chat) }), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             if (row.optString("text").isNotBlank()) Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md), color = if (via == null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.widthIn(max = 320.dp)) {
                                 Text(row.optString("text"), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
                             }
@@ -180,7 +184,7 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
             }
             if (mine != null && mine.cards.isNotEmpty() && !agentsFolded) item(key = "live-cards") { com.past9.phoneaos.remote.LiveCardList(mine, onCollapse = { fold.set(false) }) }
             if (working) item(key = "working") {
-                Row(verticalAlignment = Alignment.CenterVertically) { LoadingIndicator(Modifier.size(28.dp)); Spacer(Modifier.width(8.dp)); Text("Working…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                Row(verticalAlignment = Alignment.CenterVertically) { LoadingIndicator(Modifier.size(28.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.proj_working), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
         Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.BottomCenter) {
@@ -190,18 +194,18 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
         }
     }
     // A slide-up sheet, never a pop-up: what New chat in this chat does, said before it does it.
-    if (askNewChat) com.past9.phoneaos.ui.ConfirmSheet(Icons.Rounded.RestartAlt, name, "Start a new chat here?",
-        "What was said so far is saved to memory and this window starts empty. Nothing on your computer is deleted.", "New chat",
+    if (askNewChat) com.past9.phoneaos.ui.ConfirmSheet(Icons.Rounded.RestartAlt, name, stringResource(R.string.proj_new_chat_q),
+        stringResource(R.string.proj_new_chat_line), stringResource(R.string.proj_new_chat),
         onConfirm = {
             askNewChat = false
             val s = session
-            if (s == null) problem = "Not linked to a computer right now."
+            if (s == null) problem = ctx.getString(R.string.proj_not_linked_now)
             else scope.launch {
                 problem = when (s.newChat(chat)) {
                     com.past9.phoneaos.remote.NewChatOutcome.STARTED -> { rows = emptyList(); more = false; loaded = true; load(s); "" }
-                    com.past9.phoneaos.remote.NewChatOutcome.COMPUTER_OLDER -> "Your computer's Agent app is older than this one, so it cannot start a new chat there. Update it on your computer, then try again."
-                    com.past9.phoneaos.remote.NewChatOutcome.UNREACHABLE -> "Your computer could not be reached. Try again when it is back."
-                    com.past9.phoneaos.remote.NewChatOutcome.NOT_LINKED -> "Not linked to a computer right now."
+                    com.past9.phoneaos.remote.NewChatOutcome.COMPUTER_OLDER -> ctx.getString(R.string.proj_computer_older)
+                    com.past9.phoneaos.remote.NewChatOutcome.UNREACHABLE -> ctx.getString(R.string.proj_unreachable)
+                    com.past9.phoneaos.remote.NewChatOutcome.NOT_LINKED -> ctx.getString(R.string.proj_not_linked_now)
                 }
             }
         },
@@ -234,12 +238,13 @@ private fun RowPictures(row: JSONObject, session: RemoteSession?) {
     var asked by remember(meta) { mutableStateOf(false) }
     LaunchedEffect(meta, asked) { local = runCatching { session.picturesOf(meta, force = asked).values.toList() }.getOrDefault(emptyList()) }
     Spacer(Modifier.height(6.dp))
-    if (local.isNotEmpty()) com.past9.phoneaos.ui.ImageStrip(local.map { com.past9.phoneaos.ui.ChatImage(java.io.File(it).toURI().toString(), "Photo you sent") }, Modifier.widthIn(max = 320.dp))
+    val sentAlt = stringResource(R.string.proj_photo_you_sent)
+    if (local.isNotEmpty()) com.past9.phoneaos.ui.ImageStrip(local.map { com.past9.phoneaos.ui.ChatImage(java.io.File(it).toURI().toString(), sentAlt) }, Modifier.widthIn(max = 320.dp))
     else Surface(onClick = { asked = true }, shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
         Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(androidx.compose.material.icons.Icons.Rounded.Image, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.width(8.dp))
-            Text(if (count == 1) "1 photo · tap to load" else "$count photos · tap to load", style = MaterialTheme.typography.labelLarge)
+            Text(pluralStringResource(R.plurals.proj_photos_tap, count, count), style = MaterialTheme.typography.labelLarge)
         }
     }
 }

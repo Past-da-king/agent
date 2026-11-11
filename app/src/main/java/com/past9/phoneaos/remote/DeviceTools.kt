@@ -31,7 +31,9 @@ import java.util.concurrent.atomic.AtomicInteger
 object DeviceTools {
     /** group -> on by default. Shell (run_code) is never lent. */
     val GROUPS = linkedMapOf("browser" to true, "notifications" to true, "files" to true, "approval" to true, "phone" to true, "location" to true, "automation" to true)
-    val LABELS = mapOf("browser" to "Browser", "notifications" to "Notifications it can read", "files" to "Files", "approval" to "Questions and approvals", "phone" to "Notifications to you", "location" to "Your location (asked once)", "automation" to "Other apps: intents, music and video, macros (intents and macros ask unless allowed)")
+    val LABELS = mapOf("browser" to com.past9.phoneaos.R.string.settings_browser, "notifications" to com.past9.phoneaos.R.string.link_group_notifications, "files" to com.past9.phoneaos.R.string.link_group_files,
+        "approval" to com.past9.phoneaos.R.string.link_group_approval, "phone" to com.past9.phoneaos.R.string.link_group_phone, "location" to com.past9.phoneaos.R.string.link_group_location,
+        "automation" to com.past9.phoneaos.R.string.link_group_automation)
 
     /**
      * Every tool this phone lends to a linked computer, by name. A tool the phone has must be either here or in
@@ -185,7 +187,7 @@ object RemoteAsk {
         // request_approval asks "APPROVAL|<action>|<details>".
         val parts = question.split('|', limit = 3)
         val approval = parts.size == 3 && parts[0] == "APPROVAL"
-        val title = if (approval) "Approve: ${parts[1]}?" else "Your agent asks"
+        val title = if (approval) context.getString(com.past9.phoneaos.R.string.link_ask_approve, parts[1]) else context.getString(com.past9.phoneaos.R.string.link_ask_title)
         val text = if (approval) parts[2] else question
         val b = NotificationCompat.Builder(context, AndroidPhone.CH_MESSAGES).setSmallIcon(com.past9.phoneaos.system.Identity.statIcon(context, App.graph(context).settings.state.value.mascot))
             .setContentTitle(title).setContentText(text).setStyle(NotificationCompat.BigTextStyle().bigText(text))
@@ -290,7 +292,7 @@ class DeviceCommands(private val context: Context, private val session: RemoteSe
         if (open) runCatching { context.startActivity(view) }
         val pi = PendingIntent.getActivity(context, name.hashCode(), view, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val n = NotificationCompat.Builder(context, AndroidPhone.CH_MESSAGES).setSmallIcon(com.past9.phoneaos.system.Identity.statIcon(context, App.graph(context).settings.state.value.mascot))
-            .setContentTitle(name).setContentText("Saved to Downloads. Tap to open.").setContentIntent(pi).setAutoCancel(true).build()
+            .setContentTitle(name).setContentText(context.getString(com.past9.phoneaos.R.string.link_saved_downloads)).setContentIntent(pi).setAutoCancel(true).build()
         runCatching { NotificationManagerCompat.from(context).notify(name.hashCode(), n) }
         return true to "saved to Downloads as $name"
     }

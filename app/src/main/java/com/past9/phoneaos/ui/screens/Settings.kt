@@ -145,15 +145,15 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
             }
             SectionHeader(stringResource(R.string.settings_voice), stringResource(R.string.settings_voice_sub), Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
-                Line(Icons.Rounded.RecordVoiceOver, "Voice",
-                    mapOf("system" to "Phone voice", "gemini" to "Google voice", "openai" to "OpenAI voice", "elevenlabs" to "ElevenLabs voice")[s.ttsProvider] ?: "Phone voice") { voiceSheet = true }
+                Line(Icons.Rounded.RecordVoiceOver, stringResource(R.string.settings_voice),
+                    stringResource(mapOf("system" to R.string.settings_voice_phone, "gemini" to R.string.settings_voice_google, "openai" to R.string.settings_voice_openai, "elevenlabs" to R.string.settings_voice_elevenlabs)[s.ttsProvider] ?: R.string.settings_voice_phone)) { voiceSheet = true }
                 // The phone's digital assistant: on or off, and a sheet that walks through the two taps in the phone's Settings.
                 val actx = androidx.compose.ui.platform.LocalContext.current
                 var assistant by remember { mutableStateOf(false) }
                 var assistTick by remember { mutableIntStateOf(0) }
                 androidx.lifecycle.compose.LifecycleResumeEffect(Unit) { assistTick++; onPauseOrDispose { } }
                 val assistHeld = remember(assistant, assistTick) { com.past9.phoneaos.assist.AssistRole.held(actx) }
-                Line(Icons.Rounded.Assistant, "Default assistant", com.past9.phoneaos.assist.AssistRole.line(assistHeld)) { assistant = true }
+                Line(Icons.Rounded.Assistant, stringResource(R.string.settings_default_assistant), com.past9.phoneaos.assist.AssistRole.line(assistHeld)) { assistant = true }
                 if (assistant) AssistantSheet(s.agentName, onDismiss = { assistant = false })
             }
             SectionHeader(stringResource(R.string.settings_background), stringResource(R.string.settings_background_sub), Modifier.padding(start = 4.dp, top = 12.dp))
@@ -167,54 +167,55 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
                 Line(Icons.Rounded.Sync, stringResource(R.string.settings_handoffs), com.past9.phoneaos.handoff.HandoffStore.peek(ctx)?.let { stringResource(R.string.settings_handoffs_signed_in, it) } ?: stringResource(R.string.settings_handoffs_sub)) { handoffs = true }
                 if (handoffs) com.past9.phoneaos.handoff.HandoffSheet { handoffs = false }
                 var wakeups by remember { mutableStateOf(false) }
-                Line(Icons.Rounded.Alarm, "Wake-ups", "Rings through Do Not Disturb until you answer: permissions and a test") { wakeups = true }
+                Line(Icons.Rounded.Alarm, stringResource(R.string.settings_wakeups), stringResource(R.string.settings_wakeups_sub)) { wakeups = true }
                 if (wakeups) WakeupsSheet { wakeups = false }
                 var wakeWord by remember { mutableStateOf(false) }
                 val wakeWordOn by com.past9.phoneaos.wakeword.WakeWord.store(androidx.compose.ui.platform.LocalContext.current).state.collectAsState()
-                Line(Icons.Rounded.RecordVoiceOver, "Wake word", if (wakeWordOn.enabled) "Listening for \"" + wakeWordOn.customPhrase.ifBlank { com.past9.phoneaos.wakeword.WakePhrase.defaultFor(s.agentName) } + "\"" else "Off. Say your agent's name to open it from anywhere") { wakeWord = true }
+                Line(Icons.Rounded.RecordVoiceOver, stringResource(R.string.settings_wake_word), if (wakeWordOn.enabled) stringResource(R.string.settings_wake_word_listening, wakeWordOn.customPhrase.ifBlank { com.past9.phoneaos.wakeword.WakePhrase.defaultFor(s.agentName) }) else stringResource(R.string.settings_wake_word_off)) { wakeWord = true }
                 if (wakeWord) WakeWordSheet { wakeWord = false }
                 Line(Icons.Rounded.BatteryChargingFull, stringResource(R.string.settings_battery), stringResource(R.string.settings_battery_sub)) { actions.onBattery() }
             }
-            SectionHeader("Automation", "Other apps, both ways", Modifier.padding(start = 4.dp, top = 12.dp))
+            SectionHeader(stringResource(R.string.settings_automation), stringResource(R.string.settings_automation_sub), Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
-                Line(Icons.Rounded.Bolt, "Automation from other apps",
+                Line(Icons.Rounded.Bolt, stringResource(R.string.settings_automation_title),
                     when {
-                        !automation.running -> "Not listening yet: open the app once"
-                        automationAllowedNow -> "On \u00b7 ${automation.url}"
-                        else -> "Off \u00b7 tap to set it up"
+                        !automation.running -> stringResource(R.string.settings_automation_not_listening)
+                        automationAllowedNow -> stringResource(R.string.settings_automation_on, automation.url)
+                        else -> stringResource(R.string.settings_automation_off)
                     }) { automationSheet = true }
-                Line(Icons.Rounded.SmartToy, "Agent talks to your apps",
-                    MacroRulesUi.allowedLine(actions.macro.allowlist(), actions.macro.intents())) { macroSheet = true }
+                Line(Icons.Rounded.SmartToy, stringResource(R.string.settings_macro_title),
+                    MacroRulesUi.allowedLine(actions.macro.allowlist(), actions.macro.intents(), androidx.compose.ui.platform.LocalContext.current)) { macroSheet = true }
                 // Read again each time the sheet closes, so the line says what the sheet just changed.
-                val mediaLine = remember(mediaSheet) { MediaAppsUi.line(actions.media.rows(), actions.media.music(), actions.media.video()) }
-                Line(Icons.Rounded.LibraryMusic, "Media apps", mediaLine) { mediaSheet = true }
+                val mctx = androidx.compose.ui.platform.LocalContext.current
+                val mediaLine = remember(mediaSheet) { MediaAppsUi.line(actions.media.rows(), actions.media.music(), actions.media.video(), mctx) }
+                Line(Icons.Rounded.LibraryMusic, stringResource(R.string.settings_media_apps), mediaLine) { mediaSheet = true }
             }
-            SectionHeader("Background screen", "Other apps, while you keep your screen", Modifier.padding(start = 4.dp, top = 12.dp))
+            SectionHeader(stringResource(R.string.settings_bg_screen), stringResource(R.string.settings_bg_screen_sub), Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 val screenCtx = androidx.compose.ui.platform.LocalContext.current
                 var screenOn by remember { mutableStateOf(com.past9.phoneaos.screen.Screens.on(screenCtx)) }
                 // Off by default: it is new and still being proven on real phones. Switched off, nothing of it exists in the app.
                 val screenState = if (screenOn) com.past9.phoneaos.screen.Screens.session(screenCtx).state.value else null
-                Line(Icons.Rounded.Layers, "Background screen", if (screenState?.stopped == true) "Stopped by you. Tap to allow your agent to use it again" else if (screenOn) "On. Setup, rules and blocked apps" else "Off. Experimental: your agent uses other apps on a hidden screen while you keep yours",
+                Line(Icons.Rounded.Layers, stringResource(R.string.settings_bg_screen), if (screenState?.stopped == true) stringResource(R.string.settings_bg_screen_stopped) else if (screenOn) stringResource(R.string.settings_bg_screen_on) else stringResource(R.string.settings_bg_screen_off),
                     trailing = { Switch(screenOn, { on -> screenOn = on; com.past9.phoneaos.screen.Screens.setOn(screenCtx, on) }) }) {
-                    if (screenState?.stopped == true) { com.past9.phoneaos.screen.Screens.session(screenCtx).userAllow(); com.past9.phoneaos.ui.AppNotice.say("Your agent can use the background screen again") }
+                    if (screenState?.stopped == true) { com.past9.phoneaos.screen.Screens.session(screenCtx).userAllow(); com.past9.phoneaos.ui.AppNotice.say(screenCtx.getString(R.string.settings_bg_screen_allowed)) }
                     else if (screenOn) com.past9.phoneaos.screen.ScreenUi.show.value = com.past9.phoneaos.screen.ScreenUi.SETUP
                 }
-                if (screenOn) Line(Icons.Rounded.Movie, "Recordings and learned apps", "Watch what it did there, and teach it a job yourself") { com.past9.phoneaos.screen.ScreenUi.show.value = com.past9.phoneaos.screen.ScreenUi.RUNS }
+                if (screenOn) Line(Icons.Rounded.Movie, stringResource(R.string.settings_bg_screen_runs), stringResource(R.string.settings_bg_screen_runs_sub)) { com.past9.phoneaos.screen.ScreenUi.show.value = com.past9.phoneaos.screen.ScreenUi.RUNS }
             }
-            SectionHeader("Browser", "The browser your agent uses", Modifier.padding(start = 4.dp, top = 12.dp))
+            SectionHeader(stringResource(R.string.settings_browser), stringResource(R.string.settings_browser_sub), Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 // Read again each time the sheet closes, so the line says what the sheet just changed.
                 val sites = remember(browserSheet) { actions.browser.origins() }
-                Line(Icons.Rounded.Public, "Sites that need advanced browser features", com.past9.phoneaos.browser.IsolatedOrigins.line(sites)) { browserSheet = true }
+                Line(Icons.Rounded.Public, stringResource(R.string.settings_browser_sites), com.past9.phoneaos.browser.IsolatedOrigins.line(sites)) { browserSheet = true }
             }
-            SectionHeader("Linked devices", "Your computers and servers", Modifier.padding(start = 4.dp, top = 12.dp))
+            SectionHeader(stringResource(R.string.settings_linked), stringResource(R.string.settings_linked_sub), Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
-                Line(Icons.Rounded.Devices, "Linked devices", actions.linkedLine) { actions.onLinked() }
+                Line(Icons.Rounded.Devices, stringResource(R.string.settings_linked), actions.linkedLine) { actions.onLinked() }
             }
-            SectionHeader("Your data", "It all lives on this phone", Modifier.padding(start = 4.dp, top = 12.dp))
+            SectionHeader(stringResource(R.string.settings_data), stringResource(R.string.settings_data_sub), Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
-                Line(Icons.Rounded.Mic, "Recordings", "What you dictated: the words and the audio") { actions.onRecordings() }
+                Line(Icons.Rounded.Mic, stringResource(R.string.settings_recordings), stringResource(R.string.settings_recordings_sub)) { actions.onRecordings() }
                 Line(Icons.Rounded.ChatBubbleOutline, stringResource(R.string.settings_clear_chat), stringResource(R.string.settings_clear_chat_sub)) { actions.onClearChat() }
                 Line(Icons.Rounded.RestartAlt, stringResource(R.string.settings_reset), stringResource(R.string.settings_reset_sub), danger = true) { confirmReset = true }
             }
@@ -223,8 +224,8 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
         }
     }
     // Slide-up sheets, never pop-up dialogs.
-    if (pickSub) com.past9.phoneaos.ui.ChoiceSheet(androidx.compose.material.icons.Icons.Rounded.Bolt, "What powers it", "Which subscription?",
-        com.past9.phoneaos.data.SubKind.entries.map { k -> com.past9.phoneaos.ui.SheetChoice(k.name, "${k.label} ${stringResource(k.plan)}", if (k == com.past9.phoneaos.data.SubKind.OPENCODE) "Paste your OpenCode key" else "Sign in with your ${k.label} account",
+    if (pickSub) com.past9.phoneaos.ui.ChoiceSheet(androidx.compose.material.icons.Icons.Rounded.Bolt, stringResource(R.string.settings_what_powers), stringResource(R.string.settings_which_sub),
+        com.past9.phoneaos.data.SubKind.entries.map { k -> com.past9.phoneaos.ui.SheetChoice(k.name, "${k.label} ${stringResource(k.plan)}", if (k == com.past9.phoneaos.data.SubKind.OPENCODE) stringResource(R.string.settings_paste_opencode) else stringResource(R.string.settings_sign_in_with, k.label),
             selected = s.mode == PowerMode.SUBSCRIPTION && s.subKind == k) },
         onPick = { c -> pickSub = false; actions.onChooseSub(com.past9.phoneaos.data.SubKind.valueOf(c.id)) }, onDismiss = { pickSub = false })
     // The language picker slides up from the bottom (never a centred dialog) and is built from the app's own sheet.
@@ -233,7 +234,7 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
             com.past9.phoneaos.ui.SheetChoice(tag, label ?: stringResource(R.string.settings_language_phone), selected = tag == actions.language) },
         onPick = { c -> pickLanguage = false; if (c.id != actions.language) actions.setLanguage(c.id) }, onDismiss = { pickLanguage = false })
     edit?.let { (label, save) ->
-        com.past9.phoneaos.ui.AppSheet(androidx.compose.material.icons.Icons.Rounded.Edit, "Settings", label, { edit = null }, primary = "Save", primaryEnabled = true, onPrimary = { save(editValue); edit = null }) {
+        com.past9.phoneaos.ui.AppSheet(androidx.compose.material.icons.Icons.Rounded.Edit, stringResource(R.string.settings_title), label, { edit = null }, primary = stringResource(R.string.settings_save), primaryEnabled = true, onPrimary = { save(editValue); edit = null }) {
             com.past9.phoneaos.ui.SheetField(editValue, { editValue = it }, label, "", singleLine = true)
         }
     }
@@ -249,9 +250,9 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
     if (macroSheet) MacroSheet(actions.macro) { macroSheet = false }
     if (mediaSheet) MediaAppsSheet(actions.media) { mediaSheet = false }
     if (browserSheet) BrowserSheet(actions.browser) { browserSheet = false }
-    if (confirmReset) com.past9.phoneaos.ui.ConfirmSheet(androidx.compose.material.icons.Icons.Rounded.DeleteForever, "This phone", "Reset everything?",
-        "This deletes your keys, memory, tasks, routines and the conversation from this phone. It can't be undone.",
-        confirm = "Reset everything", onConfirm = { confirmReset = false; actions.onResetAll() }, onDismiss = { confirmReset = false }, cancel = "Keep my stuff", destructive = true)
+    if (confirmReset) com.past9.phoneaos.ui.ConfirmSheet(androidx.compose.material.icons.Icons.Rounded.DeleteForever, stringResource(R.string.settings_this_phone), stringResource(R.string.settings_reset_confirm),
+        stringResource(R.string.settings_reset_confirm_body),
+        confirm = stringResource(R.string.settings_reset), onConfirm = { confirmReset = false; actions.onResetAll() }, onDismiss = { confirmReset = false }, cancel = stringResource(R.string.settings_keep), destructive = true)
 }
 
 @Composable
@@ -290,16 +291,17 @@ private fun AutomationSheet(
     onDismiss: () -> Unit,
 ) {
     val clip = LocalClipboardManager.current
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     var confirmRotate by remember { mutableStateOf(false) }
     com.past9.phoneaos.ui.AgentSheet(onDismiss) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 24.dp).navigationBarsPadding()) {
-            com.past9.phoneaos.ui.SheetHead(Icons.Rounded.Bolt, "Settings", "Automation from other apps",
-                "Let MacroDroid, Tasker or any app on this phone fire one of your routines, over the address below or by intent. Anything that needs your approval is refused.")
+            com.past9.phoneaos.ui.SheetHead(Icons.Rounded.Bolt, stringResource(R.string.settings_title), stringResource(R.string.settings_automation_title),
+                stringResource(R.string.settings_automation_body))
             Spacer(Modifier.height(20.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
-                Line(Icons.Rounded.Link, "Address", info.url) {}
-                Line(Icons.Rounded.Key, "Token", "Copy it, then paste it into the macro as a Bearer token") {
-                    if (token.isNotBlank()) { clip.setText(AnnotatedString(token)); com.past9.phoneaos.ui.AppNotice.say("Token copied") }
+                Line(Icons.Rounded.Link, stringResource(R.string.machines_address), info.url) {}
+                Line(Icons.Rounded.Key, stringResource(R.string.settings_token), stringResource(R.string.settings_token_sub)) {
+                    if (token.isNotBlank()) { clip.setText(AnnotatedString(token)); com.past9.phoneaos.ui.AppNotice.say(ctx.getString(R.string.settings_token_copied)) }
                 }
                 if (token.isNotBlank()) SelectionContainer {
                     Text(
@@ -311,26 +313,26 @@ private fun AutomationSheet(
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = {
-                        if (token.isNotBlank()) { clip.setText(AnnotatedString(token)); com.past9.phoneaos.ui.AppNotice.say("Token copied") }
-                    }, enabled = token.isNotBlank()) { Text("Copy token", style = MaterialTheme.typography.labelLarge) }
-                    OutlinedButton(onClick = { confirmRotate = true }) { Text("New token", style = MaterialTheme.typography.labelLarge) }
+                        if (token.isNotBlank()) { clip.setText(AnnotatedString(token)); com.past9.phoneaos.ui.AppNotice.say(ctx.getString(R.string.settings_token_copied)) }
+                    }, enabled = token.isNotBlank()) { Text(stringResource(R.string.settings_copy_token), style = MaterialTheme.typography.labelLarge) }
+                    OutlinedButton(onClick = { confirmRotate = true }) { Text(stringResource(R.string.settings_new_token), style = MaterialTheme.typography.labelLarge) }
                 }
                 if (confirmRotate) Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp)) {
-                    Text("A new token stops every macro that holds the old one. You paste the new one in.",
+                    Text(stringResource(R.string.settings_new_token_warning),
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
                     Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { onRotate(); confirmRotate = false }) { Text("Make a new token", style = MaterialTheme.typography.labelLarge) }
-                        TextButton(onClick = { confirmRotate = false }) { Text("Keep it", style = MaterialTheme.typography.labelLarge) }
+                        Button(onClick = { onRotate(); confirmRotate = false }) { Text(stringResource(R.string.settings_make_new_token), style = MaterialTheme.typography.labelLarge) }
+                        TextButton(onClick = { confirmRotate = false }) { Text(stringResource(R.string.settings_keep_it), style = MaterialTheme.typography.labelLarge) }
                     }
                 }
                 Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.Bolt, null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Allow outside runs", style = MaterialTheme.typography.titleSmall)
+                        Text(stringResource(R.string.settings_allow_outside), style = MaterialTheme.typography.titleSmall)
                         Text(
-                            if (allowed) "A macro may fire a routine. Anything needing your approval is refused."
-                            else "Off: every call is refused.",
+                            if (allowed) stringResource(R.string.settings_allow_outside_on)
+                            else stringResource(R.string.settings_allow_outside_off),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -344,13 +346,13 @@ private fun AutomationSheet(
                     Icon(Icons.Rounded.Send, null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Or by intent", style = MaterialTheme.typography.titleSmall)
-                        Text("Works when the app is closed. Same token, same switch.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.settings_by_intent), style = MaterialTheme.typography.titleSmall)
+                        Text(stringResource(R.string.settings_by_intent_sub), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    OutlinedButton(onClick = { clip.setText(AnnotatedString(intentRecipe)); com.past9.phoneaos.ui.AppNotice.say("Recipe copied") }) { Text("Copy", style = MaterialTheme.typography.labelLarge) }
+                    OutlinedButton(onClick = { clip.setText(AnnotatedString(intentRecipe)); com.past9.phoneaos.ui.AppNotice.say(ctx.getString(R.string.settings_recipe_copied)) }) { Text(stringResource(R.string.settings_copy), style = MaterialTheme.typography.labelLarge) }
                 }
             }
-            Text("Only this phone can reach the address, and only while the app is running. The intent works when it is closed too.",
+            Text(stringResource(R.string.settings_automation_footer),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp))
         }

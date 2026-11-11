@@ -1,5 +1,7 @@
 package com.past9.phoneaos.assist
 
+import androidx.compose.ui.res.stringResource
+import com.past9.phoneaos.R
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -87,13 +89,14 @@ fun LiveFace(view: LiveView, modifier: Modifier = Modifier, size: Dp = 40.dp, an
 fun LiveBubbleContent(view: LiveView, onMute: (Boolean) -> Unit, onClose: () -> Unit, modifier: Modifier = Modifier, animate: Boolean = rememberAnimate(view.phase)) {
     val cs = MaterialTheme.colorScheme
     val needs = view.phase == LivePhase.NEEDS_YOU
+    val bubbleDesc = stringResource(R.string.live_bubble_desc); val muteDesc = if (view.muted) stringResource(R.string.voice_unmute) else stringResource(R.string.voice_mute); val endDesc = stringResource(R.string.live_end_session)
     val pulse = if (animate) {
         val t = rememberInfiniteTransition(label = "bubble")
         val p by t.animateFloat(0.35f, 1f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "dot")
         p
     } else 1f
     Surface(
-        modifier.height(56.dp).shadow(6.dp, CircleShape).semantics { contentDescription = "Live voice. Tap to open" },
+        modifier.height(56.dp).shadow(6.dp, CircleShape).semantics { contentDescription = bubbleDesc },
         shape = CircleShape, color = if (needs) cs.tertiaryContainer else cs.surfaceContainerHighest, contentColor = if (needs) cs.onTertiaryContainer else cs.onSurface,
     ) {
         Row(Modifier.padding(start = 8.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -103,21 +106,21 @@ fun LiveBubbleContent(view: LiveView, onMute: (Boolean) -> Unit, onClose: () -> 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(7.dp).alpha(if (view.phase == LivePhase.CONNECTING) 0.5f else pulse).clip(CircleShape).background(cs.error))
                     Spacer(Modifier.width(5.dp))
-                    Text("LIVE", style = MaterialTheme.typography.labelSmall)
+                    Text(stringResource(R.string.live_badge), style = MaterialTheme.typography.labelSmall)
                     // Honest about the screen: an eye while Live can see it, a crossed eye while it is private.
                     if (view.seeing != Seeing.OFF) {
                         Spacer(Modifier.width(5.dp))
                         Icon(if (view.seeing == Seeing.SEEING) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff,
-                            if (view.seeing == Seeing.SEEING) "Live can see your screen" else "Private screen: Live can't see it", Modifier.size(13.dp), tint = cs.onSurfaceVariant)
+                            stringResource(if (view.seeing == Seeing.SEEING) R.string.live_sees_screen else R.string.live_screen_private), Modifier.size(13.dp), tint = cs.onSurfaceVariant)
                     }
                 }
                 Text(LiveWords.caption(view), style = MaterialTheme.typography.labelLarge, color = if (needs) cs.onTertiaryContainer else cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Spacer(Modifier.width(4.dp))
-            IconButton(onClick = { onMute(!view.muted) }, modifier = Modifier.size(40.dp).semantics { contentDescription = if (view.muted) "Unmute" else "Mute" }) {
+            IconButton(onClick = { onMute(!view.muted) }, modifier = Modifier.size(40.dp).semantics { contentDescription = muteDesc }) {
                 Icon(if (view.muted) Icons.Rounded.MicOff else Icons.Rounded.Mic, null, tint = if (view.muted) cs.error else cs.onSurface)
             }
-            IconButton(onClick = onClose, modifier = Modifier.size(40.dp).semantics { contentDescription = "End the live session" }) {
+            IconButton(onClick = onClose, modifier = Modifier.size(40.dp).semantics { contentDescription = endDesc }) {
                 Icon(Icons.Rounded.Close, null, tint = cs.onSurfaceVariant)
             }
         }
@@ -131,7 +134,7 @@ fun LiveDismissTarget(over: Boolean, modifier: Modifier = Modifier) {
     val s by animateFloatAsState(if (over) 1.2f else 1f, label = "target")
     Box(modifier.size(96.dp).scale(s), contentAlignment = Alignment.Center) {
         Surface(Modifier.size(64.dp), shape = CircleShape, color = if (over) cs.error else cs.errorContainer, contentColor = if (over) cs.onError else cs.onErrorContainer, shadowElevation = 4.dp) {
-            Box(contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Close, "End the live session", Modifier.size(28.dp)) }
+            Box(contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Close, stringResource(R.string.live_end_session), Modifier.size(28.dp)) }
         }
     }
 }
@@ -140,11 +143,11 @@ fun LiveDismissTarget(over: Boolean, modifier: Modifier = Modifier) {
 @Composable
 fun OverlayPermissionSheet(agentName: String, onOpenSettings: () -> Unit, onDismiss: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    AppSheet(Icons.Rounded.PictureInPictureAlt, "Minimise", "Let $agentName float over other apps", onDismiss = onDismiss, primary = "Open Settings", primaryEnabled = true, onPrimary = onOpenSettings,
-        secondary = { TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Not now") } }) {
-        Text("Minimising turns the live sheet into a small bubble that stays on top, so you can talk to $agentName while you move between apps. Android needs you to allow that once.",
+    AppSheet(Icons.Rounded.PictureInPictureAlt, stringResource(R.string.live_minimise), stringResource(R.string.live_float_over, agentName), onDismiss = onDismiss, primary = stringResource(R.string.main_open_settings), primaryEnabled = true, onPrimary = onOpenSettings,
+        secondary = { TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.onb_not_now)) } }) {
+        Text(stringResource(R.string.live_minimise_body, agentName),
             style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(12.dp))
-        Text("In the next screen, switch on Allow display over other apps. Then come back and tap Minimise again.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+        Text(stringResource(R.string.live_minimise_steps), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
     }
 }

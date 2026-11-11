@@ -17,12 +17,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.past9.phoneaos.R
-import androidx.compose.ui.res.pluralStringResource
-import androidx.compose.ui.res.stringResource
 import com.past9.phoneaos.data.ChatItem
 import com.past9.phoneaos.ui.screens.iconFor
 import com.past9.phoneaos.ui.theme.Eyebrow
@@ -110,8 +110,8 @@ private fun lookOf(state: String): StateLook {
         "working" -> StateLook(cs.primaryContainer, cs.onPrimaryContainer, stringResource(R.string.ui_helper_working))
         "done" -> StateLook(extra.successContainer, extra.success, stringResource(R.string.ui_helper_done))
         "stopped" -> StateLook(cs.surfaceContainerHighest, cs.onSurfaceVariant, stringResource(R.string.ui_helper_stopped))
-        "lost" -> StateLook(cs.surfaceContainerHighest, cs.onSurfaceVariant, "Lost")
-        "unknown" -> StateLook(cs.surfaceContainerHighest, cs.onSurfaceVariant, "Not working")
+        "lost" -> StateLook(cs.surfaceContainerHighest, cs.onSurfaceVariant, stringResource(R.string.ui_helper_lost))
+        "unknown" -> StateLook(cs.surfaceContainerHighest, cs.onSurfaceVariant, stringResource(R.string.ui_helper_not_working))
         "interrupted" -> StateLook(cs.surfaceContainerHighest, cs.onSurfaceVariant, stringResource(R.string.ui_helper_paused))
         else -> StateLook(cs.errorContainer, cs.onErrorContainer, stringResource(R.string.ui_helper_didnt_finish))
     }
@@ -128,7 +128,7 @@ fun HelperOrb(state: String, size: Dp = 40.dp, profileColor: String? = null) {
             "working" -> LoadingIndicator(Modifier.size(size * 0.8f), color = tones.second)
             "done" -> Icon(Icons.Rounded.Check, stringResource(R.string.ui_helper_done), Modifier.size(size * 0.5f), tint = look.content)
             "stopped" -> Icon(Icons.Rounded.Stop, stringResource(R.string.ui_helper_stopped), Modifier.size(size * 0.5f), tint = look.content)
-            "lost" -> Icon(Icons.Rounded.CloudOff, "Lost", Modifier.size(size * 0.5f), tint = look.content)
+            "lost" -> Icon(Icons.Rounded.CloudOff, stringResource(R.string.ui_helper_lost), Modifier.size(size * 0.5f), tint = look.content)
             else -> Icon(Icons.Rounded.PriorityHigh, stringResource(R.string.ui_helper_didnt_finish), Modifier.size(size * 0.5f), tint = look.content)
         }
     }
@@ -226,7 +226,7 @@ fun HelperSheet(h: HelperView, onStop: ((Long) -> Unit)?, onDismiss: () -> Unit,
                 if (h.project.isNotBlank()) ProjectTile(h, 52.dp) else HelperOrb(h.shownState, 52.dp, profileColor = h.profileColor.takeIf { h.profile.isNotBlank() })
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(if (h.project.isNotBlank()) "PROJECT" else "HELPER", style = Eyebrow, color = cs.primary)
+                    Text(if (h.project.isNotBlank()) stringResource(R.string.ui_project_eyebrow) else stringResource(R.string.ui_helper_eyebrow), style = Eyebrow, color = cs.primary)
                     Text(h.label, style = MaterialTheme.typography.headlineSmall)
                     val took = if (h.working) stringResource(R.string.ui_took_for, spanLabelL(now - h.startedAt)) else if (h.endedAt > 0 && h.endedAt > h.startedAt) stringResource(R.string.ui_took_in, spanLabelL(h.endedAt - h.startedAt)) else ""
                     Text(listOf(look.word + if (took.isNotBlank()) " $took" else "", h.model.takeIf { it.isNotBlank() },
@@ -238,7 +238,7 @@ fun HelperSheet(h: HelperView, onStop: ((Long) -> Unit)?, onDismiss: () -> Unit,
             if (onGoToChat != null) {
                 Spacer(Modifier.height(16.dp))
                 Button(onClick = { onGoToChat() }, modifier = Modifier.fillMaxWidth().height(48.dp), shapes = ButtonDefaults.shapes()) {
-                    Icon(Icons.AutoMirrored.Rounded.Chat, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Go to chat")
+                    Icon(Icons.AutoMirrored.Rounded.Chat, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.ui_go_to_chat))
                 }
             }
             if (h.working && onStop != null) {
@@ -262,7 +262,7 @@ fun HelperSheet(h: HelperView, onStop: ((Long) -> Unit)?, onDismiss: () -> Unit,
             }
 
             if (h.shownState == "lost" && h.result.isBlank()) {
-                Section("WHAT HAPPENED", "It was started on a computer that stopped answering")
+                Section(stringResource(R.string.ui_what_happened), stringResource(R.string.ui_lost_sub))
                 Surface(shape = MaterialTheme.shapes.large, color = look.container, modifier = Modifier.fillMaxWidth()) {
                     Text(h.lostBecause, Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium, color = look.content)
                 }

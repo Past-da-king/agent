@@ -1,6 +1,8 @@
 package com.past9.phoneaos.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.res.stringResource
+import com.past9.phoneaos.R
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -44,19 +46,19 @@ fun AssistantSheet(agentName: String, onDismiss: () -> Unit, held: Boolean? = nu
     var screenOn by remember(tick) { mutableStateOf(readScreen ?: AssistPrefs.readScreen(context)) }
     var pictureOn by remember(tick) { mutableStateOf(readPicture ?: AssistPrefs.readScreenshot(context)) }
     val cs = MaterialTheme.colorScheme
-    AppSheet(Icons.Rounded.Assistant, "Default assistant", if (isHeld) "$agentName is this phone's assistant" else "Make $agentName this phone's assistant",
-        onDismiss = onDismiss, primary = if (isHeld) "Try it now" else "Open Settings", primaryEnabled = true,
+    AppSheet(Icons.Rounded.Assistant, stringResource(R.string.settings_default_assistant), if (isHeld) stringResource(R.string.assist_is_assistant, agentName) else stringResource(R.string.assist_make_assistant, agentName),
+        onDismiss = onDismiss, primary = if (isHeld) stringResource(R.string.assist_try_now) else stringResource(R.string.main_open_settings), primaryEnabled = true,
         onPrimary = { if (isHeld) { AssistEntry.open(context, AssistEntry.SHORTCUT); onDismiss() } else AssistRole.openSettings(context) },
-        secondary = { TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Close") } }) {
-        Text("A compact sheet slides up over whatever app you are in, listening straight away. Say what you want and $agentName answers or gets it done.",
+        secondary = { TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ui_close)) } }) {
+        Text(stringResource(R.string.assist_sheet_intro, agentName),
             style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.Assistant, null, tint = cs.primary)
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
-                Text("Phone's assistant", style = MaterialTheme.typography.titleSmall)
-                Text(if (isHeld) "On" else "Off. Your phone only lets you pick it in its own Settings: two taps.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                Text(stringResource(R.string.assist_phones_assistant), style = MaterialTheme.typography.titleSmall)
+                Text(if (isHeld) stringResource(R.string.rel_on) else stringResource(R.string.assist_off_two_taps), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
             Icon(if (isHeld) Icons.Rounded.CheckCircle else Icons.Rounded.ErrorOutline, null, tint = if (isHeld) cs.primary else cs.error)
         }
@@ -65,27 +67,27 @@ fun AssistantSheet(agentName: String, onDismiss: () -> Unit, held: Boolean? = nu
             guide.steps.forEachIndexed { i, s -> Step(i + 1, s) }
         }
         Spacer(Modifier.height(12.dp))
-        Text(if (isHeld) "How to call it" else "Then, to call it", style = MaterialTheme.typography.titleSmall)
+        Text(if (isHeld) stringResource(R.string.assist_how_to_call) else stringResource(R.string.assist_then_to_call), style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(4.dp))
         guide.triggers.forEach { t -> Text(t, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(vertical = 3.dp)) }
         Spacer(Modifier.height(16.dp))
-        Text("What it may know about the screen", style = MaterialTheme.typography.titleSmall)
-        SwitchRow(Icons.Rounded.Visibility, "Let the assistant read the screen",
-            "The words on the screen you call it over go to $agentName with that one request, so \"send this to...\" or \"what is this?\" works. Off: it only hears you.",
+        Text(stringResource(R.string.assist_screen_knowledge), style = MaterialTheme.typography.titleSmall)
+        SwitchRow(Icons.Rounded.Visibility, stringResource(R.string.assist_read_screen),
+            stringResource(R.string.assist_read_screen_line, agentName),
             screenOn) { on -> screenOn = on; if (!on) pictureOn = false; AssistPrefs.setReadScreen(context, on) }
-        SwitchRow(Icons.Rounded.Image, "Also send a picture of the screen", "For screens that are mostly pictures. Only with the switch above on.",
+        SwitchRow(Icons.Rounded.Image, stringResource(R.string.assist_send_picture), stringResource(R.string.assist_send_picture_line),
             pictureOn, enabled = screenOn) { on -> pictureOn = on; AssistPrefs.setReadScreenshot(context, on) }
         var lockOn by remember(tick) { mutableStateOf(AssistPrefs.overLockScreen(context)) }
-        SwitchRow(Icons.Rounded.Lock, "Open over the lock screen", "Off: unlock the phone first, then call it. On: it opens on a locked phone and sends your request once you unlock.",
+        SwitchRow(Icons.Rounded.Lock, stringResource(R.string.assist_over_lock), stringResource(R.string.assist_over_lock_line),
             lockOn) { on -> lockOn = on; AssistPrefs.setOverLockScreen(context, on) }
         var liveOn by remember(tick) { mutableStateOf(liveVoice ?: AssistPrefs.liveVoice(context)) }
-        SwitchRow(Icons.Rounded.GraphicEq, "Live voice in the assistant", "Off: you speak one request and it answers. On: talk naturally, $agentName answers aloud at once, you can talk over it, and it hands jobs to your agent and tells you the result.",
+        SwitchRow(Icons.Rounded.GraphicEq, stringResource(R.string.assist_live_voice), stringResource(R.string.assist_live_voice_line, agentName),
             liveOn) { on -> liveOn = on; AssistPrefs.setLiveVoice(context, on) }
         var seesOn by remember(tick) { mutableStateOf(liveSees ?: (screenOn && AssistPrefs.liveSees(context))) }
         SwitchRow(Icons.Rounded.Visibility, "Live sees your screen", "While live voice is on, $agentName looks at your screen about once a second, so \"what is this?\" is answered at once. Needs \"read the screen\" above. Never banking or money apps.",
             seesOn, enabled = screenOn && liveOn) { on -> seesOn = on; AssistPrefs.setLiveSees(context, on) }
         Spacer(Modifier.height(8.dp))
-        Text("It never reads banking, payment or money apps, with either switch on. What it reads is used for that request only.",
+        Text(stringResource(R.string.assist_never_reads_money),
             style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
     }
 }

@@ -170,9 +170,9 @@ fun CameraCard(origin: Rect, onClosed: () -> Unit, onUse: (path: String) -> Unit
                 layout(c.maxWidth, c.maxHeight) { p.place((c.maxWidth - p.width) / 2, (c.maxHeight - p.height) / 2) }
             }.graphicsLayer { alpha = ((progress.value - 0.25f) / 0.6f).coerceIn(0f, 1f) }) {
                 when {
-                    !hasCamera -> Calm("There is no camera on this device.", "You can still attach a photo from your gallery.", null, null, onGallery, ::close)
-                    !granted -> Calm("The camera is off.", "Your agent only sees a photo when you take it and send it.",
-                        if (asked) "Open settings" else null, { runCatching { ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
+                    !hasCamera -> Calm(stringResource(R.string.camera_none), stringResource(R.string.camera_none_sub), null, null, onGallery, ::close)
+                    !granted -> Calm(stringResource(R.string.camera_off), stringResource(R.string.camera_off_sub_add),
+                        if (asked) stringResource(R.string.camera_open_settings) else null, { runCatching { ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
                         onGallery, ::close, retry = if (asked) ({ perm.launch(Manifest.permission.CAMERA) }) else null)
                     else -> Live(cam, cardLife, progress, frozen, photo, onFrozen = { frozen = it }, onPhoto = { photo = it }, onRetake = ::retake, onClose = ::close, onGallery = onGallery, onUse = { photo?.let { onUse(it); close() } })
                 }
@@ -316,8 +316,8 @@ private fun Live(
 private fun Shutter(enabled: Boolean, onClick: () -> Unit) {
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
-    val s by animateFloatAsState(if (pressed) 0.92f else 1f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium), label = "shutter")
     val takePhoto = stringResource(R.string.camera_take_photo)
+    val s by animateFloatAsState(if (pressed) 0.92f else 1f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium), label = "shutter")
     Box(
         Modifier.size(72.dp).graphicsLayer { scaleX = s; scaleY = s; alpha = if (enabled) 1f else 0.6f }.clip(CircleShape).background(com.past9.phoneaos.ui.theme.Media.shutter)
             .clickable(interactionSource = src, indication = null, enabled = enabled, onClick = onClick).semantics { contentDescription = takePhoto },
@@ -343,7 +343,7 @@ private fun MenuRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label
 @Composable
 private fun BoxScope.Review(ready: Boolean, onRetake: () -> Unit, onUse: () -> Unit) {
     Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        FilledTonalButton(onClick = onRetake, Modifier.weight(1f).heightIn(min = 52.dp)) { Icon(Icons.Rounded.Replay, null); Spacer(Modifier.width(8.dp)); Text("Retake") }
-        Button(onClick = onUse, enabled = ready, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Icon(Icons.Rounded.Check, null); Spacer(Modifier.width(8.dp)); Text("Add photo") }
+        FilledTonalButton(onClick = onRetake, Modifier.weight(1f).heightIn(min = 52.dp)) { Icon(Icons.Rounded.Replay, null); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.camera_retake)) }
+        Button(onClick = onUse, enabled = ready, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Icon(Icons.Rounded.Check, null); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.camera_add_photo)) }
     }
 }

@@ -105,7 +105,7 @@ class ShareActivity : ComponentActivity() {
             input.streams.forEachIndexed { n, u ->
                 val p = runCatching { ShareStore.import(this@ShareActivity, u, n, stamp) }.getOrNull()
                 withContext(Dispatchers.Main) {
-                    if (p != null) items += p else { failed++; failedNames += ShareLogic.safeName(android.net.Uri.parse(u).lastPathSegment ?: "that file") }
+                    if (p != null) items += p else { failed++; failedNames += ShareLogic.safeName(android.net.Uri.parse(u).lastPathSegment ?: getString(R.string.share_that_file)) }
                 }
             }
             withContext(Dispatchers.Main) { copying = false }
@@ -133,7 +133,7 @@ class ShareActivity : ComponentActivity() {
             more.streams.forEachIndexed { n, u ->
                 val p = runCatching { ShareStore.import(this@ShareActivity, u, n, stamp) }.getOrNull()
                 withContext(Dispatchers.Main) {
-                    if (p != null) items += p else { failed++; failedNames += ShareLogic.safeName(android.net.Uri.parse(u).lastPathSegment ?: "that file") }
+                    if (p != null) items += p else { failed++; failedNames += ShareLogic.safeName(android.net.Uri.parse(u).lastPathSegment ?: getString(R.string.share_that_file)) }
                 }
             }
             withContext(Dispatchers.Main) { copying = false }
@@ -186,7 +186,7 @@ class ShareActivity : ComponentActivity() {
                 }
             }.onFailure { e ->
                 phase = Phase.EDIT
-                problem = "That did not send: " + (e.message.orEmpty().ifBlank { "the link to your computer dropped" }) + ". Nothing is lost, try again."
+                problem = getString(R.string.share_send_failed_why, e.message.orEmpty().ifBlank { getString(R.string.share_link_dropped) })
                 return@launch
             }
             phase = Phase.SENT
@@ -313,9 +313,9 @@ class ShareActivity : ComponentActivity() {
             }
             if (copying && items.isEmpty() && input.streams.isNotEmpty()) LinearProgressIndicator(Modifier.fillMaxWidth().clip(CircleShape))
             if (failed > 0) Text(
-                (if (failed == 1) "Could not read " else "$failed items could not be read: ") +
-                    (if (failedNames.isEmpty()) "one item." else failedNames.joinToString(", ") + ".") +
-                    " Share it again, or pick the file in the chat instead.",
+                (if (failedNames.isEmpty()) stringResource(R.string.share_one_item) else failedNames.joinToString(", ") + ".").let { what ->
+                    if (failed == 1) stringResource(R.string.share_read_fail_one, what) else stringResource(R.string.share_read_fail_many, failed, what) } +
+                    " " + stringResource(R.string.share_read_fail_hint),
                 style = MaterialTheme.typography.labelMedium, color = cs.error,
             )
         }

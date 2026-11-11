@@ -16,6 +16,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import com.past9.phoneaos.R
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
@@ -142,14 +145,14 @@ fun WakeWordSheet(onDismiss: () -> Unit) {
                     teachStep = step
                     val clip = withContext(Dispatchers.IO) { WakeEar.hearOnce(keepGoing = { open.get() }) }
                     val got = if (clip == null) emptyList() else withContext(Dispatchers.Default) { learner.hear(FloatArray(clip.size) { clip[it] / 32768f }) }
-                    if (got.size >= WakeKeywords.FEWEST_PIECES) { heard.add(got); teachSaid = "Heard \"${spoken(got)}\"" }
-                    else teachSaid = "Didn't catch that one. Say it a little louder."
+                    if (got.size >= WakeKeywords.FEWEST_PIECES) { heard.add(got); teachSaid = context.getString(R.string.wake_heard_said, spoken(got)) }
+                    else teachSaid = context.getString(R.string.wake_missed_one)
                     delay(700)
                 }
                 learner.close()
                 val learned = Learned.merge(emptyList(), heard, pieces)
-                if (learned.isNotEmpty()) { store.setLearned(phrase, learned); teachSaid = "Learned it. Try it now." }
-                else teachSaid = "It didn't hear the phrase. Find a quieter spot and try again."
+                if (learned.isNotEmpty()) { store.setLearned(phrase, learned); teachSaid = context.getString(R.string.wake_learned_it) }
+                else teachSaid = context.getString(R.string.wake_not_heard)
             } finally { teachStep = 0; MicUse.release(TEACH) }
         }
     }
@@ -188,70 +191,70 @@ fun WakeWordSheetContent(v: WakeWordView, a: WakeWordActions, onDismiss: () -> U
     val cs = MaterialTheme.colorScheme
     val s = v.settings
     val fit = WakePhrase.fit(v.latin.uppercase())
-    AppSheet(Icons.Rounded.RecordVoiceOver, "Settings", "Wake word", onDismiss = onDismiss, primary = "Done", primaryEnabled = true, onPrimary = onDismiss) {
-        Text("Say \"${v.phrase}\" and your agent opens, from any screen, with the app closed or the screen off.",
+    AppSheet(Icons.Rounded.RecordVoiceOver, stringResource(R.string.settings_title), stringResource(R.string.wake_title), onDismiss = onDismiss, primary = stringResource(R.string.rt_done), primaryEnabled = true, onPrimary = onDismiss) {
+        Text(stringResource(R.string.wake_intro, v.phrase),
             style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-        Text("Early: may miss or mishear.", style = MaterialTheme.typography.bodySmall, color = cs.tertiary, modifier = Modifier.padding(top = 6.dp))
+        Text(stringResource(R.string.wake_early), style = MaterialTheme.typography.bodySmall, color = cs.tertiary, modifier = Modifier.padding(top = 6.dp))
         Spacer(Modifier.height(12.dp))
-        SwitchRow(Icons.Rounded.Hearing, "Listen for it", when {
-            !s.enabled -> "Off"
+        SwitchRow(Icons.Rounded.Hearing, stringResource(R.string.wake_listen), when {
+            !s.enabled -> stringResource(R.string.rel_off)
             v.live.state is WakeState.Paused -> (v.live.state as WakeState.Paused).why.line
-            v.live.state == WakeState.Listening -> "Listening now"
-            else -> "Starting"
+            v.live.state == WakeState.Listening -> stringResource(R.string.wake_listening_now)
+            else -> stringResource(R.string.wake_starting)
         }, s.enabled, a.onEnabled)
-        if (!v.micAllowed) FixRow(Icons.Rounded.Mic, "Microphone", "Tap to allow it. It is only used to hear the phrase.", a.onAskMic)
-        if (!v.onTop) FixRow(Icons.Rounded.Layers, "Appear on top", "Tap and allow, so it can open while you are in another app. Without it you get a notification to tap.", a.onAskOnTop)
+        if (!v.micAllowed) FixRow(Icons.Rounded.Mic, stringResource(R.string.wake_mic), stringResource(R.string.wake_mic_body), a.onAskMic)
+        if (!v.onTop) FixRow(Icons.Rounded.Layers, stringResource(R.string.wake_on_top), stringResource(R.string.wake_on_top_body), a.onAskOnTop)
 
         Spacer(Modifier.height(20.dp))
-        SheetField(s.customPhrase, a.onPhrase, "Phrase", v.defaultPhrase, singleLine = true, keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.Words))
+        SheetField(s.customPhrase, a.onPhrase, stringResource(R.string.wake_phrase), v.defaultPhrase, singleLine = true, keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.Words))
         Text(
-            (if (s.customPhrase.isBlank()) "Follows your agent's name. Rename your agent and this changes with it. " else "") + WakePhrase.advice(v.phrase, v.latin.uppercase()),
+            (if (s.customPhrase.isBlank()) stringResource(R.string.wake_follows_name) + " " else "") + WakePhrase.advice(v.phrase, v.latin.uppercase()),
             style = MaterialTheme.typography.bodySmall, color = if (fit == WakePhrase.Fit.GOOD) cs.onSurfaceVariant else cs.error, modifier = Modifier.padding(start = 4.dp, top = 6.dp))
 
         Spacer(Modifier.height(20.dp))
-        ChoiceChips(Sensitivity.entries.map { Triple(it.name, it.label, null as ImageVector?) }, s.sensitivity.name, { a.onSensitivity(Sensitivity.of(it)) }, label = "How easily it wakes")
+        ChoiceChips(Sensitivity.entries.map { Triple(it.name, it.label, null as ImageVector?) }, s.sensitivity.name, { a.onSensitivity(Sensitivity.of(it)) }, label = stringResource(R.string.wake_how_easily))
         Text(s.sensitivity.line, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, top = 6.dp))
 
         Spacer(Modifier.height(20.dp))
-        Text("Try it", style = MaterialTheme.typography.titleSmall)
-        Text("Say the phrase and watch it land. A test never opens your agent.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+        Text(stringResource(R.string.wake_try), style = MaterialTheme.typography.titleSmall)
+        Text(stringResource(R.string.wake_try_body), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { a.onTry(!v.trying) }) { Text(if (v.trying) "Stop" else "Try it") }
+            OutlinedButton(onClick = { a.onTry(!v.trying) }) { Text(if (v.trying) stringResource(R.string.chat_stop) else stringResource(R.string.wake_try)) }
             Spacer(Modifier.width(16.dp))
             if (v.trying) {
                 Surface(color = if (v.tryHits > 0) cs.primary else if (v.hearing) cs.tertiary else cs.surfaceContainerHighest, shape = MaterialTheme.shapes.extraLarge, modifier = Modifier.size(16.dp)) {}
                 Spacer(Modifier.width(8.dp))
-                Text(when { v.tryHits == 1 -> "Heard it"; v.tryHits > 1 -> "Heard it ${v.tryHits} times"; v.hearing -> "Hearing you"; else -> "Say \"${v.phrase}\"" },
+                Text(when { v.tryHits > 0 -> pluralStringResource(R.plurals.wake_heard_times, v.tryHits, v.tryHits); v.hearing -> stringResource(R.string.wake_hearing_you); else -> stringResource(R.string.wake_say, v.phrase) },
                     style = MaterialTheme.typography.bodyMedium, color = if (v.tryHits > 0) cs.primary else cs.onSurfaceVariant)
             }
         }
 
         Spacer(Modifier.height(20.dp))
-        Text("Teach it your voice", style = MaterialTheme.typography.titleSmall)
-        Text("If it misses you, or the name isn't said the way English spells it, say the phrase three times. It learns the sound from you, in any language.",
+        Text(stringResource(R.string.wake_teach), style = MaterialTheme.typography.titleSmall)
+        Text(stringResource(R.string.wake_teach_body),
             style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = a.onTeach, enabled = v.teachStep == 0) { Text(if (v.teachStep == 0) "Say it three times" else "Say it now: ${v.teachStep} of 3") }
-            if (s.learnedFor(v.phrase).isNotEmpty() && v.teachStep == 0) { Spacer(Modifier.width(8.dp)); TextButton(onClick = a.onForget) { Text("Forget") } }
+            OutlinedButton(onClick = a.onTeach, enabled = v.teachStep == 0) { Text(if (v.teachStep == 0) stringResource(R.string.wake_say_three) else stringResource(R.string.wake_say_now, v.teachStep)) }
+            if (s.learnedFor(v.phrase).isNotEmpty() && v.teachStep == 0) { Spacer(Modifier.width(8.dp)); TextButton(onClick = a.onForget) { Text(stringResource(R.string.wake_forget)) } }
         }
         val learned = s.learnedFor(v.phrase)
-        val teachLine = v.teachSaid.ifBlank { if (learned.isNotEmpty()) "Learned from your voice: " + learned.joinToString(", ") { "\"${spoken(it)}\"" } else "" }
+        val teachLine = v.teachSaid.ifBlank { if (learned.isNotEmpty()) stringResource(R.string.wake_learned_from) + " " + learned.joinToString(", ") { "\"${spoken(it)}\"" } else "" }
         if (teachLine.isNotBlank()) Text(teachLine, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, top = 6.dp))
 
         Spacer(Modifier.height(20.dp))
-        Text("Battery", style = MaterialTheme.typography.titleSmall)
-        Text("Listening keeps a small part of the phone awake. These pause it when power matters more.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-        SwitchRow(Icons.Rounded.BatterySaver, "Pause on battery saver", "On by default", s.pauseOnSaver, a.onPauseOnSaver)
-        SwitchRow(Icons.Rounded.BatteryAlert, "Pause when battery is under 20%", "Listens again on the charger", s.pauseLowBattery, a.onPauseLowBattery)
-        SwitchRow(Icons.Rounded.Power, "Only while charging", "Never listens on battery", s.onlyCharging, a.onOnlyCharging)
+        Text(stringResource(R.string.wake_battery), style = MaterialTheme.typography.titleSmall)
+        Text(stringResource(R.string.wake_battery_body), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+        SwitchRow(Icons.Rounded.BatterySaver, stringResource(R.string.wake_pause_saver), stringResource(R.string.wake_pause_saver_sub), s.pauseOnSaver, a.onPauseOnSaver)
+        SwitchRow(Icons.Rounded.BatteryAlert, stringResource(R.string.wake_pause_low), stringResource(R.string.wake_pause_low_sub), s.pauseLowBattery, a.onPauseLowBattery)
+        SwitchRow(Icons.Rounded.Power, stringResource(R.string.wake_only_charging), stringResource(R.string.wake_only_charging_sub), s.onlyCharging, a.onOnlyCharging)
 
         Spacer(Modifier.height(16.dp))
-        Text("The phrase is recognised on this phone. Sound never leaves it, nothing is recorded, and no account or key is involved. While it listens, Android shows the microphone dot and a notification with a Pause button.",
+        Text(stringResource(R.string.wake_privacy),
             style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
-        Text("Typed names work best when they read naturally in English letters. Any other name, or any other language, works once you teach it your voice.",
+        Text(stringResource(R.string.wake_names_tip),
             style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
     }
 }

@@ -346,7 +346,7 @@ class MainActivity : ComponentActivity() {
             if (text != null || open != null) incoming.value = null to null
         }
         // The background screen's sheets (peek, setup, recordings): slide-up, drawn once here.
-        com.past9.phoneaos.ui.screens.ScreenSheetsHost(settings.agentName.ifBlank { "Your agent" })
+        com.past9.phoneaos.ui.screens.ScreenSheetsHost(settings.agentName.ifBlank { getString(R.string.svc_your_agent) })
         // Read new replies aloud when the user asked for that.
         // Only replies that arrive from now on are read out; the history never is.
         var primed by remember { mutableStateOf(false) }
@@ -392,7 +392,7 @@ class MainActivity : ComponentActivity() {
         DisposableEffect(Unit) { onDispose { dictation?.cancel(); if (!isChangingConfigurations) com.past9.phoneaos.voice.DictationHub.stop() } }
         val hubUi by com.past9.phoneaos.voice.DictationHub.ui.collectAsStateWithLifecycle()
         // A dictation the last run of the app was cut off in: its audio and words are safe, say where.
-        LaunchedEffect(Unit) { if (com.past9.phoneaos.voice.DictationHub.takeInterrupted()) com.past9.phoneaos.ui.AppNotice.say("Your last dictation was cut off. It's saved in Settings, Recordings.") }
+        LaunchedEffect(Unit) { if (com.past9.phoneaos.voice.DictationHub.takeInterrupted()) com.past9.phoneaos.ui.AppNotice.say(getString(R.string.main_dictation_cut_off)) }
         val hubActive = hubUi?.view?.ended == false
         // The screen stays on while he dictates (the mic service also keeps it going if he locks the phone).
         LaunchedEffect(hubActive) {
@@ -422,13 +422,13 @@ class MainActivity : ComponentActivity() {
                 dictation = d; dictating = true; d.start(); return
             }
             val key = g.settings.voiceKey("gemini")
-            if (key == null || !online()) { say("This phone has no speech recogniser, so the mic can't listen. Install Google's Speech Services, or add a Gemini key in Settings, Voice."); return }
-            say("This phone has no speech recogniser, so your words go to Gemini to be written down.")
+            if (key == null || !online()) { say(getString(R.string.main_no_recogniser)); return }
+            say(getString(R.string.main_no_recogniser_gemini))
             val vocab = listOf(settings.agentName, settings.userName).filter { it.isNotBlank() && it != "Your agent" }
             val d = com.past9.phoneaos.voice.Dictation(key, vocab, onText = { t -> runOnUiThread { write(t) } }, onEnd = done)
             dictation = d; dictating = true; d.start()
         }
-        val dictPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) startDictation() else say("The mic needs the microphone permission.") }
+        val dictPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) startDictation() else say(getString(R.string.main_mic_needs_permission)) }
         fun toggleMic(box: com.past9.phoneaos.ui.ComposerBox = mainBox) {
             if (com.past9.phoneaos.voice.DictationHub.active) { com.past9.phoneaos.voice.DictationHub.stop(); return }
             val d = dictation
@@ -456,7 +456,7 @@ class MainActivity : ComponentActivity() {
             if (linked != null) {
                 conn = conn.copy(remote = true, hasKey = true, loading = true, error = null, notificationsAllowed = notificationsAllowed())
                 try { val (c, t) = linked.connectedApps(); conn = conn.copy(connected = c, toolkits = t, loading = false) }
-                catch (e: Exception) { conn = conn.copy(loading = false, error = "Couldn't read the apps from your computer: ${e.message}") }
+                catch (e: Exception) { conn = conn.copy(loading = false, error = getString(R.string.main_computer_apps_failed, e.message)) }
                 // His machines and the computer's learned apps: small lists, read when the screen opens.
                 runCatching { linked.meshDevices() }.onSuccess { conn = conn.copy(devices = it) }
                 runCatching { linked.learnedApps() }.onSuccess { conn = conn.copy(learned = it) }
@@ -519,8 +519,8 @@ class MainActivity : ComponentActivity() {
         // Linked: no bar at all while something answers (failover is silent); a bar only when nothing can.
         remote?.let { com.past9.phoneaos.remote.RemoteTroubleBar(it, onDevices = { nav.navigate("linked") { launchSingleTop = true } }) }
         callWhy?.let { why ->
-            com.past9.phoneaos.ui.ConfirmSheet(androidx.compose.material.icons.Icons.Rounded.Call, "Calls", "Calls need a Google key", why,
-                confirm = "Open Settings", onConfirm = { callWhy = null; nav.navigate("settings") { launchSingleTop = true } }, onDismiss = { callWhy = null })
+            com.past9.phoneaos.ui.ConfirmSheet(androidx.compose.material.icons.Icons.Rounded.Call, getString(R.string.main_calls), getString(R.string.main_calls_need_key), why,
+                confirm = getString(R.string.main_open_settings), onConfirm = { callWhy = null; nav.navigate("settings") { launchSingleTop = true } }, onDismiss = { callWhy = null })
         }
         androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxWidth().weight(1f)
             .then(if (linkState?.let { com.past9.phoneaos.remote.RemoteTrouble.shows(it) } == true) androidx.compose.ui.Modifier.consumeWindowInsets(WindowInsets.statusBars) else androidx.compose.ui.Modifier)) {
@@ -539,7 +539,7 @@ class MainActivity : ComponentActivity() {
                             onMiniApp = { nav.navigate("miniapp/$it") }, onMiniApps = { nav.navigate("miniapps") },
                             onNeed = { t -> when (t) {
                                 is NeedTarget.ChatAt -> { ChatFocus.id.value = t.itemId; nav.navigate("chat") }
-                                is NeedTarget.ProjectChat -> openFromCard = t.chat to "Project chat"
+                                is NeedTarget.ProjectChat -> openFromCard = t.chat to getString(R.string.main_project_chat)
                                 is NeedTarget.Task -> { TaskFocus.target = t; go("tasks") }
                                 is NeedTarget.Gone -> Unit
                             } },
@@ -688,10 +688,10 @@ class MainActivity : ComponentActivity() {
                     pendingRemote?.let { (slug, profs) ->
                         // One slide-up sheet of the computer's profiles. 'No profile' IS General (an account in no profile is
                         // in General), so it is offered once, as General.
-                        com.past9.phoneaos.ui.ChoiceSheet(androidx.compose.material.icons.Icons.Rounded.Apps, com.past9.phoneaos.tools.AppCatalog.name(slug), "Which profile is it for?",
-                            com.past9.phoneaos.ui.screens.profileChoices(profs),
-                            onPick = { c -> pendingRemote = null; com.past9.phoneaos.remote.RemoteHub.session.value?.let { rs -> scope.launch { runCatching { rs.connectApp(slug, c.id) }.onSuccess { open(it) }.onFailure { conn = conn.copy(error = "Couldn't start the sign-in on your computer: ${it.message}") } } } },
-                            onDismiss = { pendingRemote = null }, line = "Its account goes into that part of your life. You can change it later.")
+                        com.past9.phoneaos.ui.ChoiceSheet(androidx.compose.material.icons.Icons.Rounded.Apps, com.past9.phoneaos.tools.AppCatalog.name(slug), getString(R.string.main_which_profile),
+                            com.past9.phoneaos.ui.screens.profileChoices(profs, this@MainActivity),
+                            onPick = { c -> pendingRemote = null; com.past9.phoneaos.remote.RemoteHub.session.value?.let { rs -> scope.launch { runCatching { rs.connectApp(slug, c.id) }.onSuccess { open(it) }.onFailure { conn = conn.copy(error = getString(R.string.main_remote_signin_failed, it.message)) } } } },
+                            onDismiss = { pendingRemote = null }, line = getString(R.string.main_which_profile_line))
                     }
                     val machines by g.runtime.machines.store.machines.collectAsStateWithLifecycle()
                     val learnedApps by g.runtime.learned.apps.collectAsStateWithLifecycle()
@@ -725,7 +725,7 @@ class MainActivity : ComponentActivity() {
                             if (linkedRs != null) {
                                 val profs = runCatching { linkedRs.agentProfiles() }.getOrDefault(emptyList())
                                 if (profs.isNotEmpty()) pendingRemote = slug to profs
-                                else runCatching { linkedRs.connectApp(slug, "") }.onSuccess { open(it) }.onFailure { conn = conn.copy(error = "Couldn't start the sign-in on your computer: ${it.message}") }
+                                else runCatching { linkedRs.connectApp(slug, "") }.onSuccess { open(it) }.onFailure { conn = conn.copy(error = getString(R.string.main_remote_signin_failed, it.message)) }
                                 return@launch
                             }
                             val ck = g.settings.composioKey()?.trim()
@@ -803,12 +803,12 @@ class MainActivity : ComponentActivity() {
                         onClearChat = { g.runtime.clearConversation() },
                         onResetAll = { scope.launch { g.automation.stop(); g.runtime.stop(); g.db.clearAllTables(); g.settings.resetAll() } },
                         onBattery = { runCatching { startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))) } },
-                        onLinked = { nav.navigate("linked") },
                         language = com.past9.phoneaos.system.AppLocale.current(this@MainActivity),
                         setLanguage = { com.past9.phoneaos.system.AppLocale.set(this@MainActivity, it) },
+                        onLinked = { nav.navigate("linked") },
                         onRecordings = { nav.navigate("recordings?box=main") },
                         linkedLine = com.past9.phoneaos.remote.RemoteHub.link.collectAsStateWithLifecycle().value.let { l ->
-                            when { l == null -> "Use the agent on your computer from this phone"; l.on -> "Using ${l.nodeName.ifBlank { "your computer" }}"; else -> "Linked to ${l.nodeName.ifBlank { "a computer" }}, using this phone's own agent" } },
+                            when { l == null -> getString(R.string.main_linked_none); l.on -> getString(R.string.main_linked_using, l.nodeName.ifBlank { getString(R.string.main_your_computer) }); else -> getString(R.string.main_linked_own, l.nodeName.ifBlank { getString(R.string.main_a_computer) }) } },
                         setAutomationAllowed = { on -> g.settings.setAutomationAllowed(on) },
                         rotateAutomationToken = { g.settings.rotateAutomationToken() },
                         macro = com.past9.phoneaos.ui.screens.MacroActions(
@@ -920,7 +920,7 @@ class MainActivity : ComponentActivity() {
                 ), onDismiss = { openCard = null }, refreshing = refreshingCard == c.id)
             }
             if (modelSheet && pickingHelper) HelperRosterSheet(
-                if (onSub) modelList?.map { if (it.id.isBlank()) it.copy(name = "Same as your agent", note = "Whatever your agent runs on") else it } else modelList,
+                if (onSub) modelList?.map { if (it.id.isBlank()) it.copy(name = getString(R.string.main_same_as_agent), note = getString(R.string.main_whatever_agent_runs)) else it } else modelList,
                 modelErr, g.runtime.helperRoster().filter { settings.helperRoster.isNotEmpty() },
                 onSave = { g.settings.setHelperRoster(it) }, onDismiss = { modelSheet = false }, kept = g.runtime.pins.agents.collectAsStateWithLifecycle().value)
             else if (modelSheet) ModelPickerSheet(
