@@ -179,7 +179,7 @@ fun group(items: List<ChatItem>, hideHelpers: Boolean = false): List<Row_> {
     val stepsOf = items.filter { it.kind == "activity" && JSONObject(it.meta).has("helper") }.groupBy { JSONObject(it.meta).optLong("helper") }
     items.forEach {
         val m = JSONObject(it.meta)
-        if (m.optBoolean("call") && (it.kind == "user" || it.kind == "agent")) { flush(); call += it; return@forEach }
+        if ((m.optBoolean("call") || LiveCallParts.isLiveRow(it)) && (it.kind == "user" || it.kind == "agent")) { flush(); call += it; return@forEach }
         flushCall()
         when {
             it.kind == "activity" && m.has("helper") -> {} // shown inside its helper's card

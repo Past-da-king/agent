@@ -153,8 +153,8 @@ class LiveSeesTest {
     }
 
     @Test fun aHandOffCarriesItsOriginAndSpokenWordsToTheComputer() {
-        val m = LiveAssistCore.handoffMeta("  Send the invoice ", " send sam the invoice ", true)
-        assertEquals("live_voice", m.getString("origin")); assertEquals("Send the invoice", m.getString("request"))
+        val m = LiveAssistCore.handoffMeta("  Send the invoice ", " send sam the invoice ", true, "live-abc123")
+        assertEquals("live_voice", m.getString("origin")); assertEquals("Send the invoice", m.getString("request")); assertEquals("live-abc123", m.getString("session"))
         assertEquals("send sam the invoice", m.getString("spoken")); assertTrue(m.getBoolean("include_screen"))
     }
 
@@ -168,7 +168,8 @@ class LiveSeesTest {
         c.caption("out", "On it."); c.caption("in", "thanks")
         c.handOff("Email Sam the invoice", 5, includeScreen = true)
         val r = c.record(1_000, 9_000)
-        assertEquals("live_assistant", r.getString("kind")); assertEquals("assistant_sheet", r.getString("source"))
+        assertEquals("live_assistant", r.getString("kind")); assertEquals("live", r.getString("source")); assertEquals(c.sessionId, r.getString("session"))
+        assertTrue(c.sessionId.startsWith("live-"))
         assertEquals(8_000L, r.getLong("durationMs"))
         val lines = r.getJSONArray("lines")
         assertEquals(3, lines.length())
@@ -212,6 +213,20 @@ class LiveSeesTest {
         assertEquals("Voice call · 3 min", LiveCallParts.title("Voice call · 3 min", false, 0))
         assertEquals("Handed to your agent: Send Sam the invoice", LiveCallParts.summary("On it.", hands))
         assertEquals("On it.", LiveCallParts.summary("On it.", emptyList()))
+    }
+
+    @Test fun aHandOffTheComputerReplicatedBackFoldsIntoTheCallAndIsNeverATypedBubble() {
+        val note = "\n\n[Assistant sheet: the user said this to the phone's assistant sheet]\nScreen: not read."
+        val live = JSONObject().put("origin", "live_voice").put("spoken", "update my end of day").put("session", "live-1")
+        val replicated = row(5, "user", "Update the EOD report" + "\n[Live voice hand-off: wording]" + note, JSONObject().put("via", JSONObject().put("from", "call").put("name", "")).put("live", live))
+        assertTrue(LiveCallParts.isLiveRow(replicated))
+        assertTrue(LiveCallParts.isLive(listOf(replicated)))
+        val h = LiveCallParts.handoffOf(replicated)!!
+        assertEquals("Update the EOD report", h.request); assertEquals("update my end of day", h.spoken)
+        // A plain message the user typed is not one.
+        assertFalse(LiveCallParts.isLiveRow(row(6, "user", "hello", JSONObject())))
+        // An agent reply is not a hand-off even in a call.
+        assertNull(LiveCallParts.handoffOf(row(7, "agent", "Done.", JSONObject().put("live", live))))
     }
 
     @Test fun aCallRowFromTheComputerWithItsMetadataIsReadToo() {
