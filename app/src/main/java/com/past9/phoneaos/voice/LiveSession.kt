@@ -388,6 +388,9 @@ class LiveSession(
 
     val isMuted: Boolean get() = muted
 
+    /** The connection is set up and ready for audio and pictures (false while connecting or reconnecting). */
+    val isReady: Boolean get() = ready.get()
+
     /**
      * Open the mic and the speaker and start streaming. Called on ANSWER, never during the ring — the
      * app has no microphone foreground-service type until then, so opening earlier would be refused.

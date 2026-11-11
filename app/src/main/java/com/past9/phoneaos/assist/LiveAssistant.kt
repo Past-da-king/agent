@@ -2,9 +2,11 @@ package com.past9.phoneaos.assist
 
 import android.content.Context
 import android.media.AudioManager
+import android.util.Base64
 import android.util.Log
 import com.past9.phoneaos.Graph
 import com.past9.phoneaos.data.ChatItem
+import com.past9.phoneaos.remote.RemoteHub
 import com.past9.phoneaos.voice.CallCore
 import com.past9.phoneaos.voice.Earcon
 import com.past9.phoneaos.voice.LiveAuth
@@ -14,16 +16,21 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 
 /**
  * One live voice session inside the assist sheet (Settings > Default assistant > Live voice in the assistant). It is
  * owned by [LiveHost] and outlives the sheet, so it keeps going while the sheet is minimised to a bubble.
  *
- * Gemini Live is the voice: it listens, answers aloud at once, can be talked over, and has exactly one tool,
- * hand_to_agent, which puts a job in front of the same agent the typed sheet talks to (this phone's, or the linked
- * computer's) with what is on screen at that moment. The agent's reply, questions and approvals come back through the
- * chat rows. Approvals are still the app's own hold-to-approve card.
+ * Gemini Live is the voice: it listens, answers aloud at once, can be talked over, and SEES the screen through frames
+ * ([LiveFrames]), so questions about the screen are answered by Live itself. Real work goes through hand_to_agent, which
+ * puts a job in front of the same agent the typed sheet talks to (this phone's, or the linked computer's). The agent's
+ * reply, questions and approvals come back through the chat rows. Approvals are still the app's own hold-to-approve card.
+ *
+ * A live session is a CALL: it is recorded the way the app already records voice calls (one collapsed call block in the
+ * chat, kind "live_assistant", with each hand-off listed inside it), and a hand-off never shows as something the user typed.
  *
  * Start-up is built to be fast: the microphone and speaker open at once and what he says is kept until the connection
  * is ready; the token is asked for while the sheet is still opening ([LiveToken.warm]); a soft earcon says "listening".
@@ -48,6 +55,9 @@ class LiveAssistant(
     private var watch: Job? = null
     private var rows: List<ChatItem> = emptyList()
     private val lastId: Long get() = rows.lastOrNull()?.id ?: 0L
+    private var startedAt = 0L
+    private var frames: LiveFrames? = null
+    @Volatile private var lastLoud = 0L
 
     val active: Boolean get() = !ended && session != null
 
@@ -57,9 +67,10 @@ class LiveAssistant(
     fun start() {
         if (session != null || ended) return
         LiveTiming.mark("start")
+        startedAt = clock()
         val st = g.settings.state.value
         val name = st.agentName.takeIf { it.isNotBlank() && it != "Your agent" } ?: "your agent"
-        val linked = com.past9.phoneaos.remote.RemoteHub.link.value?.on == true || com.past9.phoneaos.remote.RemoteHub.session.value != null
+        val linked = RemoteHub.link.value?.on == true || RemoteHub.session.value != null
         val system = LiveAssistCore.systemPrompt(name, st.userName, linked)
         val phoneVoice = st.ttsVoice.takeIf { st.ttsProvider == "gemini" && it.isNotBlank() }
         val live = LiveSession("", DEFAULT_MODEL, phoneVoice ?: "Kore", system, tools = LiveAssistCore.tools(),
@@ -97,9 +108,12 @@ class LiveAssistant(
                 LiveTiming.mark("listening_ui")
                 Earcon.play(context)
             }
-            is LiveSession.Event.SetupComplete -> { setupDone = true }
-            // The voice's loudness drives the face's mouth. Only the voice (not the microphone) and only real changes.
-            is LiveSession.Event.Level -> if (!e.mine && core.level(e.value)) push()
+            is LiveSession.Event.SetupComplete -> {
+                setupDone = true
+                // Live can see the screen from now on (when the switches allow it).
+                if (frames == null) frames = LiveFrames(context, scope, { session }, { s -> core.seeing(s); push() }, { tell(it) }, clock).also { it.start() }
+            }
+            is LiveSession.Event.Level -> if (e.mine) userLevel(e.value) else if (core.level(e.value)) push()
             is LiveSession.Event.Transcript -> { core.caption(e.who, e.text); push() }
             is LiveSession.Event.Speaking -> {
                 if (!e.on) Log.i(TAG, "turn: you=\"${core.current.you.take(160)}\" agent=\"${core.current.agent.take(160)}\"")
@@ -111,6 +125,14 @@ class LiveAssistant(
             is LiveSession.Event.Closed -> end("")
             else -> {}
         }
+    }
+
+    /** The microphone's loudness: a turn starting after a quiet moment gets a fresh look at the screen at once. */
+    private fun userLevel(v: Float) {
+        if (v < LOUD) return
+        val now = clock()
+        if (now - lastLoud > QUIET_MS) frames?.userTurnStarted()
+        lastLoud = now
     }
 
     private fun handle(e: LiveSession.Event.ToolCall) {
@@ -125,20 +147,50 @@ class LiveAssistant(
         if (e.name != LiveAssistCore.TOOL) { result(e, JSONObject().put("error", "unknown tool")); return }
         val request = e.args.optString("request").trim()
         if (request.isEmpty()) { result(e, JSONObject().put("error", "Nothing to do: say what the job is.")); return }
+        val wantPicture = e.args.optBoolean("include_screen")
         scope.launch {
             // Minimised: he is in another app now, so what the sheet saw when it opened is out of date. Read the screen as it is at this moment.
-            val screen = if (minimised()) AssistScreenNow.capture(context) else AssistHub.screen.value
-            val text = LiveAssistCore.message(request, e.args.optString("context"), source(), screen)
-            val images = listOfNotNull(screen?.screenshot?.takeIf { it.isNotBlank() && !screen.blocked })
-            core.handOff(request, lastId)
+            val screen0 = if (minimised()) AssistScreenNow.capture(context) else AssistHub.screen.value
+            // The words on screen go along; the picture only when the job needs it (include_screen).
+            val screen = if (wantPicture) screen0 else screen0?.copy(screenshot = "")
+            val jpeg = if (wantPicture && screen0?.blocked != true) frames?.latestJpeg() else null
+            val spoken = core.spokenNow()
+            val text = LiveAssistCore.message(request, e.args.optString("context"), source(), screen, spoken)
+            core.handOff(request, lastId, wantPicture && jpeg != null)
             push()
-            runCatching { g.runtime.sendAccepted(text, images) }
-                .onSuccess { result(e, JSONObject().put("status", "sent").put("note", "The agent has it. Say a very short 'on it' (a few words). Its reply comes to you as an update.")) }
+            val sent = runCatching { deliver(text, request, spoken, jpeg) }
+            sent.onSuccess { result(e, JSONObject().put("status", "sent").put("note", "The agent has it. Say a very short 'on it' (a few words). Its reply comes to you as an update.")) }
                 .onFailure { err ->
                     core.handOffFailed(); push()
                     result(e, JSONObject().put("status", "failed").put("error", "It did not go: ${err.message.orEmpty().ifBlank { "the link to the computer dropped" }}. Tell the user and offer to try again."))
                 }
         }
+    }
+
+    /**
+     * Puts the job in front of the agent the way a voice call does, so it is never a message the user typed: on a linked
+     * computer through voice.callHandoff (carrying origin "live_voice" and the user's own words), on this phone as a call
+     * hand-off ("On it: ..." in the chat, no user bubble). The picture, when the job needs one, goes with it.
+     */
+    private suspend fun deliver(text: String, request: String, spoken: String, jpeg: ByteArray?) {
+        val r = RemoteHub.session.value
+        if (r != null) {
+            val args = LiveAssistCore.handoffMeta(request, spoken, jpeg != null).put("target", "main").put("message", text).put("newChat", false)
+            if (jpeg != null) args.put("images", JSONArray().put(JSONObject().put("mime", "image/jpeg").put("data", Base64.encodeToString(jpeg, Base64.NO_WRAP))))
+            val res = try { r.call("voice.callHandoff", listOf(args), 30_000) as? JSONObject } catch (ex: Exception) {
+                // A computer older than voice.callHandoff: the message still goes, the old way.
+                if (LiveAuth.isOldComputer(ex.message)) { g.runtime.sendAccepted(text, listOfNotNull(jpeg?.let { tempPicture(it) })); return }
+                throw ex
+            } ?: throw IllegalStateException("The computer didn't answer.")
+            if (!res.optBoolean("ok")) throw IllegalStateException(res.optString("error").ifBlank { "The computer would not take it." })
+            return
+        }
+        g.runtime.send(text, images = listOfNotNull(jpeg?.let { tempPicture(it) }), fromCall = request)
+    }
+
+    private fun tempPicture(jpeg: ByteArray): String {
+        val dir = File(context.filesDir, "assist").apply { mkdirs() }
+        return File(dir, "live-${clock()}.jpg").also { it.writeBytes(jpeg) }.absolutePath
     }
 
     private fun result(e: LiveSession.Event.ToolCall, body: JSONObject) {
@@ -159,18 +211,44 @@ class LiveAssistant(
         end(why)
     }
 
-    /** The one way out: microphone, speaker and socket let go. Safe to call twice. */
+    /** The one way out: microphone, speaker and socket let go, and the session is recorded as a call. Safe to call twice. */
     fun end(reason: String = "") {
         if (ended) return
         ended = true
         watch?.cancel()
+        frames?.stop(); frames = null
         runCatching { session?.stop() }
         session = null
+        runCatching { saveCall() }
         onEnded(reason)
+    }
+
+    /**
+     * The session becomes one call in the chat, like any voice call: on a linked computer through voice.callSave (kind
+     * "live_assistant", hand-offs inside), on this phone as call rows the chat folds into one block. See docs/live-voice.md.
+     */
+    private fun saveCall() {
+        val lines = core.transcript; val hands = core.handOffs
+        if (lines.isEmpty() && hands.isEmpty()) return
+        val record = core.record(startedAt, clock())
+        val r = RemoteHub.session.value
+        if (r != null) { scope.launch { runCatching { r.call("voice.callSave", listOf(record), 30_000) } }; return }
+        scope.launch {
+            val entries = (lines.map { Triple(it.at, it.who, it.text) to null } + hands.map { Triple(it.at, "hand", it.request) to it }).sortedBy { it.first.first }
+            entries.forEach { (e, h) ->
+                val meta = JSONObject().put("call", true).put("live", true)
+                if (h != null) meta.put("handoff", true).put("spoken", h.spoken).put("include_screen", h.includeScreen)
+                g.db.chat().insert(ChatItem(kind = if (e.second == "in") "user" else "agent", text = e.third, meta = meta.toString(), createdAt = e.first))
+            }
+            runCatching { g.runtime.rememberCall(lines.joinToString("\n") { (if (it.who == "in") "User: " else "Voice: ") + it.text }) }
+        }
     }
 
     companion object {
         const val TAG = "LiveAssist"
         const val DEFAULT_MODEL = "gemini-3.1-flash-live-preview"
+        /** The microphone is loud enough to be speech, and this long since the last speech counts as a new turn. */
+        private const val LOUD = 0.25f
+        private const val QUIET_MS = 1_500L
     }
 }

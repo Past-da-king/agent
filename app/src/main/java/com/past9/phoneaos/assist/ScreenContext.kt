@@ -23,7 +23,20 @@ object AssistPrefs {
     fun overLockScreen(context: Context): Boolean = prefs(context).getBoolean("x_assist_over_lock", false)
     /** "Live voice in the assistant". Off by default: the sheet opens its normal listening input. On: it opens a Gemini Live session. */
     fun liveVoice(context: Context): Boolean = prefs(context).getBoolean("x_assist_live_voice", false)
-    fun setLiveVoice(context: Context, on: Boolean) { prefs(context).edit().putBoolean("x_assist_live_voice", on).apply() }
+    fun setLiveVoice(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean("x_assist_live_voice", on).apply()
+        AssistService.live?.let { runCatching { it.applyShowContext() } }
+    }
+
+    /** "Live sees your screen": while live voice is on, frames of the screen go into the session so it can answer "what is this". Needs [readScreen]. */
+    fun liveSees(context: Context): Boolean = readScreen(context) && prefs(context).getBoolean("x_assist_live_sees", true)
+    fun setLiveSees(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean("x_assist_live_sees", on).apply()
+        AssistService.live?.let { runCatching { it.applyShowContext() } }
+    }
+
+    /** Whether the phone should gather a picture at all: the sheet's own picture switch, or Live's frames. */
+    fun screenshotAllowed(context: Context): Boolean = readScreenshot(context) || (liveVoice(context) && liveSees(context))
 
     fun setOverLockScreen(context: Context, on: Boolean) { prefs(context).edit().putBoolean("x_assist_over_lock", on).apply() }
 

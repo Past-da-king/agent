@@ -336,15 +336,17 @@ private fun CallApprovalCard(item: com.past9.phoneaos.data.ChatItem, onAnswer: (
  * said, tap for the whole conversation. A row with no transcript in it still shows its own line of text.
  */
 @Composable
-fun CallLogRow(item: com.past9.phoneaos.data.ChatItem, agentName: String) {
+fun CallLogRow(item: com.past9.phoneaos.data.ChatItem, agentName: String, startOpen: Boolean = false) {
     val cs = MaterialTheme.colorScheme
     val meta = remember(item.meta) { runCatching { org.json.JSONObject(item.meta) }.getOrDefault(org.json.JSONObject()) }
     val lines = remember(item.meta) {
         meta.optJSONArray("lines")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { it.optString("who") to it.optString("text").trim() } }.orEmpty().filter { it.second.isNotBlank() }
     }
-    var open by remember { mutableStateOf(false) }
-    val last = lines.lastOrNull()?.second ?: item.text.trim()
-    Surface(onClick = { if (lines.isNotEmpty()) open = !open }, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md), color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+    var open by remember { mutableStateOf(startOpen) }
+    val live = meta.optString("kind") == com.past9.phoneaos.assist.LiveAssistCore.KIND
+    val hands = remember(item.meta) { LiveCallParts.fromMeta(meta) }
+    val last = if (hands.isNotEmpty()) LiveCallParts.summary("", hands) else (lines.lastOrNull()?.second ?: item.text.trim())
+    Surface(onClick = { if (lines.isNotEmpty() || hands.isNotEmpty()) open = !open }, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md), color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(28.dp).background(cs.primaryContainer, RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.sm)), contentAlignment = Alignment.Center) {
@@ -352,10 +354,10 @@ fun CallLogRow(item: com.past9.phoneaos.data.ChatItem, agentName: String) {
                 }
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(com.past9.phoneaos.voice.CallCore.rowTitle(lines.size, 0L, meta.optLong("durationMs")), style = MaterialTheme.typography.labelLarge, color = cs.onSurface)
+                    Text(LiveCallParts.title(com.past9.phoneaos.voice.CallCore.rowTitle(lines.size, 0L, meta.optLong("durationMs")), live, hands.size), style = MaterialTheme.typography.labelLarge, color = cs.onSurface)
                     if (!open && last.isNotBlank()) Text(last, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 }
-                if (lines.isNotEmpty()) Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, if (open) "Hide the call" else "Show the call", tint = cs.onSurfaceVariant)
+                if (lines.isNotEmpty() || hands.isNotEmpty()) Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, if (open) "Hide the call" else "Show the call", tint = cs.onSurfaceVariant)
             }
             if (open) Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 lines.forEach { (who, text) ->
@@ -363,6 +365,7 @@ fun CallLogRow(item: com.past9.phoneaos.data.ChatItem, agentName: String) {
                     Text(if (me) "You" else agentName, style = MaterialTheme.typography.labelMedium, color = if (me) cs.onSurfaceVariant else cs.primary)
                     Text(text, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface)
                 }
+                hands.forEach { HandoffEntry(it.request, it.spoken) }
             }
         }
     }

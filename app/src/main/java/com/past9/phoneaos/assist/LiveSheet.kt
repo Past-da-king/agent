@@ -116,7 +116,15 @@ fun LiveSheetBody(view: LiveView, agentName: String, screen: ScreenLine?, action
                 }
             }
         }
-        if (screen != null && view.phase != LivePhase.ERROR) {
+        if (view.seeing != Seeing.OFF && view.phase != LivePhase.ERROR) {
+            // Live is looking at the screen (or cannot, because it is private): said plainly, so nothing is hidden.
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(if (view.seeing == Seeing.SEEING) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff, null, Modifier.size(16.dp), tint = if (view.seeing == Seeing.SEEING) cs.primary else cs.onSurfaceVariant)
+                Spacer(Modifier.width(6.dp))
+                Text(if (view.seeing == Seeing.SEEING) "Live can see your screen" else "Private screen: Live can't see it", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        } else if (screen != null && view.phase != LivePhase.ERROR) {
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(if (screen.reading) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff, null, Modifier.size(16.dp), tint = cs.onSurfaceVariant)

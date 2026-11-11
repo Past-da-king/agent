@@ -38,7 +38,8 @@ class AssistService : VoiceInteractionService() {
     fun applyShowContext() {
         var off = 0
         if (!AssistPrefs.readScreen(this)) off = off or VoiceInteractionSession.SHOW_WITH_ASSIST
-        if (!AssistPrefs.readScreenshot(this)) off = off or VoiceInteractionSession.SHOW_WITH_SCREENSHOT
+        // A picture is gathered when the sheet may send one, or when Live voice is on and allowed to see the screen.
+        if (!AssistPrefs.screenshotAllowed(this)) off = off or VoiceInteractionSession.SHOW_WITH_SCREENSHOT
         setDisabledShowContext(off)
     }
 
@@ -65,6 +66,8 @@ class AssistSessionService : VoiceInteractionSessionService() {
  */
 class AssistSession(context: Context) : VoiceInteractionSession(context) {
     private val main = Handler(Looper.getMainLooper())
+    /** This look is a frame for Live: what it finds goes to [AssistFrameHub], never to the sheet's own [AssistHub]. */
+    private var forFrame = false
 
     override fun onPrepareShow(args: Bundle?, showFlags: Int) {
         super.onPrepareShow(args, showFlags)
@@ -76,8 +79,9 @@ class AssistSession(context: Context) : VoiceInteractionSession(context) {
         // The phone itself called (the side key, the assist gesture): there is no source in its bundle.
         com.past9.phoneaos.voice.LiveTiming.mark("entry")
         // Asked only to read the screen (the live bubble at hand-off time): gather it, show nothing.
+        forFrame = args?.getBoolean(AssistScreenNow.EXTRA_FRAME) == true
         if (args?.getBoolean(AssistScreenNow.EXTRA_CAPTURE) == true) {
-            AssistHub.begin()
+            if (forFrame) AssistFrameHub.begin() else AssistHub.begin()
             main.removeCallbacksAndMessages(null)
             main.postDelayed({ runCatching { hide() } }, 4_000)
             return
@@ -106,11 +110,15 @@ class AssistSession(context: Context) : VoiceInteractionSession(context) {
 
     private fun take(structure: AssistStructure?, content: AssistContent?) {
         if (!AssistPrefs.readScreen(context)) return
-        AssistHub.offer(runCatching { ScreenContext.from(context, structure, content) }.getOrNull())
+        val ctx = runCatching { ScreenContext.from(context, structure, content) }.getOrNull()
+        if (forFrame) AssistFrameHub.offer(ctx) else AssistHub.offer(ctx)
     }
 
     override fun onHandleScreenshot(screenshot: Bitmap?) {
-        if (!AssistPrefs.readScreenshot(context) || screenshot == null) return
+        if (screenshot == null) return
+        // A look for Live's frames needs only its own two switches; the sheet's picture needs "send a picture of the screen".
+        if (forFrame) { if (FrameGate.enabled(AssistPrefs.readScreen(context), AssistPrefs.liveSees(context))) AssistFrameHub.offerShot(ScreenContext.save(context, screenshot)); return }
+        if (!AssistPrefs.readScreenshot(context)) return
         AssistHub.offerShot(ScreenContext.save(context, screenshot))
     }
 
