@@ -17,7 +17,7 @@ object LiveTiming {
 
     @Synchronized fun mark(stage: String) {
         val now = SystemClock.elapsedRealtime()
-        if (t0 == 0L || now - last > 30_000) {
+        if (t0 == 0L || now - last > 30_000 || stage == "entry") {
             t0 = now; seen.clear()
             Log.i(TAG, "begin processAge=${now - Process.getStartElapsedRealtime()}ms")
         }

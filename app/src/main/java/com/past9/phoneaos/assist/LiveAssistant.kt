@@ -5,10 +5,11 @@ import android.media.AudioManager
 import android.util.Log
 import com.past9.phoneaos.Graph
 import com.past9.phoneaos.data.ChatItem
-import com.past9.phoneaos.remote.RemoteHub
 import com.past9.phoneaos.voice.CallCore
+import com.past9.phoneaos.voice.Earcon
 import com.past9.phoneaos.voice.LiveAuth
 import com.past9.phoneaos.voice.LiveSession
+import com.past9.phoneaos.voice.LiveTiming
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -16,21 +17,24 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 /**
- * One live voice session inside the assist sheet (Settings > Default assistant > Live voice in the assistant).
+ * One live voice session inside the assist sheet (Settings > Default assistant > Live voice in the assistant). It is
+ * owned by [LiveHost] and outlives the sheet, so it keeps going while the sheet is minimised to a bubble.
  *
  * Gemini Live is the voice: it listens, answers aloud at once, can be talked over, and has exactly one tool,
  * hand_to_agent, which puts a job in front of the same agent the typed sheet talks to (this phone's, or the linked
- * computer's) with what is on screen. The agent's reply, questions and approvals come back through the chat rows
- * the sheet already follows. Approvals are still the app's own hold-to-approve card, shown in the sheet.
+ * computer's) with what is on screen at that moment. The agent's reply, questions and approvals come back through the
+ * chat rows. Approvals are still the app's own hold-to-approve card.
  *
- * Auth is the same as a call: the linked computer mints a one-use token from its own key, else this phone's own
- * Google key. The agent's name comes from settings.
+ * Start-up is built to be fast: the microphone and speaker open at once and what he says is kept until the connection
+ * is ready; the token is asked for while the sheet is still opening ([LiveToken.warm]); a soft earcon says "listening".
  */
 class LiveAssistant(
     private val context: Context,
     private val g: Graph,
     private val scope: CoroutineScope,
     private val source: () -> String,
+    /** True while the sheet is minimised to a bubble: the screen is then read fresh at hand-off time, and quiet lasts longer. */
+    private val minimised: () -> Boolean,
     /** The view changed: redraw. */
     private val onChange: (LiveView) -> Unit,
     /** The session is over (goodbye, idle, tap, or it could not start). [reason] is blank when it ended normally. */
@@ -40,11 +44,10 @@ class LiveAssistant(
     val core = LiveAssistCore(clock)
     @Volatile private var session: LiveSession? = null
     @Volatile private var ended = false
+    @Volatile private var setupDone = false
     private var watch: Job? = null
     private var rows: List<ChatItem> = emptyList()
-    private var working = false
     private val lastId: Long get() = rows.lastOrNull()?.id ?: 0L
-    private var linked: com.past9.phoneaos.remote.RemoteSession? = null
 
     val active: Boolean get() = !ended && session != null
 
@@ -53,45 +56,34 @@ class LiveAssistant(
     /** Opens the session. Needs the microphone permission already. */
     fun start() {
         if (session != null || ended) return
-        com.past9.phoneaos.voice.LiveTiming.mark("start")
+        LiveTiming.mark("start")
         val st = g.settings.state.value
-        linked = RemoteHub.session.value
-        val key = g.settings.voiceKey("gemini")
         val name = st.agentName.takeIf { it.isNotBlank() && it != "Your agent" } ?: "your agent"
-        val system = LiveAssistCore.systemPrompt(name, st.userName, linked != null)
+        val linked = com.past9.phoneaos.remote.RemoteHub.link.value?.on == true || com.past9.phoneaos.remote.RemoteHub.session.value != null
+        val system = LiveAssistCore.systemPrompt(name, st.userName, linked)
+        val phoneVoice = st.ttsVoice.takeIf { st.ttsProvider == "gemini" && it.isNotBlank() }
+        val live = LiveSession("", DEFAULT_MODEL, phoneVoice ?: "Kore", system, tools = LiveAssistCore.tools(),
+            renew = { kotlinx.coroutines.runBlocking { LiveToken.mint(context) as? LiveAuth.Token.Ok }?.url }) { e -> if (!ended) onEvent(e) }
+        session = live
+        // The microphone and speaker open now, in parallel with the token: nothing he says is lost.
+        live.prepare(context.getSystemService(AudioManager::class.java))
         scope.launch {
-            com.past9.phoneaos.voice.LiveTiming.mark("token_req")
-            val auth = runCatching { resolve(key) }.getOrElse { LiveAuth.Token.No(it.message ?: "Live voice could not start.", false) }
-            com.past9.phoneaos.voice.LiveTiming.mark("token_ok")
+            LiveTiming.mark("token_req")
+            val auth = runCatching { LiveToken.take(context) }.getOrElse { LiveAuth.Token.No(it.message ?: "Live voice could not start.", false) }
+            LiveTiming.mark("token_ok")
             if (ended) return@launch
             if (auth !is LiveAuth.Token.Ok) { fail((auth as LiveAuth.Token.No).why); return@launch }
-            val renew = if (linked != null) ({ (kotlinx.coroutines.runBlocking { resolve(key) } as? LiveAuth.Token.Ok)?.url }) else null
-            val phoneVoice = st.ttsVoice.takeIf { st.ttsProvider == "gemini" && it.isNotBlank() }
-            session = LiveSession(auth.url, auth.model.ifBlank { null } ?: DEFAULT_MODEL, phoneVoice ?: auth.voice.ifBlank { null } ?: "Kore", system,
-                tools = LiveAssistCore.tools(), renew = renew) { e -> if (!ended) onEvent(e) }.also { it.start() }
-            // Nothing heard, nothing said and nothing out for a while: let go.
-            watch = scope.launch { while (!ended) { delay(2_000); if (core.idle()) { Log.i(TAG, "idle, ending"); end(""); } } }
-            // Never stuck on "connecting".
-            scope.launch { delay(CallCore.CONNECT_TIMEOUT_MS); if (!ended && core.current.phase == LivePhase.CONNECTING) fail(CallCore.TIMED_OUT) }
+            live.connectTo(auth.url, auth.model.ifBlank { DEFAULT_MODEL }, if (phoneVoice == null) auth.voice else "")
         }
-    }
-
-    /** The computer's one-use token while linked; this phone's own key otherwise (also when the computer has none). */
-    private suspend fun resolve(key: String?): LiveAuth.Token {
-        val r = linked
-        if (r != null) {
-            val t = try { LiveAuth.parse(r.call("voice.liveToken", emptyList(), 20_000)) } catch (e: Exception) {
-                LiveAuth.Token.No(if (LiveAuth.isOldComputer(e.message)) LiveAuth.OLD_COMPUTER else e.message ?: "Your computer didn't answer.", false)
-            }
-            if (t is LiveAuth.Token.Ok || key == null) return t
-        }
-        if (key == null) return LiveAuth.Token.No("Live voice runs on Gemini Live. Add a Google (Gemini) key in Settings, Voice, or link a computer that has one.", true)
-        return LiveAuth.Token.Ok(LiveAuth.keyUrl(key), DEFAULT_MODEL, "")
+        // Nothing heard, nothing said and nothing out for a while: let go.
+        watch = scope.launch { while (!ended) { delay(2_000); if (core.idle(minimised())) { Log.i(TAG, "idle, ending"); end("") } } }
+        // Never stuck connecting: the microphone being up does not mean the connection is.
+        scope.launch { delay(CallCore.CONNECT_TIMEOUT_MS); if (!ended && !setupDone) fail(CallCore.TIMED_OUT) }
     }
 
     /** The chat rows or the agent's working flag changed: pass on what Live should say. */
     fun onRows(r: List<ChatItem>, w: Boolean) {
-        rows = r; working = w
+        rows = r
         if (ended) return
         core.rows(r, w).forEach { tell(it) }
         push()
@@ -99,13 +91,19 @@ class LiveAssistant(
 
     private fun onEvent(e: LiveSession.Event) {
         when (e) {
-            is LiveSession.Event.SetupComplete -> {
-                session?.openAudio(context.getSystemService(AudioManager::class.java))
+            is LiveSession.Event.MicReady -> {
+                // Listening now: speech is kept until the connection is ready. A soft sound says so.
                 core.connected(); push()
-                com.past9.phoneaos.voice.LiveTiming.mark("listening_ui")
+                LiveTiming.mark("listening_ui")
+                Earcon.play(context)
             }
+            is LiveSession.Event.SetupComplete -> { setupDone = true }
             is LiveSession.Event.Transcript -> { core.caption(e.who, e.text); push() }
-            is LiveSession.Event.Speaking -> { if (!e.on) Log.i(TAG, "turn: you=\"${core.current.you.take(160)}\" agent=\"${core.current.agent.take(160)}\""); if (core.speaking(e.on)) scope.launch { delay(400); end("") }; push() }
+            is LiveSession.Event.Speaking -> {
+                if (!e.on) Log.i(TAG, "turn: you=\"${core.current.you.take(160)}\" agent=\"${core.current.agent.take(160)}\"")
+                if (core.speaking(e.on)) scope.launch { delay(400); end("") }
+                push()
+            }
             is LiveSession.Event.ToolCall -> handle(e)
             is LiveSession.Event.Failed -> fail(CallCore.plainError(e.error).ifBlank { "Live voice stopped." })
             is LiveSession.Event.Closed -> end("")
@@ -118,13 +116,13 @@ class LiveAssistant(
         if (e.name != LiveAssistCore.TOOL) { result(e, JSONObject().put("error", "unknown tool")); return }
         val request = e.args.optString("request").trim()
         if (request.isEmpty()) { result(e, JSONObject().put("error", "Nothing to do: say what the job is.")); return }
-        val text = LiveAssistCore.message(request, e.args.optString("context"), source(), AssistHub.screen.value)
-        val screen = AssistHub.screen.value
-        val images = listOfNotNull(screen?.screenshot?.takeIf { it.isNotBlank() && !screen.blocked })
-        val before = lastId
-        core.handOff(request, before)
-        push()
         scope.launch {
+            // Minimised: he is in another app now, so what the sheet saw when it opened is out of date. Read the screen as it is at this moment.
+            val screen = if (minimised()) AssistScreenNow.capture(context) else AssistHub.screen.value
+            val text = LiveAssistCore.message(request, e.args.optString("context"), source(), screen)
+            val images = listOfNotNull(screen?.screenshot?.takeIf { it.isNotBlank() && !screen.blocked })
+            core.handOff(request, lastId)
+            push()
             runCatching { g.runtime.sendAccepted(text, images) }
                 .onSuccess { result(e, JSONObject().put("status", "sent").put("note", "The agent has it. Say a very short 'on it' (a few words). Its reply comes to you as an update.")) }
                 .onFailure { err ->
@@ -144,7 +142,6 @@ class LiveAssistant(
         session?.announce(text)
     }
 
-    /** Talk over the agent: drop what it is saying now. The session itself handles real barge-in; this is the tap. */
     fun mute(on: Boolean) { session?.setMuted(on); core.muted(on); push() }
 
     private fun fail(why: String) {

@@ -79,6 +79,8 @@ object AssistEntry {
     fun open(context: Context, source: String): Route {
         com.past9.phoneaos.voice.LiveTiming.mark("entry")
         val app = context.applicationContext
+        // Live voice: ask for its token now, while the sheet is still on its way up.
+        LiveToken.warm(app)
         val src = source(source)
         val service = AssistService.live
         var wanted = route(service != null && AssistRole.held(app), onScreen(), Settings.canDrawOverlays(app))

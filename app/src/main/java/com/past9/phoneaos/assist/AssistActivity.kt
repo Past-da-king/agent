@@ -74,8 +74,10 @@ class AssistActivity : ComponentActivity() {
     private var closing by mutableStateOf(false)
     /** Live voice in the assistant: a Gemini Live session instead of the one-request listening input. */
     private var liveMode = false
-    private var liveAssistant: LiveAssistant? = null
     private var liveView by mutableStateOf(LiveView())
+    /** Minimise needs "display over other apps": the slide-up sheet that asks for it. */
+    private var overlaySheet by mutableStateOf(false)
+    private var pendingMinimise = false
 
     private val askMic = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         askingPermission = false
@@ -103,6 +105,9 @@ class AssistActivity : ComponentActivity() {
             launch { RemoteHub.session.flatMapLatest { (it?.db ?: g.db).chat().all() }.collectLatest { rows = it; refresh() } }
             launch { RemoteHub.session.flatMapLatest { it?.status ?: g.runtime.status }.collectLatest { working = it.working; refresh() } }
             // Test builds: words put in by hand, as if spoken.
+            // Live voice: the session is the host's; this sheet only shows it.
+            launch { LiveHost.view.collect { liveView = it } }
+            launch { LiveHost.ended.collect { why -> liveEnded(why) } }
             launch { AssistHub.said.collect { words -> stopListening(); if (!core.listening) core.listen(); heard(words) } }
         }
         setContent {
@@ -119,7 +124,7 @@ class AssistActivity : ComponentActivity() {
         setIntent(intent)
         source = sourceOf(intent)
         // A live session is already open: a second press changes nothing, it is already listening.
-        if (liveMode && liveAssistant?.active == true) return
+        if (liveMode && LiveHost.active) { LiveHost.attached(); return }
         AssistHub.keepIfFresh()
         AssistEntry.clearNotification(this)
         g.stopSpeaking()
@@ -131,7 +136,11 @@ class AssistActivity : ComponentActivity() {
     private fun sourceOf(i: Intent?): String =
         if (i?.action == AssistEntry.ACTION) AssistEntry.source(i.getStringExtra(AssistEntry.EXTRA_SOURCE)) else AssistEntry.SIDE_KEY
 
-    override fun onResume() { super.onResume(); ChatOnScreen.assistShowing = true }
+    override fun onResume() {
+        super.onResume(); ChatOnScreen.assistShowing = true
+        // Back from the phone's overlay page: if he allowed it, carry on with the minimise he asked for.
+        if (pendingMinimise) { askingPermission = false; pendingMinimise = false; if (android.provider.Settings.canDrawOverlays(this)) minimise() }
+    }
     override fun onPause() { super.onPause(); ChatOnScreen.assistShowing = false }
 
     override fun onStop() {
@@ -141,36 +150,47 @@ class AssistActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        liveAssistant?.end("")
+        // Leaving the sheet ends a live session, unless it was minimised to the bubble on purpose.
+        if (liveMode && !LiveHost.minimised.value) LiveHost.end("")
         stopListening()
         follow?.cancel()
         runCatching { g.stopSpeaking() }
         AssistEntry.setOpen(false)
+        // A minimised session still holds the microphone: the wake word keeps out of its way.
+        if (LiveHost.active) AssistEntry.setListening(true)
         AssistHub.clear()
         super.onDestroy()
     }
 
     private fun refresh() {
         view = core.view(rows, working)
-        // Live voice: the same chat rows tell it when the agent answered, asked something or needs an approval.
-        liveAssistant?.onRows(rows, working)
     }
 
     // ---- live voice -----------------------------------------------------------------------------
 
+    /** Joins the live session if one is running (opened again from the bubble, a second press), else starts one. */
     private fun startLive() {
-        AssistEntry.setListening(true)
-        liveView = LiveView()
-        val a = LiveAssistant(this, g, lifecycleScope, { source }, onChange = { v -> runOnUiThread { liveView = v } }, onEnded = { why -> runOnUiThread { liveEnded(why) } })
-        liveAssistant = a
-        a.onRows(rows, working)
-        a.start()
+        if (LiveHost.active) { LiveHost.attached(); liveView = LiveHost.view.value; return }
+        LiveHost.start(this, source)
+    }
+
+    /** Shrinks the sheet to the floating bubble. Asks for "display over other apps" first, in a slide-up sheet, when it is not allowed yet. */
+    private fun minimise() {
+        if (!android.provider.Settings.canDrawOverlays(this)) { overlaySheet = true; return }
+        LiveHost.minimise()
+        finish()
+    }
+
+    private fun openOverlaySettings() {
+        overlaySheet = false
+        pendingMinimise = true
+        askingPermission = true
+        runCatching { startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:$packageName"))) }
+            .onFailure { askingPermission = false; pendingMinimise = false }
     }
 
     /** The live session is over. Ended on purpose (goodbye, quiet, a tap): the sheet closes. It could not start or broke: the normal sheet takes over, with the reason. */
     private fun liveEnded(why: String) {
-        AssistEntry.setListening(false)
-        liveAssistant = null
         if (why.isBlank()) { finish(); return }
         liveMode = false
         core.listen()
@@ -274,8 +294,9 @@ class AssistActivity : ComponentActivity() {
                     Column(Modifier.navigationBarsPadding().imePadding()) {
                         if (!onboarded) NotSetUp(agentName)
                         else if (liveMode) LiveSheetBody(liveView, agentName, AssistWords.screenLine(screen, AssistPrefs.readScreen(this@AssistActivity)), LiveActions(
-                            onEnd = { liveAssistant?.end("") ?: finish() },
-                            onMute = { m -> liveAssistant?.mute(m) },
+                            onEnd = { if (LiveHost.active) LiveHost.end("") else finish() },
+                            onMute = { m -> LiveHost.mute(m) },
+                            onMinimise = { minimise() },
                             onOpenApp = { openApp() },
                             onAnswer = { id, option -> g.runtime.answer(id, option) },
                         ))
@@ -292,6 +313,7 @@ class AssistActivity : ComponentActivity() {
                     }
                 }
             }
+            if (overlaySheet) OverlayPermissionSheet(agentName, onOpenSettings = { openOverlaySettings() }, onDismiss = { overlaySheet = false })
         }
     }
 
