@@ -74,6 +74,7 @@ class AssistSession(context: Context) : VoiceInteractionSession(context) {
     override fun onShow(args: Bundle?, showFlags: Int) {
         super.onShow(args, showFlags)
         // The phone itself called (the side key, the assist gesture): there is no source in its bundle.
+        com.past9.phoneaos.voice.LiveTiming.mark("entry")
         val source = AssistEntry.source(args?.getString(AssistEntry.EXTRA_SOURCE) ?: AssistEntry.SIDE_KEY)
         AssistHub.begin()
         Log.i(AssistService.TAG, "session shown source=$source flags=$showFlags")

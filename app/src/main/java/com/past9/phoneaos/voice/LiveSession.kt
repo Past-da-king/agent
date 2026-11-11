@@ -130,8 +130,10 @@ class LiveSession(
         ws = http.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 if (webSocket !== ws) return
+                LiveTiming.mark("ws_open")
                 onEvent(Event.Connected)
                 webSocket.send(setupMessage().toString())
+                LiveTiming.mark("setup_sent")
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) { if (webSocket === ws) handle(text) }
@@ -227,6 +229,7 @@ class LiveSession(
         try {
             val m = JSONObject(raw)
             if (m.has("setupComplete")) {
+                LiveTiming.mark("setup_complete")
                 Log.i(TAG, "setup complete${if (everReady) " (reconnected)" else ""}")
                 ready.set(true); retries = 0
                 val again = everReady; everReady = true
@@ -281,6 +284,7 @@ class LiveSession(
                     val data = parts.optJSONObject(i)?.optJSONObject("inlineData")?.optString("data")
                     if (!data.isNullOrEmpty()) {
                         val pcm = Base64.decode(data, Base64.DEFAULT)
+                        LiveTiming.mark("first_audio_in")
                         // Queued, never written from this thread: a blocked write here delayed every later frame,
                         // the "interrupted" one included.
                         speaker?.enqueue(pcm) ?: runCatching { external?.play(pcm) }
@@ -443,6 +447,7 @@ class LiveSession(
             }
             recorder = rec
             rec.startRecording()
+            LiveTiming.mark("mic_started")
             thread(name = "aos-mic", isDaemon = true) {
                 val buf = ByteArray(CHUNK_BYTES)
                 while (running.get() && micOpen.get()) {
@@ -462,6 +467,7 @@ class LiveSession(
                         )
                     )
                     ws?.send(msg.toString())
+                    LiveTiming.mark("first_mic_chunk_sent")
                 }
             }
         } catch (e: Exception) {

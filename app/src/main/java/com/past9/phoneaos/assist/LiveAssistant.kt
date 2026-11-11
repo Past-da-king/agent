@@ -53,13 +53,16 @@ class LiveAssistant(
     /** Opens the session. Needs the microphone permission already. */
     fun start() {
         if (session != null || ended) return
+        com.past9.phoneaos.voice.LiveTiming.mark("start")
         val st = g.settings.state.value
         linked = RemoteHub.session.value
         val key = g.settings.voiceKey("gemini")
         val name = st.agentName.takeIf { it.isNotBlank() && it != "Your agent" } ?: "your agent"
         val system = LiveAssistCore.systemPrompt(name, st.userName, linked != null)
         scope.launch {
+            com.past9.phoneaos.voice.LiveTiming.mark("token_req")
             val auth = runCatching { resolve(key) }.getOrElse { LiveAuth.Token.No(it.message ?: "Live voice could not start.", false) }
+            com.past9.phoneaos.voice.LiveTiming.mark("token_ok")
             if (ended) return@launch
             if (auth !is LiveAuth.Token.Ok) { fail((auth as LiveAuth.Token.No).why); return@launch }
             val renew = if (linked != null) ({ (kotlinx.coroutines.runBlocking { resolve(key) } as? LiveAuth.Token.Ok)?.url }) else null
@@ -99,6 +102,7 @@ class LiveAssistant(
             is LiveSession.Event.SetupComplete -> {
                 session?.openAudio(context.getSystemService(AudioManager::class.java))
                 core.connected(); push()
+                com.past9.phoneaos.voice.LiveTiming.mark("listening_ui")
             }
             is LiveSession.Event.Transcript -> { core.caption(e.who, e.text); push() }
             is LiveSession.Event.Speaking -> { if (!e.on) Log.i(TAG, "turn: you=\"${core.current.you.take(160)}\" agent=\"${core.current.agent.take(160)}\""); if (core.speaking(e.on)) scope.launch { delay(400); end("") }; push() }

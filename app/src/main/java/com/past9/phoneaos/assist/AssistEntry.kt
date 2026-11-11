@@ -77,6 +77,7 @@ object AssistEntry {
     /** Open the assist sheet, listening. Safe from any thread and any component. */
     @JvmStatic
     fun open(context: Context, source: String): Route {
+        com.past9.phoneaos.voice.LiveTiming.mark("entry")
         val app = context.applicationContext
         val src = source(source)
         val service = AssistService.live
