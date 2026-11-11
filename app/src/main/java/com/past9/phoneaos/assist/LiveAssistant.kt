@@ -175,7 +175,7 @@ class LiveAssistant(
     private suspend fun deliver(text: String, request: String, spoken: String, jpeg: ByteArray?) {
         val r = RemoteHub.session.value
         if (r != null) {
-            val args = LiveAssistCore.handoffMeta(request, spoken, jpeg != null).put("target", "main").put("message", text).put("newChat", false)
+            val args = LiveAssistCore.handoffMeta(request, spoken, jpeg != null, core.sessionId).put("target", "main").put("message", text).put("newChat", false)
             if (jpeg != null) args.put("images", JSONArray().put(JSONObject().put("mime", "image/jpeg").put("data", Base64.encodeToString(jpeg, Base64.NO_WRAP))))
             val res = try { r.call("voice.callHandoff", listOf(args), 30_000) as? JSONObject } catch (ex: Exception) {
                 // A computer older than voice.callHandoff: the message still goes, the old way.
@@ -236,7 +236,7 @@ class LiveAssistant(
         scope.launch {
             val entries = (lines.map { Triple(it.at, it.who, it.text) to null } + hands.map { Triple(it.at, "hand", it.request) to it }).sortedBy { it.first.first }
             entries.forEach { (e, h) ->
-                val meta = JSONObject().put("call", true).put("live", true)
+                val meta = JSONObject().put("call", true).put("live", true).put("session", core.sessionId)
                 if (h != null) meta.put("handoff", true).put("spoken", h.spoken).put("include_screen", h.includeScreen)
                 g.db.chat().insert(ChatItem(kind = if (e.second == "in") "user" else "agent", text = e.third, meta = meta.toString(), createdAt = e.first))
             }

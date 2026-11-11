@@ -26,10 +26,29 @@ object LiveCallParts {
 
     private fun meta(i: ChatItem): JSONObject = runCatching { JSONObject(i.meta) }.getOrDefault(JSONObject())
 
-    fun isLive(items: List<ChatItem>): Boolean = items.any { meta(it).optBoolean("live") }
+    /** The computer's own marking of a live row (`meta.live`, an object with origin/spoken/session) or this phone's (`meta.live` true). */
+    private fun liveOf(m: JSONObject): JSONObject? = m.optJSONObject("live") ?: if (m.optBoolean("live")) m else null
 
-    /** The hand-off a call row on this phone stands for, or null for an ordinary line of the call. */
-    fun handoffOf(i: ChatItem): Hand? = meta(i).takeIf { it.optBoolean("handoff") }?.let { Hand(i.text.trim(), it.optString("spoken").trim(), it.optBoolean("include_screen")) }
+    fun isLive(items: List<ChatItem>): Boolean = items.any { liveOf(meta(it)) != null }
+
+    /**
+     * A row that belongs inside a call block even though it is not one of this phone's own call lines: a hand-off the
+     * computer replicated back, marked `meta.live` (and `meta.via` "call"). It is never drawn as a message the user typed.
+     */
+    fun isLiveRow(i: ChatItem): Boolean = i.kind == "user" && meta(i).optJSONObject("live") != null
+
+    /** What the agent was asked, without the notes only the agent reads. */
+    private fun cleanRequest(text: String): String = text.substringBefore(com.past9.phoneaos.assist.AssistMessage.MARK).substringBefore("\n[Live voice hand-off").trim()
+
+    /**
+     * The hand-off a call row stands for, or null for an ordinary line of the call: this phone's own (`meta.handoff`) or
+     * one the computer replicated back (`meta.live` object with the user's `spoken` words).
+     */
+    fun handoffOf(i: ChatItem): Hand? {
+        val m = meta(i)
+        if (i.kind == "user") m.optJSONObject("live")?.let { l -> return Hand(cleanRequest(i.text), l.optString("spoken").trim(), l.optBoolean("include_screen")) }
+        return m.takeIf { it.optBoolean("handoff") }?.let { Hand(cleanRequest(i.text), it.optString("spoken").trim(), it.optBoolean("include_screen")) }
+    }
 
     fun handoffs(items: List<ChatItem>): List<Hand> = items.mapNotNull(::handoffOf)
 

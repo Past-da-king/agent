@@ -82,6 +82,9 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
 
     // ---- the call record ----------------------------------------------------------------------------
 
+    /** This session's id: every hand-off and the saved call carry it, so the computer can tie them together. */
+    val sessionId: String = "live-" + java.util.UUID.randomUUID().toString().take(12)
+
     private val lines = ArrayList<LiveLine>()
     private val handoffs = ArrayList<LiveHandoff>()
 
@@ -98,7 +101,7 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
      */
     fun record(startedAt: Long, endedAt: Long): JSONObject =
         com.past9.phoneaos.voice.LiveAuth.record(startedAt, endedAt, lines.map { Triple(it.who, it.text, it.at) })
-            .put("kind", KIND).put("source", "assistant_sheet")
+            .put("kind", KIND).put("source", SOURCE).put("session", sessionId)
             .put("handoffs", JSONArray().apply {
                 handoffs.forEach { put(JSONObject().put("at", it.at).put("request", it.request).put("spoken", it.spoken).put("include_screen", it.includeScreen)) }
             })
@@ -210,6 +213,8 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
         /** The call record's kind for a live assistant session, and the origin its hand-offs carry (docs/live-voice.md). */
         const val KIND = "live_assistant"
         const val ORIGIN = "live_voice"
+        /** The saved call's `source`, as the computer expects it (shared/sender.ts liveFromInput). */
+        const val SOURCE = "live"
         /** Played on the phone itself, at once: no round trip to the agent. */
         const val PLAY_MEDIA = "play_media"
         const val MEDIA_CONTROL = "media_control"
@@ -268,8 +273,8 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
                 (if (spoken.isNotBlank()) " What the user actually said, just before: \"${spoken.trim().take(600)}\"." else "") + "]"
 
         /** The metadata a hand-off carries to the computer (voice.callHandoff): where it came from, and the user's words. */
-        fun handoffMeta(request: String, spoken: String, includeScreen: Boolean): JSONObject =
-            JSONObject().put("origin", ORIGIN).put("request", request.trim()).put("spoken", spoken.trim()).put("include_screen", includeScreen)
+        fun handoffMeta(request: String, spoken: String, includeScreen: Boolean, session: String = ""): JSONObject =
+            JSONObject().put("origin", ORIGIN).put("request", request.trim()).put("spoken", spoken.trim()).put("include_screen", includeScreen).put("session", session)
 
         /** What Live is told when the agent needs the user. */
         fun cardPrompt(i: ChatItem): String {

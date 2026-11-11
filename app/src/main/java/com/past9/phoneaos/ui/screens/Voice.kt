@@ -346,7 +346,7 @@ fun CallLogRow(item: com.past9.phoneaos.data.ChatItem, agentName: String, startO
         meta.optJSONArray("lines")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { it.optString("who") to it.optString("text").trim() } }.orEmpty().filter { it.second.isNotBlank() }
     }
     var open by remember { mutableStateOf(startOpen) }
-    val live = meta.optString("kind") == com.past9.phoneaos.assist.LiveAssistCore.KIND
+    val live = meta.optString("kind") == com.past9.phoneaos.assist.LiveAssistCore.KIND || meta.optString("source") == com.past9.phoneaos.assist.LiveAssistCore.SOURCE
     val hands = remember(item.meta) { LiveCallParts.fromMeta(meta) }
     val last = if (hands.isNotEmpty()) LiveCallParts.summary("", hands) else (lines.lastOrNull()?.second ?: item.text.trim())
     Surface(onClick = { if (lines.isNotEmpty() || hands.isNotEmpty()) open = !open }, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md), color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
