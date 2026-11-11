@@ -171,7 +171,7 @@ private val templates = listOf(
     Template("Morning brief", "daily", "07:00", "Brief me on today: my calendar, what's due, and news that matters to me. Keep it short.", Icons.Rounded.WbSunny),
     Template("Sunday plan", "weekly", "SUN 18:00", "Look at my open tasks and the week ahead and give me a simple plan for the week.", Icons.Rounded.EventNote),
     Template("Bank watch", "email", "from:alerts@mybank.co.za", "Tell me what changed and flag anything over R 1,000.", Icons.Rounded.AccountBalance),
-    Template("Price drop", "interval", "180", "Check the price of the thing I'm watching and tell me if it drops below my target.", Icons.Rounded.TrendingDown),
+    Template("Price drop", "interval", "180", "Check the price of the thing I'm watching and tell me if it drops below my target.", com.past9.phoneaos.ui.TrendingDownIcon),
 )
 
 @Composable

@@ -122,7 +122,7 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
                 Line(Icons.Rounded.AddToHomeScreen, stringResource(R.string.settings_pin_home, s.agentName), stringResource(R.string.settings_pin_home_sub, s.agentName)) { actions.onPinHome() }
                 Line(Icons.Rounded.Palette, stringResource(R.string.settings_style), "${com.past9.phoneaos.ui.theme.accentOf(s.accent).label} · ${com.past9.phoneaos.ui.mascotOf(s.mascot).label}") { actions.onStyle() }
                 Line(Icons.Rounded.Language, stringResource(R.string.settings_language),
-                    com.past9.phoneaos.system.AppLocale.choices.firstOrNull { it.first == actions.language }?.second ?: stringResource(R.string.settings_language_phone)) { pickLanguage = true }
+                    com.past9.phoneaos.system.AppLocale.choices.firstOrNull { it.tag == actions.language }?.name ?: stringResource(R.string.settings_language_phone)) { pickLanguage = true }
             }
             SectionHeader(stringResource(R.string.settings_power), stringResource(R.string.settings_power_sub), Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
@@ -230,8 +230,10 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
         onPick = { c -> pickSub = false; actions.onChooseSub(com.past9.phoneaos.data.SubKind.valueOf(c.id)) }, onDismiss = { pickSub = false })
     // The language picker slides up from the bottom (never a centred dialog) and is built from the app's own sheet.
     if (pickLanguage) com.past9.phoneaos.ui.ChoiceSheet(Icons.Rounded.Language, stringResource(R.string.settings_you), stringResource(R.string.settings_language),
-        com.past9.phoneaos.system.AppLocale.choices.map { (tag, label) ->
-            com.past9.phoneaos.ui.SheetChoice(tag, label ?: stringResource(R.string.settings_language_phone), selected = tag == actions.language) },
+        com.past9.phoneaos.system.AppLocale.choices.map { lang ->
+            com.past9.phoneaos.ui.SheetChoice(lang.tag, lang.name ?: stringResource(R.string.settings_language_phone),
+                line = if (lang.machine) com.past9.phoneaos.system.AppLocale.machineLine(androidx.compose.ui.platform.LocalContext.current, lang.tag) else "",
+                selected = lang.tag == actions.language) },
         onPick = { c -> pickLanguage = false; if (c.id != actions.language) actions.setLanguage(c.id) }, onDismiss = { pickLanguage = false })
     edit?.let { (label, save) ->
         com.past9.phoneaos.ui.AppSheet(androidx.compose.material.icons.Icons.Rounded.Edit, stringResource(R.string.settings_title), label, { edit = null }, primary = stringResource(R.string.settings_save), primaryEnabled = true, onPrimary = { save(editValue); edit = null }) {
@@ -343,7 +345,7 @@ private fun AutomationSheet(
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 val intentRecipe = com.past9.phoneaos.automation.IntentTriggers.recipe(token)
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.Send, null, tint = MaterialTheme.colorScheme.primary)
+                    Icon(com.past9.phoneaos.ui.SendIcon, null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
                         Text(stringResource(R.string.settings_by_intent), style = MaterialTheme.typography.titleSmall)

@@ -70,7 +70,7 @@ fun MachinesLine(machines: List<Machine>, onClick: () -> Unit) {
             }
             Spacer(Modifier.width(4.dp))
         }
-        Icon(Icons.Rounded.ChevronRight, null, tint = cs.onSurfaceVariant)
+        Icon(com.past9.phoneaos.ui.ChevronEnd, null, tint = cs.onSurfaceVariant)
     }
 }
 

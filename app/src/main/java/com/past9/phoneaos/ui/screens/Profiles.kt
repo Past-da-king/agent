@@ -102,7 +102,7 @@ private fun ProfileLine(p: AgentProfile, logos: Map<String, String>, onClick: ((
             LogoStack(p.accounts.map { it.slug }.distinct(), logos)
             if (onClick != null) {
                 Spacer(Modifier.width(4.dp))
-                Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(com.past9.phoneaos.ui.ChevronEnd, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

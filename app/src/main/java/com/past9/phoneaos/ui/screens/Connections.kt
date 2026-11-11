@@ -269,7 +269,7 @@ private fun PhoneLine(icon: androidx.compose.ui.graphics.vector.ImageVector, tit
         }
         if (fix != null) FilledTonalButton(onClick = fix) { Text(stringResource(R.string.conn_allow)) }
         else if (on) Icon(Icons.Rounded.CheckCircle, stringResource(R.string.conn_on), tint = LocalExtra.current.success)
-        else Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        else Icon(com.past9.phoneaos.ui.ChevronEnd, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -313,7 +313,7 @@ private fun ConnectedLine(c: Connection, name: String, actions: ConnectionsActio
             "INITIATED", "INITIALIZING" -> StatusPill(stringResource(R.string.conn_finish_sign_in), MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
             else -> StatusPill(c.status.lowercase().replaceFirstChar { it.uppercase() }, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
         }
-        Icon(Icons.Rounded.ChevronRight, stringResource(R.string.conn_rules_for, c.toolkit), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp))
+        Icon(com.past9.phoneaos.ui.ChevronEnd, stringResource(R.string.conn_rules_for, c.toolkit), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp))
     }
     }
 }
@@ -405,7 +405,7 @@ private fun LearnedLine(apps: List<com.past9.phoneaos.connections.LearnedApp>, r
             }
             Spacer(Modifier.width(4.dp))
         }
-        Icon(Icons.Rounded.ChevronRight, null, tint = cs.onSurfaceVariant)
+        Icon(com.past9.phoneaos.ui.ChevronEnd, null, tint = cs.onSurfaceVariant)
     }
 }
 
@@ -495,7 +495,7 @@ private fun MiniAppsLine(apps: List<com.past9.phoneaos.miniapps.MiniAppInfo>, on
             }
             Spacer(Modifier.width(4.dp))
         }
-        Icon(Icons.Rounded.ChevronRight, null, tint = cs.onSurfaceVariant)
+        Icon(com.past9.phoneaos.ui.ChevronEnd, null, tint = cs.onSurfaceVariant)
     }
 }
 
@@ -531,7 +531,7 @@ internal fun LinkedMachines(devices: List<com.past9.phoneaos.remote.MeshDevice>,
             if (ssh.isNotEmpty()) Row(Modifier.fillMaxWidth().clickable(onClick = onAdd).heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Terminal, null, tint = cs.primary); Spacer(Modifier.width(16.dp))
                 Text(stringResource(R.string.conn_ssh_machines, ssh.joinToString(" · ") { it.name }), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                Icon(Icons.Rounded.ChevronRight, null, tint = cs.onSurfaceVariant)
+                Icon(com.past9.phoneaos.ui.ChevronEnd, null, tint = cs.onSurfaceVariant)
             }
         }
         Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {

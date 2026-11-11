@@ -13,8 +13,78 @@ import java.util.Locale
  * apply it to every context we start from. An empty tag means "follow the phone".
  */
 object AppLocale {
-    /** Languages the app has text for; "" follows the phone. Labels are in their own language. */
-    val choices = listOf("" to null, "en" to "English", "es" to "Español")
+    /** One language the app can show: its tag, its name in its own language, and whether its text is machine translated. */
+    data class AppLanguage(val tag: String, val name: String?, val machine: Boolean = false)
+
+    /**
+     * Languages the app has text for; "" follows the phone. Names are in their own language. After the phone's own
+     * language come English and Spanish (written by people), then the rest in the order of their English names.
+     * Every tag here needs a values-* folder with the same keys: scripts/check-translations.py and LanguageGuardTest hold that.
+     */
+    val choices = listOf(
+        AppLanguage("", null),
+        AppLanguage("en", "English"),
+        AppLanguage("es", "Español"),
+        AppLanguage("af", "Afrikaans", machine = true), // Afrikaans
+        AppLanguage("am", "አማርኛ", machine = true), // Amharic
+        AppLanguage("ar", "العربية", machine = true), // Arabic
+        AppLanguage("bn", "বাংলা", machine = true), // Bengali
+        AppLanguage("ca", "Català", machine = true), // Catalan
+        AppLanguage("zh-CN", "中文 (简体)", machine = true), // Chinese Simplified
+        AppLanguage("zh-TW", "中文 (繁體)", machine = true), // Chinese Traditional
+        AppLanguage("cs", "Čeština", machine = true), // Czech
+        AppLanguage("da", "Dansk", machine = true), // Danish
+        AppLanguage("nl", "Nederlands", machine = true), // Dutch
+        AppLanguage("fil", "Filipino", machine = true), // Filipino
+        AppLanguage("fi", "Suomi", machine = true), // Finnish
+        AppLanguage("fr", "Français", machine = true), // French
+        AppLanguage("de", "Deutsch", machine = true), // German
+        AppLanguage("el", "Ελληνικά", machine = true), // Greek
+        AppLanguage("gu", "ગુજરાતી", machine = true), // Gujarati
+        AppLanguage("ha", "Hausa", machine = true), // Hausa
+        AppLanguage("he", "עברית", machine = true), // Hebrew
+        AppLanguage("hi", "हिन्दी", machine = true), // Hindi
+        AppLanguage("hu", "Magyar", machine = true), // Hungarian
+        AppLanguage("ig", "Igbo", machine = true), // Igbo
+        AppLanguage("id", "Bahasa Indonesia", machine = true), // Indonesian
+        AppLanguage("it", "Italiano", machine = true), // Italian
+        AppLanguage("ja", "日本語", machine = true), // Japanese
+        AppLanguage("kn", "ಕನ್ನಡ", machine = true), // Kannada
+        AppLanguage("km", "ខ្មែរ", machine = true), // Khmer
+        AppLanguage("ko", "한국어", machine = true), // Korean
+        AppLanguage("ms", "Bahasa Melayu", machine = true), // Malay
+        AppLanguage("ml", "മലയാളം", machine = true), // Malayalam
+        AppLanguage("mr", "मराठी", machine = true), // Marathi
+        AppLanguage("ne", "नेपाली", machine = true), // Nepali
+        AppLanguage("nb", "Norsk bokmål", machine = true), // Norwegian
+        AppLanguage("fa", "فارسی", machine = true), // Persian
+        AppLanguage("pl", "Polski", machine = true), // Polish
+        AppLanguage("pt-BR", "Português (Brasil)", machine = true), // Portuguese Brazil
+        AppLanguage("pt-PT", "Português (Portugal)", machine = true), // Portuguese Portugal
+        AppLanguage("pa", "ਪੰਜਾਬੀ", machine = true), // Punjabi
+        AppLanguage("ro", "Română", machine = true), // Romanian
+        AppLanguage("ru", "Русский", machine = true), // Russian
+        AppLanguage("st", "Sesotho", machine = true), // Sesotho
+        AppLanguage("sw", "Kiswahili", machine = true), // Swahili
+        AppLanguage("sv", "Svenska", machine = true), // Swedish
+        AppLanguage("ta", "தமிழ்", machine = true), // Tamil
+        AppLanguage("te", "తెలుగు", machine = true), // Telugu
+        AppLanguage("th", "ไทย", machine = true), // Thai
+        AppLanguage("tn", "Setswana", machine = true), // Tswana
+        AppLanguage("tr", "Türkçe", machine = true), // Turkish
+        AppLanguage("uk", "Українська", machine = true), // Ukrainian
+        AppLanguage("ur", "اردو", machine = true), // Urdu
+        AppLanguage("vi", "Tiếng Việt", machine = true), // Vietnamese
+        AppLanguage("xh", "isiXhosa", machine = true), // Xhosa
+        AppLanguage("yo", "Yorùbá", machine = true), // Yoruba
+        AppLanguage("zu", "isiZulu", machine = true), // Zulu
+    )
+
+    /** The "machine translated" line, in the language it sits under. */
+    fun machineLine(context: Context, tag: String): String {
+        val config = android.content.res.Configuration(context.resources.configuration).apply { setLocale(Locale.forLanguageTag(tag)) }
+        return context.createConfigurationContext(config).getString(com.past9.phoneaos.R.string.settings_language_machine)
+    }
 
     private const val PREFS = "app_locale"
     private const val KEY = "tag"

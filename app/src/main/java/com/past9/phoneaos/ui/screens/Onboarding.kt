@@ -548,7 +548,7 @@ fun KeyStep(provider: Provider, onProvider: (Provider) -> Unit, actions: Onboard
                 if (!custom) {
                     Spacer(Modifier.height(10.dp))
                     FilledTonalButton(onClick = { actions.openUrl(url) }, shapes = ButtonDefaults.shapes()) {
-                        Icon(Icons.Rounded.OpenInNew, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.onb_open_provider, provider.label))
+                        Icon(com.past9.phoneaos.ui.OpenInNewIcon, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.onb_open_provider, provider.label))
                     }
                 }
             }
@@ -636,7 +636,7 @@ fun ComposioKeyForm(save: suspend (String) -> String?, openUrl: (String) -> Unit
                 NumberedLine(4, stringResource(R.string.onb_composio_step_4))
                 Spacer(Modifier.height(10.dp))
                 FilledTonalButton(onClick = { openUrl("https://platform.composio.dev") }, shapes = ButtonDefaults.shapes()) {
-                    Icon(Icons.Rounded.OpenInNew, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.onb_open_provider, "Composio"))
+                    Icon(com.past9.phoneaos.ui.OpenInNewIcon, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.onb_open_provider, "Composio"))
                 }
             }
         }

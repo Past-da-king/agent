@@ -105,7 +105,7 @@ fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
             Spacer(Modifier.width(10.dp))
             Text(a.summary, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             Text(decidedLabel(a), style = MaterialTheme.typography.labelMedium, color = if (a.approved) LocalExtra.current.success else cs.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
-            Icon(Icons.Rounded.ChevronRight, stringResource(R.string.chat_show_what_was, decidedLabel(a).lowercase()), tint = cs.onSurfaceVariant)
+            Icon(com.past9.phoneaos.ui.ChevronEnd, stringResource(R.string.chat_show_what_was, decidedLabel(a).lowercase()), tint = cs.onSurfaceVariant)
         }
         }
     } else AppCard(container = cs.tertiaryContainer, onClick = { open = true }) {

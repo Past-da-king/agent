@@ -153,7 +153,7 @@ fun ChoiceRow(c: SheetChoice, onClick: () -> Unit) {
                 if (c.line.isNotBlank()) Text(c.line, style = MaterialTheme.typography.bodySmall, color = if (c.selected) cs.onPrimaryContainer.copy(alpha = 0.8f) else cs.onSurfaceVariant)
             }
             if (c.selected) Icon(androidx.compose.material.icons.Icons.Rounded.Check, stringResource(R.string.ui_chosen), tint = cs.onPrimaryContainer)
-            else Icon(androidx.compose.material.icons.Icons.Rounded.ChevronRight, null, tint = cs.onSurfaceVariant)
+            else Icon(com.past9.phoneaos.ui.ChevronEnd, null, tint = cs.onSurfaceVariant)
         }
     }
 }
