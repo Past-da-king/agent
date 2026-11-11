@@ -24,6 +24,8 @@ class Graph(context: Context) {
         com.past9.phoneaos.agent.Crashes.record(context.applicationContext, "background job: ${t::class.java.simpleName} ${t.message}", t)
     })
     val db = AppDb.open(app)
+    /** People (the personal CRM, issue #13): every read and write goes through it, sealed with the device key. */
+    val people get() = runtime.people
     val settings = SettingsStore(app)
     val phone = AndroidPhone(app)
     /** Live cards the agent built (HTML + data), on Home and in chat. */
@@ -35,6 +37,8 @@ class Graph(context: Context) {
     init {
         com.past9.phoneaos.triggers.Routines.appContext = app
         scope.launch { runCatching { com.past9.phoneaos.triggers.Overnight.ensureRoutine(this@Graph) } }
+        // Important dates (People): one exact alarm per date, planned from the dates themselves on every start.
+        scope.launch { runCatching { com.past9.phoneaos.people.PersonReminders.syncAll(app) } }
         // Anything scheduled that was missed while the app was dead runs once now.
         scope.launch { runCatching { Routines.catchUp(app) } }
         // Reminders follow the to-do list: any open to-do with a due time rings then, by itself.

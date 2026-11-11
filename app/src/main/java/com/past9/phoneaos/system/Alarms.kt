@@ -32,6 +32,8 @@ object ExactAlarms {
     const val ACTION_ROUTINE = "com.past9.phoneaos.alarm.ROUTINE"
     const val ACTION_REMINDER = "com.past9.phoneaos.alarm.REMINDER"
     const val ACTION_WAKE = "com.past9.phoneaos.alarm.WAKE"
+    /** An important date for a person (People, issue #13): a plain notification, no AI call. */
+    const val ACTION_PERSON = "com.past9.phoneaos.alarm.PERSON"
 
     fun canExact(context: Context): Boolean {
         val am = context.getSystemService(AlarmManager::class.java) ?: return false
@@ -89,6 +91,15 @@ class AlarmReceiver : BroadcastReceiver() {
                     OneTimeWorkRequestBuilder<RoutineWorker>().setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                         .setInputData(workDataOf("id" to id, "slot" to at)).build())
             }
+            ExactAlarms.ACTION_PERSON -> {
+                val phone = App.graph(context).phone
+                phone.workStarted()
+                CoroutineScope(Dispatchers.IO).launch {
+                    try { com.past9.phoneaos.people.PersonReminders.fire(context, id, at) }
+                    catch (t: Throwable) { com.past9.phoneaos.agent.Crashes.record(context, "alarm ${ExactAlarms.ACTION_PERSON}: ${t::class.java.simpleName} ${t.message}", t) }
+                    finally { phone.workFinished() }
+                }
+            }
             ExactAlarms.ACTION_REMINDER, ExactAlarms.ACTION_WAKE -> {
                 // A wake can run the agent for minutes. Holding the broadcast open until it finishes makes Android
                 // time the broadcast out and show "Agent isn't responding" (four ANRs on 19 Oct 2026, all on
@@ -117,6 +128,7 @@ object Rearm {
         runCatching { App.graph(context) }
         runCatching { com.past9.phoneaos.triggers.Routines.rescheduleAll(context) }
         runCatching { Reminders.syncAll(context, force = true) }
+        runCatching { com.past9.phoneaos.people.PersonReminders.syncAll(context) }
         runCatching { Wakes.rearm(context) }
         // Wake-ups: the booked ones ring from the saved snapshot even before the computer is reached again.
         runCatching { com.past9.phoneaos.wakeup.WakeHub.evaluate(context) }
