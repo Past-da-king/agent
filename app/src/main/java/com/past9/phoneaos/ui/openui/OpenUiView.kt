@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -52,6 +53,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.past9.phoneaos.R
 import com.past9.phoneaos.ui.openui.OpenUiLang.Action
 import com.past9.phoneaos.ui.openui.OpenUiLang.Node
 
@@ -349,7 +351,7 @@ private fun starKinds(rating: Double): List<Int> = (1..5).map { i -> if (rating 
 @Composable
 private fun Stars(rating: Double, reviews: Double?) {
     val cs = MaterialTheme.colorScheme
-    val said = "Rated ${fmtRating(rating)} out of 5" + (reviews?.let { ", ${count(it)} reviews" } ?: "")
+    val said = if (reviews != null) stringResource(R.string.openui_rated_reviews, fmtRating(rating), count(reviews)) else stringResource(R.string.openui_rated, fmtRating(rating))
     Row(Modifier.semantics { contentDescription = said }, verticalAlignment = Alignment.CenterVertically) {
         starKinds(rating).forEach { k -> Icon(when (k) { 2 -> Icons.Rounded.Star; 1 -> Icons.Rounded.StarHalf; else -> Icons.Rounded.StarBorder }, null, Modifier.size(16.dp), tint = if (k == 0) cs.outline else starGold()) }
         Spacer(Modifier.width(6.dp))
@@ -432,7 +434,7 @@ private fun ActionButton(n: Node, modifier: Modifier) {
     Surface(onClick = { run(); if (tellsAgent) sent = true }, enabled = !sent, shape = RoundedCornerShape(corner), color = bg, contentColor = fg, interactionSource = interaction, modifier = modifier.heightIn(min = 52.dp)) {
         Row(Modifier.padding(horizontal = 20.dp, vertical = 14.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             (if (sent) androidx.compose.material.icons.Icons.Rounded.Check else OpenUiIcons.forAction(label))?.let { Icon(it, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)) }
-            Text(if (sent) "Sent" else label, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(if (sent) stringResource(R.string.openui_sent) else label, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

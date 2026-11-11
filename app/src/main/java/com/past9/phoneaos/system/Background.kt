@@ -49,12 +49,14 @@ object Background {
     }
 
     /** Plain lines for what is wrong, worst first. Pure, for the tests. Calendar is optional, so it is not a problem. */
-    fun problems(h: Health): List<String> = buildList {
-        if (!h.notifications) add("notifications are off for the app, so nothing can reach you")
-        if (h.restricted) add("battery is set to Restricted, so it can't run in the background")
-        else if (!h.batteryUnrestricted) add("battery optimisation is on, so ${if (h.samsung) "Samsung puts it to sleep and " else ""}reminders arrive late")
-        if (!h.exactAlarms) add("exact alarms aren't allowed, so reminders can be late")
-        if (h.bucket >= 45) add("Android has put the app in its most restricted group")
+    fun problems(h: Health, context: Context? = null): List<String> = buildList {
+        fun t(id: Int, en: String) = context?.getString(id) ?: en
+        if (!h.notifications) add(t(com.past9.phoneaos.R.string.bg_notifications_off, "notifications are off for the app, so nothing can reach you"))
+        if (h.restricted) add(t(com.past9.phoneaos.R.string.bg_restricted, "battery is set to Restricted, so it can't run in the background"))
+        else if (!h.batteryUnrestricted) add(if (h.samsung) t(com.past9.phoneaos.R.string.bg_optimised_samsung, "battery optimisation is on, so Samsung puts it to sleep and reminders arrive late")
+            else t(com.past9.phoneaos.R.string.bg_optimised, "battery optimisation is on, so reminders arrive late"))
+        if (!h.exactAlarms) add(t(com.past9.phoneaos.R.string.bg_no_exact_alarms, "exact alarms aren't allowed, so reminders can be late"))
+        if (h.bucket >= 45) add(t(com.past9.phoneaos.R.string.bg_restricted_bucket, "Android has put the app in its most restricted group"))
     }
 
     fun requestBatteryExemption(context: Context) = start(context, Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}")))

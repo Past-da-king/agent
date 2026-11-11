@@ -247,4 +247,6 @@
     <string name="data_sub_codex_needs_pack">Codex de OpenAI funciona dentro de la app con tu plan. Necesita el paquete del entorno.</string>
     <string name="data_sub_opencode_plan">Zen o Go</string>
     <string name="data_sub_opencode_line">Pega tu clave de OpenCode y tu agente funcionará con tu plan de OpenCode.</string>
+    <string name="data_sub_antigravity_plan">Gratis o Google AI</string>
+    <string name="data_sub_antigravity_line">La CLI de Antigravity funciona dentro de la app con tu cuenta de Google.</string>
 </resources>

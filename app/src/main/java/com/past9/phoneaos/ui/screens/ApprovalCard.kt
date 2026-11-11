@@ -204,7 +204,7 @@ fun ApprovalBody(details: String, full: Boolean) {
                 color = com.past9.phoneaos.ui.theme.Media.onTerminal, maxLines = lines, overflow = TextOverflow.Ellipsis)
         }
         json != null -> Surface(shape = MaterialTheme.shapes.medium, color = cs.surfaceContainerLowest, modifier = Modifier.fillMaxWidth()) {
-            val fields = remember(json) { readableFields(json) }
+            val fields = readableFields(json)
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 (if (full) fields else fields.take(4)).forEach { (k, v) ->
                     if (k.startsWith("#")) Text(k.removePrefix("#"), style = MaterialTheme.typography.titleSmall, color = cs.onSurface)

@@ -23,6 +23,8 @@ import com.past9.phoneaos.browser.BrowserEngine
 import com.past9.phoneaos.browser.PageState
 import com.past9.phoneaos.ui.EmptyState
 import kotlinx.coroutines.flow.MutableStateFlow
+import androidx.compose.ui.res.stringResource
+import com.past9.phoneaos.R
 
 data class BrowserActions(
     val onClose: () -> Unit = {},
@@ -48,16 +50,16 @@ fun BrowserScreen(engines: Map<String, BrowserEngine>, profiles: List<String>, a
             Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
                 Column(Modifier.statusBarsPadding()) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = actions.onClose) { Icon(Icons.Rounded.Close, "Close") }
+                        IconButton(onClick = actions.onClose) { Icon(Icons.Rounded.Close, stringResource(R.string.browser_close)) }
                         Column(Modifier.weight(1f)) {
-                            Text(page.title.ifBlank { "Your agent's browser" }, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(page.title.ifBlank { stringResource(R.string.browser_title_default) }, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 if (page.url.startsWith("https")) Icon(Icons.Rounded.Lock, null, Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(" " + page.url.removePrefix("https://").removePrefix("http://").ifBlank { "Nothing open" }, style = MaterialTheme.typography.bodySmall,
+                                Text(" " + page.url.removePrefix("https://").removePrefix("http://").ifBlank { stringResource(R.string.browser_nothing_open) }, style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
-                        Button(onClick = actions.onHandBack, shapes = ButtonDefaults.shapes()) { Text("Hand back") }
+                        Button(onClick = actions.onHandBack, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.browser_hand_back)) }
                     }
                     // Profiles (accounts) and any helper browsers that are open.
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -69,14 +71,14 @@ fun BrowserScreen(engines: Map<String, BrowserEngine>, profiles: List<String>, a
                         engines.keys.filter { !it.startsWith("main/") }.forEach { k ->
                             FilterChip(selected == k, { selected = k }, label = { Text(k.substringBefore('/')) }, shape = RoundedCornerShape(50))
                         }
-                        AssistChip({ adding = true }, label = { Text("Profile") }, leadingIcon = { Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)) }, shape = RoundedCornerShape(50))
+                        AssistChip({ adding = true }, label = { Text(stringResource(R.string.browser_profile)) }, leadingIcon = { Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)) }, shape = RoundedCornerShape(50))
                     }
                 }
             }
         },
     ) { pad ->
         if (page.loading) LinearWavyProgressIndicator(Modifier.fillMaxWidth().padding(pad))
-        if (engine == null) Box(Modifier.padding(pad).fillMaxSize()) { EmptyState("Not browsing right now", "When your agent opens a page, you can watch it here and take over if a site needs you. Profiles keep your accounts apart, like Personal and Work.") }
+        if (engine == null) Box(Modifier.padding(pad).fillMaxSize()) { EmptyState(stringResource(R.string.browser_empty), stringResource(R.string.browser_empty_body)) }
         else key(selected) {
             AndroidView(factory = { ctx -> FrameLayout(ctx).also { engine.attachTo(it) } }, onRelease = { engine.detachFrom(it) }, modifier = Modifier.padding(pad).fillMaxSize())
         }
