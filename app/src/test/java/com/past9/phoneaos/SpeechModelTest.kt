@@ -42,9 +42,9 @@ class SpeechModelTest {
     }
 
     @Test
-    fun southAfricanEnglishGoesUpWithTheIsiZulu() {
-        assertEquals(listOf("en-ZA", "zu-ZA"), SpeechModel.languages(Locale.forLanguageTag("en-ZA")))
-        // Never a guess at isiZulu for someone who does not speak South African English.
+    fun theLanguageHintIsThePhonesOwnAndNothingInvented() {
+        // en-ZA, not isiZulu: adding zu-ZA made "My guy" come back as "Shumayela" on his own recordings.
+        assertEquals(listOf("en-ZA"), SpeechModel.languages(Locale.forLanguageTag("en-ZA")))
         assertEquals(listOf("en-GB"), SpeechModel.languages(Locale.forLanguageTag("en-GB")))
         assertEquals(listOf("zu-ZA"), SpeechModel.languages(Locale.forLanguageTag("zu-ZA")))
     }
