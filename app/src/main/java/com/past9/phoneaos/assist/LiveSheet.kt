@@ -14,6 +14,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.CallEnd
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.CloseFullscreen
+import androidx.compose.material.icons.rounded.PictureInPictureAlt
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MicOff
@@ -40,6 +43,8 @@ data class LiveActions(
     val onMute: (Boolean) -> Unit = {},
     val onOpenApp: () -> Unit = {},
     val onAnswer: (Long, String) -> Unit = { _, _ -> },
+    /** Shrink the sheet to a floating bubble; the session keeps going. */
+    val onMinimise: () -> Unit = {},
 )
 
 object LiveWords {
@@ -73,6 +78,12 @@ fun LiveSheetBody(view: LiveView, agentName: String, screen: ScreenLine?, action
                 Text(LiveWords.caption(view), style = MaterialTheme.typography.bodySmall, color = if (view.phase == LivePhase.ERROR) cs.error else cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (view.phase != LivePhase.ERROR) LiveBadge(view.phase != LivePhase.CONNECTING)
+            if (view.phase != LivePhase.ERROR) {
+                Spacer(Modifier.width(4.dp))
+                IconButton(onClick = actions.onMinimise, modifier = Modifier.size(44.dp).semantics { contentDescription = "Minimise" }) {
+                    Icon(Icons.Rounded.CloseFullscreen, null, tint = cs.onSurfaceVariant)
+                }
+            }
         }
         Spacer(Modifier.height(14.dp))
         Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).heightIn(min = 72.dp)) {

@@ -37,8 +37,8 @@ import kotlin.concurrent.thread
 class LiveSession(
     /** Where to connect: [LiveAuth.keyUrl] with this phone's key, or a token URL from the linked computer. */
     @Volatile private var url: String,
-    private val model: String,
-    private val voice: String,
+    @Volatile private var model: String,
+    @Volatile private var voice: String,
     private val systemInstruction: String,
     /** BCP-47 speech language. Pinned because his English was transcribed as French/German/Italian. */
     private val language: String = "en-US",
@@ -58,6 +58,8 @@ class LiveSession(
     sealed class Event {
         object Connected : Event()
         object SetupComplete : Event()
+        /** The microphone is recording (speech from now on is kept and goes out as soon as the connection is ready). */
+        object MicReady : Event()
         data class Speaking(val on: Boolean) : Event()
         data class Transcript(val who: String, val text: String) : Event()
         /** Where the voice is coming out now — earphones or the loudspeaker. Fires again on a change. */
@@ -108,6 +110,26 @@ class LiveSession(
         connect()
     }
 
+    /** Speech heard before the connection is ready waits here, in order, and is sent the moment setup completes. */
+    private val gate = SendGate(MAX_PRE_CHUNKS)
+
+    /**
+     * Opens the microphone and the speaker NOW, before there is anything to connect to (the token may still be on its
+     * way). What he says meanwhile is kept and sent once the connection is ready, so nothing is lost and nothing waits.
+     */
+    fun prepare(am: AudioManager?) {
+        running.set(true)
+        openAudio(am)
+    }
+
+    /** Connects a prepared session (see [prepare]). A blank [newModel] or [newVoice] keeps what was given at the start. */
+    fun connectTo(newUrl: String, newModel: String, newVoice: String) {
+        url = newUrl
+        if (newModel.isNotBlank()) model = newModel
+        if (newVoice.isNotBlank()) voice = newVoice
+        if (running.get()) connect()
+    }
+
     /** Where the voice goes when it is not this phone's speaker (a call inside the browser). */
     @Volatile private var external: ExternalAudio? = null
 
@@ -130,8 +152,10 @@ class LiveSession(
         ws = http.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 if (webSocket !== ws) return
+                LiveTiming.mark("ws_open")
                 onEvent(Event.Connected)
                 webSocket.send(setupMessage().toString())
+                LiveTiming.mark("setup_sent")
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) { if (webSocket === ws) handle(text) }
@@ -170,6 +194,7 @@ class LiveSession(
         if (!everReady && retries >= 1) return false
         retries++
         ready.set(false)
+        gate.close()
         val old = ws; ws = null
         runCatching { old?.cancel() }
         if (everReady) onEvent(Event.Reconnecting)
@@ -227,8 +252,10 @@ class LiveSession(
         try {
             val m = JSONObject(raw)
             if (m.has("setupComplete")) {
+                LiveTiming.mark("setup_complete")
                 Log.i(TAG, "setup complete${if (everReady) " (reconnected)" else ""}")
                 ready.set(true); retries = 0
+                gate.open { ws?.send(it) }
                 val again = everReady; everReady = true
                 if (!again) onEvent(Event.SetupComplete) else onEvent(Event.Speaking(false))
                 return
@@ -281,6 +308,7 @@ class LiveSession(
                     val data = parts.optJSONObject(i)?.optJSONObject("inlineData")?.optString("data")
                     if (!data.isNullOrEmpty()) {
                         val pcm = Base64.decode(data, Base64.DEFAULT)
+                        LiveTiming.mark("first_audio_in")
                         // Queued, never written from this thread: a blocked write here delayed every later frame,
                         // the "interrupted" one included.
                         speaker?.enqueue(pcm) ?: runCatching { external?.play(pcm) }
@@ -443,13 +471,15 @@ class LiveSession(
             }
             recorder = rec
             rec.startRecording()
+            LiveTiming.mark("mic_started")
+            onEvent(Event.MicReady)
             thread(name = "aos-mic", isDaemon = true) {
                 val buf = ByteArray(CHUNK_BYTES)
                 while (running.get() && micOpen.get()) {
                     val n = rec.read(buf, 0, buf.size)
                     // An error read returns at once: wait a moment so a dead microphone never spins a core.
                     if (n <= 0) { runCatching { Thread.sleep(20) }; continue }
-                    if (muted || !ready.get()) continue
+                    if (muted) continue
                     onEvent(Event.Level(true, loudness(buf, n)))
                     val b64 = Base64.encodeToString(buf.copyOf(n), Base64.NO_WRAP)
                     val msg = JSONObject().put(
@@ -461,7 +491,8 @@ class LiveSession(
                                 .put("mimeType", "audio/pcm;rate=$IN_RATE")
                         )
                     )
-                    ws?.send(msg.toString())
+                    // Not ready yet (still connecting, or reconnecting): kept in order, sent when it is.
+                    gate.submit(msg.toString()) { ws?.send(it); LiveTiming.mark("first_mic_chunk_sent") }
                 }
             }
         } catch (e: Exception) {
@@ -534,6 +565,8 @@ class LiveSession(
         private const val IN_RATE = 16000
         private const val OUT_RATE = 24000
         private const val CHUNK_BYTES = 3200 // 100ms of 16k mono PCM16
+        /** About ten seconds of speech may wait for the connection. */
+        private const val MAX_PRE_CHUNKS = 100
 
         /** One piece of the caller's voice on the wire: realtimeInput.audio, 16 kHz PCM16, base64. */
         fun audioMessage(pcm: ByteArray, n: Int): String = JSONObject().put(

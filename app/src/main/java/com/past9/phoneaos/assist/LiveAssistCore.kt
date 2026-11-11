@@ -91,7 +91,8 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
     }
 
     /** True when it has been quiet for [IDLE_MS]: nobody speaking, nothing out with the agent, nothing waiting on him. */
-    fun idle(): Boolean = live && !speaking && hand == null && view.card == null && clock() - lastActive >= IDLE_MS
+    fun idle(minimised: Boolean = false): Boolean =
+        live && !speaking && hand == null && view.card == null && clock() - lastActive >= if (minimised) IDLE_MINIMISED_MS else IDLE_MS
 
     /** The user said goodbye by tool-free means (a tap is handled by the caller). */
     fun goodbye() { endPending = true }
@@ -151,6 +152,8 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
     companion object {
         /** Quiet for this long and the session ends by itself. */
         const val IDLE_MS = 45_000L
+        /** Minimised to a bubble he is busy in another app, so it waits longer before letting go. */
+        const val IDLE_MINIMISED_MS = 180_000L
 
         const val TOOL = "hand_to_agent"
 
