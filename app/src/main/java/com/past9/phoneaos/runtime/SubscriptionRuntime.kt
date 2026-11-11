@@ -215,6 +215,9 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
             "NODE_PATH" to File(dir, "node_modules").path,
             "SSL_CERT_FILE" to File(dir, "cacert.pem").path, "NODE_EXTRA_CA_CERTS" to File(dir, "cacert.pem").path,
             "SSL_CERT_DIR" to File(dir, "certs").apply { mkdirs() }.path,
+            // The node build reads OpenSSL's config from Termux's prefix, which Android refuses to another app ("Permission denied"
+            // even when Termux isn't installed), and then exits. An empty config of our own avoids that path.
+            "OPENSSL_CONF" to File(dir, "openssl.cnf").apply { if (!exists()) writeText("") }.path,
             "USE_BUILTIN_RIPGREP" to "0", "DISABLE_AUTOUPDATER" to "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC" to "1",
             "CODEX_HOME" to File(home, ".codex").apply { mkdirs() }.path, "CODEX_BIN" to File(bin, "codex").path,
             "CLAUDE_BIN" to File(bin, "claude").path, "ANTIGRAVITY_BIN" to File(bin, "antigravity").path,
