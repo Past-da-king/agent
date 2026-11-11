@@ -82,7 +82,8 @@ class Dictation(
         val tr = JSONObject()
         if (hints) {
             // English as spoken here, with isiZulu mixed through it. Both are listed so the model does not have to guess one.
-            tr.put("languageCodes", JSONArray().put("en-ZA").put("zu-ZA"))
+            // His own languages, from the phone (SpeechModel.languages): en-ZA brings the isiZulu he mixes into it.
+            tr.put("languageCodes", JSONArray(SpeechModel.languages()))
             if (vocabulary.isNotEmpty()) tr.put("customVocabulary", JSONArray(vocabulary.take(100)))
         } else tr.put("languageCodes", JSONArray())
         return JSONObject().put("setup", JSONObject()

@@ -346,6 +346,31 @@ class DictationEngineTest {
         assertEquals(said, boxWords(r))
     }
 
+    // ---- 11 Nov 2026: the caption is only a caption; what he gets is the speech model reading the whole take ----
+
+    @Test fun theWholeTakeIsWrittenDownWhenHeStopsSoTheFinalWordsAreTheSpeechModels() = runTest {
+        val live = HandLive()
+        val pc = FakePc().apply { answer = { "So in this specific agent, please move the agent to Opus and Sonnet." } }
+        val r = engine(live, pc)
+        speak(r, 0, 20, talk = 20, pause = 1)
+        live.ev!!.partial("so in this specific agent in this specific agent and sonnets")
+        r.engine.finish()
+        untilEnded(r)
+        assertEquals("So in this specific agent, please move the agent to Opus and Sonnet.", r.engine.text())
+        assertTrue("the whole take went to the speech model", pc.calls > 0)
+    }
+
+    @Test fun aPolishThatFailsLeavesTheCaptionHeCanSee() = runTest {
+        val live = HandLive()
+        val pc = FakePc().apply { online = false }
+        val r = engine(live, pc)
+        speak(r, 0, 20, talk = 20, pause = 1)
+        live.ev!!.partial(said.joinToString(" "))
+        r.engine.finish()
+        untilEnded(r)
+        assertEquals(said, boxWords(r))
+    }
+
     @Test fun tapeIsAValidWavWhileRecording() {
         val tape = DictationTape(File(dir, "w.wav"))
         repeat(25) { tape.append(block(it / 10, it % 10, true)) }

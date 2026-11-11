@@ -99,6 +99,9 @@ class DictationEngine(
     private var silenced = false
     private var finishing = false
     private var phase = DictationView.Phase.LISTENING
+    /** The whole take written down from the saved audio at the end: better words than any live caption. */
+    private var polished: String? = null
+    private var polishJob: Job? = null
     private val startedAt = clock()
     private var stoppedAt = 0L
 
@@ -333,18 +336,22 @@ class DictationEngine(
             if (!phase.let { it == DictationView.Phase.DONE || it == DictationView.Phase.KEPT || it == DictationView.Phase.CANCELLED }) {
                 log("finishing limit reached after $limit ms")
                 queueJob?.cancel()
+                polishJob?.cancel()
                 segs.filter { it.state == State.MISSED || it.state == State.FIXING }.forEach { it.state = State.LOST }
                 settle()
             }
         }
         if (transcribe == null) segs.filter { it.state == State.MISSED }.forEach { it.state = State.LOST }
         if (segs.any { it.state == State.MISSED }) pump() else if (queueJob?.isActive != true) settle()
+        polishFromTape()
         show()
     }
 
     private fun settle() {
         if (phase == DictationView.Phase.DONE || phase == DictationView.Phase.KEPT || phase == DictationView.Phase.CANCELLED) return
         if (segs.any { it.state == State.MISSED || it.state == State.FIXING }) return
+        // The whole take is being written down once more: wait for it, it is the text he gets.
+        if (polishJob?.isActive == true) return
         phase = if (segs.any { it.state == State.LOST }) DictationView.Phase.KEPT else DictationView.Phase.DONE
         runCatching { tape.seal() }
         log("ended: $phase")
@@ -354,7 +361,7 @@ class DictationEngine(
     /** Throw it away: nothing more is delivered. */
     fun cancel() {
         phase = DictationView.Phase.CANCELLED
-        restartJob?.cancel(); queueJob?.cancel()
+        restartJob?.cancel(); queueJob?.cancel(); polishJob?.cancel()
         curEvents = null; cur = null
         runCatching { live?.cancel() }; live = null
         runCatching { tape.close() }
@@ -378,9 +385,51 @@ class DictationEngine(
         show()
     }
 
+    // ---- the whole take, written down again ----
+
+    /**
+     * The whole recording, written down from the tape by the speech model (11 Nov 2026).
+     *
+     * The live caption is the phone's own recogniser, stretch by stretch, and it is only what he watches while he
+     * speaks: this is the text he gets. It runs when he stops, in pieces of at most [PIECE_MS] cut at quiet moments, and
+     * it only ever replaces the caption with more words than he can already see (Words.less). A piece that cannot be
+     * written down twice leaves the caption exactly as it was, so a lost connection never costs him his words.
+     */
+    private fun polishFromTape() {
+        val t = transcribe ?: return
+        if (polished != null || polishJob?.isActive == true) return
+        if (!Quiet.hasSpeech(tape.levels(), 0, tape.bytes)) return
+        polishJob = scope.launch {
+            val pieces = Quiet.split(tape.levels(), 0, tape.bytes, maxMs = PIECE_MS)
+            val texts = arrayOfNulls<String>(pieces.size)
+            for ((index, piece) in pieces.withIndex()) {
+                if (!Quiet.hasSpeech(tape.levels(), piece.first, piece.last + 1)) { texts[index] = ""; continue }
+                val audio = tape.read(piece.first, piece.last + 1)
+                var text: String? = null
+                for (attempt in 0 until 2) {
+                    val r = withTimeoutOrNull(pieceLimitMs(audio.size.toLong())) {
+                        try { t(audio) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { log("polish piece failed: ${e.message}"); null }
+                    }
+                    if (r != null) { text = r; break }
+                }
+                if (text == null) { log("polish gave up: the live words stay"); settle(); show(); return@launch }
+                texts[index] = text
+            }
+            val whole = texts.filterNotNull().filter { it.isNotBlank() }.joinToString(" ").trim()
+            val live = text()
+            when {
+                whole.isBlank() -> log("polish answered nothing: the live words stay")
+                Words.less(live, whole) -> log("polish ignored: ${whole.length} of ${live.length} chars")
+                else -> { polished = whole; log("polished the whole take: ${live.length} to ${whole.length} chars") }
+            }
+            settle()
+            show()
+        }
+    }
+
     // ---- what he sees ----
 
-    fun text(): String = segs.sortedBy { it.start }.map { it.text.trim() }.filter { it.isNotEmpty() }.joinToString(" ")
+    fun text(): String = polished ?: segs.sortedBy { it.start }.map { it.text.trim() }.filter { it.isNotEmpty() }.joinToString(" ")
 
     fun view(): DictationView {
         val pending = segs.filter { it.state == State.MISSED || it.state == State.FIXING }.sumOf { DictationTape.ms(it.end - it.start) }
@@ -404,6 +453,8 @@ class DictationEngine(
         /** How long the live recogniser has for its last words after stop. */
         const val LAST_WORDS_MS = 4_000L
         const val FINISH_BASE_MS = 30_000L
+        /** A piece of the whole-take write-down: two minutes, cut at a quiet moment (four times fewer cuts than 30 s). */
+        const val PIECE_MS = 120_000L
         const val FINISH_MAX_MS = 120_000L
         /** One piece's limit: 20 s, plus one for every two said. */
         fun pieceLimitMs(bytes: Long): Long = 20_000L + DictationTape.ms(bytes) / 2

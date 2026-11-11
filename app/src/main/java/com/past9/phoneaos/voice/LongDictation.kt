@@ -207,15 +207,26 @@ class MicCapture(
 }
 
 /**
- * Writes a piece of saved audio down: through the linked computer (voice.transcribe, its own Google key) or, when the
- * phone is not linked, with this phone's own Gemini key. Throws when neither can be reached right now, which the
- * engine answers with a retry.
+ * Writes saved audio down: through the linked computer (voice.transcribe, which adds the names in its memory), or, when
+ * the phone is not linked, with this phone's own Gemini key through [SpeechModel] (11 Nov 2026: the speech model, told
+ * his languages and his names, instead of a one-line prompt to a lite model). Throws when neither can be reached, which
+ * the engine answers with a retry.
  */
 object PieceTranscriber {
-    private val http by lazy { okhttp3.OkHttpClient.Builder().callTimeout(90, java.util.concurrent.TimeUnit.SECONDS).build() }
-
     fun available(context: Context): Boolean =
         com.past9.phoneaos.remote.RemoteHub.session.value != null || runCatching { com.past9.phoneaos.App.graph(context).settings.voiceKey("gemini") }.getOrNull() != null
+
+    /** The names this phone knows without the computer: his own and the agent's, from Settings > Voice. */
+    private fun ownNames(context: Context): List<String> {
+        val names = ArrayList<String>()
+        runCatching {
+            val settings = com.past9.phoneaos.App.graph(context).settings
+            val state = settings.state.value
+            if (state.userName.isNotBlank()) names.add(state.userName.trim())
+            if (state.agentName.isNotBlank() && state.agentName != "Your agent") names.add(state.agentName.trim())
+        }
+        return names
+    }
 
     suspend fun transcribe(context: Context, pcm: ByteArray): String {
         val linked = com.past9.phoneaos.remote.RemoteHub.session.value
@@ -227,31 +238,8 @@ object PieceTranscriber {
             return o.optString("text")
         }
         val key = com.past9.phoneaos.App.graph(context).settings.voiceKey("gemini") ?: throw IOException("Not linked to a computer, and no Gemini key on this phone.")
-        return withContext(Dispatchers.IO) { gemini(key, pcm) }
+        return withContext(Dispatchers.IO) { SpeechModel.transcribe(key, pcm, ownNames(context)) }
     }
-
-    private fun gemini(key: String, pcm: ByteArray): String {
-        val wav = DictationTape.header(pcm.size.toLong()) + pcm
-        val body = JSONObject().put("contents", JSONArray().put(JSONObject().put("parts", JSONArray()
-            .put(JSONObject().put("text", "Write down exactly what is said in this recording: South African English, with isiZulu mixed in. Only the words, no notes."))
-            .put(JSONObject().put("inline_data", JSONObject().put("mime_type", "audio/wav").put("data", Base64.encodeToString(wav, Base64.NO_WRAP)))))))
-        var last: Exception? = null
-        for (model in listOf("gemini-3.5-flash-lite", "gemini-2.5-flash")) {
-            val req = okhttp3.Request.Builder().url("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent")
-                .header("x-goog-api-key", key).post(body.toString().toRequestBody("application/json".toMediaType())).build()
-            try {
-                http.newCall(req).execute().use { res ->
-                    val text = res.body?.string().orEmpty()
-                    if (res.code == 404) { last = IOException("no $model"); return@use }
-                    if (!res.isSuccessful) throw IOException("Gemini ${res.code}")
-                    val parts = JSONObject(text).optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")
-                    return (0 until (parts?.length() ?: 0)).joinToString("") { parts!!.optJSONObject(it)?.optString("text").orEmpty() }.trim()
-                }
-            } catch (e: IOException) { last = e }
-        }
-        throw last ?: IOException("Gemini couldn't write that down.")
-    }
-
 }
 
 /**
