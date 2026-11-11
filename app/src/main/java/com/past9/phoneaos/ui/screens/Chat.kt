@@ -697,8 +697,10 @@ fun iconFor(tool: String): ImageVector = when (tool) {
 
 /** A voice call in the chat: one line ("Voice call · 12 messages · last thing said"), tap for the whole conversation. */
 @Composable
-private fun CallRow(items: List<ChatItem>, agentName: String) {
+internal fun CallRow(items: List<ChatItem>, agentName: String) {
     var open by remember { mutableStateOf(false) }
+    val live = LiveCallParts.isLive(items)
+    val hands = LiveCallParts.handoffs(items)
     val cs = MaterialTheme.colorScheme
     Surface(onClick = { open = !open }, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.md), color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp).animateContentSize()) {
@@ -708,16 +710,19 @@ private fun CallRow(items: List<ChatItem>, agentName: String) {
                 }
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(com.past9.phoneaos.voice.CallCore.rowTitle(items.size, items.first().createdAt, items.last().createdAt), style = MaterialTheme.typography.labelLarge, color = cs.onSurface)
-                    if (!open) Text(items.last().text, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(LiveCallParts.title(com.past9.phoneaos.voice.CallCore.rowTitle(items.size, items.first().createdAt, items.last().createdAt), live, hands.size), style = MaterialTheme.typography.labelLarge, color = cs.onSurface)
+                    if (!open) Text(LiveCallParts.summary(items.last().text, hands), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, if (open) "Hide the call" else "Show the call", tint = cs.onSurfaceVariant)
             }
             if (open) Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items.forEach { i ->
+                    val h = LiveCallParts.handoffOf(i)
+                    if (h != null) HandoffEntry(h.request, h.spoken) else {
                     val me = i.kind == "user"
                     Text(if (me) "You" else agentName, style = MaterialTheme.typography.labelMedium, color = if (me) cs.onSurfaceVariant else cs.primary)
                     Text(i.text, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface)
+                    }
                 }
             }
         }

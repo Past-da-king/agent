@@ -16,6 +16,8 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MicOff
 import androidx.compose.material.icons.rounded.PictureInPictureAlt
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -102,6 +104,12 @@ fun LiveBubbleContent(view: LiveView, onMute: (Boolean) -> Unit, onClose: () -> 
                     Box(Modifier.size(7.dp).alpha(if (view.phase == LivePhase.CONNECTING) 0.5f else pulse).clip(CircleShape).background(cs.error))
                     Spacer(Modifier.width(5.dp))
                     Text("LIVE", style = MaterialTheme.typography.labelSmall)
+                    // Honest about the screen: an eye while Live can see it, a crossed eye while it is private.
+                    if (view.seeing != Seeing.OFF) {
+                        Spacer(Modifier.width(5.dp))
+                        Icon(if (view.seeing == Seeing.SEEING) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff,
+                            if (view.seeing == Seeing.SEEING) "Live can see your screen" else "Private screen: Live can't see it", Modifier.size(13.dp), tint = cs.onSurfaceVariant)
+                    }
                 }
                 Text(LiveWords.caption(view), style = MaterialTheme.typography.labelLarge, color = if (needs) cs.onTertiaryContainer else cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }

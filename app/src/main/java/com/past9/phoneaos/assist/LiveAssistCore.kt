@@ -22,7 +22,15 @@ data class LiveView(
     /** How loud the voice is right now, 0..1 (what is playing), so the face can move its mouth with it. */
     val level: Float = 0f,
     val problem: String = "",
+    /** Whether Live is looking at the screen, so the sheet and the bubble can say so honestly. */
+    val seeing: Seeing = Seeing.OFF,
 )
+
+/** One stretch of speech in the session, for the call record: [who] is "in" (the user) or "out" (the agent's voice). */
+data class LiveLine(val who: String, val text: String, val at: Long)
+
+/** One job Live gave the agent, as the call record keeps it. [spoken] is what the user actually said just before. */
+data class LiveHandoff(val at: Long, val request: String, val spoken: String, val includeScreen: Boolean)
 
 /**
  * The live assistant's brain, free of Android: what Live is told, the one tool it has, the caption, when the session
@@ -69,6 +77,32 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
 
     fun muted(m: Boolean) = publish { it.copy(muted = m) }
 
+    /** Whether frames of the screen are going to Live. */
+    fun seeing(s: Seeing) = publish { it.copy(seeing = s) }
+
+    // ---- the call record ----------------------------------------------------------------------------
+
+    private val lines = ArrayList<LiveLine>()
+    private val handoffs = ArrayList<LiveHandoff>()
+
+    /** The whole conversation so far, one line per stretch of speech. */
+    val transcript: List<LiveLine> get() = lines.toList()
+    val handOffs: List<LiveHandoff> get() = handoffs.toList()
+
+    /** What the user said most recently: the words that led to a hand-off. Empty when they have said nothing yet. */
+    fun spokenNow(): String = lines.lastOrNull { it.who == "in" }?.text?.trim().orEmpty().take(600)
+
+    /**
+     * The session as the call record the app already keeps for voice calls (voice.callSave on a linked computer, call
+     * rows in the chat otherwise): the same shape, marked kind "live_assistant", with each hand-off listed inside it.
+     */
+    fun record(startedAt: Long, endedAt: Long): JSONObject =
+        com.past9.phoneaos.voice.LiveAuth.record(startedAt, endedAt, lines.map { Triple(it.who, it.text, it.at) })
+            .put("kind", KIND).put("source", "assistant_sheet")
+            .put("handoffs", JSONArray().apply {
+                handoffs.forEach { put(JSONObject().put("at", it.at).put("request", it.request).put("spoken", it.spoken).put("include_screen", it.includeScreen)) }
+            })
+
     /**
      * How loud the voice is now. Only a real change is published (the loudness arrives many times a second), and the
      * level falls to zero the moment the voice stops. True when the view changed.
@@ -93,6 +127,9 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
     fun caption(who: String, text: String) {
         if (text.isEmpty()) return
         touch()
+        // The record keeps one line per stretch: more of the same speaker grows it, a change of speaker starts a new one.
+        val last = lines.lastOrNull()
+        if (last != null && last.who == who) lines[lines.size - 1] = last.copy(text = last.text + text) else lines += LiveLine(who, text.trimStart(), clock())
         if (who == "in") {
             lastIn = if (lastWho == "in") lastIn + text else text.trimStart()
             publish { it.copy(you = lastIn.trim()) }
@@ -116,8 +153,9 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
      * Live called hand_to_agent. [lastIdBefore] is the newest chat row at send time: rows after it belong to this job.
      * Returns the words to send. If a job is already out its tracker is kept: the agent queues the new one behind it.
      */
-    fun handOff(request: String, lastIdBefore: Long): String {
+    fun handOff(request: String, lastIdBefore: Long, includeScreen: Boolean = false): String {
         touch()
+        handoffs += LiveHandoff(clock(), request.trim(), spokenNow(), includeScreen)
         if (hand == null) {
             hand = AssistCore().also { it.listen(); it.finished(request); it.sent(lastIdBefore) }
         }
@@ -169,6 +207,9 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
         const val IDLE_MINIMISED_MS = 180_000L
 
         const val TOOL = "hand_to_agent"
+        /** The call record's kind for a live assistant session, and the origin its hand-offs carry (docs/live-voice.md). */
+        const val KIND = "live_assistant"
+        const val ORIGIN = "live_voice"
         /** Played on the phone itself, at once: no round trip to the agent. */
         const val PLAY_MEDIA = "play_media"
         const val MEDIA_CONTROL = "media_control"
@@ -181,8 +222,9 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
                 You are $agentName, $who's personal agent, speaking with them live through the phone's assistant. Be warm, quick and natural. This is speech: short sentences, no lists, no reading out symbols.
                 Answer quick questions yourself, at once: facts, small talk, sums, definitions, the time, how to say something, ideas. Do not call a tool for those.
                 To play music or a video, call play_media straight away; to pause, play, skip or say what is playing, call media_control. Those two run on the phone and answer in a moment, so do not hand them to the agent. Say what it answers, in a few words.
-                For anything that needs doing, or needs something of theirs (their messages, mail, calendar, files, apps, contacts, what is on their screen, anything sent or changed, anything on the web or on their computer), call hand_to_agent with the full request and every detail they gave (names, who to, what to say, when). The same agent they type to does it, $where. Say a very short "on it" and carry on talking if they do.
-                When they say "this", "that" or "here", they mean their screen. The screen is passed along with a hand-off automatically: just hand it off, do not ask them to read it out.
+                You can SEE their screen: pictures of it arrive about once a second while this session is open. When they ask what is on their screen, say "look at this", or mean "this", "that" or "here", answer yourself from the latest picture, at once and briefly: read it, describe it, explain it, translate it, summarise it. Do not hand that to the agent.
+                If a note says the screen is private, say you cannot see it right now and do not guess. If no picture has arrived (the setting may be off in the assistant's settings), say you cannot see the screen right now and do not make anything up.
+                For real work, call hand_to_agent with the full request and every detail they gave (names, who to, what to say, when): anything to be done or found beyond answering from what you see, such as sending, changing, opening, searching, remembering, their messages, mail, calendar, files, apps, contacts, the web, or anything on their computer. The same agent they type to does it, $where. Say a very short "on it" and carry on talking if they do. The words on their screen go along with a hand-off; set include_screen to true only when the agent itself must see the picture to do the job.
                 NEVER say you can't do something or that they must do it themselves: hand it to the agent.
                 When the agent's reply arrives, say a short version, one or two sentences, as your own news. Never invent a result; if you do not know yet, say it is still in progress.
                 When the agent needs something from them, ask it out loud in one short line. If it needs their OK, say what it wants to do and tell them the approve button is on the screen and they hold it to approve. Never approve for them and never say it is approved. If they answer a question, hand their answer to the agent with hand_to_agent.
@@ -193,9 +235,10 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
         /** The one tool Live has. */
         fun tools(): JSONArray = JSONArray().put(JSONObject().put("functionDeclarations", JSONArray()
             .put(JSONObject().put("name", TOOL)
-                .put("description", "Give a job to the user's main agent: the same one they type to, with all its tools and apps. Use it for anything that needs doing or looking up, anything about their own things or screen, and for passing on an answer they gave to a question. The screen they are on is sent along with it. Then say a short \"on it\" and carry on; the reply comes back to you.")
+                .put("description", "Give a job to the user's main agent: the same one they type to, with all its tools and apps. Use it for real work: anything that needs doing or looking up, anything about their own things, and for passing on an answer they gave to a question. Do NOT use it just to describe or read what is on their screen: you can see it yourself. The words on their screen go along with it. Then say a short \"on it\" and carry on; the reply comes back to you.")
                 .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject()
                     .put("request", JSONObject().put("type", "STRING").put("description", "The job, clearly, with every detail the user gave (who, what, where, wording, when)"))
+                    .put("include_screen", JSONObject().put("type", "BOOLEAN").put("description", "True only when the agent must see a picture of the screen to do the job. Default false."))
                     .put("context", JSONObject().put("type", "STRING").put("description", "Anything else from the conversation the agent needs, or empty")))
                     .put("required", JSONArray().put("request"))))
             .put(JSONObject().put("name", PLAY_MEDIA)
@@ -213,8 +256,20 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
                     .put("required", JSONArray().put("action"))))))
 
         /** What the user said, ready for the agent: the request and the voice's notes, then the usual sheet note and screen. */
-        fun message(request: String, context: String, source: String, screen: ScreenContext?): String =
-            AssistMessage.compose(request.trim() + if (context.isNotBlank()) "\n(From the voice conversation: ${context.trim()})" else "", source, screen)
+        fun message(request: String, context: String, source: String, screen: ScreenContext?, spoken: String = ""): String =
+            AssistMessage.compose(request.trim() + (if (context.isNotBlank()) "\n(From the voice conversation: ${context.trim()})" else "") + liveNote(spoken), source, screen)
+
+        /**
+         * Tells the agent what this message is: Live's own paraphrase, plus the user's real words when there are any, so
+         * the agent never takes the line for something the user typed. The chat shows none of this as a user bubble.
+         */
+        fun liveNote(spoken: String): String =
+            "\n[Live voice hand-off: the request above is the live assistant's own wording, not something the user typed." +
+                (if (spoken.isNotBlank()) " What the user actually said, just before: \"${spoken.trim().take(600)}\"." else "") + "]"
+
+        /** The metadata a hand-off carries to the computer (voice.callHandoff): where it came from, and the user's words. */
+        fun handoffMeta(request: String, spoken: String, includeScreen: Boolean): JSONObject =
+            JSONObject().put("origin", ORIGIN).put("request", request.trim()).put("spoken", spoken.trim()).put("include_screen", includeScreen)
 
         /** What Live is told when the agent needs the user. */
         fun cardPrompt(i: ChatItem): String {

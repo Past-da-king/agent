@@ -34,7 +34,7 @@ import com.past9.phoneaos.ui.AppSheet
  */
 @Composable
 fun AssistantSheet(agentName: String, onDismiss: () -> Unit, held: Boolean? = null, readScreen: Boolean? = null, readPicture: Boolean? = null,
-                   steps: AssistRole.Guide? = null, liveVoice: Boolean? = null) {
+                   steps: AssistRole.Guide? = null, liveVoice: Boolean? = null, liveSees: Boolean? = null) {
     val context = LocalContext.current
     // The phone's picker lists the app under its own label, which is not always the agent's name.
     val guide = steps ?: remember { AssistRole.guide(runCatching { context.applicationInfo.loadLabel(context.packageManager).toString() }.getOrDefault("").ifBlank { "this app" }) }
@@ -81,6 +81,9 @@ fun AssistantSheet(agentName: String, onDismiss: () -> Unit, held: Boolean? = nu
         var liveOn by remember(tick) { mutableStateOf(liveVoice ?: AssistPrefs.liveVoice(context)) }
         SwitchRow(Icons.Rounded.GraphicEq, "Live voice in the assistant", "Off: you speak one request and it answers. On: talk naturally, $agentName answers aloud at once, you can talk over it, and it hands jobs to your agent and tells you the result.",
             liveOn) { on -> liveOn = on; AssistPrefs.setLiveVoice(context, on) }
+        var seesOn by remember(tick) { mutableStateOf(liveSees ?: (screenOn && AssistPrefs.liveSees(context))) }
+        SwitchRow(Icons.Rounded.Visibility, "Live sees your screen", "While live voice is on, $agentName looks at your screen about once a second, so \"what is this?\" is answered at once. Needs \"read the screen\" above. Never banking or money apps.",
+            seesOn, enabled = screenOn && liveOn) { on -> seesOn = on; AssistPrefs.setLiveSees(context, on) }
         Spacer(Modifier.height(8.dp))
         Text("It never reads banking, payment or money apps, with either switch on. What it reads is used for that request only.",
             style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
