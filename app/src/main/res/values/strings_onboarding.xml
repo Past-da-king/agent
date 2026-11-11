@@ -159,6 +159,7 @@
     <string name="settings_style">Colour and sidekick</string>
     <string name="settings_language">Language</string>
     <string name="settings_language_phone">Phone\'s language</string>
+    <string name="settings_language_machine">Machine translated, help improve it on GitHub</string>
     <string name="settings_power">Power</string>
     <string name="settings_power_sub">What your agent thinks with</string>
     <string name="settings_api_key">API key</string>

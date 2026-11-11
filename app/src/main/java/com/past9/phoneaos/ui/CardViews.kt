@@ -92,7 +92,7 @@ fun CardChatRow(c: Card?, title: String, onOpen: () -> Unit) {
                 Text(c?.headline?.ifBlank { null } ?: if (c == null) stringResource(R.string.ui_card_deleted) else stringResource(R.string.ui_tap_to_open), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            if (c != null) Icon(Icons.Rounded.ChevronRight, stringResource(R.string.ui_open_named, c.title), tint = cs.onSurfaceVariant)
+            if (c != null) Icon(com.past9.phoneaos.ui.ChevronEnd, stringResource(R.string.ui_open_named, c.title), tint = cs.onSurfaceVariant)
         }
     }
 }

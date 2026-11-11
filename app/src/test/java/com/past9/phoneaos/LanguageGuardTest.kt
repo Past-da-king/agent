@@ -44,7 +44,11 @@ class LanguageGuardTest {
         assertTrue("the language picker must be a slide-up ChoiceSheet", Regex("""if \(pickLanguage\)\s*com\.past9\.phoneaos\.ui\.ChoiceSheet""").containsMatchIn(settings))
         assertTrue("the picker offers the app's languages", settings.contains("AppLocale.choices"))
         assertTrue("MainActivity no longer passes the language to Settings", src("MainActivity.kt").contains("setLanguage = { com.past9.phoneaos.system.AppLocale.set("))
-        assertEquals(listOf("", "en", "es"), com.past9.phoneaos.system.AppLocale.choices.map { it.first })
+        val tags = com.past9.phoneaos.system.AppLocale.choices.map { it.tag }
+        assertEquals(listOf("", "en", "es"), tags.take(3))
+        assertEquals("every language is listed once", tags.size, tags.toSet().size)
+        assertEquals("people wrote English and Spanish; the rest say they are machine translated",
+            setOf("", "en", "es"), com.past9.phoneaos.system.AppLocale.choices.filter { !it.machine }.map { it.tag }.toSet())
     }
 
     @Test fun theChosenLanguageReachesTheApp() {

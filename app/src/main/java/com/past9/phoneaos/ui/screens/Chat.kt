@@ -1025,7 +1025,7 @@ private fun FileCard(item: ChatItem) {
                             .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION), file.name).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
                     }.onFailure { saved = ctx.getString(R.string.chat_no_app_opens, ext) }
                 }, modifier = Modifier.weight(1f).heightIn(min = 48.dp), shapes = ButtonDefaults.shapes()) {
-                    Icon(Icons.Rounded.OpenInNew, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.chat_open))
+                    Icon(com.past9.phoneaos.ui.OpenInNewIcon, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.chat_open))
                 }
             }
             saved?.takeIf { it != savedMsg }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.error, modifier = Modifier.padding(top = 8.dp)) }

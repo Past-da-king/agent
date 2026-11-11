@@ -122,7 +122,7 @@ fun ProjectsSection(projects: ProfileProjects, actions: ProfileActions, now: Lon
                                     Text(when { p.chats.isEmpty() -> stringResource(R.string.proj_no_chats_yet); else -> ProjectsApi.ago(p.activeAt, now).ifBlank { pluralStringResource(R.plurals.proj_chats_count, p.chats.size, p.chats.size) } },
                                         style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
-                                Icon(Icons.Rounded.ChevronRight, null, tint = cs.onSurfaceVariant)
+                                Icon(com.past9.phoneaos.ui.ChevronEnd, null, tint = cs.onSurfaceVariant)
                             }
                         }
                     }

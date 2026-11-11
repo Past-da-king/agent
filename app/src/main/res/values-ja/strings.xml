@@ -1,0 +1,5 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="share_label">エージェントに送る</string>
+    <string name="assist_label">エージェントと話す</string>
+</resources>

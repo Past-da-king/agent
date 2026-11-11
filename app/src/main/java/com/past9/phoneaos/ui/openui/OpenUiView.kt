@@ -317,7 +317,7 @@ private fun FactList(rows: List<Map<*, *>>) {
                 val left = r["left"]?.toString().orEmpty(); val value = fmt(r["right"])
                 if (i > 0) HorizontalDivider(Modifier.padding(start = 62.dp), color = cs.outlineVariant.copy(alpha = 0.45f))
                 val out = value.trim().startsWith("-"); val into = value.trim().startsWith("+")
-                val icon = OpenUiIcons.forText(left) ?: if (out) Icons.Rounded.CallMade else if (into) Icons.Rounded.CallReceived else null
+                val icon = OpenUiIcons.forText(left) ?: if (out) com.past9.phoneaos.ui.CallMadeIcon else if (into) com.past9.phoneaos.ui.CallReceivedIcon else null
                 val long = value.length > 30
                 Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = if (long) Alignment.Top else Alignment.CenterVertically) {
                     if (icon != null) IconChip(icon, 36.dp, cs.surfaceContainerHigh, cs.onSurfaceVariant, cookie = false)

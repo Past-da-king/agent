@@ -54,7 +54,7 @@ fun ScreenLearnedDetails(a: LearnedApp, edit: LearnedEdit) {
                         Text(t.name.replace('_', ' '), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(learnedToolLine(t), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
-                    Icon(Icons.Rounded.ChevronRight, stringResource(R.string.ui_open), tint = cs.onSurfaceVariant)
+                    Icon(com.past9.phoneaos.ui.ChevronEnd, stringResource(R.string.ui_open), tint = cs.onSurfaceVariant)
                 }
             }
         }

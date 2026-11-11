@@ -204,7 +204,7 @@ fun HelperCard(h: HelperView, onClick: () -> Unit, modifier: Modifier = Modifier
                 }
                 Text(line, style = if (compact) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium, color = if (h.working) cs.primary else cs.onSurfaceVariant, maxLines = if (compact) 1 else 2, overflow = TextOverflow.Ellipsis)
             }
-            Icon(Icons.Rounded.ChevronRight, stringResource(R.string.ui_open_named, h.label), tint = cs.onSurfaceVariant)
+            Icon(com.past9.phoneaos.ui.ChevronEnd, stringResource(R.string.ui_open_named, h.label), tint = cs.onSurfaceVariant)
         }
     }
 }

@@ -270,7 +270,7 @@ fun ScreenSetupSheet(info: ScreenSetupInfo, actions: ScreenSetupActions, onDismi
                                 Text(stringResource(R.string.screen_blocked_apps), style = MaterialTheme.typography.titleSmall)
                                 Text(stringResource(R.string.screen_blocked_apps_sub), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                             }
-                            Icon(Icons.Rounded.ChevronRight, stringResource(R.string.ui_open), tint = cs.onSurfaceVariant)
+                            Icon(com.past9.phoneaos.ui.ChevronEnd, stringResource(R.string.ui_open), tint = cs.onSurfaceVariant)
                         }
                     }
                 }

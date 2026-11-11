@@ -1,0 +1,64 @@
+# Brand, product and technical names that stay as they are in every language (one token per line, any case).
+# "<locale-folder-language> <key>" lines let one value stay identical to English in one language, "* <key>" in all.
+Agent
+WhatsApp
+Google
+Gemini
+GitHub
+Composio
+Shizuku
+Gmail
+Slack
+Telegram
+Signal
+Android
+DeepSeek
+OpenAI
+Anthropic
+Claude
+OpenCode
+Groq
+Tavily
+Brave
+Vault
+MacroDroid
+Tasker
+Samsung
+Uber
+Maps
+Chrome
+YouTube
+Spotify
+Facebook
+Instagram
+LinkedIn
+TikTok
+Notion
+Outlook
+Microsoft
+Wi-Fi
+WiFi
+Bluetooth
+QR
+API
+URL
+MCP
+PDF
+SMS
+OK
+AI
+Ai
+GPS
+VPN
+USB
+PIN
+NFC
+APK
+Node
+OAuth
+Token
+# OpenAI's own page is English only, so its button names are quoted as they are
+* onb_key_openai_3
+de chat_attach_document_sub
+# The button named in this sentence is on the computer and stays English there
+* wake_up_intro

@@ -1,0 +1,5 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="share_label">에이전트에게 보내기</string>
+    <string name="assist_label">에이전트와 대화하기</string>
+</resources>

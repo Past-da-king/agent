@@ -159,6 +159,7 @@
     <string name="settings_style">Color y compañero</string>
     <string name="settings_language">Idioma</string>
     <string name="settings_language_phone">Idioma del móvil</string>
+    <string name="settings_language_machine">Traducción automática, ayuda a mejorarla en GitHub</string>
     <string name="settings_power">Motor</string>
     <string name="settings_power_sub">Con qué piensa tu agente</string>
     <string name="settings_api_key">Clave API</string>
