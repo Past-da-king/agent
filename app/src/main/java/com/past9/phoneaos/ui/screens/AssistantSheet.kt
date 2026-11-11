@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Assistant
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Visibility
@@ -33,7 +34,7 @@ import com.past9.phoneaos.ui.AppSheet
  */
 @Composable
 fun AssistantSheet(agentName: String, onDismiss: () -> Unit, held: Boolean? = null, readScreen: Boolean? = null, readPicture: Boolean? = null,
-                   steps: AssistRole.Guide? = null) {
+                   steps: AssistRole.Guide? = null, liveVoice: Boolean? = null) {
     val context = LocalContext.current
     // The phone's picker lists the app under its own label, which is not always the agent's name.
     val guide = steps ?: remember { AssistRole.guide(runCatching { context.applicationInfo.loadLabel(context.packageManager).toString() }.getOrDefault("").ifBlank { "this app" }) }
@@ -77,6 +78,9 @@ fun AssistantSheet(agentName: String, onDismiss: () -> Unit, held: Boolean? = nu
         var lockOn by remember(tick) { mutableStateOf(AssistPrefs.overLockScreen(context)) }
         SwitchRow(Icons.Rounded.Lock, "Open over the lock screen", "Off: unlock the phone first, then call it. On: it opens on a locked phone and sends your request once you unlock.",
             lockOn) { on -> lockOn = on; AssistPrefs.setOverLockScreen(context, on) }
+        var liveOn by remember(tick) { mutableStateOf(liveVoice ?: AssistPrefs.liveVoice(context)) }
+        SwitchRow(Icons.Rounded.GraphicEq, "Live voice in the assistant", "Off: you speak one request and it answers. On: talk naturally, $agentName answers aloud at once, you can talk over it, and it hands jobs to your agent and tells you the result.",
+            liveOn) { on -> liveOn = on; AssistPrefs.setLiveVoice(context, on) }
         Spacer(Modifier.height(8.dp))
         Text("It never reads banking, payment or money apps, with either switch on. What it reads is used for that request only.",
             style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)

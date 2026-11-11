@@ -72,10 +72,15 @@ class AssistActivity : ComponentActivity() {
     private var askingPermission = false
     private var follow: Job? = null
     private var closing by mutableStateOf(false)
+    /** Live voice in the assistant: a Gemini Live session instead of the one-request listening input. */
+    private var liveMode = false
+    private var liveAssistant: LiveAssistant? = null
+    private var liveView by mutableStateOf(LiveView())
 
     private val askMic = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         askingPermission = false
-        if (granted) startListening() else { core.micFailed("The microphone is off for this app, so type it here. You can allow it in the phone's Settings."); refresh() }
+        if (granted && liveMode) startLive()
+        else if (granted) startListening() else { liveMode = false; core.listen(); core.micFailed("The microphone is off for this app, so type it here. You can allow it in the phone's Settings."); refresh() }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -103,6 +108,7 @@ class AssistActivity : ComponentActivity() {
             val settings by g.settings.state.collectAsState()
             AppTheme(accent = settings.accent, mascot = settings.mascot) { Sheet(settings.agentName.takeIf { it.isNotBlank() && it != "Your agent" } ?: "Your agent", settings.onboarded) }
         }
+        liveMode = st.onboarded && AssistPrefs.liveVoice(this)
         if (st.onboarded) beginListening()
     }
 
@@ -111,6 +117,8 @@ class AssistActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         source = sourceOf(intent)
+        // A live session is already open: a second press changes nothing, it is already listening.
+        if (liveMode && liveAssistant?.active == true) return
         AssistHub.keepIfFresh()
         AssistEntry.clearNotification(this)
         g.stopSpeaking()
@@ -132,6 +140,7 @@ class AssistActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        liveAssistant?.end("")
         stopListening()
         follow?.cancel()
         runCatching { g.stopSpeaking() }
@@ -140,13 +149,39 @@ class AssistActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    private fun refresh() { view = core.view(rows, working) }
+    private fun refresh() {
+        view = core.view(rows, working)
+        // Live voice: the same chat rows tell it when the agent answered, asked something or needs an approval.
+        liveAssistant?.onRows(rows, working)
+    }
+
+    // ---- live voice -----------------------------------------------------------------------------
+
+    private fun startLive() {
+        AssistEntry.setListening(true)
+        liveView = LiveView()
+        val a = LiveAssistant(this, g, lifecycleScope, { source }, onChange = { v -> runOnUiThread { liveView = v } }, onEnded = { why -> runOnUiThread { liveEnded(why) } })
+        liveAssistant = a
+        a.onRows(rows, working)
+        a.start()
+    }
+
+    /** The live session is over. Ended on purpose (goodbye, quiet, a tap): the sheet closes. It could not start or broke: the normal sheet takes over, with the reason. */
+    private fun liveEnded(why: String) {
+        AssistEntry.setListening(false)
+        liveAssistant = null
+        if (why.isBlank()) { finish(); return }
+        liveMode = false
+        core.listen()
+        core.micFailed("Live voice stopped: $why You can type here, or tap the mic.")
+        refresh()
+    }
 
     // ---- listening ------------------------------------------------------------------------------
 
     private fun beginListening() {
         if (!core.listening) return
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) { startListening(); return }
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) { if (liveMode) startLive() else startListening(); return }
         // The phone's own permission question cannot be drawn over the lock screen: there the keyboard takes over.
         if (locked()) { core.micFailed("Unlock the phone once and allow the microphone, then this listens straight away."); refresh(); return }
         askingPermission = true
@@ -237,6 +272,12 @@ class AssistActivity : ComponentActivity() {
                 ) {
                     Column(Modifier.navigationBarsPadding().imePadding()) {
                         if (!onboarded) NotSetUp(agentName)
+                        else if (liveMode) LiveSheetBody(liveView, agentName, AssistWords.screenLine(screen, AssistPrefs.readScreen(this@AssistActivity)), LiveActions(
+                            onEnd = { liveAssistant?.end("") ?: finish() },
+                            onMute = { m -> liveAssistant?.mute(m) },
+                            onOpenApp = { openApp() },
+                            onAnswer = { id, option -> g.runtime.answer(id, option) },
+                        ))
                         else AssistSheetBody(view, agentName, AssistWords.screenLine(screen, AssistPrefs.readScreen(this@AssistActivity)), AssistActions(
                             onMic = { g.stopSpeaking(); core.listen(); refresh(); beginListening() },
                             onDoneSpeaking = { dictation?.finish() ?: heard(core.words) },
