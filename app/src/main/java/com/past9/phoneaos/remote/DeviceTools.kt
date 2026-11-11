@@ -66,7 +66,8 @@ object DeviceTools {
         listOf("memory_search", "memory_save", "memory_get", "memory_update", "skill_save", "skill_find", "goal_create", "goal_update", "goal_delete", "task_add", "task_update", "task_delete", "task_list").associateWith { "The phone agent's own memory and tasks; a linked computer is the one that holds them." } +
         listOf("card_guide", "card_save", "card_update", "card_list", "card_show", "card_pin", "card_delete").associateWith { "Cards in the phone's own chat." } +
         listOf("machine_list", "machine_run", "machine_job_start", "machine_job_status", "machine_upload", "machine_download", "send_file", "machine_handoff", "machine_handoff_status", "machine_host_setup").associateWith { "The phone agent reaching computers; a computer does not need the phone for that." } +
-        listOf("apps_connected", "apps_connect", "apps_find_tools", "apps_run").associateWith { "Connected apps run on the computer's own account." }
+        listOf("apps_connected", "apps_connect", "apps_find_tools", "apps_run").associateWith { "Connected apps run on the computer's own account." } +
+        listOf("person_add", "person_log", "person_list", "person_get", "person_date_add", "gift_add").associateWith { "People live in the phone's own sealed store, which a linked computer cannot open yet." }
 
     fun groupOf(name: String): String? = when {
         name.startsWith("browser_") || name == "site_probe" || name == "site_catalog" || name == "place_whatsapp_call" -> "browser"
