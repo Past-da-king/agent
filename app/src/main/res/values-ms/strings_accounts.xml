@@ -33,15 +33,15 @@
     <string name="machines_username">Nama pengguna</string>
     <string name="machines_username_hint">anda</string>
     <string name="machines_sign_in_with">LOG MASUK DENGAN</string>
-    <string name="machines_password">Kata laluan</string>
-    <string name="machines_password_sub">Yang anda guna untuk log masuk</string>
+    <string name="machines_field_login">Kata laluan</string>
+    <string name="machines_field_login_sub">Yang anda guna untuk log masuk</string>
     <string name="machines_your_key">Kunci anda</string>
     <string name="machines_your_key_sub">Tampal kunci yang anda gunakan</string>
     <string name="machines_new_key">Kunci baharu</string>
     <string name="machines_new_key_sub">Dibuat pada telefon ini</string>
     <string name="machines_saved_keep">Disimpan. Biarkan kosong untuk mengekalkannya</string>
     <string name="machines_private_key">Kunci peribadi</string>
-    <string name="machines_passphrase">Frasa laluan kunci, jika ada</string>
+    <string name="machines_field_key_phrase">Frasa laluan kunci, jika ada</string>
     <string name="machines_new_key_explain">Kunci khas untuk mesin ini. Anda hanya perlu menambah separuh awamnya pada mesin sekali, dan tiada kata laluan disimpan.</string>
     <string name="machines_show_public_key">Tunjukkan kunci awam telefon ini</string>
     <string name="machines_direct">Terus</string>
@@ -251,7 +251,7 @@
     <string name="handoff_sign_out">Log keluar</string>
     <string name="handoff_url_label">Alamat perkhidmatan segerak anda (https://…)</string>
     <string name="handoff_email">E-mel</string>
-    <string name="handoff_password">Kata laluan</string>
+    <string name="handoff_field_login">Kata laluan</string>
     <string name="handoff_signing_in">Sedang log masuk…</string>
     <string name="handoff_sign_in">Log masuk</string>
     <string name="handoff_create_account">Cipta akaun pada perkhidmatan saya</string>

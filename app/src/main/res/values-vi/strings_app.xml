@@ -30,7 +30,7 @@
     <string name="rt_branch_failed">Một luồng phụ (“%1$s”) đã thất bại: %2$s</string>
     <string name="rt_done">Xong</string>
     <string name="rt_interrupted_by_close">Tôi đang làm dở “%1$s” thì ứng dụng đóng. Hãy bảo tôi tiếp tục là tôi sẽ làm tiếp.</string>
-    <string name="rt_not_claude_token">Đó không phải là token Claude. Nó bắt đầu bằng sk-ant-. Hãy dùng Đăng nhập bằng Claude.</string>
+    <string name="rt_not_claude_access">Đó không phải là token Claude. Nó bắt đầu bằng sk-ant-. Hãy dùng Đăng nhập bằng Claude.</string>
     <string name="rt_note_installed">Đã cài đặt · đăng nhập bằng %1$s</string>
     <string name="rt_note_no_pack">Bản dựng này không có gói chạy %1$s</string>
     <string name="rt_note_ready">Sẵn sàng · đã đăng nhập %1$s</string>

@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">Kena ka %1$s</string>
     <string name="sub_error">Seo ha se a sebetsa. %1$s</string>
     <string name="sub_hide">Pata</string>
-    <string name="sub_have_token">U na le token ho e-na le hoo?</string>
-    <string name="sub_token_label">Token (e qala ka sk-ant-)</string>
+    <string name="sub_have_access">U na le token ho e-na le hoo?</string>
+    <string name="sub_access_label">Token (e qala ka sk-ant-)</string>
     <string name="sub_auth_json">Litaba tsa auth.json</string>
-    <string name="sub_use_token">Sebelisa token ena</string>
+    <string name="sub_use_access">Sebelisa token ena</string>
     <string name="sub_hide_details">Pata lintlha</string>
     <string name="sub_details">Lintlha</string>
     <string name="settings_title">Litlhophiso</string>

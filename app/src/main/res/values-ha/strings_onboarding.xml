@@ -141,10 +141,10 @@
     <string name="sub_sign_in_button">Shiga da %1$s</string>
     <string name="sub_error">Bai yi aiki ba. %1$s</string>
     <string name="sub_hide">Ɓoye</string>
-    <string name="sub_have_token">Kana da alama maimakon haka?</string>
-    <string name="sub_token_label">Alama (tana farawa da sk-ant-)</string>
+    <string name="sub_have_access">Kana da alama maimakon haka?</string>
+    <string name="sub_access_label">Alama (tana farawa da sk-ant-)</string>
     <string name="sub_auth_json">Abin da ke cikin auth.json</string>
-    <string name="sub_use_token">Yi amfani da wannan alamar</string>
+    <string name="sub_use_access">Yi amfani da wannan alamar</string>
     <string name="sub_hide_details">Ɓoye bayanai</string>
     <string name="sub_details">Bayanai</string>
     <string name="settings_title">Saituna</string>

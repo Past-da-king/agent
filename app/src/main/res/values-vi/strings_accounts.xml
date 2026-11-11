@@ -33,15 +33,15 @@
     <string name="machines_username">Tên người dùng</string>
     <string name="machines_username_hint">bạn</string>
     <string name="machines_sign_in_with">ĐĂNG NHẬP BẰNG</string>
-    <string name="machines_password">Mật khẩu</string>
-    <string name="machines_password_sub">Thông tin bạn dùng để đăng nhập</string>
+    <string name="machines_field_login">Mật khẩu</string>
+    <string name="machines_field_login_sub">Thông tin bạn dùng để đăng nhập</string>
     <string name="machines_your_key">Khóa của bạn</string>
     <string name="machines_your_key_sub">Dán khóa bạn đang dùng</string>
     <string name="machines_new_key">Khóa mới</string>
     <string name="machines_new_key_sub">Tạo trên điện thoại này</string>
     <string name="machines_saved_keep">Đã lưu. Để trống để giữ nguyên</string>
     <string name="machines_private_key">Khóa riêng</string>
-    <string name="machines_passphrase">Cụm mật khẩu của khóa, nếu có</string>
+    <string name="machines_field_key_phrase">Cụm mật khẩu của khóa, nếu có</string>
     <string name="machines_new_key_explain">Một khóa dành riêng cho máy này. Bạn chỉ cần thêm nửa công khai của nó vào máy một lần, và không có mật khẩu nào được lưu.</string>
     <string name="machines_show_public_key">Hiện khóa công khai của điện thoại này</string>
     <string name="machines_direct">Trực tiếp</string>
@@ -251,7 +251,7 @@
     <string name="handoff_sign_out">Đăng xuất</string>
     <string name="handoff_url_label">Địa chỉ dịch vụ đồng bộ của bạn (https://…)</string>
     <string name="handoff_email">Email</string>
-    <string name="handoff_password">Mật khẩu</string>
+    <string name="handoff_field_login">Mật khẩu</string>
     <string name="handoff_signing_in">Đang đăng nhập…</string>
     <string name="handoff_sign_in">Đăng nhập</string>
     <string name="handoff_create_account">Tạo tài khoản trên dịch vụ của tôi</string>

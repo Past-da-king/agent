@@ -33,15 +33,15 @@
     <string name="machines_username">వినియోగదారు పేరు</string>
     <string name="machines_username_hint">మీరు</string>
     <string name="machines_sign_in_with">దీనితో సైన్ ఇన్ చేయండి</string>
-    <string name="machines_password">పాస్‌వర్డ్</string>
-    <string name="machines_password_sub">మీరు లాగిన్ అయ్యే పాస్‌వర్డ్</string>
+    <string name="machines_field_login">పాస్‌వర్డ్</string>
+    <string name="machines_field_login_sub">మీరు లాగిన్ అయ్యే పాస్‌వర్డ్</string>
     <string name="machines_your_key">మీ కీ</string>
     <string name="machines_your_key_sub">మీరు వాడుతున్న కీని అతికించండి</string>
     <string name="machines_new_key">కొత్త కీ</string>
     <string name="machines_new_key_sub">ఈ ఫోన్‌లోనే తయారైనది</string>
     <string name="machines_saved_keep">సేవ్ అయింది. ఉంచాలంటే ఖాళీగా వదిలేయండి</string>
     <string name="machines_private_key">ప్రైవేట్ కీ</string>
-    <string name="machines_passphrase">కీ పాస్‌ఫ్రేజ్ (ఉంటే)</string>
+    <string name="machines_field_key_phrase">కీ పాస్‌ఫ్రేజ్ (ఉంటే)</string>
     <string name="machines_new_key_explain">ఈ మెషీన్ కోసం మాత్రమే ఒక కీ. దీని పబ్లిక్ భాగాన్ని మెషీన్‌లో ఒక్కసారి జోడించండి; పాస్‌వర్డ్ ఎప్పుడూ నిల్వ చేయబడదు.</string>
     <string name="machines_show_public_key">ఈ ఫోన్ పబ్లిక్ కీని చూపించు</string>
     <string name="machines_direct">నేరుగా</string>
@@ -265,7 +265,7 @@
     <string name="handoff_sign_out">సైన్ అవుట్ చేయండి</string>
     <string name="handoff_url_label">మీ సింక్ సేవ చిరునామా (https://…)</string>
     <string name="handoff_email">ఈమెయిల్</string>
-    <string name="handoff_password">పాస్‌వర్డ్</string>
+    <string name="handoff_field_login">పాస్‌వర్డ్</string>
     <string name="handoff_signing_in">సైన్ ఇన్ అవుతోంది…</string>
     <string name="handoff_sign_in">సైన్ ఇన్ చేయండి</string>
     <string name="handoff_create_account">నా సేవలో ఖాతాను సృష్టించండి</string>

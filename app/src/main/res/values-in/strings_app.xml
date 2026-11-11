@@ -30,7 +30,7 @@
     <string name="rt_branch_failed">Utas sampingan (\"%1$s\") gagal: %2$s</string>
     <string name="rt_done">Selesai</string>
     <string name="rt_interrupted_by_close">Saya sedang di tengah \"%1$s\" saat aplikasi ditutup. Suruh saya melanjutkan dan saya akan lanjutkan.</string>
-    <string name="rt_not_claude_token">Itu bukan token Claude. Token Claude diawali dengan sk-ant-. Gunakan Masuk dengan Claude saja.</string>
+    <string name="rt_not_claude_access">Itu bukan token Claude. Token Claude diawali dengan sk-ant-. Gunakan Masuk dengan Claude saja.</string>
     <string name="rt_note_installed">Terpasang · masuk dengan %1$s</string>
     <string name="rt_note_no_pack">Paket runtime %1$s tidak ada di build ini</string>
     <string name="rt_note_ready">Siap · masuk ke %1$s</string>

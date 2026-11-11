@@ -33,15 +33,15 @@
     <string name="machines_username">Nama pengguna</string>
     <string name="machines_username_hint">Anda</string>
     <string name="machines_sign_in_with">MASUK DENGAN</string>
-    <string name="machines_password">Kata sandi</string>
-    <string name="machines_password_sub">Yang Anda pakai untuk masuk</string>
+    <string name="machines_field_login">Kata sandi</string>
+    <string name="machines_field_login_sub">Yang Anda pakai untuk masuk</string>
     <string name="machines_your_key">Kunci Anda</string>
     <string name="machines_your_key_sub">Tempel kunci yang sudah Anda pakai</string>
     <string name="machines_new_key">Kunci baru</string>
     <string name="machines_new_key_sub">Dibuat di ponsel ini</string>
     <string name="machines_saved_keep">Tersimpan. Kosongkan untuk mempertahankannya</string>
     <string name="machines_private_key">Kunci privat</string>
-    <string name="machines_passphrase">Frasa sandi kunci, jika ada</string>
+    <string name="machines_field_key_phrase">Frasa sandi kunci, jika ada</string>
     <string name="machines_new_key_explain">Kunci khusus untuk mesin ini. Anda cukup menambahkan separuh publiknya ke mesin sekali saja, dan tidak ada kata sandi yang disimpan.</string>
     <string name="machines_show_public_key">Tampilkan kunci publik ponsel ini</string>
     <string name="machines_direct">Langsung</string>
@@ -251,7 +251,7 @@
     <string name="handoff_sign_out">Keluar</string>
     <string name="handoff_url_label">Alamat layanan sinkronisasi Anda (https://…)</string>
     <string name="handoff_email">Email</string>
-    <string name="handoff_password">Kata sandi</string>
+    <string name="handoff_field_login">Kata sandi</string>
     <string name="handoff_signing_in">Sedang masuk…</string>
     <string name="handoff_sign_in">Masuk</string>
     <string name="handoff_create_account">Buat akun di layanan saya</string>

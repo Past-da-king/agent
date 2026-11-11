@@ -33,15 +33,15 @@
     <string name="machines_username">Nome de utilizador</string>
     <string name="machines_username_hint">utilizador</string>
     <string name="machines_sign_in_with">INICIAR SESSÃO COM</string>
-    <string name="machines_password">Palavra-passe</string>
-    <string name="machines_password_sub">Aquilo com que inicia sessão</string>
+    <string name="machines_field_login">Palavra-passe</string>
+    <string name="machines_field_login_sub">Aquilo com que inicia sessão</string>
     <string name="machines_your_key">A sua chave</string>
     <string name="machines_your_key_sub">Cole uma que já utilize</string>
     <string name="machines_new_key">Nova chave</string>
     <string name="machines_new_key_sub">Criada neste telemóvel</string>
     <string name="machines_saved_keep">Guardada. Deixe vazio para mantê-la</string>
     <string name="machines_private_key">Chave privada</string>
-    <string name="machines_passphrase">Frase secreta da chave, se tiver</string>
+    <string name="machines_field_key_phrase">Frase secreta da chave, se tiver</string>
     <string name="machines_new_key_explain">Uma chave só para esta máquina. Adiciona a metade pública dela à máquina uma única vez e nunca é guardada nenhuma palavra-passe.</string>
     <string name="machines_show_public_key">Mostrar a chave pública deste telemóvel</string>
     <string name="machines_direct">Direto</string>
@@ -271,7 +271,7 @@
     <string name="handoff_sign_out">Terminar sessão</string>
     <string name="handoff_url_label">Endereço do seu serviço de sincronização (https://…)</string>
     <string name="handoff_email">E-mail</string>
-    <string name="handoff_password">Palavra-passe</string>
+    <string name="handoff_field_login">Palavra-passe</string>
     <string name="handoff_signing_in">A iniciar sessão…</string>
     <string name="handoff_sign_in">Iniciar sessão</string>
     <string name="handoff_create_account">Criar a conta no meu serviço</string>

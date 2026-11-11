@@ -33,15 +33,15 @@
     <string name="machines_username">Kullanıcı adı</string>
     <string name="machines_username_hint">sen</string>
     <string name="machines_sign_in_with">ŞUNUNLA OTURUM AÇ</string>
-    <string name="machines_password">Parola</string>
-    <string name="machines_password_sub">Oturum açtığın şey</string>
+    <string name="machines_field_login">Parola</string>
+    <string name="machines_field_login_sub">Oturum açtığın şey</string>
     <string name="machines_your_key">Anahtarın</string>
     <string name="machines_your_key_sub">Kullandığın bir anahtarı yapıştır</string>
     <string name="machines_new_key">Yeni anahtar</string>
     <string name="machines_new_key_sub">Bu telefonda oluşturuldu</string>
     <string name="machines_saved_keep">Kaydedildi. Korumak için boş bırak</string>
     <string name="machines_private_key">Özel anahtar</string>
-    <string name="machines_passphrase">Anahtar parolası, varsa</string>
+    <string name="machines_field_key_phrase">Anahtar parolası, varsa</string>
     <string name="machines_new_key_explain">Yalnızca bu makine için bir anahtar. Herkese açık yarısını makineye bir kez eklersin ve hiçbir parola saklanmaz.</string>
     <string name="machines_show_public_key">Bu telefonun açık anahtarını göster</string>
     <string name="machines_direct">Doğrudan</string>
@@ -261,7 +261,7 @@
     <string name="handoff_sign_out">Oturumu kapat</string>
     <string name="handoff_url_label">Eşitleme hizmetinin adresi (https://…)</string>
     <string name="handoff_email">E-posta</string>
-    <string name="handoff_password">Parola</string>
+    <string name="handoff_field_login">Parola</string>
     <string name="handoff_signing_in">Oturum açılıyor…</string>
     <string name="handoff_sign_in">Oturum aç</string>
     <string name="handoff_create_account">Hizmetimde hesap oluştur</string>

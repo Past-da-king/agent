@@ -33,15 +33,15 @@
     <string name="machines_username">Nume de utilizator</string>
     <string name="machines_username_hint">tu</string>
     <string name="machines_sign_in_with">AUTENTIFICARE CU</string>
-    <string name="machines_password">Parolă</string>
-    <string name="machines_password_sub">Cu ce te autentifici</string>
+    <string name="machines_field_login">Parolă</string>
+    <string name="machines_field_login_sub">Cu ce te autentifici</string>
     <string name="machines_your_key">Cheia ta</string>
     <string name="machines_your_key_sub">Lipește una pe care o folosești</string>
     <string name="machines_new_key">Cheie nouă</string>
     <string name="machines_new_key_sub">Creată pe acest telefon</string>
     <string name="machines_saved_keep">Salvată. Lasă gol pentru a o păstra</string>
     <string name="machines_private_key">Cheie privată</string>
-    <string name="machines_passphrase">Fraza-parolă a cheii, dacă are</string>
+    <string name="machines_field_key_phrase">Fraza-parolă a cheii, dacă are</string>
     <string name="machines_new_key_explain">O cheie doar pentru această mașină. Îi adaugi o singură dată jumătatea publică pe mașină și nicio parolă nu este stocată.</string>
     <string name="machines_show_public_key">Arată cheia publică a acestui telefon</string>
     <string name="machines_direct">Direct</string>
@@ -271,7 +271,7 @@
     <string name="handoff_sign_out">Deconectare</string>
     <string name="handoff_url_label">Adresa serviciului tău de sincronizare (https://…)</string>
     <string name="handoff_email">E-mail</string>
-    <string name="handoff_password">Parolă</string>
+    <string name="handoff_field_login">Parolă</string>
     <string name="handoff_signing_in">Se autentifică…</string>
     <string name="handoff_sign_in">Autentificare</string>
     <string name="handoff_create_account">Creează contul pe serviciul meu</string>

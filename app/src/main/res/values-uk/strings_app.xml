@@ -33,7 +33,7 @@
     <string name="rt_branch_failed">Побічна гілка («%1$s») завершилася помилкою: %2$s</string>
     <string name="rt_done">Готово</string>
     <string name="rt_interrupted_by_close">Я був на півдорозі із «%1$s», коли застосунок закрився. Скажіть мені продовжити, і я продовжу.</string>
-    <string name="rt_not_claude_token">Це не токен Claude. Він починається з sk-ant-. Краще скористайтеся входом через Claude.</string>
+    <string name="rt_not_claude_access">Це не токен Claude. Він починається з sk-ant-. Краще скористайтеся входом через Claude.</string>
     <string name="rt_note_installed">Установлено · увійдіть через %1$s</string>
     <string name="rt_note_no_pack">Пакета середовища виконання %1$s немає в цій збірці</string>
     <string name="rt_note_ready">Готово · виконано вхід у %1$s</string>

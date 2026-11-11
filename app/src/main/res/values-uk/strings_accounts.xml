@@ -33,15 +33,15 @@
     <string name="machines_username">Ім’я користувача</string>
     <string name="machines_username_hint">ви</string>
     <string name="machines_sign_in_with">УВІЙТИ ЗА ДОПОМОГОЮ</string>
-    <string name="machines_password">Пароль</string>
-    <string name="machines_password_sub">Те, чим ви входите</string>
+    <string name="machines_field_login">Пароль</string>
+    <string name="machines_field_login_sub">Те, чим ви входите</string>
     <string name="machines_your_key">Ваш ключ</string>
     <string name="machines_your_key_sub">Вставте той, яким користуєтеся</string>
     <string name="machines_new_key">Новий ключ</string>
     <string name="machines_new_key_sub">Створено на цьому телефоні</string>
     <string name="machines_saved_keep">Збережено. Залиште порожнім, щоб зберегти</string>
     <string name="machines_private_key">Закритий ключ</string>
-    <string name="machines_passphrase">Парольна фраза ключа, якщо є</string>
+    <string name="machines_field_key_phrase">Парольна фраза ключа, якщо є</string>
     <string name="machines_new_key_explain">Ключ лише для цієї машини. Ви один раз додаєте його відкриту частину на машину, і пароль ніде не зберігається.</string>
     <string name="machines_show_public_key">Показати відкритий ключ цього телефона</string>
     <string name="machines_direct">Напряму</string>
@@ -281,7 +281,7 @@
     <string name="handoff_sign_out">Вийти</string>
     <string name="handoff_url_label">Адреса вашого сервісу синхронізації (https://…)</string>
     <string name="handoff_email">Ел. пошта</string>
-    <string name="handoff_password">Пароль</string>
+    <string name="handoff_field_login">Пароль</string>
     <string name="handoff_signing_in">Вхід…</string>
     <string name="handoff_sign_in">Увійти</string>
     <string name="handoff_create_account">Створити обліковий запис на моєму сервісі</string>

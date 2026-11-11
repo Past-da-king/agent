@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">Mag-sign in gamit ang %1$s</string>
     <string name="sub_error">Hindi iyon gumana. %1$s</string>
     <string name="sub_hide">Itago</string>
-    <string name="sub_have_token">May token ka ba na lang?</string>
-    <string name="sub_token_label">Token (nagsisimula sa sk-ant-)</string>
+    <string name="sub_have_access">May token ka ba na lang?</string>
+    <string name="sub_access_label">Token (nagsisimula sa sk-ant-)</string>
     <string name="sub_auth_json">Laman ng auth.json</string>
-    <string name="sub_use_token">Gamitin ang token na ito</string>
+    <string name="sub_use_access">Gamitin ang token na ito</string>
     <string name="sub_hide_details">Itago ang detalye</string>
     <string name="sub_details">Detalye</string>
     <string name="settings_title">Settings</string>

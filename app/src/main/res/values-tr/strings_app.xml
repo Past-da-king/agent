@@ -31,7 +31,7 @@
     <string name="rt_branch_failed">Bir yan iş parçacığı («%1$s») başarısız oldu: %2$s</string>
     <string name="rt_done">Tamam</string>
     <string name="rt_interrupted_by_close">Uygulama kapandığında «%1$s» işinin ortasındaydım. Devam etmemi söyle, devam ederim.</string>
-    <string name="rt_not_claude_token">Bu bir Claude belirteci değil. sk-ant- ile başlar. Bunun yerine Claude ile oturum açmayı kullan.</string>
+    <string name="rt_not_claude_access">Bu bir Claude belirteci değil. sk-ant- ile başlar. Bunun yerine Claude ile oturum açmayı kullan.</string>
     <string name="rt_note_installed">Kuruldu · %1$s ile oturum aç</string>
     <string name="rt_note_no_pack">%1$s çalışma ortamı paketi bu sürümde yok</string>
     <string name="rt_note_ready">Hazır · %1$s oturumu açık</string>

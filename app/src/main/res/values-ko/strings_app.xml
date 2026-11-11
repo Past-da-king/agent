@@ -30,7 +30,7 @@
     <string name="rt_branch_failed">보조 스레드(“%1$s”)가 실패했습니다: %2$s</string>
     <string name="rt_done">완료</string>
     <string name="rt_interrupted_by_close">앱이 닫혔을 때 “%1$s” 작업을 하던 중이었습니다. 계속하라고 말씀해 주시면 이어서 하겠습니다.</string>
-    <string name="rt_not_claude_token">Claude 토큰이 아닙니다. sk-ant-로 시작해야 합니다. 대신 Claude로 로그인을 사용하세요.</string>
+    <string name="rt_not_claude_access">Claude 토큰이 아닙니다. sk-ant-로 시작해야 합니다. 대신 Claude로 로그인을 사용하세요.</string>
     <string name="rt_note_installed">설치됨 · %1$s(으)로 로그인</string>
     <string name="rt_note_no_pack">이 빌드에는 %1$s 런타임 팩이 없습니다</string>
     <string name="rt_note_ready">준비됨 · %1$s에 로그인됨</string>

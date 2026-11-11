@@ -32,7 +32,7 @@
     <string name="rt_branch_failed">Uma ramificação (\"%1$s\") falhou: %2$s</string>
     <string name="rt_done">Pronto</string>
     <string name="rt_interrupted_by_close">Eu estava a meio de \"%1$s\" quando a app foi fechada. Diga-me para continuar e eu continuo.</string>
-    <string name="rt_not_claude_token">Isso não é um token do Claude. Ele começa com sk-ant-. Use Iniciar sessão com o Claude.</string>
+    <string name="rt_not_claude_access">Isso não é um token do Claude. Ele começa com sk-ant-. Use Iniciar sessão com o Claude.</string>
     <string name="rt_note_installed">Instalado · inicie sessão com %1$s</string>
     <string name="rt_note_no_pack">O pacote de execução do %1$s não está nesta versão</string>
     <string name="rt_note_ready">Pronto · ligado ao %1$s</string>

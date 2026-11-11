@@ -33,15 +33,15 @@
     <string name="machines_username">使用者名稱</string>
     <string name="machines_username_hint">你</string>
     <string name="machines_sign_in_with">登入方式</string>
-    <string name="machines_password">密碼</string>
-    <string name="machines_password_sub">你用來登入的憑據</string>
+    <string name="machines_field_login">密碼</string>
+    <string name="machines_field_login_sub">你用來登入的憑據</string>
     <string name="machines_your_key">你的金鑰</string>
     <string name="machines_your_key_sub">貼上你正在使用的金鑰</string>
     <string name="machines_new_key">新金鑰</string>
     <string name="machines_new_key_sub">在這部手機上生成</string>
     <string name="machines_saved_keep">已儲存。留空則保持不變</string>
     <string name="machines_private_key">私鑰</string>
-    <string name="machines_passphrase">金鑰口令（如有）</string>
+    <string name="machines_field_key_phrase">金鑰口令（如有）</string>
     <string name="machines_new_key_explain">專用於這台裝置的金鑰。你只需把它的公鑰部分新增到裝置上一次，不會儲存任何密碼。</string>
     <string name="machines_show_public_key">顯示這部手機的公鑰</string>
     <string name="machines_direct">直連</string>
@@ -251,7 +251,7 @@
     <string name="handoff_sign_out">退出登入</string>
     <string name="handoff_url_label">你的同步服務地址（https://…）</string>
     <string name="handoff_email">電子郵件</string>
-    <string name="handoff_password">密碼</string>
+    <string name="handoff_field_login">密碼</string>
     <string name="handoff_signing_in">正在登入…</string>
     <string name="handoff_sign_in">登入</string>
     <string name="handoff_create_account">在我的服務上建立帳號</string>

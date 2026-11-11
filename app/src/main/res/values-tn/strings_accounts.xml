@@ -33,15 +33,15 @@
     <string name="machines_username">Leina la modirisi</string>
     <string name="machines_username_hint">wena</string>
     <string name="machines_sign_in_with">TSENA KA</string>
-    <string name="machines_password">Phasewete</string>
-    <string name="machines_password_sub">Eo o tsenang ka yone</string>
+    <string name="machines_field_login">Phasewete</string>
+    <string name="machines_field_login_sub">Eo o tsenang ka yone</string>
     <string name="machines_your_key">Senotlolo sa gago</string>
     <string name="machines_your_key_sub">Kopanya se o se dirisang</string>
     <string name="machines_new_key">Senotlolo se sešha</string>
     <string name="machines_new_key_sub">Se dirilwe mo mogaleng ono</string>
     <string name="machines_saved_keep">Go bolokilwe. E tlogele e se na sepe fa o batla go e boloka</string>
     <string name="machines_private_key">Senotlolo sa sephiri</string>
-    <string name="machines_passphrase">Polelo ya senotlolo, fa se na le yone</string>
+    <string name="machines_field_key_phrase">Polelo ya senotlolo, fa se na le yone</string>
     <string name="machines_new_key_explain">Senotlolo se se kgethegileng sa metšhine eno. O oketsa karolo ya sone ya setšhaba mo metšhineng fela ka nako e le nngwe, mme ga go na phasewete e e bolokwang.</string>
     <string name="machines_show_public_key">Bontšha senotlolo sa setšhaba sa mogala ono</string>
     <string name="machines_direct">Ka tlhamalalo</string>
@@ -265,7 +265,7 @@
     <string name="handoff_sign_out">Tswa</string>
     <string name="handoff_url_label">Aterese ya tirelo ya gago ya go dumalana (https://…)</string>
     <string name="handoff_email">Imeile</string>
-    <string name="handoff_password">Phasewete</string>
+    <string name="handoff_field_login">Phasewete</string>
     <string name="handoff_signing_in">E a tsena…</string>
     <string name="handoff_sign_in">Tsena</string>
     <string name="handoff_create_account">Dira akhaonto mo seveng ya me</string>

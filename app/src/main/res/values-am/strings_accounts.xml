@@ -33,15 +33,15 @@
     <string name="machines_username">የተጠቃሚ ስም</string>
     <string name="machines_username_hint">እርስዎ</string>
     <string name="machines_sign_in_with">በዚህ ይግቡ</string>
-    <string name="machines_password">የይለፍ ቃል</string>
-    <string name="machines_password_sub">ለመግባት የሚጠቀሙበት</string>
+    <string name="machines_field_login">የይለፍ ቃል</string>
+    <string name="machines_field_login_sub">ለመግባት የሚጠቀሙበት</string>
     <string name="machines_your_key">ቁልፍዎ</string>
     <string name="machines_your_key_sub">የሚጠቀሙበትን ይለጥፉ</string>
     <string name="machines_new_key">አዲስ ቁልፍ</string>
     <string name="machines_new_key_sub">በዚህ ስልክ የተፈጠረ</string>
     <string name="machines_saved_keep">ተቀምጧል። ለማቆየት ባዶ ይተዉት</string>
     <string name="machines_private_key">የግል ቁልፍ</string>
-    <string name="machines_passphrase">የቁልፉ የይለፍ ሐረግ፣ ካለው</string>
+    <string name="machines_field_key_phrase">የቁልፉ የይለፍ ሐረግ፣ ካለው</string>
     <string name="machines_new_key_explain">ለዚህ ማሽን ብቻ የሆነ ቁልፍ። ይፋዊውን ግማሽ በማሽኑ ላይ አንድ ጊዜ ያክላሉ፤ የይለፍ ቃል ፈጽሞ አይቀመጥም።</string>
     <string name="machines_show_public_key">የዚህን ስልክ ይፋዊ ቁልፍ አሳይ</string>
     <string name="machines_direct">ቀጥታ</string>
@@ -261,7 +261,7 @@
     <string name="handoff_sign_out">ውጣ</string>
     <string name="handoff_url_label">የማመሳሰል አገልግሎትዎ አድራሻ (https://…)</string>
     <string name="handoff_email">ኢሜይል</string>
-    <string name="handoff_password">የይለፍ ቃል</string>
+    <string name="handoff_field_login">የይለፍ ቃል</string>
     <string name="handoff_signing_in">በመግባት ላይ…</string>
     <string name="handoff_sign_in">ግባ</string>
     <string name="handoff_create_account">መለያውን በአገልግሎቴ ላይ ፍጠር</string>

@@ -123,16 +123,16 @@ fun SubSetupScreen(kind: SubKind, signInHelp: String, info: RuntimeInfo, install
                 }
             }
             if (installed && !info.signedIn && !signingIn && !needsCode && !verifying && kind != SubKind.ANTIGRAVITY) {
-                TextButton(onClick = { showToken = !showToken }) { Text(if (showToken) stringResource(R.string.sub_hide) else stringResource(R.string.sub_have_token)) }
+                TextButton(onClick = { showToken = !showToken }) { Text(if (showToken) stringResource(R.string.sub_hide) else stringResource(R.string.sub_have_access)) }
                 AnimatedVisibility(showToken) {
                     var token by remember { mutableStateOf("") }
                     AppCard {
                         Text(signInHelp, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                         Spacer(Modifier.height(10.dp))
-                        com.past9.phoneaos.ui.AppTextField(token, { token = it.trim() }, label = { Text(if (kind == SubKind.CLAUDE) stringResource(R.string.sub_token_label) else stringResource(R.string.sub_auth_json)) }, singleLine = true,
+                        com.past9.phoneaos.ui.AppTextField(token, { token = it.trim() }, label = { Text(if (kind == SubKind.CLAUDE) stringResource(R.string.sub_access_label) else stringResource(R.string.sub_auth_json)) }, singleLine = true,
                             visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
                         Spacer(Modifier.height(10.dp))
-                        OutlinedButton(onClick = { onSaveToken(token) }, enabled = token.length > 20, modifier = Modifier.fillMaxWidth().height(52.dp), shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.sub_use_token)) }
+                        OutlinedButton(onClick = { onSaveToken(token) }, enabled = token.length > 20, modifier = Modifier.fillMaxWidth().height(52.dp), shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.sub_use_access)) }
                     }
                 }
             }

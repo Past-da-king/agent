@@ -141,10 +141,10 @@
     <string name="sub_sign_in_button">Logg på med %1$s</string>
     <string name="sub_error">Det fungerte ikke. %1$s</string>
     <string name="sub_hide">Skjul</string>
-    <string name="sub_have_token">Har du et token i stedet?</string>
-    <string name="sub_token_label">Token (begynner med sk-ant-)</string>
+    <string name="sub_have_access">Har du et token i stedet?</string>
+    <string name="sub_access_label">Token (begynner med sk-ant-)</string>
     <string name="sub_auth_json">Innhold i auth.json</string>
-    <string name="sub_use_token">Bruk dette tokenet</string>
+    <string name="sub_use_access">Bruk dette tokenet</string>
     <string name="sub_hide_details">Skjul detaljer</string>
     <string name="sub_details">Detaljer</string>
     <string name="settings_title">Innstillinger</string>

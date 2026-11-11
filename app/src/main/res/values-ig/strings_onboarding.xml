@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">Banye na %1$s</string>
     <string name="sub_error">Nke ahụ adịghị arụ ọrụ. %1$s</string>
     <string name="sub_hide">Zoo</string>
-    <string name="sub_have_token">I nwere token kama?</string>
-    <string name="sub_token_label">Token (na-amalite na sk-ant-)</string>
+    <string name="sub_have_access">I nwere token kama?</string>
+    <string name="sub_access_label">Token (na-amalite na sk-ant-)</string>
     <string name="sub_auth_json">Ọdịnaya auth.json</string>
-    <string name="sub_use_token">Jiri token a</string>
+    <string name="sub_use_access">Jiri token a</string>
     <string name="sub_hide_details">Zoo nkọwa</string>
     <string name="sub_details">Nkọwa</string>
     <string name="settings_title">Ntọala</string>

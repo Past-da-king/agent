@@ -33,15 +33,15 @@
     <string name="machines_username">Nazwa użytkownika</string>
     <string name="machines_username_hint">ty</string>
     <string name="machines_sign_in_with">ZALOGUJ SIĘ PRZEZ</string>
-    <string name="machines_password">Hasło</string>
-    <string name="machines_password_sub">To, czym się logujesz</string>
+    <string name="machines_field_login">Hasło</string>
+    <string name="machines_field_login_sub">To, czym się logujesz</string>
     <string name="machines_your_key">Twój klucz</string>
     <string name="machines_your_key_sub">Wklej ten, którego używasz</string>
     <string name="machines_new_key">Nowy klucz</string>
     <string name="machines_new_key_sub">Utworzony na tym telefonie</string>
     <string name="machines_saved_keep">Zapisano. Zostaw puste, aby zachować</string>
     <string name="machines_private_key">Klucz prywatny</string>
-    <string name="machines_passphrase">Hasło klucza, jeśli ma</string>
+    <string name="machines_field_key_phrase">Hasło klucza, jeśli ma</string>
     <string name="machines_new_key_explain">Klucz tylko dla tej maszyny. Raz dodajesz jego część publiczną na maszynie i żadne hasło nie jest nigdzie przechowywane.</string>
     <string name="machines_show_public_key">Pokaż klucz publiczny tego telefonu</string>
     <string name="machines_direct">Bezpośrednio</string>
@@ -281,7 +281,7 @@
     <string name="handoff_sign_out">Wyloguj</string>
     <string name="handoff_url_label">Adres twojej usługi synchronizacji (https://…)</string>
     <string name="handoff_email">E-mail</string>
-    <string name="handoff_password">Hasło</string>
+    <string name="handoff_field_login">Hasło</string>
     <string name="handoff_signing_in">Logowanie…</string>
     <string name="handoff_sign_in">Zaloguj</string>
     <string name="handoff_create_account">Utwórz konto w mojej usłudze</string>

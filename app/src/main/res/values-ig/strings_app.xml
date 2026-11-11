@@ -31,7 +31,7 @@
     <string name="rt_branch_failed">Eri akụkụ (\"%1$s\") dara: %2$s</string>
     <string name="rt_done">Emechaala</string>
     <string name="rt_interrupted_by_close">Anọ m n\'etiti \"%1$s\" mgbe app mechiri. Gwa m ka m gaa n\'ihu m ga-agakwa.</string>
-    <string name="rt_not_claude_token">Nke ahụ abụghị token Claude. Ọ na-amalite na sk-ant-. Jiri Banye na Claude kama.</string>
+    <string name="rt_not_claude_access">Nke ahụ abụghị token Claude. Ọ na-amalite na sk-ant-. Jiri Banye na Claude kama.</string>
     <string name="rt_note_installed">Etinyere · banye na %1$s</string>
     <string name="rt_note_no_pack">Ngwugwu oge ịrụ ọrụ %1$s adịghị n\'ụdị a</string>
     <string name="rt_note_ready">Dị njikere · ebanyere na %1$s</string>

@@ -212,17 +212,17 @@ fun MachineSheet(existing: Machine?, others: List<Machine>, actions: MachineActi
             Spacer(Modifier.height(24.dp))
             Text(stringResource(R.string.machines_sign_in_with), style = Eyebrow, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ChoiceCard(Icons.Rounded.Password, stringResource(R.string.machines_password), stringResource(R.string.machines_password_sub), auth == MachineAuth.PASSWORD, { auth = MachineAuth.PASSWORD; result = null }, Modifier.weight(1f))
+                ChoiceCard(Icons.Rounded.Password, stringResource(R.string.machines_field_login), stringResource(R.string.machines_field_login_sub), auth == MachineAuth.PASSWORD, { auth = MachineAuth.PASSWORD; result = null }, Modifier.weight(1f))
                 ChoiceCard(Icons.Rounded.Key, stringResource(R.string.machines_your_key), stringResource(R.string.machines_your_key_sub), auth == MachineAuth.KEY, { auth = MachineAuth.KEY; result = null }, Modifier.weight(1f))
                 ChoiceCard(Icons.Rounded.AutoAwesome, stringResource(R.string.machines_new_key), stringResource(R.string.machines_new_key_sub), auth == MachineAuth.NEW_KEY, { auth = MachineAuth.NEW_KEY; result = null }, Modifier.weight(1f))
             }
             Spacer(Modifier.height(16.dp))
             when (auth) {
-                MachineAuth.PASSWORD -> SheetField(password, { password = it; result = null }, stringResource(R.string.machines_password), if (editing) stringResource(R.string.machines_saved_keep) else "••••••••", singleLine = true, secret = true, keyboard = plain.copy(keyboardType = KeyboardType.Password))
+                MachineAuth.PASSWORD -> SheetField(password, { password = it; result = null }, stringResource(R.string.machines_field_login), if (editing) stringResource(R.string.machines_saved_keep) else "••••••••", singleLine = true, secret = true, keyboard = plain.copy(keyboardType = KeyboardType.Password))
                 MachineAuth.KEY -> {
                     SheetField(key, { key = it; result = null }, stringResource(R.string.machines_private_key), if (editing) stringResource(R.string.machines_saved_keep) else "-----BEGIN OPENSSH PRIVATE KEY-----", minLines = 3, maxLines = 6, mono = true, keyboard = plain)
                     Spacer(Modifier.height(12.dp))
-                    SheetField(passphrase, { passphrase = it; result = null }, stringResource(R.string.machines_passphrase), "", singleLine = true, secret = true, keyboard = plain.copy(keyboardType = KeyboardType.Password))
+                    SheetField(passphrase, { passphrase = it; result = null }, stringResource(R.string.machines_field_key_phrase), "", singleLine = true, secret = true, keyboard = plain.copy(keyboardType = KeyboardType.Password))
                 }
                 MachineAuth.NEW_KEY -> if (pub == null) Text(stringResource(R.string.machines_new_key_explain),
                     style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))

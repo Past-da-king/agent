@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">%1$s でサインイン</string>
     <string name="sub_error">うまくいきませんでした。%1$s</string>
     <string name="sub_hide">隠す</string>
-    <string name="sub_have_token">代わりにトークンをお持ちですか？</string>
-    <string name="sub_token_label">トークン（sk-ant- で始まる）</string>
+    <string name="sub_have_access">代わりにトークンをお持ちですか？</string>
+    <string name="sub_access_label">トークン（sk-ant- で始まる）</string>
     <string name="sub_auth_json">auth.json の内容</string>
-    <string name="sub_use_token">このトークンを使う</string>
+    <string name="sub_use_access">このトークンを使う</string>
     <string name="sub_hide_details">詳細を隠す</string>
     <string name="sub_details">詳細</string>
     <string name="settings_title">設定</string>

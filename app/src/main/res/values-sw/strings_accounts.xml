@@ -32,15 +32,15 @@
     <string name="machines_username">Jina la mtumiaji</string>
     <string name="machines_username_hint">wewe</string>
     <string name="machines_sign_in_with">INGIA KWA</string>
-    <string name="machines_password">Nenosiri</string>
-    <string name="machines_password_sub">Unachotumia kuingia</string>
+    <string name="machines_field_login">Nenosiri</string>
+    <string name="machines_field_login_sub">Unachotumia kuingia</string>
     <string name="machines_your_key">Ufunguo wako</string>
     <string name="machines_your_key_sub">Bandika ule unaotumia</string>
     <string name="machines_new_key">Ufunguo mpya</string>
     <string name="machines_new_key_sub">Umetengenezwa kwenye simu hii</string>
     <string name="machines_saved_keep">Imehifadhiwa. Acha wazi ili uendelee kuutumia</string>
     <string name="machines_private_key">Ufunguo wa faragha</string>
-    <string name="machines_passphrase">Nenosiri la ufunguo, ikiwa lipo</string>
+    <string name="machines_field_key_phrase">Nenosiri la ufunguo, ikiwa lipo</string>
     <string name="machines_new_key_explain">Ufunguo kwa ajili ya mashine hii tu. Unaongeza nusu yake ya umma kwenye mashine mara moja, na hakuna nenosiri linalohifadhiwa kamwe.</string>
     <string name="machines_show_public_key">Onyesha ufunguo wa umma wa simu hii</string>
     <string name="machines_direct">Moja kwa moja</string>
@@ -260,7 +260,7 @@
     <string name="handoff_sign_out">Toka</string>
     <string name="handoff_url_label">Anwani ya huduma yako ya usawazishaji (https://…)</string>
     <string name="handoff_email">Barua pepe</string>
-    <string name="handoff_password">Nenosiri</string>
+    <string name="handoff_field_login">Nenosiri</string>
     <string name="handoff_signing_in">Inaingia…</string>
     <string name="handoff_sign_in">Ingia</string>
     <string name="handoff_create_account">Fungua akaunti kwenye huduma yangu</string>

@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">%1$s سے سائن اِن کریں</string>
     <string name="sub_error">یہ کام نہیں کیا۔ %1$s</string>
     <string name="sub_hide">چھپائیں</string>
-    <string name="sub_have_token">اس کی بجائے ٹوکن ہے؟</string>
-    <string name="sub_token_label">ٹوکن (sk-ant- سے شروع ہوتا ہے)</string>
+    <string name="sub_have_access">اس کی بجائے ٹوکن ہے؟</string>
+    <string name="sub_access_label">ٹوکن (sk-ant- سے شروع ہوتا ہے)</string>
     <string name="sub_auth_json">auth.json کا مواد</string>
-    <string name="sub_use_token">یہ ٹوکن استعمال کریں</string>
+    <string name="sub_use_access">یہ ٹوکن استعمال کریں</string>
     <string name="sub_hide_details">تفصیلات چھپائیں</string>
     <string name="sub_details">تفصیلات</string>
     <string name="settings_title">سیٹنگز</string>

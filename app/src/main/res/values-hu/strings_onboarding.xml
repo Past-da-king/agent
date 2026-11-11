@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">Bejelentkezés: %1$s</string>
     <string name="sub_error">Ez nem sikerült. %1$s</string>
     <string name="sub_hide">Elrejtés</string>
-    <string name="sub_have_token">Inkább van tokened?</string>
-    <string name="sub_token_label">Token (sk-ant-tal kezdődik)</string>
+    <string name="sub_have_access">Inkább van tokened?</string>
+    <string name="sub_access_label">Token (sk-ant-tal kezdődik)</string>
     <string name="sub_auth_json">Az auth.json tartalma</string>
-    <string name="sub_use_token">Token használata</string>
+    <string name="sub_use_access">Token használata</string>
     <string name="sub_hide_details">Részletek elrejtése</string>
     <string name="sub_details">Részletek</string>
     <string name="settings_title">Beállítások</string>

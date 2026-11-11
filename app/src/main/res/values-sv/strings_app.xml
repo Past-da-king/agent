@@ -30,7 +30,7 @@
     <string name="rt_branch_failed">En sidotråd (”%1$s”) misslyckades: %2$s</string>
     <string name="rt_done">Klart</string>
     <string name="rt_interrupted_by_close">Jag höll på med ”%1$s” när appen stängdes. Säg åt mig att fortsätta så gör jag det.</string>
-    <string name="rt_not_claude_token">Det är inte en Claude-token. Den börjar med sk-ant-. Använd Logga in med Claude i stället.</string>
+    <string name="rt_not_claude_access">Det är inte en Claude-token. Den börjar med sk-ant-. Använd Logga in med Claude i stället.</string>
     <string name="rt_note_installed">Installerad · logga in med %1$s</string>
     <string name="rt_note_no_pack">Körmiljöpaketet för %1$s finns inte i den här versionen</string>
     <string name="rt_note_ready">Redo · inloggad på %1$s</string>

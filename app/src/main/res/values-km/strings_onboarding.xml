@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">ចូលដោយ %1$s</string>
     <string name="sub_error">វាមិនបានដំណើរការទេ។ %1$s</string>
     <string name="sub_hide">លាក់</string>
-    <string name="sub_have_token">មានថូខឹនជំនួសវិញឬ?</string>
-    <string name="sub_token_label">ថូខឹន (ចាប់ផ្តើមដោយ sk-ant-)</string>
+    <string name="sub_have_access">មានថូខឹនជំនួសវិញឬ?</string>
+    <string name="sub_access_label">ថូខឹន (ចាប់ផ្តើមដោយ sk-ant-)</string>
     <string name="sub_auth_json">មាតិកា auth.json</string>
-    <string name="sub_use_token">ប្រើថូខឹននេះ</string>
+    <string name="sub_use_access">ប្រើថូខឹននេះ</string>
     <string name="sub_hide_details">លាក់ព័ត៌មានលម្អិត</string>
     <string name="sub_details">ព័ត៌មានលម្អិត</string>
     <string name="settings_title">ការកំណត់</string>

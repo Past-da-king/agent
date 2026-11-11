@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">Ngena nge-%1$s</string>
     <string name="sub_error">Oko akusebenzanga. %1$s</string>
     <string name="sub_hide">Fihla</string>
-    <string name="sub_have_token">Unesiqinisekiso endaweni yoko?</string>
-    <string name="sub_token_label">Isiqinisekiso (siqala nge-sk-ant-)</string>
+    <string name="sub_have_access">Unesiqinisekiso endaweni yoko?</string>
+    <string name="sub_access_label">Isiqinisekiso (siqala nge-sk-ant-)</string>
     <string name="sub_auth_json">Okuqulethwe yi-auth.json</string>
-    <string name="sub_use_token">Sebenzisa esi siqinisekiso</string>
+    <string name="sub_use_access">Sebenzisa esi siqinisekiso</string>
     <string name="sub_hide_details">Fihla iinkcukacha</string>
     <string name="sub_details">Iinkcukacha</string>
     <string name="settings_title">Useto</string>

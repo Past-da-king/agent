@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">Σύνδεση με %1$s</string>
     <string name="sub_error">Αυτό δεν δούλεψε. %1$s</string>
     <string name="sub_hide">Απόκρυψη</string>
-    <string name="sub_have_token">Έχεις αντί γι’ αυτό ένα διακριτικό;</string>
-    <string name="sub_token_label">Διακριτικό (ξεκινά με sk-ant-)</string>
+    <string name="sub_have_access">Έχεις αντί γι’ αυτό ένα διακριτικό;</string>
+    <string name="sub_access_label">Διακριτικό (ξεκινά με sk-ant-)</string>
     <string name="sub_auth_json">Περιεχόμενο του auth.json</string>
-    <string name="sub_use_token">Χρήση αυτού του διακριτικού</string>
+    <string name="sub_use_access">Χρήση αυτού του διακριτικού</string>
     <string name="sub_hide_details">Απόκρυψη λεπτομερειών</string>
     <string name="sub_details">Λεπτομέρειες</string>
     <string name="settings_title">Ρυθμίσεις</string>

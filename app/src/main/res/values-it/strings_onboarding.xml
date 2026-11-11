@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">Accedi con %1$s</string>
     <string name="sub_error">Non ha funzionato. %1$s</string>
     <string name="sub_hide">Nascondi</string>
-    <string name="sub_have_token">Hai invece un token?</string>
-    <string name="sub_token_label">Token (inizia con sk-ant-)</string>
+    <string name="sub_have_access">Hai invece un token?</string>
+    <string name="sub_access_label">Token (inizia con sk-ant-)</string>
     <string name="sub_auth_json">Contenuto di auth.json</string>
-    <string name="sub_use_token">Usa questo token</string>
+    <string name="sub_use_access">Usa questo token</string>
     <string name="sub_hide_details">Nascondi i dettagli</string>
     <string name="sub_details">Dettagli</string>
     <string name="settings_title">Impostazioni</string>

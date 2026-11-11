@@ -33,15 +33,15 @@
     <string name="machines_username">Lebitso la mosebelisi</string>
     <string name="machines_username_hint">uena</string>
     <string name="machines_sign_in_with">KENA KA</string>
-    <string name="machines_password">Phasewete</string>
-    <string name="machines_password_sub">Eo u kenang ka eona</string>
+    <string name="machines_field_login">Phasewete</string>
+    <string name="machines_field_login_sub">Eo u kenang ka eona</string>
     <string name="machines_your_key">Senotlolo sa hao</string>
     <string name="machines_your_key_sub">Kopanya seo u se sebelisang</string>
     <string name="machines_new_key">Senotlolo se secha</string>
     <string name="machines_new_key_sub">Se entsoe mohaleng ona</string>
     <string name="machines_saved_keep">Ho bolokilwe. E tlohele e se na letho haeba u batla ho e boloka</string>
     <string name="machines_private_key">Senotlolo sa lekunutu</string>
-    <string name="machines_passphrase">Polelo ea senotlolo, haeba se e na le eona</string>
+    <string name="machines_field_key_phrase">Polelo ea senotlolo, haeba se e na le eona</string>
     <string name="machines_new_key_explain">Senotlolo se ikhethileng sa metjhini ona. U eketsa karolo ea sona ea sechaba metjhining hang feela, \'me ha ho phasewete e bolokoang.</string>
     <string name="machines_show_public_key">Bontša senotlolo sa sechaba sa mohala ona</string>
     <string name="machines_direct">Ka kotloloho</string>
@@ -265,7 +265,7 @@
     <string name="handoff_sign_out">Tsoa</string>
     <string name="handoff_url_label">Aterese ea ts\'ebeletso ea hao ea ho lumellana (https://…)</string>
     <string name="handoff_email">Imeile</string>
-    <string name="handoff_password">Phasewete</string>
+    <string name="handoff_field_login">Phasewete</string>
     <string name="handoff_signing_in">E ea kena…</string>
     <string name="handoff_sign_in">Kena</string>
     <string name="handoff_create_account">Etsa akhaonto ho server ea ka</string>

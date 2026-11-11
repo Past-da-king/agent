@@ -32,7 +32,7 @@
     <string name="rt_branch_failed">O discuție secundară („%1$s”) a eșuat: %2$s</string>
     <string name="rt_done">Gata</string>
     <string name="rt_interrupted_by_close">Eram la jumătatea sarcinii „%1$s” când s-a închis aplicația. Spune-mi să continui și o fac.</string>
-    <string name="rt_not_claude_token">Acesta nu este un token Claude. Începe cu sk-ant-. Folosește în schimb autentificarea cu Claude.</string>
+    <string name="rt_not_claude_access">Acesta nu este un token Claude. Începe cu sk-ant-. Folosește în schimb autentificarea cu Claude.</string>
     <string name="rt_note_installed">Instalat · autentifică-te cu %1$s</string>
     <string name="rt_note_no_pack">Pachetul de rulare %1$s nu este în această versiune</string>
     <string name="rt_note_ready">Gata · autentificat în %1$s</string>

@@ -31,7 +31,7 @@
     <string name="rt_branch_failed">एक साइड थ्रेड (\"%1$s\") अयशस्वी झाला: %2$s</string>
     <string name="rt_done">झाले</string>
     <string name="rt_interrupted_by_close">ॲप बंद झाले तेव्हा मी \"%1$s\" च्या मध्यात होतो. पुढे चालू ठेवायला सांगा, मी ठेवीन.</string>
-    <string name="rt_not_claude_token">हा Claude टोकन नाही. तो sk-ant- ने सुरू होतो. त्याऐवजी Claude सह साइन इन करा वापरा.</string>
+    <string name="rt_not_claude_access">हा Claude टोकन नाही. तो sk-ant- ने सुरू होतो. त्याऐवजी Claude सह साइन इन करा वापरा.</string>
     <string name="rt_note_installed">इंस्टॉल केले · %1$s सह साइन इन करा</string>
     <string name="rt_note_no_pack">%1$s रनटाइम पॅक या बिल्डमध्ये नाही</string>
     <string name="rt_note_ready">तयार · %1$s मध्ये साइन इन आहात</string>

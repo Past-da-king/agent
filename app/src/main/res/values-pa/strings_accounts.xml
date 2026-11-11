@@ -33,15 +33,15 @@
     <string name="machines_username">ਯੂਜ਼ਰਨੇਮ</string>
     <string name="machines_username_hint">ਤੁਸੀਂ</string>
     <string name="machines_sign_in_with">ਇਸ ਨਾਲ ਸਾਈਨ ਇਨ ਕਰੋ</string>
-    <string name="machines_password">ਪਾਸਵਰਡ</string>
-    <string name="machines_password_sub">ਜਿਸ ਨਾਲ ਤੁਸੀਂ ਲੌਗ ਇਨ ਕਰਦੇ ਹੋ</string>
+    <string name="machines_field_login">ਪਾਸਵਰਡ</string>
+    <string name="machines_field_login_sub">ਜਿਸ ਨਾਲ ਤੁਸੀਂ ਲੌਗ ਇਨ ਕਰਦੇ ਹੋ</string>
     <string name="machines_your_key">ਤੁਹਾਡੀ ਕੁੰਜੀ</string>
     <string name="machines_your_key_sub">ਜਿਹੜੀ ਵਰਤਦੇ ਹੋ, ਉਹ ਪੇਸਟ ਕਰੋ</string>
     <string name="machines_new_key">ਨਵੀਂ ਕੁੰਜੀ</string>
     <string name="machines_new_key_sub">ਇਸ ਫ਼ੋਨ ਉੱਤੇ ਬਣਾਈ ਗਈ</string>
     <string name="machines_saved_keep">ਸੇਵ ਹੋ ਗਿਆ। ਰੱਖਣ ਲਈ ਖਾਲੀ ਛੱਡੋ</string>
     <string name="machines_private_key">ਪ੍ਰਾਈਵੇਟ ਕੁੰਜੀ</string>
-    <string name="machines_passphrase">ਕੁੰਜੀ ਦਾ ਪਾਸਫ਼ਰੇਜ਼, ਜੇ ਹੈ ਤਾਂ</string>
+    <string name="machines_field_key_phrase">ਕੁੰਜੀ ਦਾ ਪਾਸਫ਼ਰੇਜ਼, ਜੇ ਹੈ ਤਾਂ</string>
     <string name="machines_new_key_explain">ਸਿਰਫ਼ ਇਸ ਮਸ਼ੀਨ ਲਈ ਇੱਕ ਕੁੰਜੀ। ਇਸਦਾ ਪਬਲਿਕ ਹਿੱਸਾ ਤੁਸੀਂ ਮਸ਼ੀਨ ਵਿੱਚ ਇੱਕ ਵਾਰ ਜੋੜਦੇ ਹੋ, ਅਤੇ ਕੋਈ ਪਾਸਵਰਡ ਕਦੇ ਸੇਵ ਨਹੀਂ ਹੁੰਦਾ।</string>
     <string name="machines_show_public_key">ਇਸ ਫ਼ੋਨ ਦੀ ਪਬਲਿਕ ਕੁੰਜੀ ਦਿਖਾਓ</string>
     <string name="machines_direct">ਸਿੱਧਾ</string>
@@ -265,7 +265,7 @@
     <string name="handoff_sign_out">ਸਾਈਨ ਆਊਟ ਕਰੋ</string>
     <string name="handoff_url_label">ਤੁਹਾਡੀ ਸਿੰਕ ਸੇਵਾ ਦਾ ਪਤਾ (https://…)</string>
     <string name="handoff_email">ਈਮੇਲ</string>
-    <string name="handoff_password">ਪਾਸਵਰਡ</string>
+    <string name="handoff_field_login">ਪਾਸਵਰਡ</string>
     <string name="handoff_signing_in">ਸਾਈਨ ਇਨ ਹੋ ਰਿਹਾ ਹੈ…</string>
     <string name="handoff_sign_in">ਸਾਈਨ ਇਨ ਕਰੋ</string>
     <string name="handoff_create_account">ਮੇਰੀ ਸੇਵਾ \'ਤੇ ਖਾਤਾ ਬਣਾਓ</string>

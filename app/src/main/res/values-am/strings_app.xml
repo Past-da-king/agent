@@ -31,7 +31,7 @@
     <string name="rt_branch_failed">አንድ የጎን ክር (\"%1$s\") አልተሳካም፦ %2$s</string>
     <string name="rt_done">ተጠናቋል</string>
     <string name="rt_interrupted_by_close">መተግበሪያው ሲዘጋ በ\"%1$s\" መሃል ነበርኩ። እንድቀጥል ይንገሩኝ እቀጥላለሁ።</string>
-    <string name="rt_not_claude_token">ይህ የClaude ቶከን አይደለም። የሚጀምረው በsk-ant- ነው። በምትኩ በClaude መግቢያን ይጠቀሙ።</string>
+    <string name="rt_not_claude_access">ይህ የClaude ቶከን አይደለም። የሚጀምረው በsk-ant- ነው። በምትኩ በClaude መግቢያን ይጠቀሙ።</string>
     <string name="rt_note_installed">ተጭኗል · በ%1$s ይግቡ</string>
     <string name="rt_note_no_pack">የ%1$s የሩጫ ጥቅል በዚህ ግንባታ ውስጥ የለም</string>
     <string name="rt_note_ready">ዝግጁ · ወደ %1$s ገብተዋል</string>

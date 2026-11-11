@@ -32,15 +32,15 @@
     <string name="machines_username">Käyttäjänimi</string>
     <string name="machines_username_hint">sinä</string>
     <string name="machines_sign_in_with">KIRJAUDU</string>
-    <string name="machines_password">Salasana</string>
-    <string name="machines_password_sub">Se, millä kirjaudut</string>
+    <string name="machines_field_login">Salasana</string>
+    <string name="machines_field_login_sub">Se, millä kirjaudut</string>
     <string name="machines_your_key">Avaimesi</string>
     <string name="machines_your_key_sub">Liitä käyttämäsi avain</string>
     <string name="machines_new_key">Uusi avain</string>
     <string name="machines_new_key_sub">Luotu tässä puhelimessa</string>
     <string name="machines_saved_keep">Tallennettu. Jätä tyhjäksi, jos haluat säilyttää sen</string>
     <string name="machines_private_key">Yksityinen avain</string>
-    <string name="machines_passphrase">Avaimen salalause, jos sellainen on</string>
+    <string name="machines_field_key_phrase">Avaimen salalause, jos sellainen on</string>
     <string name="machines_new_key_explain">Avain vain tälle koneelle. Lisäät sen julkisen puolikkaan koneelle kerran, eikä salasanaa tallenneta koskaan.</string>
     <string name="machines_show_public_key">Näytä tämän puhelimen julkinen avain</string>
     <string name="machines_direct">Suoraan</string>
@@ -260,7 +260,7 @@
     <string name="handoff_sign_out">Kirjaudu ulos</string>
     <string name="handoff_url_label">Synkronointipalvelusi osoite (https://…)</string>
     <string name="handoff_email">Sähköposti</string>
-    <string name="handoff_password">Salasana</string>
+    <string name="handoff_field_login">Salasana</string>
     <string name="handoff_signing_in">Kirjaudutaan…</string>
     <string name="handoff_sign_in">Kirjaudu</string>
     <string name="handoff_create_account">Luo tili palveluuni</string>

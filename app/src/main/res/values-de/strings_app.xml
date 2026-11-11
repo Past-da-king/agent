@@ -31,7 +31,7 @@
     <string name="rt_branch_failed">Ein Nebenstrang (\"%1$s\") ist fehlgeschlagen: %2$s</string>
     <string name="rt_done">Fertig</string>
     <string name="rt_interrupted_by_close">Ich war mitten in \"%1$s\", als die App geschlossen wurde. Sag mir, dass ich weitermachen soll, dann tue ich das.</string>
-    <string name="rt_not_claude_token">Das ist kein Claude-Token. Er beginnt mit sk-ant-. Nutze stattdessen Mit Claude anmelden.</string>
+    <string name="rt_not_claude_access">Das ist kein Claude-Token. Er beginnt mit sk-ant-. Nutze stattdessen Mit Claude anmelden.</string>
     <string name="rt_note_installed">Installiert · mit %1$s anmelden</string>
     <string name="rt_note_no_pack">%1$s-Laufzeitpaket nicht in diesem Build</string>
     <string name="rt_note_ready">Bereit · bei %1$s angemeldet</string>

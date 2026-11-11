@@ -33,15 +33,15 @@
     <string name="machines_username">ব্যবহারকারীর নাম</string>
     <string name="machines_username_hint">আপনি</string>
     <string name="machines_sign_in_with">এর মাধ্যমে সাইন ইন করুন</string>
-    <string name="machines_password">পাসওয়ার্ড</string>
-    <string name="machines_password_sub">যা দিয়ে আপনি লগ ইন করেন</string>
+    <string name="machines_field_login">পাসওয়ার্ড</string>
+    <string name="machines_field_login_sub">যা দিয়ে আপনি লগ ইন করেন</string>
     <string name="machines_your_key">আপনার কী</string>
     <string name="machines_your_key_sub">আপনি যেটি ব্যবহার করেন সেটি পেস্ট করুন</string>
     <string name="machines_new_key">নতুন কী</string>
     <string name="machines_new_key_sub">এই ফোনেই তৈরি</string>
     <string name="machines_saved_keep">সংরক্ষিত হয়েছে। রাখতে চাইলে খালি রাখুন</string>
     <string name="machines_private_key">প্রাইভেট কী</string>
-    <string name="machines_passphrase">কী-র পাসফ্রেজ, যদি থাকে</string>
+    <string name="machines_field_key_phrase">কী-র পাসফ্রেজ, যদি থাকে</string>
     <string name="machines_new_key_explain">শুধু এই মেশিনের জন্য একটি কী। এর পাবলিক অংশটি একবার মেশিনে যোগ করতে হবে, এবং কোনো পাসওয়ার্ড কখনো সংরক্ষণ করা হয় না।</string>
     <string name="machines_show_public_key">এই ফোনের পাবলিক কী দেখান</string>
     <string name="machines_direct">সরাসরি</string>
@@ -265,7 +265,7 @@
     <string name="handoff_sign_out">সাইন আউট</string>
     <string name="handoff_url_label">আপনার সিঙ্ক সেবার ঠিকানা (https://…)</string>
     <string name="handoff_email">ইমেইল</string>
-    <string name="handoff_password">পাসওয়ার্ড</string>
+    <string name="handoff_field_login">পাসওয়ার্ড</string>
     <string name="handoff_signing_in">সাইন ইন হচ্ছে…</string>
     <string name="handoff_sign_in">সাইন ইন</string>
     <string name="handoff_create_account">আমার সেবায় অ্যাকাউন্ট তৈরি করুন</string>

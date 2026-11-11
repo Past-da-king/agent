@@ -32,7 +32,7 @@
     <string name="rt_branch_failed">ਇੱਕ ਸਾਈਡ ਥ੍ਰੈੱਡ (\"%1$s\") ਅਸਫ਼ਲ ਰਿਹਾ: %2$s</string>
     <string name="rt_done">ਹੋ ਗਿਆ</string>
     <string name="rt_interrupted_by_close">ਐਪ ਬੰਦ ਹੋਣ ਵੇਲੇ ਮੈਂ \"%1$s\" \'ਤੇ ਅੱਧ ਵਿਚਾਲੇ ਸੀ। ਕਹੋ ਤਾਂ ਮੈਂ ਅੱਗੇ ਜਾਰੀ ਰੱਖਾਂਗਾ।</string>
-    <string name="rt_not_claude_token">ਇਹ Claude ਟੋਕਨ ਨਹੀਂ ਹੈ। ਇਹ sk-ant- ਨਾਲ ਸ਼ੁਰੂ ਹੁੰਦਾ ਹੈ। ਇਸ ਦੀ ਬਜਾਏ Claude ਨਾਲ ਸਾਈਨ ਇਨ ਵਰਤੋ।</string>
+    <string name="rt_not_claude_access">ਇਹ Claude ਟੋਕਨ ਨਹੀਂ ਹੈ। ਇਹ sk-ant- ਨਾਲ ਸ਼ੁਰੂ ਹੁੰਦਾ ਹੈ। ਇਸ ਦੀ ਬਜਾਏ Claude ਨਾਲ ਸਾਈਨ ਇਨ ਵਰਤੋ।</string>
     <string name="rt_note_installed">ਇੰਸਟਾਲ ਹੋ ਗਿਆ · %1$s ਨਾਲ ਸਾਈਨ ਇਨ ਕਰੋ</string>
     <string name="rt_note_no_pack">ਇਸ ਬਿਲਡ ਵਿੱਚ %1$s ਰਨਟਾਈਮ ਪੈਕ ਨਹੀਂ ਹੈ</string>
     <string name="rt_note_ready">ਤਿਆਰ · %1$s ਵਿੱਚ ਸਾਈਨ ਇਨ ਹੈ</string>

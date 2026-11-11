@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">تسجيل الدخول عبر %1$s</string>
     <string name="sub_error">لم ينجح ذلك. %1$s</string>
     <string name="sub_hide">إخفاء</string>
-    <string name="sub_have_token">لديك رمز بدلًا من ذلك؟</string>
-    <string name="sub_token_label">الرمز (يبدأ بـ sk-ant-)</string>
+    <string name="sub_have_access">لديك رمز بدلًا من ذلك؟</string>
+    <string name="sub_access_label">الرمز (يبدأ بـ sk-ant-)</string>
     <string name="sub_auth_json">محتويات auth.json</string>
-    <string name="sub_use_token">استخدام هذا الرمز</string>
+    <string name="sub_use_access">استخدام هذا الرمز</string>
     <string name="sub_hide_details">إخفاء التفاصيل</string>
     <string name="sub_details">التفاصيل</string>
     <string name="settings_title">الإعدادات</string>

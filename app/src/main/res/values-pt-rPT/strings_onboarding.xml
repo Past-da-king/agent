@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">Iniciar sessão com %1$s</string>
     <string name="sub_error">Isso não funcionou. %1$s</string>
     <string name="sub_hide">Ocultar</string>
-    <string name="sub_have_token">Tem um token em vez disso?</string>
-    <string name="sub_token_label">Token (começa com sk-ant-)</string>
+    <string name="sub_have_access">Tem um token em vez disso?</string>
+    <string name="sub_access_label">Token (começa com sk-ant-)</string>
     <string name="sub_auth_json">Conteúdo do auth.json</string>
-    <string name="sub_use_token">Usar este token</string>
+    <string name="sub_use_access">Usar este token</string>
     <string name="sub_hide_details">Ocultar detalhes</string>
     <string name="sub_details">Detalhes</string>
     <string name="settings_title">Definições</string>

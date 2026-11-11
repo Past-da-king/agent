@@ -33,15 +33,15 @@
     <string name="machines_username">Aha onye ọrụ</string>
     <string name="machines_username_hint">gị</string>
     <string name="machines_sign_in_with">BANYE site na</string>
-    <string name="machines_password">Paswọdụ</string>
-    <string name="machines_password_sub">Ihe ị na-eji abanye</string>
+    <string name="machines_field_login">Paswọdụ</string>
+    <string name="machines_field_login_sub">Ihe ị na-eji abanye</string>
     <string name="machines_your_key">Igodo gị</string>
     <string name="machines_your_key_sub">Kọpịa nke ị na-eji</string>
     <string name="machines_new_key">Igodo ọhụrụ</string>
     <string name="machines_new_key_sub">E mere ya n\'ekwentị a</string>
     <string name="machines_saved_keep">Echekwara. Hapụ ya efu ma ọ bụrụ na ịchọrọ ichekwa ya</string>
     <string name="machines_private_key">Igodo nzuzo</string>
-    <string name="machines_passphrase">Okwu igodo, ma ọ bụrụ na o nwere</string>
+    <string name="machines_field_key_phrase">Okwu igodo, ma ọ bụrụ na o nwere</string>
     <string name="machines_new_key_explain">Igodo naanị maka igwe a. Ị na-agbakwunye akụkụ ya ọha n\'igwe ahụ otu ugboro, ọ dịghịkwa paswọdụ a na-echekwa.</string>
     <string name="machines_show_public_key">Gosi igodo ọha nke ekwentị a</string>
     <string name="machines_direct">Ozugbo</string>
@@ -255,7 +255,7 @@
     <string name="handoff_sign_out">Pụọ</string>
     <string name="handoff_url_label">Adreesị ọrụ mmekọrịta gị (https://…)</string>
     <string name="handoff_email">Ịmeelụ</string>
-    <string name="handoff_password">Paswọdụ</string>
+    <string name="handoff_field_login">Paswọdụ</string>
     <string name="handoff_signing_in">Na-abanye…</string>
     <string name="handoff_sign_in">Banye</string>
     <string name="handoff_create_account">Mepụta akaụntụ na sava m</string>

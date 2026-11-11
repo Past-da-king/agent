@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">Увійти через %1$s</string>
     <string name="sub_error">Не вийшло. %1$s</string>
     <string name="sub_hide">Сховати</string>
-    <string name="sub_have_token">Є токен?</string>
-    <string name="sub_token_label">Токен (починається з sk-ant-)</string>
+    <string name="sub_have_access">Є токен?</string>
+    <string name="sub_access_label">Токен (починається з sk-ant-)</string>
     <string name="sub_auth_json">Вміст auth.json</string>
-    <string name="sub_use_token">Використати цей токен</string>
+    <string name="sub_use_access">Використати цей токен</string>
     <string name="sub_hide_details">Сховати подробиці</string>
     <string name="sub_details">Подробиці</string>
     <string name="settings_title">Налаштування</string>

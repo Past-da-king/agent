@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">Tsena ka %1$s</string>
     <string name="sub_error">Seo ga se a dira. %1$s</string>
     <string name="sub_hide">Fitlha</string>
-    <string name="sub_have_token">A o na le token go e na le moo?</string>
-    <string name="sub_token_label">Token (e simolola ka sk-ant-)</string>
+    <string name="sub_have_access">A o na le token go e na le moo?</string>
+    <string name="sub_access_label">Token (e simolola ka sk-ant-)</string>
     <string name="sub_auth_json">Diteng tsa auth.json</string>
-    <string name="sub_use_token">Dirisa token eno</string>
+    <string name="sub_use_access">Dirisa token eno</string>
     <string name="sub_hide_details">Fitlha dintlha</string>
     <string name="sub_details">Dintlha</string>
     <string name="settings_title">Ditlhophiso</string>

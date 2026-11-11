@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">Log masuk dengan %1$s</string>
     <string name="sub_error">Itu tidak berjaya. %1$s</string>
     <string name="sub_hide">Sembunyikan</string>
-    <string name="sub_have_token">Ada token sebaliknya?</string>
-    <string name="sub_token_label">Token (bermula dengan sk-ant-)</string>
+    <string name="sub_have_access">Ada token sebaliknya?</string>
+    <string name="sub_access_label">Token (bermula dengan sk-ant-)</string>
     <string name="sub_auth_json">Kandungan auth.json</string>
-    <string name="sub_use_token">Guna token ini</string>
+    <string name="sub_use_access">Guna token ini</string>
     <string name="sub_hide_details">Sembunyikan butiran</string>
     <string name="sub_details">Butiran</string>
     <string name="settings_title">Tetapan</string>

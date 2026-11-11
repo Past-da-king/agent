@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">%1$s ಮೂಲಕ ಸೈನ್ ಇನ್ ಮಾಡಿ</string>
     <string name="sub_error">ಅದು ಕೆಲಸ ಮಾಡಲಿಲ್ಲ. %1$s</string>
     <string name="sub_hide">ಮರೆಮಾಡಿ</string>
-    <string name="sub_have_token">ಬದಲಿಗೆ ಟೋಕನ್ ಇದೆಯೇ?</string>
-    <string name="sub_token_label">ಟೋಕನ್ (sk-ant- ನಿಂದ ಪ್ರಾರಂಭ)</string>
+    <string name="sub_have_access">ಬದಲಿಗೆ ಟೋಕನ್ ಇದೆಯೇ?</string>
+    <string name="sub_access_label">ಟೋಕನ್ (sk-ant- ನಿಂದ ಪ್ರಾರಂಭ)</string>
     <string name="sub_auth_json">auth.json ವಿಷಯ</string>
-    <string name="sub_use_token">ಈ ಟೋಕನ್ ಬಳಸಿ</string>
+    <string name="sub_use_access">ಈ ಟೋಕನ್ ಬಳಸಿ</string>
     <string name="sub_hide_details">ವಿವರ ಮರೆಮಾಡಿ</string>
     <string name="sub_details">ವಿವರ</string>
     <string name="settings_title">ಸೆಟ್ಟಿಂಗ್‌ಗಳು</string>

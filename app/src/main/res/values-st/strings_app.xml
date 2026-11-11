@@ -32,7 +32,7 @@
     <string name="rt_branch_failed">Khoele ea lehlakoreng (\"%1$s\") ha e a atleha: %2$s</string>
     <string name="rt_done">Ho phethilwe</string>
     <string name="rt_interrupted_by_close">Ke ne ke le bohareng ba \"%1$s\" ha app e koaloa. Ntlhahise hore ke tsoele pele \'me ke tla tsoela pele.</string>
-    <string name="rt_not_claude_token">Seo ha se token ea Claude. E qala ka sk-ant-. Sebelisa Kena ka Claude ho e-na le hoo.</string>
+    <string name="rt_not_claude_access">Seo ha se token ea Claude. E qala ka sk-ant-. Sebelisa Kena ka Claude ho e-na le hoo.</string>
     <string name="rt_note_installed">Ho kentsoe · kena ka %1$s</string>
     <string name="rt_note_no_pack">Sephutheloana sa nako ea ho sebetsa sa %1$s ha se ho mofuta ona</string>
     <string name="rt_note_ready">Ho loketse · o kene ho %1$s</string>

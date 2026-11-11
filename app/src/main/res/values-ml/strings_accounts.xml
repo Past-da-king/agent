@@ -33,15 +33,15 @@
     <string name="machines_username">ഉപയോക്തൃനാമം</string>
     <string name="machines_username_hint">നിങ്ങൾ</string>
     <string name="machines_sign_in_with">ഇതുപയോഗിച്ച് സൈൻ ഇൻ ചെയ്യുക</string>
-    <string name="machines_password">പാസ്‌വേഡ്</string>
-    <string name="machines_password_sub">ലോഗിൻ ചെയ്യാൻ ഉപയോഗിക്കുന്നത്</string>
+    <string name="machines_field_login">പാസ്‌വേഡ്</string>
+    <string name="machines_field_login_sub">ലോഗിൻ ചെയ്യാൻ ഉപയോഗിക്കുന്നത്</string>
     <string name="machines_your_key">നിങ്ങളുടെ കീ</string>
     <string name="machines_your_key_sub">നിങ്ങൾ ഉപയോഗിക്കുന്ന ഒന്ന് ഒട്ടിക്കുക</string>
     <string name="machines_new_key">പുതിയ കീ</string>
     <string name="machines_new_key_sub">ഈ ഫോണിൽ ഉണ്ടാക്കിയത്</string>
     <string name="machines_saved_keep">സേവ് ചെയ്തു. മാറ്റണ്ടെങ്കിൽ ശൂന്യമായി വിടുക</string>
     <string name="machines_private_key">സ്വകാര്യ കീ</string>
-    <string name="machines_passphrase">കീയുടെ പാസ്‌ഫ്രെയ്‌സ്, ഉണ്ടെങ്കിൽ</string>
+    <string name="machines_field_key_phrase">കീയുടെ പാസ്‌ഫ്രെയ്‌സ്, ഉണ്ടെങ്കിൽ</string>
     <string name="machines_new_key_explain">ഈ മെഷീനു മാത്രമുള്ള ഒരു കീ. അതിന്റെ പബ്ലിക് ഭാഗം ഒരിക്കൽ മെഷീനിൽ ചേർക്കുക; പാസ്‌വേഡ് ഒരിക്കലും സൂക്ഷിക്കില്ല.</string>
     <string name="machines_show_public_key">ഈ ഫോണിന്റെ പബ്ലിക് കീ കാണിക്കുക</string>
     <string name="machines_direct">നേരിട്ട്</string>
@@ -265,7 +265,7 @@
     <string name="handoff_sign_out">സൈൻ ഔട്ട് ചെയ്യുക</string>
     <string name="handoff_url_label">നിങ്ങളുടെ സിങ്ക് സർവീസ് വിലാസം (https://…)</string>
     <string name="handoff_email">ഇമെയിൽ</string>
-    <string name="handoff_password">പാസ്‌വേഡ്</string>
+    <string name="handoff_field_login">പാസ്‌വേഡ്</string>
     <string name="handoff_signing_in">സൈൻ ഇൻ ചെയ്യുന്നു…</string>
     <string name="handoff_sign_in">സൈൻ ഇൻ ചെയ്യുക</string>
     <string name="handoff_create_account">എന്റെ സർവീസിൽ അക്കൗണ്ട് സൃഷ്ടിക്കുക</string>

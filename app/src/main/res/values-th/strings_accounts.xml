@@ -33,15 +33,15 @@
     <string name="machines_username">ชื่อผู้ใช้</string>
     <string name="machines_username_hint">คุณ</string>
     <string name="machines_sign_in_with">เข้าสู่ระบบด้วย</string>
-    <string name="machines_password">รหัสผ่าน</string>
-    <string name="machines_password_sub">สิ่งที่คุณใช้ล็อกอิน</string>
+    <string name="machines_field_login">รหัสผ่าน</string>
+    <string name="machines_field_login_sub">สิ่งที่คุณใช้ล็อกอิน</string>
     <string name="machines_your_key">คีย์ของคุณ</string>
     <string name="machines_your_key_sub">วางคีย์ที่คุณใช้อยู่</string>
     <string name="machines_new_key">คีย์ใหม่</string>
     <string name="machines_new_key_sub">สร้างบนโทรศัพท์เครื่องนี้</string>
     <string name="machines_saved_keep">บันทึกแล้ว เว้นว่างไว้เพื่อคงค่าเดิม</string>
     <string name="machines_private_key">คีย์ส่วนตัว</string>
-    <string name="machines_passphrase">รหัสผ่านของคีย์ (ถ้ามี)</string>
+    <string name="machines_field_key_phrase">รหัสผ่านของคีย์ (ถ้ามี)</string>
     <string name="machines_new_key_explain">คีย์สำหรับเครื่องนี้โดยเฉพาะ คุณเพิ่มส่วนสาธารณะของคีย์ลงในเครื่องเพียงครั้งเดียว และจะไม่มีการเก็บรหัสผ่านใด ๆ</string>
     <string name="machines_show_public_key">แสดงคีย์สาธารณะของโทรศัพท์เครื่องนี้</string>
     <string name="machines_direct">โดยตรง</string>
@@ -251,7 +251,7 @@
     <string name="handoff_sign_out">ออกจากระบบ</string>
     <string name="handoff_url_label">ที่อยู่บริการซิงก์ของคุณ (https://…)</string>
     <string name="handoff_email">อีเมล</string>
-    <string name="handoff_password">รหัสผ่าน</string>
+    <string name="handoff_field_login">รหัสผ่าน</string>
     <string name="handoff_signing_in">กำลังเข้าสู่ระบบ…</string>
     <string name="handoff_sign_in">เข้าสู่ระบบ</string>
     <string name="handoff_create_account">สร้างบัญชีบนบริการของฉัน</string>

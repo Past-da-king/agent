@@ -31,7 +31,7 @@
     <string name="rt_branch_failed">Okùn ẹ̀gbẹ́ kan (\"%1$s\") kùnà: %2$s</string>
     <string name="rt_done">Ti parí</string>
     <string name="rt_interrupted_by_close">Mo wà láàrín \"%1$s\" nígbà tí app tì. Sọ fún mi kí n tẹ̀síwájú, èmi yóò sì tẹ̀síwájú.</string>
-    <string name="rt_not_claude_token">Èyí kì í ṣe àmì Claude. Ó bẹ̀rẹ̀ pẹ̀lú sk-ant-. Lo Wọlé pẹ̀lú Claude dípò.</string>
+    <string name="rt_not_claude_access">Èyí kì í ṣe àmì Claude. Ó bẹ̀rẹ̀ pẹ̀lú sk-ant-. Lo Wọlé pẹ̀lú Claude dípò.</string>
     <string name="rt_note_installed">A ti fi sílẹ̀ · wọlé pẹ̀lú %1$s</string>
     <string name="rt_note_no_pack">Àpò ìgbà ṣíṣiṣẹ́ %1$s kò sí nínú ẹ̀yà yìí</string>
     <string name="rt_note_ready">Ó ti ṣetán · o ti wọlé sí %1$s</string>

@@ -33,15 +33,15 @@
     <string name="machines_username">نام کاربری</string>
     <string name="machines_username_hint">شما</string>
     <string name="machines_sign_in_with">ورود با</string>
-    <string name="machines_password">گذرواژه</string>
-    <string name="machines_password_sub">چیزی که با آن وارد می‌شوید</string>
+    <string name="machines_field_login">گذرواژه</string>
+    <string name="machines_field_login_sub">چیزی که با آن وارد می‌شوید</string>
     <string name="machines_your_key">کلید شما</string>
     <string name="machines_your_key_sub">کلیدی که استفاده می‌کنید را جای‌گذاری کنید</string>
     <string name="machines_new_key">کلید جدید</string>
     <string name="machines_new_key_sub">ساخته‌شده روی این گوشی</string>
     <string name="machines_saved_keep">ذخیره شد. برای نگه داشتن، خالی بگذارید</string>
     <string name="machines_private_key">کلید خصوصی</string>
-    <string name="machines_passphrase">عبارت رمز کلید، اگر دارد</string>
+    <string name="machines_field_key_phrase">عبارت رمز کلید، اگر دارد</string>
     <string name="machines_new_key_explain">کلیدی فقط برای این ماشین. نیمه عمومی آن را یک بار به ماشین اضافه می‌کنید و هیچ گذرواژه‌ای ذخیره نمی‌شود.</string>
     <string name="machines_show_public_key">نمایش کلید عمومی این گوشی</string>
     <string name="machines_direct">مستقیم</string>
@@ -261,7 +261,7 @@
     <string name="handoff_sign_out">خروج</string>
     <string name="handoff_url_label">نشانی سرویس همگام‌سازی شما (https://…)</string>
     <string name="handoff_email">ایمیل</string>
-    <string name="handoff_password">گذرواژه</string>
+    <string name="handoff_field_login">گذرواژه</string>
     <string name="handoff_signing_in">در حال ورود…</string>
     <string name="handoff_sign_in">ورود</string>
     <string name="handoff_create_account">ساخت حساب روی سرویس من</string>

@@ -32,7 +32,7 @@
     <string name="rt_branch_failed">ಒಂದು ಉಪ ಥ್ರೆಡ್ (\"%1$s\") ವಿಫಲವಾಗಿದೆ: %2$s</string>
     <string name="rt_done">ಮುಗಿಯಿತು</string>
     <string name="rt_interrupted_by_close">ಆ್ಯಪ್ ಮುಚ್ಚಿದಾಗ ನಾನು \"%1$s\" ಕೆಲಸದ ಮಧ್ಯದಲ್ಲಿದ್ದೆ. ಮುಂದುವರಿಸಲು ಹೇಳಿ, ನಾನು ಮಾಡುತ್ತೇನೆ.</string>
-    <string name="rt_not_claude_token">ಇದು Claude ಟೋಕನ್ ಅಲ್ಲ. ಇದು sk-ant- ಎಂದು ಪ್ರಾರಂಭವಾಗುತ್ತದೆ. ಬದಲ�ಿಗೆ Claude ಜೊತೆ ಸೈನ್ ಇನ್ ಬಳಸಿ.</string>
+    <string name="rt_not_claude_access">ಇದು Claude ಟೋಕನ್ ಅಲ್ಲ. ಇದು sk-ant- ಎಂದು ಪ್ರಾರಂಭವಾಗುತ್ತದೆ. ಬದಲ�ಿಗೆ Claude ಜೊತೆ ಸೈನ್ ಇನ್ ಬಳಸಿ.</string>
     <string name="rt_note_installed">ಸ್ಥಾಪಿಸಲಾಗಿದೆ · %1$s ಮೂಲಕ ಸೈನ್ ಇನ್ ಮಾಡಿ</string>
     <string name="rt_note_no_pack">ಈ ಬಿಲ್ಡ್‌ನಲ್ಲಿ %1$s ರನ್‌ಟೈಮ್ ಪ್ಯಾಕ್ ಇಲ್ಲ</string>
     <string name="rt_note_ready">ಸಿದ್ಧ · %1$sಗೆ ಸೈನ್ ಇನ್ ಆಗಿದೆ</string>

@@ -33,15 +33,15 @@
     <string name="machines_username">Nom d\'usuari</string>
     <string name="machines_username_hint">tu</string>
     <string name="machines_sign_in_with">INICIA LA SESSIÓ AMB</string>
-    <string name="machines_password">Contrasenya</string>
-    <string name="machines_password_sub">Amb el que inicies la sessió</string>
+    <string name="machines_field_login">Contrasenya</string>
+    <string name="machines_field_login_sub">Amb el que inicies la sessió</string>
     <string name="machines_your_key">La teva clau</string>
     <string name="machines_your_key_sub">Enganxa\'n una que ja facis servir</string>
     <string name="machines_new_key">Clau nova</string>
     <string name="machines_new_key_sub">Creada en aquest telèfon</string>
     <string name="machines_saved_keep">Desada. Deixa-ho buit per mantenir-la</string>
     <string name="machines_private_key">Clau privada</string>
-    <string name="machines_passphrase">Frase de pas de la clau, si en té</string>
+    <string name="machines_field_key_phrase">Frase de pas de la clau, si en té</string>
     <string name="machines_new_key_explain">Una clau només per a aquesta màquina. N\'afegeixes la meitat pública a la màquina una sola vegada i mai no es desa cap contrasenya.</string>
     <string name="machines_show_public_key">Mostra la clau pública d\'aquest telèfon</string>
     <string name="machines_direct">Directa</string>
@@ -271,7 +271,7 @@
     <string name="handoff_sign_out">Tanca la sessió</string>
     <string name="handoff_url_label">Adreça del teu servei de sincronització (https://…)</string>
     <string name="handoff_email">Correu electrònic</string>
-    <string name="handoff_password">Contrasenya</string>
+    <string name="handoff_field_login">Contrasenya</string>
     <string name="handoff_signing_in">Iniciant la sessió…</string>
     <string name="handoff_sign_in">Inicia la sessió</string>
     <string name="handoff_create_account">Crea el compte al meu servei</string>

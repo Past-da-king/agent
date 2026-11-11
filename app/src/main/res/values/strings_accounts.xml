@@ -33,15 +33,15 @@
     <string name="machines_username">Username</string>
     <string name="machines_username_hint">you</string>
     <string name="machines_sign_in_with">SIGN IN WITH</string>
-    <string name="machines_password">Password</string>
-    <string name="machines_password_sub">What you log in with</string>
+    <string name="machines_field_login">Password</string>
+    <string name="machines_field_login_sub">What you log in with</string>
     <string name="machines_your_key">Your key</string>
     <string name="machines_your_key_sub">Paste one you use</string>
     <string name="machines_new_key">New key</string>
     <string name="machines_new_key_sub">Made on this phone</string>
     <string name="machines_saved_keep">Saved. Leave empty to keep it</string>
     <string name="machines_private_key">Private key</string>
-    <string name="machines_passphrase">Key passphrase, if it has one</string>
+    <string name="machines_field_key_phrase">Key passphrase, if it has one</string>
     <string name="machines_new_key_explain">A key just for this machine. You add its public half to the machine once, and no password is ever stored.</string>
     <string name="machines_show_public_key">Show this phone\'s public key</string>
     <string name="machines_direct">Direct</string>
@@ -265,7 +265,7 @@
     <string name="handoff_sign_out">Sign out</string>
     <string name="handoff_url_label">Your sync service address (https://…)</string>
     <string name="handoff_email">Email</string>
-    <string name="handoff_password">Password</string>
+    <string name="handoff_field_login">Password</string>
     <string name="handoff_signing_in">Signing in…</string>
     <string name="handoff_sign_in">Sign in</string>
     <string name="handoff_create_account">Create the account on my service</string>

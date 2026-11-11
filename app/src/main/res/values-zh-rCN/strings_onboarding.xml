@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">使用 %1$s 登录</string>
     <string name="sub_error">没有成功。%1$s</string>
     <string name="sub_hide">隐藏</string>
-    <string name="sub_have_token">改用令牌？</string>
-    <string name="sub_token_label">令牌（以 sk-ant- 开头）</string>
+    <string name="sub_have_access">改用令牌？</string>
+    <string name="sub_access_label">令牌（以 sk-ant- 开头）</string>
     <string name="sub_auth_json">auth.json 的内容</string>
-    <string name="sub_use_token">使用此令牌</string>
+    <string name="sub_use_access">使用此令牌</string>
     <string name="sub_hide_details">隐藏详情</string>
     <string name="sub_details">详情</string>
     <string name="settings_title">设置</string>

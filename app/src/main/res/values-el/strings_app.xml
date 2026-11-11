@@ -31,7 +31,7 @@
     <string name="rt_branch_failed">Ένα δευτερεύον νήμα («%1$s») απέτυχε: %2$s</string>
     <string name="rt_done">Έτοιμο</string>
     <string name="rt_interrupted_by_close">Ήμουν στη μέση της εργασίας «%1$s» όταν έκλεισε η εφαρμογή. Πες μου να συνεχίσω και θα συνεχίσω.</string>
-    <string name="rt_not_claude_token">Αυτό δεν είναι διακριτικό Claude. Ξεκινά με sk-ant-. Χρησιμοποίησε αντί γι’ αυτό τη σύνδεση με Claude.</string>
+    <string name="rt_not_claude_access">Αυτό δεν είναι διακριτικό Claude. Ξεκινά με sk-ant-. Χρησιμοποίησε αντί γι’ αυτό τη σύνδεση με Claude.</string>
     <string name="rt_note_installed">Εγκαταστάθηκε · συνδέσου με %1$s</string>
     <string name="rt_note_no_pack">Το πακέτο εκτέλεσης %1$s δεν υπάρχει σε αυτή την έκδοση</string>
     <string name="rt_note_ready">Έτοιμο · συνδεδεμένος στο %1$s</string>

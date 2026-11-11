@@ -30,7 +30,7 @@
     <string name="rt_branch_failed">Urutan sampingan (\"%1$s\") gagal: %2$s</string>
     <string name="rt_done">Selesai</string>
     <string name="rt_interrupted_by_close">Saya berada di tengah \"%1$s\" apabila aplikasi ditutup. Suruh saya teruskan dan saya akan teruskan.</string>
-    <string name="rt_not_claude_token">Itu bukan token Claude. Ia bermula dengan sk-ant-. Gunakan Log masuk dengan Claude sebaliknya.</string>
+    <string name="rt_not_claude_access">Itu bukan token Claude. Ia bermula dengan sk-ant-. Gunakan Log masuk dengan Claude sebaliknya.</string>
     <string name="rt_note_installed">Dipasang · log masuk dengan %1$s</string>
     <string name="rt_note_no_pack">Pek runtime %1$s tiada dalam binaan ini</string>
     <string name="rt_note_ready">Sedia · telah log masuk ke %1$s</string>

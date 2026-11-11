@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">በ%1$s ይግቡ</string>
     <string name="sub_error">ያ አልሠራም። %1$s</string>
     <string name="sub_hide">ደብቅ</string>
-    <string name="sub_have_token">በምትኩ ቶከን አለዎት?</string>
-    <string name="sub_token_label">ቶከን (በsk-ant- ይጀምራል)</string>
+    <string name="sub_have_access">በምትኩ ቶከን አለዎት?</string>
+    <string name="sub_access_label">ቶከን (በsk-ant- ይጀምራል)</string>
     <string name="sub_auth_json">የauth.json ይዘቶች</string>
-    <string name="sub_use_token">ይህን ቶከን ተጠቀም</string>
+    <string name="sub_use_access">ይህን ቶከን ተጠቀም</string>
     <string name="sub_hide_details">ዝርዝሮችን ደብቅ</string>
     <string name="sub_details">ዝርዝሮች</string>
     <string name="settings_title">ቅንብሮች</string>

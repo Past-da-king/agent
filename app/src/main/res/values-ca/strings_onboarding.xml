@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">Inicia la sessió amb %1$s</string>
     <string name="sub_error">Això no ha funcionat. %1$s</string>
     <string name="sub_hide">Amaga</string>
-    <string name="sub_have_token">Tens un token en comptes d\'això?</string>
-    <string name="sub_token_label">Token (comença per sk-ant-)</string>
+    <string name="sub_have_access">Tens un token en comptes d\'això?</string>
+    <string name="sub_access_label">Token (comença per sk-ant-)</string>
     <string name="sub_auth_json">Contingut d\'auth.json</string>
-    <string name="sub_use_token">Fes servir aquest token</string>
+    <string name="sub_use_access">Fes servir aquest token</string>
     <string name="sub_hide_details">Amaga els detalls</string>
     <string name="sub_details">Detalls</string>
     <string name="settings_title">Configuració</string>

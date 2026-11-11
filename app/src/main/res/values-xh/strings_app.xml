@@ -32,7 +32,7 @@
     <string name="rt_branch_failed">Umsonto osecaleni (\"%1$s\") awuphumelelanga: %2$s</string>
     <string name="rt_done">Kugqityiwe</string>
     <string name="rt_interrupted_by_close">Bendiphakathi ndisenza \"%1$s\" xa i-app ivaliwe. Ndixelele ukuba ndiqhubeke ndiya kuqhubeka.</string>
-    <string name="rt_not_claude_token">Oko akusosiqinisekiso se-Claude. Siqala nge-sk-ant-. Sebenzisa u-Ngena nge-Claude endaweni yoko.</string>
+    <string name="rt_not_claude_access">Oko akusosiqinisekiso se-Claude. Siqala nge-sk-ant-. Sebenzisa u-Ngena nge-Claude endaweni yoko.</string>
     <string name="rt_note_installed">Kufakiwe · ngena nge-%1$s</string>
     <string name="rt_note_no_pack">Ipakethe yexesha lokusebenza ye-%1$s ayikho kule nguqulelo</string>
     <string name="rt_note_ready">Sekulungile · ungene kwi-%1$s</string>

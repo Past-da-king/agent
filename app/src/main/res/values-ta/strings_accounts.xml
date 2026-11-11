@@ -33,15 +33,15 @@
     <string name="machines_username">பயனர்பெயர்</string>
     <string name="machines_username_hint">நீங்கள்</string>
     <string name="machines_sign_in_with">இதன் மூலம் உள்நுழைக</string>
-    <string name="machines_password">கடவுச்சொல்</string>
-    <string name="machines_password_sub">நீங்கள் உள்நுழையப் பயன்படுத்துவது</string>
+    <string name="machines_field_login">கடவுச்சொல்</string>
+    <string name="machines_field_login_sub">நீங்கள் உள்நுழையப் பயன்படுத்துவது</string>
     <string name="machines_your_key">உங்கள் விசை</string>
     <string name="machines_your_key_sub">நீங்கள் பயன்படுத்தும் ஒன்றை ஒட்டவும்</string>
     <string name="machines_new_key">புதிய விசை</string>
     <string name="machines_new_key_sub">இந்த ஃபோனில் உருவாக்கப்பட்டது</string>
     <string name="machines_saved_keep">சேமிக்கப்பட்டது. வைத்திருக்க காலியாக விடவும்</string>
     <string name="machines_private_key">தனிப்பட்ட விசை</string>
-    <string name="machines_passphrase">விசையின் கடவுச்சொற்றொடர் இருந்தால்</string>
+    <string name="machines_field_key_phrase">விசையின் கடவுச்சொற்றொடர் இருந்தால்</string>
     <string name="machines_new_key_explain">இந்தக் கணினிக்கு மட்டும் ஒரு விசை. அதன் பொது பகுதியை கணினியில் ஒருமுறை சேர்க்கவும்; கடவுச்சொல் எதுவும் சேமிக்கப்படாது.</string>
     <string name="machines_show_public_key">இந்த ஃபோனின் பொது விசையைக் காட்டு</string>
     <string name="machines_direct">நேரடி</string>
@@ -265,7 +265,7 @@
     <string name="handoff_sign_out">வெளியேறு</string>
     <string name="handoff_url_label">உங்கள் ஒத்திசைவு சேவையின் முகவரி (https://…)</string>
     <string name="handoff_email">மின்னஞ்சல்</string>
-    <string name="handoff_password">கடவுச்சொல்</string>
+    <string name="handoff_field_login">கடவுச்சொல்</string>
     <string name="handoff_signing_in">உள்நுழைகிறது…</string>
     <string name="handoff_sign_in">உள்நுழை</string>
     <string name="handoff_create_account">என் சேவையில் கணக்கை உருவாக்கு</string>

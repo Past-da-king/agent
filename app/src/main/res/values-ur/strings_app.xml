@@ -31,7 +31,7 @@
     <string name="rt_branch_failed">ایک ضمنی تھریڈ (\"%1$s\") ناکام ہو گیا: %2$s</string>
     <string name="rt_done">مکمل</string>
     <string name="rt_interrupted_by_close">جب ایپ بند ہوئی تو میں \"%1$s\" کے بیچ میں تھا۔ مجھے جاری رکھنے کو کہیں اور میں رکھوں گا۔</string>
-    <string name="rt_not_claude_token">یہ Claude ٹوکن نہیں ہے۔ یہ sk-ant- سے شروع ہوتا ہے۔ اس کی بجائے Claude سے سائن اِن استعمال کریں۔</string>
+    <string name="rt_not_claude_access">یہ Claude ٹوکن نہیں ہے۔ یہ sk-ant- سے شروع ہوتا ہے۔ اس کی بجائے Claude سے سائن اِن استعمال کریں۔</string>
     <string name="rt_note_installed">انسٹال ہو گیا · %1$s سے سائن اِن کریں</string>
     <string name="rt_note_no_pack">%1$s کا رن ٹائم پیک اس بلڈ میں نہیں ہے</string>
     <string name="rt_note_ready">تیار · %1$s میں سائن اِن ہے</string>

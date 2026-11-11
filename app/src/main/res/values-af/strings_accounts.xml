@@ -32,15 +32,15 @@
     <string name="machines_username">Gebruikersnaam</string>
     <string name="machines_username_hint">jy</string>
     <string name="machines_sign_in_with">MELD AAN MET</string>
-    <string name="machines_password">Wagwoord</string>
-    <string name="machines_password_sub">Waarmee jy aanmeld</string>
+    <string name="machines_field_login">Wagwoord</string>
+    <string name="machines_field_login_sub">Waarmee jy aanmeld</string>
     <string name="machines_your_key">Jou sleutel</string>
     <string name="machines_your_key_sub">Plak een wat jy gebruik</string>
     <string name="machines_new_key">Nuwe sleutel</string>
     <string name="machines_new_key_sub">Op hierdie foon gemaak</string>
     <string name="machines_saved_keep">Gestoor. Los leeg om dit te behou</string>
     <string name="machines_private_key">Private sleutel</string>
-    <string name="machines_passphrase">Sleutel-wagfrase, as dit een het</string>
+    <string name="machines_field_key_phrase">Sleutel-wagfrase, as dit een het</string>
     <string name="machines_new_key_explain">\'n Sleutel net vir hierdie masjien. Jy voeg sy openbare helfte een keer by die masjien, en geen wagwoord word ooit gestoor nie.</string>
     <string name="machines_show_public_key">Wys hierdie foon se openbare sleutel</string>
     <string name="machines_direct">Direk</string>
@@ -260,7 +260,7 @@
     <string name="handoff_sign_out">Meld af</string>
     <string name="handoff_url_label">Die adres van jou sinkronisasiediens (https://…)</string>
     <string name="handoff_email">E-pos</string>
-    <string name="handoff_password">Wagwoord</string>
+    <string name="handoff_field_login">Wagwoord</string>
     <string name="handoff_signing_in">Meld tans aan…</string>
     <string name="handoff_sign_in">Meld aan</string>
     <string name="handoff_create_account">Skep die rekening op my diens</string>
