@@ -177,8 +177,8 @@ interface TriggerDao {
 }
 
 @Database(
-    entities = [ChatItem::class, TurnRow::class, MemoryRow::class, GoalRow::class, TaskRow::class, TriggerRow::class, NotificationRow::class],
-    version = 2,
+    entities = [ChatItem::class, TurnRow::class, MemoryRow::class, GoalRow::class, TaskRow::class, TriggerRow::class, NotificationRow::class, PersonRow::class, PersonLogRow::class],
+    version = 3,
     exportSchema = true,
 )
 abstract class AppDb : RoomDatabase() {
@@ -187,6 +187,7 @@ abstract class AppDb : RoomDatabase() {
     abstract fun tasks(): TaskDao
     abstract fun triggers(): TriggerDao
     abstract fun notifications(): NotificationDao
+    abstract fun people(): PeopleDao
 
     companion object {
         fun open(context: Context): AppDb =
