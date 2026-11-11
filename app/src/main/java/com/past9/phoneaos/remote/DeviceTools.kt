@@ -218,21 +218,41 @@ class RemoteAnswerReceiver : BroadcastReceiver() {
 
 /** Device commands (protocol s5.2): things the agent on a computer does on this phone. Each is acked. */
 class DeviceCommands(private val context: Context, private val session: RemoteSession) {
+    /** Every command id seen: a repeat after a drop never runs twice (11 Nov 2026). */
+    internal val ledger = CommandLedger()
+
     suspend fun handle(c: JSONObject) {
         val id = c.optString("id")
         if (id.isBlank()) return
-        when (c.optString("kind")) {
-            "tool" -> {
-                val (ok, value) = DeviceTools.run(context, c.optString("tool"), c.optJSONObject("args") ?: JSONObject(), c.optLong("deadlineMs", 120_000), session)
-                runCatching { session.call("device.result", listOf(id, ok, value)) }
-                return
-            }
-            else -> {
-                val (ok, note) = runCatching { act(c) }.getOrElse { false to (it.message ?: "failed") }
-                runCatching { session.call("device.ack", listOf(id, ok, note)) }
-            }
+        when (ledger.begin(id)) {
+            CommandLedger.Verdict.RUNNING -> return
+            CommandLedger.Verdict.DONE -> { deliver(id); return }
+            CommandLedger.Verdict.RUN -> {}
         }
+        // While it runs the link is kept up and the Wi-Fi and wake locks are held.
+        session.jobStarted()
+        try {
+            val kind = c.optString("kind")
+            if (kind == "tool") {
+                val (ok, value) = DeviceTools.run(context, c.optString("tool"), c.optJSONObject("args") ?: JSONObject(), c.optLong("deadlineMs", 120_000), session)
+                ledger.finish(id, "tool", ok, value)
+            } else {
+                val (ok, note) = runCatching { act(c) }.getOrElse { false to (it.message ?: "failed") }
+                ledger.finish(id, kind.ifBlank { "command" }, ok, note)
+            }
+        } finally { session.jobEnded() }
+        deliver(id)
     }
+
+    /** Give the computer the answer; if the link is down it waits in the ledger and goes with the next link. */
+    private suspend fun deliver(id: String) {
+        val r = ledger.get(id)?.takeIf { it.done } ?: return
+        val ok = runCatching { session.call(if (r.kind == "tool") "device.result" else "device.ack", listOf(id, r.ok, r.value)) }.isSuccess
+        if (ok) ledger.delivered(id)
+    }
+
+    /** A link came back: send every answer the computer has not had. */
+    suspend fun resendUndelivered() { for ((id, _) in ledger.undelivered()) deliver(id) }
 
     private suspend fun act(c: JSONObject): Pair<Boolean, String> = when (c.optString("kind")) {
         "open_url" -> {

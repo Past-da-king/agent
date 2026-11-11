@@ -152,14 +152,34 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     private val _earlierLoading = MutableStateFlow(false)
     val earlierLoading: StateFlow<Boolean> = _earlierLoading
     private val cm: ConnectivityManager? by lazy { app.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager }
+    /** The network in use now, and the one the open socket was made on (11 Nov 2026: a regained Wi-Fi replaces a socket that has not noticed it died). */
+    @Volatile private var activeNetwork: Network? = null
+    @Volatile private var socketNetwork: Network? = null
     private val netCb = object : ConnectivityManager.NetworkCallback() {
-        override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) { networkChanged() }
-        override fun onLost(network: Network) { networkChanged() }
+        override fun onAvailable(network: Network) { activeNetwork = network; networkChanged() }
+        override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) { activeNetwork = network; networkChanged() }
+        override fun onLost(network: Network) { if (activeNetwork == network) activeNetwork = null; networkChanged() }
     }
+    /** Screen on and unlocked: a link that is down is tried at once, not at the end of a wait. */
+    private val screenCb = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: android.content.Intent) {
+            if (rpc?.isOpen != true && _state.value !is LinkState.Paused) { android.util.Log.i("RemoteLink", "screen on: trying the link now"); retry() }
+        }
+    }
+    /** Jobs the computer has on this phone right now: the link is kept up, and the Wi-Fi and wake locks are held, while any runs. */
+    private val jobsRunning = java.util.concurrent.atomic.AtomicInteger()
+    private val jobLocks by lazy { JobLocks(app) }
+    fun jobStarted() { jobsRunning.incrementAndGet(); pauseJob?.cancel(); jobLocks.acquire() }
+    fun jobEnded() { jobLocks.release(); jobsRunning.updateAndGet { maxOf(0, it - 1) } }
+    private fun mayPause() = mayPauseLink(foreground, turnRunning, jobsRunning.get(), metered)
     private fun readMetered(): Boolean = runCatching { cm?.isActiveNetworkMetered ?: false }.getOrDefault(false)
     init {
         metered = readMetered()
         runCatching { cm?.registerDefaultNetworkCallback(netCb) }
+        runCatching {
+            val f = android.content.IntentFilter(android.content.Intent.ACTION_SCREEN_ON).apply { addAction(android.content.Intent.ACTION_USER_PRESENT) }
+            app.registerReceiver(screenCb, f)
+        }
     }
     @Volatile private var current: Pick? = null
     @Volatile private var turnRunning = false
@@ -298,12 +318,15 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         cardsStaleJob?.cancel(); cardsStaleJob = null
         if (_state.value !is LinkState.Retrying && _state.value !is LinkState.NoAgents) _state.value = LinkState.Connecting
         connectStartedAt = System.currentTimeMillis()
+        socketNetwork = activeNetwork ?: runCatching { cm?.activeNetwork }.getOrNull()
         val c = RpcClient(clientFor(pick.brain.fp), pick.url, link.pass, ::hello, object : RpcClient.Listener {
             override fun onOpen(rpc: RpcClient) {
                 if (this@RemoteSession.rpc !== rpc) return
                 _state.value = LinkState.Connected(pick.brain, pick.url)
                 syncJob?.cancel()
                 syncJob = scope.launch { connectSync(pick); runCatching { readRunState() }; pushDictations() }
+                // Answers to the computer's commands that a drop kept from arriving go now.
+                scope.launch { runCatching { commands.resendUndelivered() } }
             }
             override fun onEvent(rpc: RpcClient, name: String, payload: Any?) { if (this@RemoteSession.rpc === rpc) onEvent(name, payload) }
             override fun onClosed(rpc: RpcClient, why: String, opened: Boolean, problem: LinkProblem) {
@@ -444,7 +467,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         pauseJob?.cancel()
         pauseJob = scope.launch {
             delay(30_000)
-            if (!foreground && !turnRunning) pause()
+            // Only on mobile data with nothing asked of the phone: on Wi-Fi the link stays, so the computer can always reach it.
+            if (mayPause()) pause()
         }
         if (turnRunning) hold(true)
     }
@@ -465,6 +489,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
 
     fun close() {
         runCatching { cm?.unregisterNetworkCallback(netCb) }
+        runCatching { app.unregisterReceiver(screenCb) }
         hold(false)
         detach()
         scope.cancel()
@@ -901,7 +926,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
             "run_finished" -> {
                 turnRunning = false; publishStatus()
                 scope.launch { runCatching { tellReply() } }
-                if (holdingWork && !foreground) scope.launch { delay(5_000); if (!foreground && !turnRunning) pause() }
+                if (holdingWork && !foreground) scope.launch { delay(5_000); if (!foreground && !turnRunning) { if (mayPause()) pause() else hold(false) } }
                 // Between turns: a higher brain that came back takes over now.
                 kick.trySend(Unit)
             }
@@ -1220,9 +1245,23 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
 
     /** The network changed between mobile data and Wi-Fi: tell the computer; catch up in full on Wi-Fi, stop big transfers on mobile. */
     private fun networkChanged() {
+        val net = activeNetwork
+        if (net != null && _state.value !is LinkState.Paused) {
+            when (reactToNetwork(true, rpc?.isOpen == true, socketNetwork == null || net == socketNetwork)) {
+                NetReaction.ConnectNow -> { android.util.Log.i("RemoteLink", "network available, link down: connecting now"); retry() }
+                NetReaction.ReplaceSocket -> {
+                    android.util.Log.i("RemoteLink", "network changed under an open link: replacing the socket")
+                    detach(); current = null; failures = 0; nextTryAt = 0
+                    _state.value = LinkState.Connecting
+                    kick.trySend(Unit); start()
+                }
+                NetReaction.None -> {}
+            }
+        }
         val now = readMetered()
         if (now == metered) return
         metered = now
+        if (now && !foreground) { pauseJob?.cancel(); pauseJob = scope.launch { delay(30_000); if (mayPause()) pause() } }
         android.util.Log.i("RemoteLink", "network is now ${if (now) "metered" else "unmetered"}")
         if (!protocolV2 || rpc?.isOpen != true) return
         syncJob?.cancel(); resyncJob?.cancel()
