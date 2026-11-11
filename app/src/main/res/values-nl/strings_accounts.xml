@@ -33,15 +33,15 @@
     <string name="machines_username">Gebruikersnaam</string>
     <string name="machines_username_hint">jij</string>
     <string name="machines_sign_in_with">INLOGGEN MET</string>
-    <string name="machines_password">Wachtwoord</string>
-    <string name="machines_password_sub">Waarmee je inlogt</string>
+    <string name="machines_field_login">Wachtwoord</string>
+    <string name="machines_field_login_sub">Waarmee je inlogt</string>
     <string name="machines_your_key">Je sleutel</string>
     <string name="machines_your_key_sub">Plak er een die je gebruikt</string>
     <string name="machines_new_key">Nieuwe sleutel</string>
     <string name="machines_new_key_sub">Gemaakt op deze telefoon</string>
     <string name="machines_saved_keep">Opgeslagen. Laat leeg om te behouden</string>
     <string name="machines_private_key">Privésleutel</string>
-    <string name="machines_passphrase">Wachtzin van de sleutel, als die er is</string>
+    <string name="machines_field_key_phrase">Wachtzin van de sleutel, als die er is</string>
     <string name="machines_new_key_explain">Een sleutel alleen voor deze machine. Je voegt de openbare helft één keer toe op de machine en er wordt nooit een wachtwoord opgeslagen.</string>
     <string name="machines_show_public_key">Openbare sleutel van deze telefoon tonen</string>
     <string name="machines_direct">Direct</string>
@@ -261,7 +261,7 @@
     <string name="handoff_sign_out">Uitloggen</string>
     <string name="handoff_url_label">Adres van je synchronisatiedienst (https://…)</string>
     <string name="handoff_email">E-mail</string>
-    <string name="handoff_password">Wachtwoord</string>
+    <string name="handoff_field_login">Wachtwoord</string>
     <string name="handoff_signing_in">Inloggen…</string>
     <string name="handoff_sign_in">Inloggen</string>
     <string name="handoff_create_account">Account aanmaken op mijn dienst</string>

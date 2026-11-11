@@ -33,15 +33,15 @@
     <string name="machines_username">ឈ្មោះអ្នកប្រើ</string>
     <string name="machines_username_hint">អ្នក</string>
     <string name="machines_sign_in_with">ចូលដោយប្រើ</string>
-    <string name="machines_password">ពាក្យសម្ងាត់</string>
-    <string name="machines_password_sub">អ្វីដែលអ្នកប្រើដើម្បីចូល</string>
+    <string name="machines_field_login">ពាក្យសម្ងាត់</string>
+    <string name="machines_field_login_sub">អ្វីដែលអ្នកប្រើដើម្បីចូល</string>
     <string name="machines_your_key">សោរបស់អ្នក</string>
     <string name="machines_your_key_sub">បិទភ្ជាប់សោដែលអ្នកកំពុងប្រើ</string>
     <string name="machines_new_key">សោថ្មី</string>
     <string name="machines_new_key_sub">បង្កើតនៅលើទូរសព្ទនេះ</string>
     <string name="machines_saved_keep">បានរក្សាទុក។ ទុកទទេដើម្បីរក្សាដដែល</string>
     <string name="machines_private_key">សោឯកជន</string>
-    <string name="machines_passphrase">ឃ្លាសម្ងាត់របស់សោ ប្រសិនបើមាន</string>
+    <string name="machines_field_key_phrase">ឃ្លាសម្ងាត់របស់សោ ប្រសិនបើមាន</string>
     <string name="machines_new_key_explain">សោសម្រាប់តែម៉ាស៊ីននេះ។ អ្នកបន្ថែមផ្នែកសាធារណៈរបស់វាទៅម៉ាស៊ីនតែម្តង ហើយគ្មានពាក្យសម្ងាត់ណាត្រូវបានរក្សាទុកទេ។</string>
     <string name="machines_show_public_key">បង្ហាញសោសាធារណៈរបស់ទូរសព្ទនេះ</string>
     <string name="machines_direct">ផ្ទាល់</string>
@@ -251,7 +251,7 @@
     <string name="handoff_sign_out">ចេញ</string>
     <string name="handoff_url_label">អាសយដ្ឋានសេវាធ្វើសមកាលកម្មរបស់អ្នក (https://…)</string>
     <string name="handoff_email">អ៊ីមែល</string>
-    <string name="handoff_password">ពាក្យសម្ងាត់</string>
+    <string name="handoff_field_login">ពាក្យសម្ងាត់</string>
     <string name="handoff_signing_in">កំពុងចូល…</string>
     <string name="handoff_sign_in">ចូល</string>
     <string name="handoff_create_account">បង្កើតគណនីនៅលើសេវារបស់ខ្ញុំ</string>

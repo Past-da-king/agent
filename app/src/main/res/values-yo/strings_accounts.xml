@@ -33,15 +33,15 @@
     <string name="machines_username">Orúkọ olùṣàmúlò</string>
     <string name="machines_username_hint">ìwọ</string>
     <string name="machines_sign_in_with">WỌLÉ PẸ̀LÚ</string>
-    <string name="machines_password">Ọ̀rọ̀ aṣínà</string>
-    <string name="machines_password_sub">Ohun tí o fi ń wọlé</string>
+    <string name="machines_field_login">Ọ̀rọ̀ aṣínà</string>
+    <string name="machines_field_login_sub">Ohun tí o fi ń wọlé</string>
     <string name="machines_your_key">Kọ́kọ́rọ́ rẹ</string>
     <string name="machines_your_key_sub">Lẹ èyí tí o ń lò mọ́ ọn</string>
     <string name="machines_new_key">Kọ́kọ́rọ́ tuntun</string>
     <string name="machines_new_key_sub">A ṣe é lórí fóònù yìí</string>
     <string name="machines_saved_keep">A ti fipamọ́. Fi í sílẹ̀ ní òfo tí o bá fẹ́ pa á mọ́</string>
     <string name="machines_private_key">Kọ́kọ́rọ́ àṣírí</string>
-    <string name="machines_passphrase">Gbólóhùn kọ́kọ́rọ́, tí ó bá ní ọ̀kan</string>
+    <string name="machines_field_key_phrase">Gbólóhùn kọ́kọ́rọ́, tí ó bá ní ọ̀kan</string>
     <string name="machines_new_key_explain">Kọ́kọ́rọ́ kan fún ẹ̀rọ yìí nìkan. O máa fi apá rẹ̀ tí gbogbo ènìyàn lè rí kún ẹ̀rọ náà lẹ́ẹ̀kan, a kò sì ní fi ọ̀rọ̀ aṣínà pamọ́ láéláé.</string>
     <string name="machines_show_public_key">Fi kọ́kọ́rọ́ gbogbo ènìyàn ti fóònù yìí hàn</string>
     <string name="machines_direct">Tààrà</string>
@@ -255,7 +255,7 @@
     <string name="handoff_sign_out">Jáde</string>
     <string name="handoff_url_label">Àdírẹ́sì iṣẹ́ ìṣọ̀kan rẹ (https://…)</string>
     <string name="handoff_email">Ímeèlì</string>
-    <string name="handoff_password">Ọ̀rọ̀ aṣínà</string>
+    <string name="handoff_field_login">Ọ̀rọ̀ aṣínà</string>
     <string name="handoff_signing_in">Ó ń wọlé…</string>
     <string name="handoff_sign_in">Wọlé</string>
     <string name="handoff_create_account">Ṣẹ̀dá àkáǹtì lórí sáfà mi</string>

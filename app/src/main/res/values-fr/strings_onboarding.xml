@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">Se connecter avec %1$s</string>
     <string name="sub_error">Ça n\'a pas marché. %1$s</string>
     <string name="sub_hide">Masquer</string>
-    <string name="sub_have_token">Vous avez plutôt un jeton ?</string>
-    <string name="sub_token_label">Jeton (commence par sk-ant-)</string>
+    <string name="sub_have_access">Vous avez plutôt un jeton ?</string>
+    <string name="sub_access_label">Jeton (commence par sk-ant-)</string>
     <string name="sub_auth_json">Contenu de auth.json</string>
-    <string name="sub_use_token">Utiliser ce jeton</string>
+    <string name="sub_use_access">Utiliser ce jeton</string>
     <string name="sub_hide_details">Masquer les détails</string>
     <string name="sub_details">Détails</string>
     <string name="settings_title">Réglages</string>

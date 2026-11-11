@@ -82,7 +82,7 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
     fun setToken(t: String?) {
         if (t == null) { tokenFile.delete(); return }
         dir.mkdirs()
-        if (kind == SubKind.CLAUDE && !t.trim().startsWith("sk-ant-")) error(context.getString(com.past9.phoneaos.R.string.rt_not_claude_token))
+        if (kind == SubKind.CLAUDE && !t.trim().startsWith("sk-ant-")) error(context.getString(com.past9.phoneaos.R.string.rt_not_claude_access))
         if (kind == SubKind.CODEX && t.trim().startsWith("{")) { File(home, ".codex").mkdirs(); File(home, ".codex/auth.json").writeText(t.trim()); return }
         tokenFile.writeText(t.trim()); tokenFile.setReadable(false, false); tokenFile.setReadable(true, true)
     }

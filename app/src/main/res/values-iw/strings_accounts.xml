@@ -33,15 +33,15 @@
     <string name="machines_username">שם משתמש</string>
     <string name="machines_username_hint">אתה</string>
     <string name="machines_sign_in_with">התחברות באמצעות</string>
-    <string name="machines_password">סיסמה</string>
-    <string name="machines_password_sub">מה שמשתמשים בו כדי להתחבר</string>
+    <string name="machines_field_login">סיסמה</string>
+    <string name="machines_field_login_sub">מה שמשתמשים בו כדי להתחבר</string>
     <string name="machines_your_key">המפתח שלך</string>
     <string name="machines_your_key_sub">הדבק מפתח שאתה משתמש בו</string>
     <string name="machines_new_key">מפתח חדש</string>
     <string name="machines_new_key_sub">נוצר בטלפון הזה</string>
     <string name="machines_saved_keep">נשמר. השאר ריק כדי לשמור אותו</string>
     <string name="machines_private_key">מפתח פרטי</string>
-    <string name="machines_passphrase">ביטוי הסיסמה של המפתח, אם יש</string>
+    <string name="machines_field_key_phrase">ביטוי הסיסמה של המפתח, אם יש</string>
     <string name="machines_new_key_explain">מפתח רק למכונה הזו. מוסיפים את החצי הציבורי שלו למכונה פעם אחת, ואף סיסמה לא נשמרת.</string>
     <string name="machines_show_public_key">הצג את המפתח הציבורי של הטלפון הזה</string>
     <string name="machines_direct">ישיר</string>
@@ -281,7 +281,7 @@
     <string name="handoff_sign_out">התנתק</string>
     <string name="handoff_url_label">כתובת שירות הסנכרון שלך (https://…)</string>
     <string name="handoff_email">אימייל</string>
-    <string name="handoff_password">סיסמה</string>
+    <string name="handoff_field_login">סיסמה</string>
     <string name="handoff_signing_in">מתחבר…</string>
     <string name="handoff_sign_in">התחבר</string>
     <string name="handoff_create_account">צור את החשבון בשירות שלי</string>

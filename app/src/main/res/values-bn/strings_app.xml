@@ -32,7 +32,7 @@
     <string name="rt_branch_failed">একটি সহ-থ্রেড (\"%1$s\") ব্যর্থ হয়েছে: %2$s</string>
     <string name="rt_done">সম্পন্ন</string>
     <string name="rt_interrupted_by_close">অ্যাপ বন্ধ হওয়ার সময় আমি \"%1$s\" নিয়ে মাঝপথে ছিলাম। এগিয়ে যেতে বললেই আমি শুরু করব।</string>
-    <string name="rt_not_claude_token">এটি Claude টোকেন নয়। এটি sk-ant- দিয়ে শুরু হয়। বরং Sign in with Claude ব্যবহার করুন।</string>
+    <string name="rt_not_claude_access">এটি Claude টোকেন নয়। এটি sk-ant- দিয়ে শুরু হয়। বরং Sign in with Claude ব্যবহার করুন।</string>
     <string name="rt_note_installed">ইনস্টল করা হয়েছে · %1$s দিয়ে সাইন ইন করুন</string>
     <string name="rt_note_no_pack">এই বিল্ডে %1$s runtime pack নেই</string>
     <string name="rt_note_ready">প্রস্তুত · %1$s-এ সাইন ইন করা আছে</string>

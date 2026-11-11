@@ -32,7 +32,7 @@
     <string name="rt_branch_failed">Una branca (\"%1$s\") ha fallat: %2$s</string>
     <string name="rt_done">Fet</string>
     <string name="rt_interrupted_by_close">Estava a mig \"%1$s\" quan l\'app s\'ha tancat. Digues-me que continuï i ho faig.</string>
-    <string name="rt_not_claude_token">Això no és un token de Claude. Comença per sk-ant-. Fes servir Inicia la sessió amb Claude.</string>
+    <string name="rt_not_claude_access">Això no és un token de Claude. Comença per sk-ant-. Fes servir Inicia la sessió amb Claude.</string>
     <string name="rt_note_installed">Instal·lat · inicia la sessió amb %1$s</string>
     <string name="rt_note_no_pack">El paquet d\'execució de %1$s no és en aquesta versió</string>
     <string name="rt_note_ready">Llest · sessió iniciada a %1$s</string>

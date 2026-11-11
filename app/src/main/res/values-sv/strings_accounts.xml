@@ -32,15 +32,15 @@
     <string name="machines_username">Användarnamn</string>
     <string name="machines_username_hint">du</string>
     <string name="machines_sign_in_with">LOGGA IN MED</string>
-    <string name="machines_password">Lösenord</string>
-    <string name="machines_password_sub">Det du loggar in med</string>
+    <string name="machines_field_login">Lösenord</string>
+    <string name="machines_field_login_sub">Det du loggar in med</string>
     <string name="machines_your_key">Din nyckel</string>
     <string name="machines_your_key_sub">Klistra in en du använder</string>
     <string name="machines_new_key">Ny nyckel</string>
     <string name="machines_new_key_sub">Skapad på den här telefonen</string>
     <string name="machines_saved_keep">Sparad. Lämna tomt för att behålla den</string>
     <string name="machines_private_key">Privat nyckel</string>
-    <string name="machines_passphrase">Nyckelns lösenfras, om den har en</string>
+    <string name="machines_field_key_phrase">Nyckelns lösenfras, om den har en</string>
     <string name="machines_new_key_explain">En nyckel bara för den här maskinen. Du lägger till dess publika halva på maskinen en gång, och inget lösenord sparas någonsin.</string>
     <string name="machines_show_public_key">Visa den här telefonens publika nyckel</string>
     <string name="machines_direct">Direkt</string>
@@ -260,7 +260,7 @@
     <string name="handoff_sign_out">Logga ut</string>
     <string name="handoff_url_label">Adressen till din synktjänst (https://…)</string>
     <string name="handoff_email">E-post</string>
-    <string name="handoff_password">Lösenord</string>
+    <string name="handoff_field_login">Lösenord</string>
     <string name="handoff_signing_in">Loggar in…</string>
     <string name="handoff_sign_in">Logga in</string>
     <string name="handoff_create_account">Skapa kontot på min tjänst</string>

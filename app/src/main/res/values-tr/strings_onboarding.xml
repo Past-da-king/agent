@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">%1$s ile oturum aç</string>
     <string name="sub_error">Bu çalışmadı. %1$s</string>
     <string name="sub_hide">Gizle</string>
-    <string name="sub_have_token">Bunun yerine bir belirtecin mi var?</string>
-    <string name="sub_token_label">Belirteç (sk-ant- ile başlar)</string>
+    <string name="sub_have_access">Bunun yerine bir belirtecin mi var?</string>
+    <string name="sub_access_label">Belirteç (sk-ant- ile başlar)</string>
     <string name="sub_auth_json">auth.json içeriği</string>
-    <string name="sub_use_token">Bu belirteci kullan</string>
+    <string name="sub_use_access">Bu belirteci kullan</string>
     <string name="sub_hide_details">Ayrıntıları gizle</string>
     <string name="sub_details">Ayrıntılar</string>
     <string name="settings_title">Ayarlar</string>

@@ -31,7 +31,7 @@
     <string name="rt_branch_failed">یک رشته فرعی («%1$s») ناموفق بود: %2$s</string>
     <string name="rt_done">انجام شد</string>
     <string name="rt_interrupted_by_close">وقتی برنامه بسته شد وسط «%1$s» بودم. بگویید ادامه بدهم تا ادامه بدهم.</string>
-    <string name="rt_not_claude_token">این توکن Claude نیست. توکن Claude با sk-ant- شروع می‌شود. به‌جای آن از ورود با Claude استفاده کنید.</string>
+    <string name="rt_not_claude_access">این توکن Claude نیست. توکن Claude با sk-ant- شروع می‌شود. به‌جای آن از ورود با Claude استفاده کنید.</string>
     <string name="rt_note_installed">نصب شد · با %1$s وارد شوید</string>
     <string name="rt_note_no_pack">بسته اجرای %1$s در این نسخه نیست</string>
     <string name="rt_note_ready">آماده · وارد %1$s شده‌اید</string>

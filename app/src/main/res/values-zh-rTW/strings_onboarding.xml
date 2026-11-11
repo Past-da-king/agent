@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">使用 %1$s 登入</string>
     <string name="sub_error">沒有成功。%1$s</string>
     <string name="sub_hide">隱藏</string>
-    <string name="sub_have_token">改用權杖？</string>
-    <string name="sub_token_label">權杖（以 sk-ant- 開頭）</string>
+    <string name="sub_have_access">改用權杖？</string>
+    <string name="sub_access_label">權杖（以 sk-ant- 開頭）</string>
     <string name="sub_auth_json">auth.json 的內容</string>
-    <string name="sub_use_token">使用此權杖</string>
+    <string name="sub_use_access">使用此權杖</string>
     <string name="sub_hide_details">隱藏詳情</string>
     <string name="sub_details">詳情</string>
     <string name="settings_title">設定</string>

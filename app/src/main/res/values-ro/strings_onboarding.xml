@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">Autentificare cu %1$s</string>
     <string name="sub_error">Nu a mers. %1$s</string>
     <string name="sub_hide">Ascunde</string>
-    <string name="sub_have_token">AI în schimb un token?</string>
-    <string name="sub_token_label">Token (începe cu sk-ant-)</string>
+    <string name="sub_have_access">AI în schimb un token?</string>
+    <string name="sub_access_label">Token (începe cu sk-ant-)</string>
     <string name="sub_auth_json">Conținutul auth.json</string>
-    <string name="sub_use_token">Folosește acest token</string>
+    <string name="sub_use_access">Folosește acest token</string>
     <string name="sub_hide_details">Ascunde detaliile</string>
     <string name="sub_details">Detalii</string>
     <string name="settings_title">Setări</string>

@@ -35,7 +35,7 @@
     <string name="rt_branch_failed">فشل خيط جانبي (\"%1$s\"): %2$s</string>
     <string name="rt_done">تم</string>
     <string name="rt_interrupted_by_close">كنت في منتصف \"%1$s\" عندما أُغلق التطبيق. قل لي أن أواصل وسأفعل.</string>
-    <string name="rt_not_claude_token">هذا ليس رمز Claude. يبدأ الرمز الصحيح بـ sk-ant-. استخدم تسجيل الدخول عبر Claude بدلًا من ذلك.</string>
+    <string name="rt_not_claude_access">هذا ليس رمز Claude. يبدأ الرمز الصحيح بـ sk-ant-. استخدم تسجيل الدخول عبر Claude بدلًا من ذلك.</string>
     <string name="rt_note_installed">مثبّت · سجّل الدخول عبر %1$s</string>
     <string name="rt_note_no_pack">حزمة تشغيل %1$s غير موجودة في هذا الإصدار</string>
     <string name="rt_note_ready">جاهز · تم تسجيل الدخول إلى %1$s</string>

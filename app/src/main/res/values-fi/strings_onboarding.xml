@@ -141,10 +141,10 @@
     <string name="sub_sign_in_button">Kirjaudu palveluun %1$s</string>
     <string name="sub_error">Se ei onnistunut. %1$s</string>
     <string name="sub_hide">Piilota</string>
-    <string name="sub_have_token">Onko sinulla sen sijaan tunnus?</string>
-    <string name="sub_token_label">Tunnus (alkaa merkeillä sk-ant-)</string>
+    <string name="sub_have_access">Onko sinulla sen sijaan tunnus?</string>
+    <string name="sub_access_label">Tunnus (alkaa merkeillä sk-ant-)</string>
     <string name="sub_auth_json">auth.json-tiedoston sisältö</string>
-    <string name="sub_use_token">Käytä tätä tunnusta</string>
+    <string name="sub_use_access">Käytä tätä tunnusta</string>
     <string name="sub_hide_details">Piilota tiedot</string>
     <string name="sub_details">Tiedot</string>
     <string name="settings_title">Asetukset</string>

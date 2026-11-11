@@ -30,7 +30,7 @@
     <string name="rt_branch_failed">一個旁支任務（「%1$s」）失敗了：%2$s</string>
     <string name="rt_done">完成</string>
     <string name="rt_interrupted_by_close">應用程式關閉時，我正在處理「%1$s」。告訴我繼續，我就接著做。</string>
-    <string name="rt_not_claude_token">這不是 Claude 權杖。它以 sk-ant- 開頭。請改用「使用 Claude 登入」。</string>
+    <string name="rt_not_claude_access">這不是 Claude 權杖。它以 sk-ant- 開頭。請改用「使用 Claude 登入」。</string>
     <string name="rt_note_installed">已安裝 · 使用 %1$s 登入</string>
     <string name="rt_note_no_pack">此版本不包含 %1$s 執行包</string>
     <string name="rt_note_ready">已就緒 · 已登入 %1$s</string>

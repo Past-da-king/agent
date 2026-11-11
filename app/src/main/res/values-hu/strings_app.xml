@@ -31,7 +31,7 @@
     <string name="rt_branch_failed">Egy mellékszál („%1$s”) hibára futott: %2$s</string>
     <string name="rt_done">Kész</string>
     <string name="rt_interrupted_by_close">A(z) „%1$s” feladat közepén tartottam, amikor az alkalmazás bezárult. Mondd, hogy folytassam, és folytatom.</string>
-    <string name="rt_not_claude_token">Ez nem Claude-token. sk-ant-tal kezdődik. Használd inkább a Claude-bejelentkezést.</string>
+    <string name="rt_not_claude_access">Ez nem Claude-token. sk-ant-tal kezdődik. Használd inkább a Claude-bejelentkezést.</string>
     <string name="rt_note_installed">Telepítve · jelentkezz be ezzel: %1$s</string>
     <string name="rt_note_no_pack">A(z) %1$s futtatókörnyezet-csomag nincs ebben a buildben</string>
     <string name="rt_note_ready">Kész · bejelentkezve: %1$s</string>

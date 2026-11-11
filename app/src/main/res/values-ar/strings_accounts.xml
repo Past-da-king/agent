@@ -33,15 +33,15 @@
     <string name="machines_username">اسم المستخدم</string>
     <string name="machines_username_hint">أنت</string>
     <string name="machines_sign_in_with">تسجيل الدخول بواسطة</string>
-    <string name="machines_password">كلمة المرور</string>
-    <string name="machines_password_sub">ما تسجّل به الدخول</string>
+    <string name="machines_field_login">كلمة المرور</string>
+    <string name="machines_field_login_sub">ما تسجّل به الدخول</string>
     <string name="machines_your_key">مفتاحك</string>
     <string name="machines_your_key_sub">الصق مفتاحًا تستخدمه</string>
     <string name="machines_new_key">مفتاح جديد</string>
     <string name="machines_new_key_sub">أُنشئ على هذا الهاتف</string>
     <string name="machines_saved_keep">محفوظ. اتركه فارغًا للإبقاء عليه</string>
     <string name="machines_private_key">المفتاح الخاص</string>
-    <string name="machines_passphrase">عبارة مرور المفتاح، إن وُجدت</string>
+    <string name="machines_field_key_phrase">عبارة مرور المفتاح، إن وُجدت</string>
     <string name="machines_new_key_explain">مفتاح مخصص لهذا الجهاز فقط. تضيف نصفه العام إلى الجهاز مرة واحدة، ولا تُخزَّن أي كلمة مرور أبدًا.</string>
     <string name="machines_show_public_key">عرض المفتاح العام لهذا الهاتف</string>
     <string name="machines_direct">مباشر</string>
@@ -301,7 +301,7 @@
     <string name="handoff_sign_out">تسجيل الخروج</string>
     <string name="handoff_url_label">عنوان خدمة المزامنة (https://…)</string>
     <string name="handoff_email">البريد الإلكتروني</string>
-    <string name="handoff_password">كلمة المرور</string>
+    <string name="handoff_field_login">كلمة المرور</string>
     <string name="handoff_signing_in">جارٍ تسجيل الدخول…</string>
     <string name="handoff_sign_in">تسجيل الدخول</string>
     <string name="handoff_create_account">إنشاء الحساب على خدمتي</string>

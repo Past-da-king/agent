@@ -32,7 +32,7 @@
     <string name="rt_branch_failed">Un ramo secondario (\"%1$s\") non è riuscito: %2$s</string>
     <string name="rt_done">Fatto</string>
     <string name="rt_interrupted_by_close">Ero a metà di \"%1$s\" quando l\'app si è chiusa. Dimmi di continuare e lo faccio.</string>
-    <string name="rt_not_claude_token">Quello non è un token Claude. Inizia con sk-ant-. Usa invece Accedi con Claude.</string>
+    <string name="rt_not_claude_access">Quello non è un token Claude. Inizia con sk-ant-. Usa invece Accedi con Claude.</string>
     <string name="rt_note_installed">Installato · accedi con %1$s</string>
     <string name="rt_note_no_pack">Il pacchetto runtime di %1$s non è in questa versione</string>
     <string name="rt_note_ready">Pronto · accesso a %1$s effettuato</string>

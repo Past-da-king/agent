@@ -30,7 +30,7 @@
     <string name="rt_branch_failed">Sivupolku (”%1$s”) epäonnistui: %2$s</string>
     <string name="rt_done">Valmis</string>
     <string name="rt_interrupted_by_close">Olin kesken työn ”%1$s”, kun sovellus suljettiin. Pyydä minua jatkamaan, niin jatkan.</string>
-    <string name="rt_not_claude_token">Tämä ei ole Claude-tunnus. Se alkaa merkeillä sk-ant-. Käytä sen sijaan Kirjaudu Claudella -toimintoa.</string>
+    <string name="rt_not_claude_access">Tämä ei ole Claude-tunnus. Se alkaa merkeillä sk-ant-. Käytä sen sijaan Kirjaudu Claudella -toimintoa.</string>
     <string name="rt_note_installed">Asennettu · kirjaudu sisään tilillä %1$s</string>
     <string name="rt_note_no_pack">%1$s-suoritusympäristöpakettia ei ole tässä versiossa</string>
     <string name="rt_note_ready">Valmis · kirjautuneena: %1$s</string>

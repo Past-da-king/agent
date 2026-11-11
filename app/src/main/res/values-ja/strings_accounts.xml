@@ -33,15 +33,15 @@
     <string name="machines_username">ユーザー名</string>
     <string name="machines_username_hint">あなた</string>
     <string name="machines_sign_in_with">サインイン方法</string>
-    <string name="machines_password">パスワード</string>
-    <string name="machines_password_sub">ログインに使うもの</string>
+    <string name="machines_field_login">パスワード</string>
+    <string name="machines_field_login_sub">ログインに使うもの</string>
     <string name="machines_your_key">あなたのキー</string>
     <string name="machines_your_key_sub">使っているキーを貼り付け</string>
     <string name="machines_new_key">新しいキー</string>
     <string name="machines_new_key_sub">このスマホで作成</string>
     <string name="machines_saved_keep">保存しました。空欄のままなら現状維持</string>
     <string name="machines_private_key">秘密鍵</string>
-    <string name="machines_passphrase">キーのパスフレーズ（ある場合）</string>
+    <string name="machines_field_key_phrase">キーのパスフレーズ（ある場合）</string>
     <string name="machines_new_key_explain">このマシン専用のキーです。公開鍵の半分を一度マシンに追加すれば、パスワードは一切保存されません。</string>
     <string name="machines_show_public_key">このスマホの公開鍵を表示</string>
     <string name="machines_direct">直接</string>
@@ -251,7 +251,7 @@
     <string name="handoff_sign_out">サインアウト</string>
     <string name="handoff_url_label">同期サービスのアドレス（https://…）</string>
     <string name="handoff_email">メール</string>
-    <string name="handoff_password">パスワード</string>
+    <string name="handoff_field_login">パスワード</string>
     <string name="handoff_signing_in">サインイン中…</string>
     <string name="handoff_sign_in">サインイン</string>
     <string name="handoff_create_account">自分のサービスにアカウントを作成</string>

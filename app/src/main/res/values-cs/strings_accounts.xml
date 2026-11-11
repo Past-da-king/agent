@@ -33,15 +33,15 @@
     <string name="machines_username">Uživatelské jméno</string>
     <string name="machines_username_hint">vy</string>
     <string name="machines_sign_in_with">PŘIHLÁSIT PŘES</string>
-    <string name="machines_password">Heslo</string>
-    <string name="machines_password_sub">Čím se přihlašujete</string>
+    <string name="machines_field_login">Heslo</string>
+    <string name="machines_field_login_sub">Čím se přihlašujete</string>
     <string name="machines_your_key">Váš klíč</string>
     <string name="machines_your_key_sub">Vložte ten, který používáte</string>
     <string name="machines_new_key">Nový klíč</string>
     <string name="machines_new_key_sub">Vytvořen v tomto telefonu</string>
     <string name="machines_saved_keep">Uloženo. Nechte prázdné, aby zůstal</string>
     <string name="machines_private_key">Soukromý klíč</string>
-    <string name="machines_passphrase">Heslo klíče, pokud nějaké má</string>
+    <string name="machines_field_key_phrase">Heslo klíče, pokud nějaké má</string>
     <string name="machines_new_key_explain">Klíč jen pro tento stroj. Jeho veřejnou část na stroj přidáte jednou a žádné heslo se nikdy neukládá.</string>
     <string name="machines_show_public_key">Zobrazit veřejný klíč tohoto telefonu</string>
     <string name="machines_direct">Přímo</string>
@@ -281,7 +281,7 @@
     <string name="handoff_sign_out">Odhlásit</string>
     <string name="handoff_url_label">Adresa vaší synchronizační služby (https://…)</string>
     <string name="handoff_email">E-mail</string>
-    <string name="handoff_password">Heslo</string>
+    <string name="handoff_field_login">Heslo</string>
     <string name="handoff_signing_in">Přihlašování…</string>
     <string name="handoff_sign_in">Přihlásit</string>
     <string name="handoff_create_account">Vytvořit účet na mé službě</string>

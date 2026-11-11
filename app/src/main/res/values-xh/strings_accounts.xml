@@ -33,15 +33,15 @@
     <string name="machines_username">Igama lomsebenzisi</string>
     <string name="machines_username_hint">wena</string>
     <string name="machines_sign_in_with">NGENA NGE-</string>
-    <string name="machines_password">Iphasiwedi</string>
-    <string name="machines_password_sub">Oyisebenzisa ukungena</string>
+    <string name="machines_field_login">Iphasiwedi</string>
+    <string name="machines_field_login_sub">Oyisebenzisa ukungena</string>
     <string name="machines_your_key">Isitshixo sakho</string>
     <string name="machines_your_key_sub">Namathelisa osisebenzisayo</string>
     <string name="machines_new_key">Isitshixo esitsha</string>
     <string name="machines_new_key_sub">Senziwe kule fowuni</string>
     <string name="machines_saved_keep">Kugciniwe. Shiya ingenanto ukuba ufuna ukuyigcina</string>
     <string name="machines_private_key">Isitshixo esingasese</string>
-    <string name="machines_passphrase">Isivakalisi sokungena sesitshixo, ukuba sinaso</string>
+    <string name="machines_field_key_phrase">Isivakalisi sokungena sesitshixo, ukuba sinaso</string>
     <string name="machines_new_key_explain">Isitshixo esiyodwa walo matshini. Wongeza inxalenye yaso yoluntu kumatshini kube kanye kuphela, yaye akukho phasiwedi igcinwayo.</string>
     <string name="machines_show_public_key">Bonisa isitshixo soluntu sale fowuni</string>
     <string name="machines_direct">Ngqo</string>
@@ -265,7 +265,7 @@
     <string name="handoff_sign_out">Phuma</string>
     <string name="handoff_url_label">Idilesi yesevisi yakho yokuvumelanisa (https://…)</string>
     <string name="handoff_email">I-imeyile</string>
-    <string name="handoff_password">Iphasiwedi</string>
+    <string name="handoff_field_login">Iphasiwedi</string>
     <string name="handoff_signing_in">Iyangena…</string>
     <string name="handoff_sign_in">Ngena</string>
     <string name="handoff_create_account">Yenza i-akhawunti kwiseva yam</string>

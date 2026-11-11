@@ -30,7 +30,7 @@
     <string name="rt_branch_failed">ខ្សែរងមួយ (“%1$s”) បរាជ័យ៖ %2$s</string>
     <string name="rt_done">រួចរាល់</string>
     <string name="rt_interrupted_by_close">ខ្ញុំកំពុងធ្វើ “%1$s” ពាក់កណ្តាលផ្លូវពេលកម្មវិធីបិទ។ ប្រាប់ខ្ញុំឱ្យបន្ត ហើយខ្ញុំនឹងបន្ត។</string>
-    <string name="rt_not_claude_token">នោះមិនមែនជាថូខឹន Claude ទេ។ វាចាប់ផ្តើមដោយ sk-ant-។ សូមប្រើចូលជាមួយ Claude ជំនួសវិញ។</string>
+    <string name="rt_not_claude_access">នោះមិនមែនជាថូខឹន Claude ទេ។ វាចាប់ផ្តើមដោយ sk-ant-។ សូមប្រើចូលជាមួយ Claude ជំនួសវិញ។</string>
     <string name="rt_note_installed">បានដំឡើង · ចូលជាមួយ %1$s</string>
     <string name="rt_note_no_pack">កំណែនេះមិនមានកញ្ចប់ runtime %1$s ទេ</string>
     <string name="rt_note_ready">រួចរាល់ · បានចូល %1$s</string>

@@ -30,7 +30,7 @@
     <string name="rt_branch_failed">En sidetråd («%1$s») mislyktes: %2$s</string>
     <string name="rt_done">Ferdig</string>
     <string name="rt_interrupted_by_close">Jeg var midt i «%1$s» da appen ble lukket. Si at jeg skal fortsette, så gjør jeg det.</string>
-    <string name="rt_not_claude_token">Det er ikke et Claude-token. Det begynner med sk-ant-. Bruk Logg på med Claude i stedet.</string>
+    <string name="rt_not_claude_access">Det er ikke et Claude-token. Det begynner med sk-ant-. Bruk Logg på med Claude i stedet.</string>
     <string name="rt_note_installed">Installert · logg på med %1$s</string>
     <string name="rt_note_no_pack">Kjøremiljøpakken for %1$s er ikke med i denne versjonen</string>
     <string name="rt_note_ready">Klar · pålogget på %1$s</string>

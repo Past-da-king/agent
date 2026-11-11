@@ -33,7 +33,7 @@
     <string name="rt_branch_failed">Vedlejší vlákno („%1$s“) selhalo: %2$s</string>
     <string name="rt_done">Hotovo</string>
     <string name="rt_interrupted_by_close">Byl jsem v půlce úkolu „%1$s“, když se aplikace zavřela. Řekněte mi, ať pokračuji, a pokračuji.</string>
-    <string name="rt_not_claude_token">To není token Claude. Začíná na sk-ant-. Použijte raději přihlášení přes Claude.</string>
+    <string name="rt_not_claude_access">To není token Claude. Začíná na sk-ant-. Použijte raději přihlášení přes Claude.</string>
     <string name="rt_note_installed">Nainstalováno · přihlaste se přes %1$s</string>
     <string name="rt_note_no_pack">Balíček prostředí %1$s v tomto sestavení není</string>
     <string name="rt_note_ready">Připraveno · přihlášeno k %1$s</string>

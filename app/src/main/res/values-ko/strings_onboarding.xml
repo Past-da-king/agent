@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">%1$s(으)로 로그인</string>
     <string name="sub_error">작동하지 않았습니다. %1$s</string>
     <string name="sub_hide">숨기기</string>
-    <string name="sub_have_token">토큰이 있나요?</string>
-    <string name="sub_token_label">토큰(sk-ant-로 시작)</string>
+    <string name="sub_have_access">토큰이 있나요?</string>
+    <string name="sub_access_label">토큰(sk-ant-로 시작)</string>
     <string name="sub_auth_json">auth.json 내용</string>
-    <string name="sub_use_token">이 토큰 사용</string>
+    <string name="sub_use_access">이 토큰 사용</string>
     <string name="sub_hide_details">세부 정보 숨기기</string>
     <string name="sub_details">세부 정보</string>
     <string name="settings_title">설정</string>

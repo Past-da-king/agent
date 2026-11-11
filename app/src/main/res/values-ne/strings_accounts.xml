@@ -33,15 +33,15 @@
     <string name="machines_username">प्रयोगकर्ता नाम</string>
     <string name="machines_username_hint">तपाईं</string>
     <string name="machines_sign_in_with">यसबाट साइन इन गर्नुहोस्</string>
-    <string name="machines_password">पासवर्ड</string>
-    <string name="machines_password_sub">लगइन गर्न प्रयोग गर्ने कुरा</string>
+    <string name="machines_field_login">पासवर्ड</string>
+    <string name="machines_field_login_sub">लगइन गर्न प्रयोग गर्ने कुरा</string>
     <string name="machines_your_key">तपाईंको कुञ्जी</string>
     <string name="machines_your_key_sub">प्रयोग गरिरहेको कुञ्जी पेस्ट गर्नुहोस्</string>
     <string name="machines_new_key">नयाँ कुञ्जी</string>
     <string name="machines_new_key_sub">यही फोनमा बनाइएको</string>
     <string name="machines_saved_keep">सेभ गरियो। राख्न खाली छोड्नुहोस्</string>
     <string name="machines_private_key">निजी कुञ्जी</string>
-    <string name="machines_passphrase">कुञ्जीको पासफ्रेज, यदि छ भने</string>
+    <string name="machines_field_key_phrase">कुञ्जीको पासफ्रेज, यदि छ भने</string>
     <string name="machines_new_key_explain">यो मेसिनका लागि मात्रै बनेको कुञ्जी। यसको सार्वजनिक भाग मेसिनमा एक पटक थप्नुहोस्, कुनै पासवर्ड कहिल्यै सेभ हुँदैन।</string>
     <string name="machines_show_public_key">यो फोनको सार्वजनिक कुञ्जी देखाउनुहोस्</string>
     <string name="machines_direct">सिधै</string>
@@ -261,7 +261,7 @@
     <string name="handoff_sign_out">साइन आउट गर्नुहोस्</string>
     <string name="handoff_url_label">तपाईंको सिंक सेवाको ठेगाना (https://…)</string>
     <string name="handoff_email">इमेल</string>
-    <string name="handoff_password">पासवर्ड</string>
+    <string name="handoff_field_login">पासवर्ड</string>
     <string name="handoff_signing_in">साइन इन हुँदैछ…</string>
     <string name="handoff_sign_in">साइन इन गर्नुहोस्</string>
     <string name="handoff_create_account">मेरो सेवामा खाता बनाउनुहोस्</string>

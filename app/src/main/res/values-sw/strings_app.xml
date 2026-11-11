@@ -30,7 +30,7 @@
     <string name="rt_branch_failed">Uzi wa pembeni (“%1$s”) umeshindwa: %2$s</string>
     <string name="rt_done">Imekamilika</string>
     <string name="rt_interrupted_by_close">Nilikuwa katikati ya “%1$s” programu ilipofungwa. Niambie niendelee nami nitaendelea.</string>
-    <string name="rt_not_claude_token">Hiyo si tokeni ya Claude. Inaanza na sk-ant-. Tumia Ingia kwa Claude badala yake.</string>
+    <string name="rt_not_claude_access">Hiyo si tokeni ya Claude. Inaanza na sk-ant-. Tumia Ingia kwa Claude badala yake.</string>
     <string name="rt_note_installed">Imesakinishwa · ingia kwa %1$s</string>
     <string name="rt_note_no_pack">Kifurushi cha mazingira ya uendeshaji cha %1$s hakimo katika toleo hili</string>
     <string name="rt_note_ready">Tayari · umeingia kwenye %1$s</string>

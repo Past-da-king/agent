@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">Masuk dengan %1$s</string>
     <string name="sub_error">Itu tidak berhasil. %1$s</string>
     <string name="sub_hide">Sembunyikan</string>
-    <string name="sub_have_token">Punya token saja?</string>
-    <string name="sub_token_label">Token (diawali sk-ant-)</string>
+    <string name="sub_have_access">Punya token saja?</string>
+    <string name="sub_access_label">Token (diawali sk-ant-)</string>
     <string name="sub_auth_json">Isi auth.json</string>
-    <string name="sub_use_token">Pakai token ini</string>
+    <string name="sub_use_access">Pakai token ini</string>
     <string name="sub_hide_details">Sembunyikan detail</string>
     <string name="sub_details">Detail</string>
     <string name="settings_title">Pengaturan</string>

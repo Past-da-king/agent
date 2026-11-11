@@ -33,7 +33,7 @@
     <string name="rt_branch_failed">Boczny wątek („%1$s”) zakończył się błędem: %2$s</string>
     <string name="rt_done">Gotowe</string>
     <string name="rt_interrupted_by_close">Byłem w połowie zadania „%1$s”, gdy aplikacja się zamknęła. Powiedz, żebym kontynuował, a to zrobię.</string>
-    <string name="rt_not_claude_token">To nie jest token Claude. Zaczyna się od sk-ant-. Użyj logowania przez Claude.</string>
+    <string name="rt_not_claude_access">To nie jest token Claude. Zaczyna się od sk-ant-. Użyj logowania przez Claude.</string>
     <string name="rt_note_installed">Zainstalowano · zaloguj się przez %1$s</string>
     <string name="rt_note_no_pack">Pakietu środowiska %1$s nie ma w tej wersji</string>
     <string name="rt_note_ready">Gotowe · zalogowano w %1$s</string>

@@ -30,7 +30,7 @@
     <string name="rt_branch_failed">サイドスレッド（「%1$s」）が失敗しました：%2$s</string>
     <string name="rt_done">完了</string>
     <string name="rt_interrupted_by_close">アプリが閉じたとき、「%1$s」の途中でした。続けるよう伝えてくれれば再開します。</string>
-    <string name="rt_not_claude_token">それは Claude のトークンではありません。sk-ant- で始まる必要があります。代わりに「Claude でサインイン」を使ってください。</string>
+    <string name="rt_not_claude_access">それは Claude のトークンではありません。sk-ant- で始まる必要があります。代わりに「Claude でサインイン」を使ってください。</string>
     <string name="rt_note_installed">インストール済み・%1$s でサインイン</string>
     <string name="rt_note_no_pack">このビルドに %1$s ランタイムパックがありません</string>
     <string name="rt_note_ready">準備完了・%1$s にサインイン済み</string>

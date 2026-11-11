@@ -33,15 +33,15 @@
     <string name="machines_username">Username</string>
     <string name="machines_username_hint">ikaw</string>
     <string name="machines_sign_in_with">MAG-SIGN IN GAMIT ANG</string>
-    <string name="machines_password">Password</string>
-    <string name="machines_password_sub">Ang ginagamit mo sa pag-log in</string>
+    <string name="machines_field_login">Password</string>
+    <string name="machines_field_login_sub">Ang ginagamit mo sa pag-log in</string>
     <string name="machines_your_key">Iyong key</string>
     <string name="machines_your_key_sub">Mag-paste ng ginagamit mo na</string>
     <string name="machines_new_key">Bagong key</string>
     <string name="machines_new_key_sub">Ginawa sa telepono mong ito</string>
     <string name="machines_saved_keep">Naka-save. Iwanang walang laman para panatilihin</string>
     <string name="machines_private_key">Private key</string>
-    <string name="machines_passphrase">Passphrase ng key, kung mayroon</string>
+    <string name="machines_field_key_phrase">Passphrase ng key, kung mayroon</string>
     <string name="machines_new_key_explain">Key na para lang sa makinang ito. Minsan mo lang idadagdag ang public half nito sa makina, at hindi kailanman magse-save ng password.</string>
     <string name="machines_show_public_key">Ipakita ang public key ng telepono</string>
     <string name="machines_direct">Direkta</string>
@@ -261,7 +261,7 @@
     <string name="handoff_sign_out">Mag-sign out</string>
     <string name="handoff_url_label">Address ng sync service mo (https://…)</string>
     <string name="handoff_email">Email</string>
-    <string name="handoff_password">Password</string>
+    <string name="handoff_field_login">Password</string>
     <string name="handoff_signing_in">Nagsa-sign in…</string>
     <string name="handoff_sign_in">Mag-sign in</string>
     <string name="handoff_create_account">Gumawa ng account sa aking service</string>

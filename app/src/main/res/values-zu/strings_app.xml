@@ -32,7 +32,7 @@
     <string name="rt_branch_failed">Uchungechunge lohlangothini (\"%1$s\") aluphumelelanga: %2$s</string>
     <string name="rt_done">Kwenziwe</string>
     <string name="rt_interrupted_by_close">Ngangiphakathi nokwenza \"%1$s\" lapho i-app ivaleka. Ngitshele ukuthi ngiqhubeke bese ngiqhubeka.</string>
-    <string name="rt_not_claude_token">Lokho akukona ithokheni ye-Claude. Iqala ngo-sk-ant-. Sebenzisa u-Ngena nge-Claude esikhundleni.</string>
+    <string name="rt_not_claude_access">Lokho akukona ithokheni ye-Claude. Iqala ngo-sk-ant-. Sebenzisa u-Ngena nge-Claude esikhundleni.</string>
     <string name="rt_note_installed">Kufakiwe · ngena nge-%1$s</string>
     <string name="rt_note_no_pack">Iphakheji yesikhathi sokusebenza se-%1$s ayikho kule nguqulo</string>
     <string name="rt_note_ready">Sekulungile · ungene ku-%1$s</string>

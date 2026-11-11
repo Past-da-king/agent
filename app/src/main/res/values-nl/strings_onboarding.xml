@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">Inloggen met %1$s</string>
     <string name="sub_error">Dat werkte niet. %1$s</string>
     <string name="sub_hide">Verbergen</string>
-    <string name="sub_have_token">Heb je in plaats daarvan een token?</string>
-    <string name="sub_token_label">Token (begint met sk-ant-)</string>
+    <string name="sub_have_access">Heb je in plaats daarvan een token?</string>
+    <string name="sub_access_label">Token (begint met sk-ant-)</string>
     <string name="sub_auth_json">Inhoud van auth.json</string>
-    <string name="sub_use_token">Dit token gebruiken</string>
+    <string name="sub_use_access">Dit token gebruiken</string>
     <string name="sub_hide_details">Details verbergen</string>
     <string name="sub_details">Details</string>
     <string name="settings_title">Instellingen</string>

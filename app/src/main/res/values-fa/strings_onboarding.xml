@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">ورود با %1$s</string>
     <string name="sub_error">کار نکرد. %1$s</string>
     <string name="sub_hide">پنهان</string>
-    <string name="sub_have_token">به‌جای آن توکن دارید؟</string>
-    <string name="sub_token_label">توکن (با sk-ant- شروع می‌شود)</string>
+    <string name="sub_have_access">به‌جای آن توکن دارید؟</string>
+    <string name="sub_access_label">توکن (با sk-ant- شروع می‌شود)</string>
     <string name="sub_auth_json">محتوای auth.json</string>
-    <string name="sub_use_token">استفاده از این توکن</string>
+    <string name="sub_use_access">استفاده از این توکن</string>
     <string name="sub_hide_details">پنهان کردن جزئیات</string>
     <string name="sub_details">جزئیات</string>
     <string name="settings_title">تنظیمات</string>

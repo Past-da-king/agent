@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">Đăng nhập bằng %1$s</string>
     <string name="sub_error">Không được. %1$s</string>
     <string name="sub_hide">Ẩn</string>
-    <string name="sub_have_token">Có token rồi?</string>
-    <string name="sub_token_label">Token (bắt đầu bằng sk-ant-)</string>
+    <string name="sub_have_access">Có token rồi?</string>
+    <string name="sub_access_label">Token (bắt đầu bằng sk-ant-)</string>
     <string name="sub_auth_json">Nội dung auth.json</string>
-    <string name="sub_use_token">Dùng token này</string>
+    <string name="sub_use_access">Dùng token này</string>
     <string name="sub_hide_details">Ẩn chi tiết</string>
     <string name="sub_details">Chi tiết</string>
     <string name="settings_title">Cài đặt</string>

@@ -141,10 +141,10 @@
     <string name="sub_sign_in_button">Meld aan met %1$s</string>
     <string name="sub_error">Dit het nie gewerk nie. %1$s</string>
     <string name="sub_hide">Versteek</string>
-    <string name="sub_have_token">Het jy eerder \'n teken?</string>
-    <string name="sub_token_label">Teken (begin met sk-ant-)</string>
+    <string name="sub_have_access">Het jy eerder \'n teken?</string>
+    <string name="sub_access_label">Teken (begin met sk-ant-)</string>
     <string name="sub_auth_json">auth.json-inhoud</string>
-    <string name="sub_use_token">Gebruik hierdie teken</string>
+    <string name="sub_use_access">Gebruik hierdie teken</string>
     <string name="sub_hide_details">Versteek besonderhede</string>
     <string name="sub_details">Besonderhede</string>
     <string name="settings_title">Instellings</string>

@@ -33,15 +33,15 @@
     <string name="machines_username">यूज़रनेम</string>
     <string name="machines_username_hint">आप</string>
     <string name="machines_sign_in_with">इससे साइन इन करें</string>
-    <string name="machines_password">पासवर्ड</string>
-    <string name="machines_password_sub">जिससे आप लॉग इन करते हैं</string>
+    <string name="machines_field_login">पासवर्ड</string>
+    <string name="machines_field_login_sub">जिससे आप लॉग इन करते हैं</string>
     <string name="machines_your_key">आपकी की</string>
     <string name="machines_your_key_sub">जो की आप इस्तेमाल करते हैं, उसे पेस्ट करें</string>
     <string name="machines_new_key">नई की</string>
     <string name="machines_new_key_sub">इसी फ़ोन पर बनाई गई</string>
     <string name="machines_saved_keep">सहेजा गया। रखने के लिए खाली छोड़ें</string>
     <string name="machines_private_key">प्राइवेट की</string>
-    <string name="machines_passphrase">की का पासफ़्रेज़, अगर हो</string>
+    <string name="machines_field_key_phrase">की का पासफ़्रेज़, अगर हो</string>
     <string name="machines_new_key_explain">सिर्फ़ इसी मशीन के लिए एक की। इसका पब्लिक हिस्सा आप मशीन में एक बार जोड़ते हैं, और कोई पासवर्ड कभी सहेजा नहीं जाता।</string>
     <string name="machines_show_public_key">इस फ़ोन की पब्लिक की दिखाएँ</string>
     <string name="machines_direct">सीधे</string>
@@ -261,7 +261,7 @@
     <string name="handoff_sign_out">साइन आउट करें</string>
     <string name="handoff_url_label">आपकी सिंक सर्विस का पता (https://…)</string>
     <string name="handoff_email">ईमेल</string>
-    <string name="handoff_password">पासवर्ड</string>
+    <string name="handoff_field_login">पासवर्ड</string>
     <string name="handoff_signing_in">साइन इन हो रहा है…</string>
     <string name="handoff_sign_in">साइन इन करें</string>
     <string name="handoff_create_account">मेरी सर्विस पर खाता बनाएँ</string>

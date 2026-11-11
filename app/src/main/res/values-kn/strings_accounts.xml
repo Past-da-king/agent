@@ -33,15 +33,15 @@
     <string name="machines_username">ಬಳಕೆದಾರ ಹೆಸರು</string>
     <string name="machines_username_hint">ನೀವು</string>
     <string name="machines_sign_in_with">ಇದರ ಮೂಲಕ ಸೈನ್ ಇನ್ ಮಾಡಿ</string>
-    <string name="machines_password">ಪಾಸ್‌ವರ್ಡ್</string>
-    <string name="machines_password_sub">ನೀವು ಲಾಗ್ ಇನ್ ಮಾಡಲು ಬಳಸುವುದು</string>
+    <string name="machines_field_login">ಪಾಸ್‌ವರ್ಡ್</string>
+    <string name="machines_field_login_sub">ನೀವು ಲಾಗ್ ಇನ್ ಮಾಡಲು ಬಳಸುವುದು</string>
     <string name="machines_your_key">ನಿಮ್ಮ ಕೀ</string>
     <string name="machines_your_key_sub">ನೀವು ಬಳಸುವ ಕೀಯನ್ನು ಅಂಟಿಸಿ</string>
     <string name="machines_new_key">ಹೊಸ ಕೀ</string>
     <string name="machines_new_key_sub">ಈ ಫೋನಿನಲ್ಲಿ ರಚಿಸಲಾಗಿದೆ</string>
     <string name="machines_saved_keep">ಉಳಿಸಲಾಗಿದೆ. ಹಾಗೆಯೇ ಇಡಲು ಖಾಲಿ ಬಿಡಿ</string>
     <string name="machines_private_key">ಖಾಸಗಿ ಕೀ</string>
-    <string name="machines_passphrase">ಕೀ ಪಾಸ್‌ಫ್ರೇಸ್, ಇದ್ದರೆ</string>
+    <string name="machines_field_key_phrase">ಕೀ ಪಾಸ್‌ಫ್ರೇಸ್, ಇದ್ದರೆ</string>
     <string name="machines_new_key_explain">ಈ ಯಂತ್ರಕ್ಕಾಗಿ ಮಾತ್ರ ಒಂದು ಕೀ. ಅದರ ಸಾರ್ವಜನಿಕ ಭಾಗವನ್ನು ಯಂತ್ರಕ್ಕೆ ಒಮ್ಮೆ ಸೇರಿಸಿ; ಯಾವುದೇ ಪಾಸ್‌ವರ್ಡ್ ಎಂದಿಗೂ ಉಳಿಸಲಾಗುವುದಿಲ್ಲ.</string>
     <string name="machines_show_public_key">ಈ ಫೋನಿನ ಸಾರ್ವಜನಿಕ ಕೀ ತೋರಿಸಿ</string>
     <string name="machines_direct">ನೇರ</string>
@@ -265,7 +265,7 @@
     <string name="handoff_sign_out">ಸೈನ್ ಔಟ್</string>
     <string name="handoff_url_label">ನಿಮ್ಮ ಸಿಂಕ್ ಸೇವೆಯ ವಿಳಾಸ (https://…)</string>
     <string name="handoff_email">ಇಮೇಲ್</string>
-    <string name="handoff_password">ಪಾಸ್‌ವರ್ಡ್</string>
+    <string name="handoff_field_login">ಪಾಸ್‌ವರ್ಡ್</string>
     <string name="handoff_signing_in">ಸೈನ್ ಇನ್ ಆಗುತ್ತಿದೆ…</string>
     <string name="handoff_sign_in">ಸೈನ್ ಇನ್</string>
     <string name="handoff_create_account">ನನ್ನ ಸೇವೆಯಲ್ಲಿ ಖಾತೆಯನ್ನು ರಚಿಸು</string>

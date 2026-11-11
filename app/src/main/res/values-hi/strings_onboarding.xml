@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">%1$s से साइन इन करें</string>
     <string name="sub_error">यह काम नहीं किया। %1$s</string>
     <string name="sub_hide">छिपाएँ</string>
-    <string name="sub_have_token">टोकन है तो?</string>
-    <string name="sub_token_label">टोकन (sk-ant- से शुरू होता है)</string>
+    <string name="sub_have_access">टोकन है तो?</string>
+    <string name="sub_access_label">टोकन (sk-ant- से शुरू होता है)</string>
     <string name="sub_auth_json">auth.json की सामग्री</string>
-    <string name="sub_use_token">यह टोकन इस्तेमाल करें</string>
+    <string name="sub_use_access">यह टोकन इस्तेमाल करें</string>
     <string name="sub_hide_details">विवरण छिपाएँ</string>
     <string name="sub_details">विवरण</string>
     <string name="settings_title">सेटिंग</string>

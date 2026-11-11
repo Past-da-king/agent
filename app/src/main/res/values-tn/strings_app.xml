@@ -32,7 +32,7 @@
     <string name="rt_branch_failed">Kgoele ya fa thoko (\"%1$s\") e palelwe: %2$s</string>
     <string name="rt_done">Go wetswe</string>
     <string name="rt_interrupted_by_close">Ke ne ke le gare ga \"%1$s\" fa app e tswalwa. Mpolelele gore ke tswelele mme ke tla tswelela.</string>
-    <string name="rt_not_claude_token">Seo ga se token ya Claude. E simolola ka sk-ant-. Dirisa Tsena ka Claude go e na le moo.</string>
+    <string name="rt_not_claude_access">Seo ga se token ya Claude. E simolola ka sk-ant-. Dirisa Tsena ka Claude go e na le moo.</string>
     <string name="rt_note_installed">Go tsentswe · tsena ka %1$s</string>
     <string name="rt_note_no_pack">Sephuthelwana sa nako ya go dira sa %1$s ga se mo go phetolelong eno</string>
     <string name="rt_note_ready">Go siame · o tsene mo go %1$s</string>

@@ -141,10 +141,10 @@
     <string name="sub_sign_in_button">Ingia kwa %1$s</string>
     <string name="sub_error">Haikufanya kazi. %1$s</string>
     <string name="sub_hide">Ficha</string>
-    <string name="sub_have_token">Una tokeni badala yake?</string>
-    <string name="sub_token_label">Tokeni (huanza na sk-ant-)</string>
+    <string name="sub_have_access">Una tokeni badala yake?</string>
+    <string name="sub_access_label">Tokeni (huanza na sk-ant-)</string>
     <string name="sub_auth_json">Yaliyomo ya auth.json</string>
-    <string name="sub_use_token">Tumia tokeni hii</string>
+    <string name="sub_use_access">Tumia tokeni hii</string>
     <string name="sub_hide_details">Ficha maelezo</string>
     <string name="sub_details">Maelezo</string>
     <string name="settings_title">Mipangilio</string>

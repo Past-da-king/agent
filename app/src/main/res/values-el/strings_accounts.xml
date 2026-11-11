@@ -33,15 +33,15 @@
     <string name="machines_username">Όνομα χρήστη</string>
     <string name="machines_username_hint">εσύ</string>
     <string name="machines_sign_in_with">ΣΥΝΔΕΣΗ ΜΕ</string>
-    <string name="machines_password">Κωδικός</string>
-    <string name="machines_password_sub">Με ό,τι συνδέεσαι</string>
+    <string name="machines_field_login">Κωδικός</string>
+    <string name="machines_field_login_sub">Με ό,τι συνδέεσαι</string>
     <string name="machines_your_key">Το κλειδί σου</string>
     <string name="machines_your_key_sub">Επικόλλησε ένα που χρησιμοποιείς</string>
     <string name="machines_new_key">Νέο κλειδί</string>
     <string name="machines_new_key_sub">Δημιουργήθηκε σε αυτό το τηλέφωνο</string>
     <string name="machines_saved_keep">Αποθηκεύτηκε. Άφησέ το κενό για να το κρατήσεις</string>
     <string name="machines_private_key">Ιδιωτικό κλειδί</string>
-    <string name="machines_passphrase">Φράση πρόσβασης του κλειδιού, αν έχει</string>
+    <string name="machines_field_key_phrase">Φράση πρόσβασης του κλειδιού, αν έχει</string>
     <string name="machines_new_key_explain">Ένα κλειδί μόνο για αυτό το μηχάνημα. Προσθέτεις το δημόσιο μισό του στο μηχάνημα μία φορά και κανένας κωδικός δεν αποθηκεύεται ποτέ.</string>
     <string name="machines_show_public_key">Εμφάνιση του δημόσιου κλειδιού αυτού του τηλεφώνου</string>
     <string name="machines_direct">Απευθείας</string>
@@ -261,7 +261,7 @@
     <string name="handoff_sign_out">Αποσύνδεση</string>
     <string name="handoff_url_label">Η διεύθυνση της υπηρεσίας συγχρονισμού σου (https://…)</string>
     <string name="handoff_email">Email</string>
-    <string name="handoff_password">Κωδικός</string>
+    <string name="handoff_field_login">Κωδικός</string>
     <string name="handoff_signing_in">Σύνδεση…</string>
     <string name="handoff_sign_in">Σύνδεση</string>
     <string name="handoff_create_account">Δημιουργία λογαριασμού στην υπηρεσία μου</string>

@@ -31,7 +31,7 @@
     <string name="rt_branch_failed">Een zijtak (\"%1$s\") is mislukt: %2$s</string>
     <string name="rt_done">Klaar</string>
     <string name="rt_interrupted_by_close">Ik was halverwege \"%1$s\" toen de app sloot. Zeg dat ik door moet gaan, dan doe ik dat.</string>
-    <string name="rt_not_claude_token">Dat is geen Claude-token. Een Claude-token begint met sk-ant-. Gebruik in plaats daarvan Inloggen met Claude.</string>
+    <string name="rt_not_claude_access">Dat is geen Claude-token. Een Claude-token begint met sk-ant-. Gebruik in plaats daarvan Inloggen met Claude.</string>
     <string name="rt_note_installed">Geïnstalleerd · log in met %1$s</string>
     <string name="rt_note_no_pack">Het runtimepakket van %1$s zit niet in deze versie</string>
     <string name="rt_note_ready">Klaar · ingelogd bij %1$s</string>

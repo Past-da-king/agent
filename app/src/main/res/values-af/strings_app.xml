@@ -30,7 +30,7 @@
     <string name="rt_branch_failed">\'n Systakel (“%1$s”) het misluk: %2$s</string>
     <string name="rt_done">Klaar</string>
     <string name="rt_interrupted_by_close">Ek was halfpad deur “%1$s” toe die program toegemaak is. Sê vir my om voort te gaan, dan doen ek dit.</string>
-    <string name="rt_not_claude_token">Dit is nie \'n Claude-teken nie. Dit begin met sk-ant-. Gebruik eerder Meld aan met Claude.</string>
+    <string name="rt_not_claude_access">Dit is nie \'n Claude-teken nie. Dit begin met sk-ant-. Gebruik eerder Meld aan met Claude.</string>
     <string name="rt_note_installed">Geïnstalleer · meld aan met %1$s</string>
     <string name="rt_note_no_pack">%1$s-looptydpakket is nie in hierdie weergawe nie</string>
     <string name="rt_note_ready">Gereed · aangemeld by %1$s</string>

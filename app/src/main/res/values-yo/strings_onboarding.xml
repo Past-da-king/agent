@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">Wọlé pẹ̀lú %1$s</string>
     <string name="sub_error">Iyẹn kò ṣiṣẹ́. %1$s</string>
     <string name="sub_hide">Fi pamọ́</string>
-    <string name="sub_have_token">Ṣé o ní àmì dípò?</string>
-    <string name="sub_token_label">Àmì (ó bẹ̀rẹ̀ pẹ̀lú sk-ant-)</string>
+    <string name="sub_have_access">Ṣé o ní àmì dípò?</string>
+    <string name="sub_access_label">Àmì (ó bẹ̀rẹ̀ pẹ̀lú sk-ant-)</string>
     <string name="sub_auth_json">Àkóónú auth.json</string>
-    <string name="sub_use_token">Lo àmì yìí</string>
+    <string name="sub_use_access">Lo àmì yìí</string>
     <string name="sub_hide_details">Fi àwọn àlàyé pamọ́</string>
     <string name="sub_details">Àwọn àlàyé</string>
     <string name="settings_title">Ètò</string>

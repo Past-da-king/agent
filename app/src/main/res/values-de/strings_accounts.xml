@@ -33,15 +33,15 @@
     <string name="machines_username">Benutzername</string>
     <string name="machines_username_hint">du</string>
     <string name="machines_sign_in_with">ANMELDEN MIT</string>
-    <string name="machines_password">Passwort</string>
-    <string name="machines_password_sub">Womit du dich anmeldest</string>
+    <string name="machines_field_login">Passwort</string>
+    <string name="machines_field_login_sub">Womit du dich anmeldest</string>
     <string name="machines_your_key">Dein Schlüssel</string>
     <string name="machines_your_key_sub">Füge einen vorhandenen ein</string>
     <string name="machines_new_key">Neuer Schlüssel</string>
     <string name="machines_new_key_sub">Auf diesem Handy erzeugt</string>
     <string name="machines_saved_keep">Gespeichert. Leer lassen, um ihn zu behalten</string>
     <string name="machines_private_key">Privater Schlüssel</string>
-    <string name="machines_passphrase">Passphrase des Schlüssels, falls vorhanden</string>
+    <string name="machines_field_key_phrase">Passphrase des Schlüssels, falls vorhanden</string>
     <string name="machines_new_key_explain">Ein Schlüssel nur für diesen Rechner. Du fügst seine öffentliche Hälfte einmal auf dem Rechner hinzu, ein Passwort wird nie gespeichert.</string>
     <string name="machines_show_public_key">Öffentlichen Schlüssel dieses Handys zeigen</string>
     <string name="machines_direct">Direkt</string>
@@ -261,7 +261,7 @@
     <string name="handoff_sign_out">Abmelden</string>
     <string name="handoff_url_label">Adresse deines Sync-Dienstes (https://…)</string>
     <string name="handoff_email">E-Mail</string>
-    <string name="handoff_password">Passwort</string>
+    <string name="handoff_field_login">Passwort</string>
     <string name="handoff_signing_in">Melde an…</string>
     <string name="handoff_sign_in">Anmelden</string>
     <string name="handoff_create_account">Konto auf meinem Dienst erstellen</string>

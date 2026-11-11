@@ -33,7 +33,7 @@
     <string name="rt_branch_failed">שרשור צדדי (\"%1$s\") נכשל: %2$s</string>
     <string name="rt_done">בוצע</string>
     <string name="rt_interrupted_by_close">הייתי באמצע \"%1$s\" כשהאפליקציה נסגרה. תגיד לי להמשיך ואמשיך.</string>
-    <string name="rt_not_claude_token">זה לא טוקן של Claude. הוא מתחיל ב-sk-ant-. השתמש בכניסה עם Claude במקום.</string>
+    <string name="rt_not_claude_access">זה לא טוקן של Claude. הוא מתחיל ב-sk-ant-. השתמש בכניסה עם Claude במקום.</string>
     <string name="rt_note_installed">מותקן · התחבר עם %1$s</string>
     <string name="rt_note_no_pack">חבילת הריצה של %1$s אינה בגרסה הזו</string>
     <string name="rt_note_ready">מוכן · מחובר ל-%1$s</string>

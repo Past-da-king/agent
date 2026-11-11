@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">Přihlásit přes %1$s</string>
     <string name="sub_error">To nevyšlo. %1$s</string>
     <string name="sub_hide">Skrýt</string>
-    <string name="sub_have_token">Máte místo toho token?</string>
-    <string name="sub_token_label">Token (začíná na sk-ant-)</string>
+    <string name="sub_have_access">Máte místo toho token?</string>
+    <string name="sub_access_label">Token (začíná na sk-ant-)</string>
     <string name="sub_auth_json">Obsah auth.json</string>
-    <string name="sub_use_token">Použít tento token</string>
+    <string name="sub_use_access">Použít tento token</string>
     <string name="sub_hide_details">Skrýt podrobnosti</string>
     <string name="sub_details">Podrobnosti</string>
     <string name="settings_title">Nastavení</string>

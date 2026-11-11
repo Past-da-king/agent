@@ -32,7 +32,7 @@
     <string name="rt_branch_failed">Une branche (« %1$s ») a échoué : %2$s</string>
     <string name="rt_done">Terminé</string>
     <string name="rt_interrupted_by_close">J\'étais en plein « %1$s » quand l\'appli s\'est fermée. Dites-moi de continuer et je m\'y remets.</string>
-    <string name="rt_not_claude_token">Ce n\'est pas un jeton Claude. Il commence par sk-ant-. Utilisez plutôt Se connecter avec Claude.</string>
+    <string name="rt_not_claude_access">Ce n\'est pas un jeton Claude. Il commence par sk-ant-. Utilisez plutôt Se connecter avec Claude.</string>
     <string name="rt_note_installed">Installé · connectez-vous avec %1$s</string>
     <string name="rt_note_no_pack">Le pack d\'exécution %1$s n\'est pas dans cette version</string>
     <string name="rt_note_ready">Prêt · connecté à %1$s</string>

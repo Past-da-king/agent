@@ -33,15 +33,15 @@
     <string name="machines_username">Igama lomsebenzisi</string>
     <string name="machines_username_hint">wena</string>
     <string name="machines_sign_in_with">NGENA NGE-</string>
-    <string name="machines_password">Iphasiwedi</string>
-    <string name="machines_password_sub">Oyisebenzisa ukungena</string>
+    <string name="machines_field_login">Iphasiwedi</string>
+    <string name="machines_field_login_sub">Oyisebenzisa ukungena</string>
     <string name="machines_your_key">Isihluthulelo sakho</string>
     <string name="machines_your_key_sub">Namathisela osisebenzisayo</string>
     <string name="machines_new_key">Isihluthulelo esisha</string>
     <string name="machines_new_key_sub">Senziwe kule foni</string>
     <string name="machines_saved_keep">Kulondoloziwe. Yishiye ingenalutho uma ufuna ukuyigcina</string>
     <string name="machines_private_key">Isihluthulelo esiyimfihlo</string>
-    <string name="machines_passphrase">Iphasiphrezi yesihluthulelo, uma sinayo</string>
+    <string name="machines_field_key_phrase">Iphasiphrezi yesihluthulelo, uma sinayo</string>
     <string name="machines_new_key_explain">Isihluthulelo esiwukuphela kwalo mshini. Wengeza ingxenye yaso yomphakathi kumshini kanye kuphela, futhi akukho phasiwedi egcinwayo.</string>
     <string name="machines_show_public_key">Bonisa isihluthulelo somphakathi sale foni</string>
     <string name="machines_direct">Ngqo</string>
@@ -265,7 +265,7 @@
     <string name="handoff_sign_out">Phuma</string>
     <string name="handoff_url_label">Ikheli lesevisi yakho yokuvumelanisa (https://…)</string>
     <string name="handoff_email">I-imeyili</string>
-    <string name="handoff_password">Iphasiwedi</string>
+    <string name="handoff_field_login">Iphasiwedi</string>
     <string name="handoff_signing_in">Iyangena…</string>
     <string name="handoff_sign_in">Ngena</string>
     <string name="handoff_create_account">Yenza i-akhawunti kuseva yami</string>

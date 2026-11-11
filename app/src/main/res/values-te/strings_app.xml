@@ -32,7 +32,7 @@
     <string name="rt_branch_failed">\"%1$s\" అనే ఉప-థ్రెడ్ విఫలమైంది: %2$s</string>
     <string name="rt_done">పూర్తైంది</string>
     <string name="rt_interrupted_by_close">యాప్ మూసివేసినప్పుడు నేను \"%1$s\" పని సగం వరకు చేశాను. కొనసాగించమని చెప్పండి, నేను కొనసాగిస్తాను.</string>
-    <string name="rt_not_claude_token">అది Claude టోకెన్ కాదు. ఇది sk-ant- తో మొదలవుతుంది. బదులుగా Claudeతో సైన్ ఇన్ ఉపయోగించండి.</string>
+    <string name="rt_not_claude_access">అది Claude టోకెన్ కాదు. ఇది sk-ant- తో మొదలవుతుంది. బదులుగా Claudeతో సైన్ ఇన్ ఉపయోగించండి.</string>
     <string name="rt_note_installed">ఇన్‌స్టాల్ అయింది · %1$sతో సైన్ ఇన్ చేయండి</string>
     <string name="rt_note_no_pack">%1$s రన్‌టైమ్ ప్యాక్ ఈ బిల్డ్‌లో లేదు</string>
     <string name="rt_note_ready">సిద్ధంగా ఉంది · %1$sలో సైన్ ఇన్ అయ్యారు</string>

@@ -33,7 +33,7 @@
     <string name="rt_branch_failed">Побочная ветка («%1$s») завершилась ошибкой: %2$s</string>
     <string name="rt_done">Готово</string>
     <string name="rt_interrupted_by_close">Я был на середине задачи «%1$s», когда приложение закрылось. Скажите мне продолжить, и я продолжу.</string>
-    <string name="rt_not_claude_token">Это не токен Claude. Он начинается с sk-ant-. Лучше используйте вход через Claude.</string>
+    <string name="rt_not_claude_access">Это не токен Claude. Он начинается с sk-ant-. Лучше используйте вход через Claude.</string>
     <string name="rt_note_installed">Установлено · войдите через %1$s</string>
     <string name="rt_note_no_pack">Пакет среды выполнения %1$s не включён в эту сборку</string>
     <string name="rt_note_ready">Готово · выполнен вход в %1$s</string>

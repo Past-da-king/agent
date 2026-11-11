@@ -30,7 +30,7 @@
     <string name="rt_branch_failed">เธรดรอง (“%1$s”) ล้มเหลว: %2$s</string>
     <string name="rt_done">เสร็จสิ้น</string>
     <string name="rt_interrupted_by_close">ฉันกำลังทำ “%1$s” ค้างอยู่ตอนแอปปิด บอกให้ฉันทำต่อ แล้วฉันจะทำต่อ</string>
-    <string name="rt_not_claude_token">นั่นไม่ใช่โทเค็น Claude โทเค็นต้องขึ้นต้นด้วย sk-ant- ให้ใช้ลงชื่อเข้าใช้ด้วย Claude แทน</string>
+    <string name="rt_not_claude_access">นั่นไม่ใช่โทเค็น Claude โทเค็นต้องขึ้นต้นด้วย sk-ant- ให้ใช้ลงชื่อเข้าใช้ด้วย Claude แทน</string>
     <string name="rt_note_installed">ติดตั้งแล้ว · เข้าสู่ระบบด้วย %1$s</string>
     <string name="rt_note_no_pack">บิลด์นี้ไม่มีแพ็กรันไทม์ %1$s</string>
     <string name="rt_note_ready">พร้อมแล้ว · เข้าสู่ระบบ %1$s แล้ว</string>

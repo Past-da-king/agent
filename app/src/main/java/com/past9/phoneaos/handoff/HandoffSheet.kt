@@ -72,7 +72,7 @@ fun HandoffSheet(onDone: () -> Unit) {
                 Spacer(Modifier.height(8.dp))
                 com.past9.phoneaos.ui.AppTextField(email, { email = it }, label = { Text(stringResource(R.string.handoff_email)) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
                 Spacer(Modifier.height(8.dp))
-                com.past9.phoneaos.ui.AppTextField(password, { password = it }, label = { Text(stringResource(R.string.handoff_password)) }, singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
+                com.past9.phoneaos.ui.AppTextField(password, { password = it }, label = { Text(stringResource(R.string.handoff_field_login)) }, singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp)) }
                 Spacer(Modifier.height(16.dp))
                 Button(onClick = { go(false) }, enabled = !busy && url.isNotBlank() && email.isNotBlank() && password.length >= 6, modifier = Modifier.fillMaxWidth().height(56.dp), shapes = ButtonDefaults.shapes()) { Text(if (busy) stringResource(R.string.handoff_signing_in) else stringResource(R.string.handoff_sign_in)) }

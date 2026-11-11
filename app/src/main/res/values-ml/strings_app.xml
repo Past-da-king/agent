@@ -32,7 +32,7 @@
     <string name="rt_branch_failed">ഒരു സമാന്തര ത്രെഡ് (\"%1$s\") പരാജയപ്പെട്ടു: %2$s</string>
     <string name="rt_done">പൂർത്തിയായി</string>
     <string name="rt_interrupted_by_close">ആപ്പ് അടഞ്ഞപ്പോൾ ഞാൻ \"%1$s\" ജോലിയുടെ പകുതിയിലായിരുന്നു. തുടരാൻ പറഞ്ഞാൽ ഞാൻ തുടരാം.</string>
-    <string name="rt_not_claude_token">അത് Claude ടോക്കൺ അല്ല. അത് sk-ant- എന്നാണ് തുടങ്ങുന്നത്. പകരം Claude ഉപയോഗിച്ച് സൈൻ ഇൻ ചെയ്യുക.</string>
+    <string name="rt_not_claude_access">അത് Claude ടോക്കൺ അല്ല. അത് sk-ant- എന്നാണ് തുടങ്ങുന്നത്. പകരം Claude ഉപയോഗിച്ച് സൈൻ ഇൻ ചെയ്യുക.</string>
     <string name="rt_note_installed">ഇൻസ്റ്റാൾ ചെയ്തു · %1$s ഉപയോഗിച്ച് സൈൻ ഇൻ ചെയ്യുക</string>
     <string name="rt_note_no_pack">%1$s റൺടൈം പാക്ക് ഈ ബിൽഡിൽ ഇല്ല</string>
     <string name="rt_note_ready">തയ്യാർ · %1$sലേക്ക് സൈൻ ഇൻ ചെയ്തു</string>

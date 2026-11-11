@@ -33,15 +33,15 @@
     <string name="machines_username">صارف نام</string>
     <string name="machines_username_hint">آپ</string>
     <string name="machines_sign_in_with">سائن اِن کا طریقہ</string>
-    <string name="machines_password">پاس ورڈ</string>
-    <string name="machines_password_sub">جس سے آپ لاگ اِن کرتے ہیں</string>
+    <string name="machines_field_login">پاس ورڈ</string>
+    <string name="machines_field_login_sub">جس سے آپ لاگ اِن کرتے ہیں</string>
     <string name="machines_your_key">آپ کی کلید</string>
     <string name="machines_your_key_sub">جو کلید آپ استعمال کرتے ہیں وہ چسپاں کریں</string>
     <string name="machines_new_key">نئی کلید</string>
     <string name="machines_new_key_sub">اسی فون پر بنائی گئی</string>
     <string name="machines_saved_keep">محفوظ ہے۔ برقرار رکھنے کے لیے خالی چھوڑیں</string>
     <string name="machines_private_key">نجی کلید</string>
-    <string name="machines_passphrase">کلید کا پاس فریز، اگر ہو</string>
+    <string name="machines_field_key_phrase">کلید کا پاس فریز، اگر ہو</string>
     <string name="machines_new_key_explain">صرف اس مشین کے لیے ایک کلید۔ آپ اس کا عوامی حصہ مشین میں ایک بار شامل کرتے ہیں، اور کوئی پاس ورڈ کبھی محفوظ نہیں ہوتا۔</string>
     <string name="machines_show_public_key">اس فون کی عوامی کلید دکھائیں</string>
     <string name="machines_direct">براہِ راست</string>
@@ -261,7 +261,7 @@
     <string name="handoff_sign_out">سائن آؤٹ</string>
     <string name="handoff_url_label">آپ کی سنک سروس کا پتہ (https://…)</string>
     <string name="handoff_email">ای میل</string>
-    <string name="handoff_password">پاس ورڈ</string>
+    <string name="handoff_field_login">پاس ورڈ</string>
     <string name="handoff_signing_in">سائن اِن ہو رہا ہے…</string>
     <string name="handoff_sign_in">سائن اِن</string>
     <string name="handoff_create_account">میری سروس پر اکاؤنٹ بنائیں</string>

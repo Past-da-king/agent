@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">התחבר עם %1$s</string>
     <string name="sub_error">זה לא עבד. %1$s</string>
     <string name="sub_hide">הסתר</string>
-    <string name="sub_have_token">יש לך טוקן במקום?</string>
-    <string name="sub_token_label">טוקן (מתחיל ב-sk-ant-)</string>
+    <string name="sub_have_access">יש לך טוקן במקום?</string>
+    <string name="sub_access_label">טוקן (מתחיל ב-sk-ant-)</string>
     <string name="sub_auth_json">תוכן auth.json</string>
-    <string name="sub_use_token">השתמש בטוקן הזה</string>
+    <string name="sub_use_access">השתמש בטוקן הזה</string>
     <string name="sub_hide_details">הסתר פרטים</string>
     <string name="sub_details">פרטים</string>
     <string name="settings_title">הגדרות</string>

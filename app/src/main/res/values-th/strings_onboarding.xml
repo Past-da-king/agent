@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">เข้าสู่ระบบด้วย %1$s</string>
     <string name="sub_error">ไม่สำเร็จ %1$s</string>
     <string name="sub_hide">ซ่อน</string>
-    <string name="sub_have_token">มีโทเค็นอยู่แล้วหรือ</string>
-    <string name="sub_token_label">โทเค็น (ขึ้นต้นด้วย sk-ant-)</string>
+    <string name="sub_have_access">มีโทเค็นอยู่แล้วหรือ</string>
+    <string name="sub_access_label">โทเค็น (ขึ้นต้นด้วย sk-ant-)</string>
     <string name="sub_auth_json">เนื้อหาของ auth.json</string>
-    <string name="sub_use_token">ใช้โทเค็นนี้</string>
+    <string name="sub_use_access">ใช้โทเค็นนี้</string>
     <string name="sub_hide_details">ซ่อนรายละเอียด</string>
     <string name="sub_details">รายละเอียด</string>
     <string name="settings_title">การตั้งค่า</string>

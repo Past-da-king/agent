@@ -33,15 +33,15 @@
     <string name="machines_username">Nome de usuário</string>
     <string name="machines_username_hint">você</string>
     <string name="machines_sign_in_with">ENTRAR COM</string>
-    <string name="machines_password">Senha</string>
-    <string name="machines_password_sub">Com o que você faz login</string>
+    <string name="machines_field_login">Senha</string>
+    <string name="machines_field_login_sub">Com o que você faz login</string>
     <string name="machines_your_key">Sua chave</string>
     <string name="machines_your_key_sub">Cole uma que você já usa</string>
     <string name="machines_new_key">Nova chave</string>
     <string name="machines_new_key_sub">Criada neste celular</string>
     <string name="machines_saved_keep">Salva. Deixe vazio para mantê-la</string>
     <string name="machines_private_key">Chave privada</string>
-    <string name="machines_passphrase">Frase secreta da chave, se tiver</string>
+    <string name="machines_field_key_phrase">Frase secreta da chave, se tiver</string>
     <string name="machines_new_key_explain">Uma chave só para esta máquina. Você adiciona a metade pública dela à máquina uma vez e nenhuma senha é armazenada.</string>
     <string name="machines_show_public_key">Mostrar a chave pública deste celular</string>
     <string name="machines_direct">Direto</string>
@@ -271,7 +271,7 @@
     <string name="handoff_sign_out">Sair</string>
     <string name="handoff_url_label">Endereço do seu serviço de sincronização (https://…)</string>
     <string name="handoff_email">E-mail</string>
-    <string name="handoff_password">Senha</string>
+    <string name="handoff_field_login">Senha</string>
     <string name="handoff_signing_in">Entrando…</string>
     <string name="handoff_sign_in">Entrar</string>
     <string name="handoff_create_account">Criar a conta no meu serviço</string>

@@ -30,7 +30,7 @@
     <string name="rt_branch_failed">Wani ɓangare (“%1$s”) ya gaza: %2$s</string>
     <string name="rt_done">An gama</string>
     <string name="rt_interrupted_by_close">Ina tsakiyar “%1$s” lokacin da aka rufe manhajar. Ka ce in ci gaba, zan ci gaba.</string>
-    <string name="rt_not_claude_token">Wannan ba alamar Claude ba ce. Tana farawa da sk-ant-. Yi amfani da Shiga da Claude maimakon haka.</string>
+    <string name="rt_not_claude_access">Wannan ba alamar Claude ba ce. Tana farawa da sk-ant-. Yi amfani da Shiga da Claude maimakon haka.</string>
     <string name="rt_note_installed">An shigar · shiga da %1$s</string>
     <string name="rt_note_no_pack">Ba a haɗa fakitin muhallin gudanarwa na %1$s a wannan sigar ba</string>
     <string name="rt_note_ready">A shirye · an shiga %1$s</string>

@@ -31,7 +31,7 @@
     <string name="rt_branch_failed">Nabigo ang isang side thread (\"%1$s\"): %2$s</string>
     <string name="rt_done">Tapos na</string>
     <string name="rt_interrupted_by_close">Nasa kalagitnaan ako ng \"%1$s\" nang magsara ang app. Sabihin mong ituloy ko at itutuloy ko.</string>
-    <string name="rt_not_claude_token">Hindi iyon Claude token. Nagsisimula ito sa sk-ant-. Gamitin na lang ang Mag-sign in gamit ang Claude.</string>
+    <string name="rt_not_claude_access">Hindi iyon Claude token. Nagsisimula ito sa sk-ant-. Gamitin na lang ang Mag-sign in gamit ang Claude.</string>
     <string name="rt_note_installed">Naka-install · mag-sign in gamit ang %1$s</string>
     <string name="rt_note_no_pack">Wala sa build na ito ang runtime pack ng %1$s</string>
     <string name="rt_note_ready">Handa · naka-sign in sa %1$s</string>

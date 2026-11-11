@@ -32,15 +32,15 @@
     <string name="machines_username">Sunan mai amfani</string>
     <string name="machines_username_hint">kai</string>
     <string name="machines_sign_in_with">SHIGA DA</string>
-    <string name="machines_password">Kalmar sirri</string>
-    <string name="machines_password_sub">Abin da kake shiga da shi</string>
+    <string name="machines_field_login">Kalmar sirri</string>
+    <string name="machines_field_login_sub">Abin da kake shiga da shi</string>
     <string name="machines_your_key">Maɓallinka</string>
     <string name="machines_your_key_sub">Liƙa wanda kake amfani da shi</string>
     <string name="machines_new_key">Sabon maɓalli</string>
     <string name="machines_new_key_sub">An ƙirƙira a wannan wayar</string>
     <string name="machines_saved_keep">An ajiye. Bar shi babu komai don ka riƙe shi</string>
     <string name="machines_private_key">Maɓalli na sirri</string>
-    <string name="machines_passphrase">Kalmar sirrin maɓalli, idan yana da ita</string>
+    <string name="machines_field_key_phrase">Kalmar sirrin maɓalli, idan yana da ita</string>
     <string name="machines_new_key_explain">Maɓalli na wannan na\'urar kaɗai. Za ka ƙara rabinsa na jama\'a a na\'urar sau ɗaya, kuma ba a taɓa ajiye kalmar sirri ba.</string>
     <string name="machines_show_public_key">Nuna maɓallin jama\'a na wannan wayar</string>
     <string name="machines_direct">Kai tsaye</string>
@@ -260,7 +260,7 @@
     <string name="handoff_sign_out">Fita</string>
     <string name="handoff_url_label">Adireshin sabis ɗin daidaitawarka (https://…)</string>
     <string name="handoff_email">Imel</string>
-    <string name="handoff_password">Kalmar sirri</string>
+    <string name="handoff_field_login">Kalmar sirri</string>
     <string name="handoff_signing_in">Ana shiga…</string>
     <string name="handoff_sign_in">Shiga</string>
     <string name="handoff_create_account">Buɗe asusu a sabis ɗina</string>

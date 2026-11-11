@@ -302,8 +302,8 @@ private fun AutomationSheet(
             Spacer(Modifier.height(20.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 Line(Icons.Rounded.Link, stringResource(R.string.machines_address), info.url) {}
-                Line(Icons.Rounded.Key, stringResource(R.string.settings_token), stringResource(R.string.settings_token_sub)) {
-                    if (token.isNotBlank()) { clip.setText(AnnotatedString(token)); com.past9.phoneaos.ui.AppNotice.say(ctx.getString(R.string.settings_token_copied)) }
+                Line(Icons.Rounded.Key, stringResource(R.string.settings_access), stringResource(R.string.settings_access_sub)) {
+                    if (token.isNotBlank()) { clip.setText(AnnotatedString(token)); com.past9.phoneaos.ui.AppNotice.say(ctx.getString(R.string.settings_access_copied)) }
                 }
                 if (token.isNotBlank()) SelectionContainer {
                     Text(
@@ -315,15 +315,15 @@ private fun AutomationSheet(
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = {
-                        if (token.isNotBlank()) { clip.setText(AnnotatedString(token)); com.past9.phoneaos.ui.AppNotice.say(ctx.getString(R.string.settings_token_copied)) }
-                    }, enabled = token.isNotBlank()) { Text(stringResource(R.string.settings_copy_token), style = MaterialTheme.typography.labelLarge) }
-                    OutlinedButton(onClick = { confirmRotate = true }) { Text(stringResource(R.string.settings_new_token), style = MaterialTheme.typography.labelLarge) }
+                        if (token.isNotBlank()) { clip.setText(AnnotatedString(token)); com.past9.phoneaos.ui.AppNotice.say(ctx.getString(R.string.settings_access_copied)) }
+                    }, enabled = token.isNotBlank()) { Text(stringResource(R.string.settings_copy_access), style = MaterialTheme.typography.labelLarge) }
+                    OutlinedButton(onClick = { confirmRotate = true }) { Text(stringResource(R.string.settings_new_access), style = MaterialTheme.typography.labelLarge) }
                 }
                 if (confirmRotate) Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp)) {
-                    Text(stringResource(R.string.settings_new_token_warning),
+                    Text(stringResource(R.string.settings_new_access_warning),
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
                     Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { onRotate(); confirmRotate = false }) { Text(stringResource(R.string.settings_make_new_token), style = MaterialTheme.typography.labelLarge) }
+                        Button(onClick = { onRotate(); confirmRotate = false }) { Text(stringResource(R.string.settings_make_new_access), style = MaterialTheme.typography.labelLarge) }
                         TextButton(onClick = { confirmRotate = false }) { Text(stringResource(R.string.settings_keep_it), style = MaterialTheme.typography.labelLarge) }
                     }
                 }
