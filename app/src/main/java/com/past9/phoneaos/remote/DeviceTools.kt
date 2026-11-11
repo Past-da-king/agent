@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger
 object DeviceTools {
     /** group -> on by default. Shell (run_code) is never lent. */
     val GROUPS = linkedMapOf("browser" to true, "notifications" to true, "files" to true, "approval" to true, "phone" to true, "location" to true, "automation" to true)
-    val LABELS = mapOf("browser" to "Browser", "notifications" to "Notifications it can read", "files" to "Files", "approval" to "Questions and approvals", "phone" to "Notifications to you", "location" to "Your location (asked once)", "automation" to "Other apps: intents and macros (asks unless allowed)")
+    val LABELS = mapOf("browser" to "Browser", "notifications" to "Notifications it can read", "files" to "Files", "approval" to "Questions and approvals", "phone" to "Notifications to you", "location" to "Your location (asked once)", "automation" to "Other apps: intents, music and video, macros (intents and macros ask unless allowed)")
 
     /**
      * Every tool this phone lends to a linked computer, by name. A tool the phone has must be either here or in
@@ -43,7 +43,7 @@ object DeviceTools {
         "browser_back", "browser_show_user", "browser_look", "browser_handoff", "browser_eval", "browser_network", "browser_console", "browser_call_voice", "place_whatsapp_call",
         "webapp_list", "webapp_test",
         "notifications_read", "notifications_wait_code", "notification_act", "phone_files", "photos_recent", "ask_user", "request_approval", "notify_user", "phone_location",
-        "android_intent", "android_apps", "macrodroid_run",
+        "android_intent", "android_apps", "macrodroid_run", "play_media", "media_control",
         "screen_open_app", "screen_look", "screen_tap", "screen_type", "screen_swipe", "screen_key", "screen_wait", "screen_close", "screen_status",
         "screen_skill_save", "screen_skill_list", "screen_skill_run", "screen_skill_undo", "app_share",
     )
@@ -76,7 +76,7 @@ object DeviceTools {
         name == "ask_user" || name == "request_approval" -> "approval"
         name == "notify_user" -> "phone"
         name == "phone_location" -> "location"
-        name == "macrodroid_run" || name == "android_intent" || name == "android_apps" -> "automation"
+        name == "macrodroid_run" || name == "android_intent" || name == "android_apps" || name == "play_media" || name == "media_control" -> "automation"
         name.startsWith("screen_") || name.startsWith("app_") -> "screen"
         else -> null
     }
@@ -100,7 +100,7 @@ object DeviceTools {
             com.past9.phoneaos.connections.WebAppListTool(g.runtime.learned), com.past9.phoneaos.connections.WebAppTestTool(g.runtime.learned, g.runtime.pageRunner),
             com.past9.phoneaos.automation.AndroidIntentTool(context, g.settings.intentSettings), com.past9.phoneaos.automation.AndroidAppsTool(context),
             com.past9.phoneaos.automation.MacroDroidRunTool(context, g.settings.macroSettings),
-        ) + g.runtime.learned.apps.value.filter { !it.isScreen }.flatMap { a -> a.tools.map { com.past9.phoneaos.connections.LearnedCallTool(a.id, it, g.runtime.learned, g.runtime.pageRunner) } } +
+        ) + com.past9.phoneaos.media.MediaTools.tools(context) + g.runtime.learned.apps.value.filter { !it.isScreen }.flatMap { a -> a.tools.map { com.past9.phoneaos.connections.LearnedCallTool(a.id, it, g.runtime.learned, g.runtime.pageRunner) } } +
             (if (com.past9.phoneaos.screen.Screens.on(context)) com.past9.phoneaos.tools.screenTools(context) + com.past9.phoneaos.tools.screenLearnedTools(context) else emptyList())
     }
 

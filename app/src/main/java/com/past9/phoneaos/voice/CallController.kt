@@ -140,7 +140,19 @@ class CallController(
                     .put("required", JSONArray().put("answer"))))
             .put(JSONObject().put("name", "work_status")
                 .put("description", "What you are working on right now, the last thing you said in the chat, and anything you are waiting on the user for.")
-                .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject())))))
+                .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject())))
+            .put(JSONObject().put("name", "play_media")
+                .put("description", "Play music or a video on the user's phone right now, in the app they use. Use it at once when they ask to play something. Answers what is playing.")
+                .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject()
+                    .put("query", JSONObject().put("type", "STRING").put("description", "What to play, in their words"))
+                    .put("kind", JSONObject().put("type", "STRING").put("description", "song, artist, album, playlist, podcast or video. Song when unsure."))
+                    .put("app", JSONObject().put("type", "STRING").put("description", "Only when they name an app")))
+                    .put("required", JSONArray().put("query"))))
+            .put(JSONObject().put("name", "media_control")
+                .put("description", "Pause, play, skip or say what is playing on the user's phone, in whatever app is playing.")
+                .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject()
+                    .put("action", JSONObject().put("type", "STRING").put("description", "play, pause, next, previous or now_playing")))
+                    .put("required", JSONArray().put("action"))))))
 
         /** What the voice is told when the agent needs the user, so it says it out loud. */
         fun cardPrompt(i: com.past9.phoneaos.data.ChatItem): String {
@@ -428,6 +440,10 @@ class CallController(
                     toolResult(e.id, e.name, JSONObject().put("working", stNow.working).put("doing", stNow.label).put("last_message", lastAgent.take(800))
                         .put("waiting_on_user", waiting?.let { if (isApproval(it)) "Approval: ${approvalWhat(it).take(300)}" else it.text.take(300) } ?: "")
                         .apply { if (who.isNotBlank()) put("everyone", who) })
+                }
+                "play_media", "media_control" -> scope.launch {
+                    val out = runCatching { com.past9.phoneaos.media.MediaTools.runDirect(context, e.name, e.args) }.getOrElse { "failed: ${it.message ?: "it did not run"}" }
+                    toolResult(e.id, e.name, JSONObject().put(if (out.startsWith("failed")) "error" else "result", out))
                 }
                 else -> toolResult(e.id, e.name, JSONObject().put("error", "unknown tool"))
             } }

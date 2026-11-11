@@ -115,6 +115,13 @@ class LiveAssistant(
 
     private fun handle(e: LiveSession.Event.ToolCall) {
         Log.i(TAG, "tool call ${e.name}: ${e.args.toString().take(300)}")
+        if (e.name == LiveAssistCore.PLAY_MEDIA || e.name == LiveAssistCore.MEDIA_CONTROL) {
+            scope.launch {
+                val out = runCatching { com.past9.phoneaos.media.MediaTools.runDirect(context, e.name, e.args) }.getOrElse { "failed: ${it.message ?: "it did not run"}" }
+                result(e, JSONObject().put(if (out.startsWith("failed")) "error" else "result", out))
+            }
+            return
+        }
         if (e.name != LiveAssistCore.TOOL) { result(e, JSONObject().put("error", "unknown tool")); return }
         val request = e.args.optString("request").trim()
         if (request.isEmpty()) { result(e, JSONObject().put("error", "Nothing to do: say what the job is.")); return }

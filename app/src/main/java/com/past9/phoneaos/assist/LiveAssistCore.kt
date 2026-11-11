@@ -169,6 +169,9 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
         const val IDLE_MINIMISED_MS = 180_000L
 
         const val TOOL = "hand_to_agent"
+        /** Played on the phone itself, at once: no round trip to the agent. */
+        const val PLAY_MEDIA = "play_media"
+        const val MEDIA_CONTROL = "media_control"
 
         /** Live's instructions. The name comes from settings; nothing here is about one person. */
         fun systemPrompt(agentName: String, userName: String, linked: Boolean): String {
@@ -177,6 +180,7 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
             return """
                 You are $agentName, $who's personal agent, speaking with them live through the phone's assistant. Be warm, quick and natural. This is speech: short sentences, no lists, no reading out symbols.
                 Answer quick questions yourself, at once: facts, small talk, sums, definitions, the time, how to say something, ideas. Do not call a tool for those.
+                To play music or a video, call play_media straight away; to pause, play, skip or say what is playing, call media_control. Those two run on the phone and answer in a moment, so do not hand them to the agent. Say what it answers, in a few words.
                 For anything that needs doing, or needs something of theirs (their messages, mail, calendar, files, apps, contacts, what is on their screen, anything sent or changed, anything on the web or on their computer), call hand_to_agent with the full request and every detail they gave (names, who to, what to say, when). The same agent they type to does it, $where. Say a very short "on it" and carry on talking if they do.
                 When they say "this", "that" or "here", they mean their screen. The screen is passed along with a hand-off automatically: just hand it off, do not ask them to read it out.
                 NEVER say you can't do something or that they must do it themselves: hand it to the agent.
@@ -193,7 +197,20 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
                 .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject()
                     .put("request", JSONObject().put("type", "STRING").put("description", "The job, clearly, with every detail the user gave (who, what, where, wording, when)"))
                     .put("context", JSONObject().put("type", "STRING").put("description", "Anything else from the conversation the agent needs, or empty")))
-                    .put("required", JSONArray().put("request"))))))
+                    .put("required", JSONArray().put("request"))))
+            .put(JSONObject().put("name", PLAY_MEDIA)
+                .put("description", "Play music or a video on the phone right now, in the app they use. Use it at once when they ask to play, put on or listen to something, instead of handing it off. Answers what is playing.")
+                .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject()
+                    .put("query", JSONObject().put("type", "STRING").put("description", "What to play, in their words: a song, an artist, an album, a playlist, a podcast or a video"))
+                    .put("kind", JSONObject().put("type", "STRING").put("description", "song, artist, album, playlist, podcast or video. Song when unsure."))
+                    .put("app", JSONObject().put("type", "STRING").put("description", "Only when they name an app to use")))
+                    .put("required", JSONArray().put("query"))))
+            .put(JSONObject().put("name", MEDIA_CONTROL)
+                .put("description", "Pause, play, skip to the next or previous, or say what is playing, in whatever app is playing on the phone. Use it at once for those requests.")
+                .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject()
+                    .put("action", JSONObject().put("type", "STRING").put("description", "play, pause, next, previous or now_playing"))
+                    .put("app", JSONObject().put("type", "STRING").put("description", "Only when they name an app")))
+                    .put("required", JSONArray().put("action"))))))
 
         /** What the user said, ready for the agent: the request and the voice's notes, then the usual sheet note and screen. */
         fun message(request: String, context: String, source: String, screen: ScreenContext?): String =

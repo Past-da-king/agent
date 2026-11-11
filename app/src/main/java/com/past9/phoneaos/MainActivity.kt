@@ -814,6 +814,17 @@ class MainActivity : ComponentActivity() {
                                 com.past9.phoneaos.automation.IntentRules.ACTIVITY, Intent.ACTION_VIEW, data = "geo:0,0?q=Sandton+City")) },
                             test = { name -> com.past9.phoneaos.automation.MacroSender(this@MainActivity).broadcast(com.past9.phoneaos.automation.MacroCall(name, v1 = "hello")) },
                         ),
+                        media = com.past9.phoneaos.ui.screens.MediaAppsActions(
+                            rows = {
+                                val deps = com.past9.phoneaos.media.AndroidMediaDeps(this@MainActivity)
+                                val now = (deps.sessions() as? com.past9.phoneaos.media.Sessions.Ok)?.list.orEmpty().map { it.pkg }.toSet()
+                                deps.installed().filter { it.any }.map { com.past9.phoneaos.ui.screens.MediaAppRow.of(it, it.pkg in now) }.sortedBy { it.label.lowercase() }
+                            },
+                            music = { g.settings.mediaDefault(false).orEmpty() }, setMusic = { g.settings.setMediaDefault(false, it) },
+                            video = { g.settings.mediaDefault(true).orEmpty() }, setVideo = { g.settings.setMediaDefault(true, it) },
+                            hasSessionAccess = { this@MainActivity.packageName in androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(this@MainActivity) },
+                            openSessionAccess = { runCatching { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
+                        ),
                         browser = com.past9.phoneaos.ui.screens.BrowserSettingsActions(
                             origins = g.settings::isolatedOrigins,
                             addOrigin = { typed -> g.settings.addIsolatedOrigin(typed).also { if (it == null) com.past9.phoneaos.browser.BrowserService.applyIsolation(g.settings.isolatedOrigins()) } },
