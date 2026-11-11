@@ -200,15 +200,6 @@
     <string name="routines_kind_email">Al recibir un correo</string>
     <string name="routines_kind_email_sub">Cuando llegue un correo que coincida</string>
     <string name="routines_days">DÍAS</string>
-    <string-array name="routines_day_letters">
-        <item>L</item>
-        <item>M</item>
-        <item>X</item>
-        <item>J</item>
-        <item>V</item>
-        <item>S</item>
-        <item>D</item>
-    </string-array>
     <string name="routines_time">Hora</string>
     <string name="routines_int_15">15 min</string>
     <string name="routines_int_hour">Cada hora</string>

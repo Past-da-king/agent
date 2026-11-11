@@ -75,6 +75,15 @@ class Checker(unittest.TestCase):
     def test_english_left(self):
         self.red("values-ru", GOOD_RU.replace("Привет, %1$s, у вас %2$d сообщений", "Hello %1$s, you have %2$d messages"), "identical to English")
 
+    def test_wrong_script(self):
+        # Hindi text in a Tamil folder, and Cyrillic in a Latin language
+        ta = GOOD_RU.replace("Привет", "नमस्ते").replace("у вас", "உங்களுக்கு").replace("сообщений", "செய்திகள்")
+        self.red("values-ta", ta, "wrong script")
+        self.red("values-de", GOOD_RU.replace("Привет", "Hallo").replace("у вас", "du hast"), "wrong script")
+
+    def test_english_run_in_non_latin(self):
+        self.red("values-ru", GOOD_RU.replace("Не останавливайтесь", "Please do not stop right now"), "English")
+
     def test_bad_xml(self):
         self.red("values-ru", GOOD_RU.replace("</resources>", ""), "invalid XML")
 

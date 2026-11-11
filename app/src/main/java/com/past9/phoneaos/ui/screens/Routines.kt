@@ -237,7 +237,7 @@ internal fun RoutineEditor(r: TriggerRow, onDismiss: () -> Unit, onSave: (Trigge
                 fun put(d: Set<Int>, t: String) { spec = d.sorted().joinToString(",") { codes[it - 1] } + " " + t }
                 Text(stringResource(R.string.routines_days), style = Eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    stringArrayResource(R.array.routines_day_letters).forEachIndexed { i, l ->
+                    java.time.DayOfWeek.values().map { it.getDisplayName(java.time.format.TextStyle.NARROW, androidx.compose.ui.platform.LocalConfiguration.current.locales[0]) }.forEachIndexed { i, l ->
                         val on = (i + 1) in days
                         Surface(onClick = { val n = if (on) days - (i + 1) else days + (i + 1); if (n.isNotEmpty()) put(n, time) }, shape = androidx.compose.foundation.shape.CircleShape,
                             color = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.weight(1f).aspectRatio(1f)) {

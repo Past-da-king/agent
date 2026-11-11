@@ -44,7 +44,7 @@ import java.io.File
 class I18nShotsTest(private val qualifier: String, private val dark: Boolean) {
     companion object {
         // Right to left first, then the scripts most likely to break (CJK, Indic, Thai, Khmer, Ethiopic), then the long Latin ones.
-        private val locales = (System.getProperty("i18n.shots") ?: "ar,iw,fa,ur,ja,zh-rCN,ko,hi,ta,bn,th,km,am,de,ru").split(",")
+        private val locales = (System.getenv("I18N_SHOTS") ?: "ar,iw,fa,ur,ja,zh-rCN,ko,hi,ta,bn,th,km,am,de,ru").split(",")
         @JvmStatic @ParameterizedRobolectricTestRunner.Parameters(name = "{0}-dark={1}")
         fun params() = locales.flatMap { listOf(arrayOf<Any>(it, false), arrayOf<Any>(it, true)) }
     }

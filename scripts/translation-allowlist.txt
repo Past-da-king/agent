@@ -57,3 +57,8 @@ APK
 Node
 OAuth
 Token
+# OpenAI's own page is English only, so its button names are quoted as they are
+* onb_key_openai_3
+de chat_attach_document_sub
+# The button named in this sentence is on the computer and stays English there
+* wake_up_intro

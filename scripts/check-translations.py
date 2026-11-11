@@ -61,6 +61,39 @@ ENGLISH_STOP = {"the", "your", "you", "with", "this", "that", "will", "have", "f
                 "than", "also", "only", "just", "tap", "please", "wait", "need", "needs"}
 
 NOFORMAT = set()  # names of strings marked formatted="false"
+# Unicode script each language is written in. Latin letters are always allowed in the non-Latin ones (brands,
+# technical words); a letter from any OTHER script means text in the wrong language slipped in.
+import unicodedata
+SCRIPTS = {
+    "hi": {"DEVANAGARI"}, "mr": {"DEVANAGARI"}, "ne": {"DEVANAGARI"}, "bn": {"BENGALI"}, "ta": {"TAMIL"}, "te": {"TELUGU"},
+    "gu": {"GUJARATI"}, "kn": {"KANNADA"}, "ml": {"MALAYALAM"}, "pa": {"GURMUKHI"}, "ar": {"ARABIC"}, "fa": {"ARABIC"},
+    "ur": {"ARABIC"}, "he": {"HEBREW"}, "am": {"ETHIOPIC"}, "th": {"THAI"}, "km": {"KHMER"},
+    "ja": {"CJK", "HIRAGANA", "KATAKANA"}, "zh": {"CJK", "BOPOMOFO"}, "ko": {"HANGUL", "CJK"},
+    "ru": {"CYRILLIC"}, "uk": {"CYRILLIC"}, "el": {"GREEK"},
+}
+
+
+def script_of(ch):
+    try:
+        return unicodedata.name(ch).split()[0].split("-")[0]
+    except ValueError:
+        return "UNKNOWN"
+
+
+def wrong_script(lang, text):
+    allowed = SCRIPTS.get(lang, set()) | {"LATIN"}
+    bad = {}
+    for ch in PLACEHOLDER.sub(" ", TAG.sub(" ", text)):
+        if unicodedata.category(ch)[0] != "L":
+            continue
+        sc = script_of(ch)
+        if sc not in allowed and not (sc == "MODIFIER" or sc == "COMBINING"):
+            bad.setdefault(sc, []).append(ch)
+    if bad:
+        return ", ".join("%s %s" % (k, "".join(v[:6])) for k, v in bad.items())
+    return None
+
+
 PLACEHOLDER = re.compile(r"%(?:(\d+)\$)?[-#+ 0,(]*\d*(?:\.\d+)?([a-zA-Z%])")
 TAG = re.compile(r"</?[a-zA-Z][^>]*>")
 
@@ -195,6 +228,9 @@ def words(s):
 
 def english_leak(lang, en, tr, key, brands, identical):
     """Return a message or None."""
+    ws = wrong_script(lang, tr)
+    if ws:
+        return "wrong script (%s)" % ws
     if (lang, key) in identical or ("*", key) in identical:
         return None
     en_w = [w for w in words(en) if w.lower() not in brands]
