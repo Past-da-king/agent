@@ -19,6 +19,8 @@ data class LiveView(
     /** The approval or question that waits for him: drawn by the app's own card, never decided by voice. */
     val card: ChatItem? = null,
     val muted: Boolean = false,
+    /** How loud the voice is right now, 0..1 (what is playing), so the face can move its mouth with it. */
+    val level: Float = 0f,
     val problem: String = "",
 )
 
@@ -67,12 +69,23 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
 
     fun muted(m: Boolean) = publish { it.copy(muted = m) }
 
+    /**
+     * How loud the voice is now. Only a real change is published (the loudness arrives many times a second), and the
+     * level falls to zero the moment the voice stops. True when the view changed.
+     */
+    fun level(v: Float): Boolean {
+        val l = v.coerceIn(0f, 1f)
+        if (l == view.level || (l != 0f && kotlin.math.abs(l - view.level) < 0.05f)) return false
+        publish { it.copy(level = l) }
+        return true
+    }
+
     /** Live started or stopped speaking. True when the user's goodbye was heard and the farewell has now been said. */
     fun speaking(on: Boolean): Boolean {
         touch()
         if (on && !speaking && lastWho == "in" && isEndPhrase(lastIn)) endPending = true
         speaking = on
-        publish()
+        publish { if (on) it else it.copy(level = 0f) }
         return endPending && !on
     }
 
