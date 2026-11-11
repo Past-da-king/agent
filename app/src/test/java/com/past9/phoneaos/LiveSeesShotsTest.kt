@@ -14,7 +14,6 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.past9.phoneaos.assist.LiveActions
@@ -100,10 +99,10 @@ open class LiveSeesShotsTest(private val dark: Boolean) {
 
     private fun call(name: String, open: Boolean) {
         rule.mainClock.autoAdvance = false
-        rule.setContent { AppTheme(dark = dark) { Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) { Column(Modifier.padding(16.dp)) { CallRow(liveItems, "Nova") } } } }
-        rule.mainClock.advanceTimeBy(500)
-        if (open) { rule.onNodeWithText("Handed to your agent: Update the EOD report with today's numbers").performClick(); rule.mainClock.advanceTimeBy(1500); rule.onNodeWithText("Sent to your agent").assertExists() }
-        else rule.onNodeWithText("Handed to your agent: Update the EOD report with today's numbers").assertIsDisplayed()
+        rule.setContent { AppTheme(dark = dark) { Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) { Column(Modifier.padding(16.dp)) { CallRow(liveItems, "Nova", startOpen = open) } } } }
+        rule.mainClock.advanceTimeBy(1500)
+        if (open) { rule.onNodeWithText("Sent to your agent", useUnmergedTree = true).assertIsDisplayed(); rule.onNodeWithText("You said: “can you put today's numbers in the end of day report”", useUnmergedTree = true).assertIsDisplayed() }
+        else rule.onNodeWithText("Handed to your agent: Update the EOD report with today's numbers", useUnmergedTree = true).assertIsDisplayed()
         rule.onRoot().captureRoboImage(file(name))
     }
 
@@ -116,11 +115,9 @@ open class LiveSeesShotsTest(private val dark: Boolean) {
             .put("handoffs", JSONArray().put(JSONObject().put("at", 2L).put("request", "Update the EOD report").put("spoken", "update my end of day report").put("include_screen", false)))
         val item = ChatItem(id = 9, kind = "call", text = "Live voice", meta = meta.toString())
         rule.mainClock.autoAdvance = false
-        rule.setContent { AppTheme(dark = dark) { Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) { Column(Modifier.padding(16.dp)) { CallLogRow(item, "Nova") } } } }
-        rule.mainClock.advanceTimeBy(500)
-        rule.onNodeWithText("Handed to your agent: Update the EOD report").performClick()
+        rule.setContent { AppTheme(dark = dark) { Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) { Column(Modifier.padding(16.dp)) { CallLogRow(item, "Nova", startOpen = true) } } } }
         rule.mainClock.advanceTimeBy(1500)
-        rule.onNodeWithText("Sent to your agent").assertExists()
+        rule.onNodeWithText("Sent to your agent", useUnmergedTree = true).assertIsDisplayed()
         rule.onRoot().captureRoboImage(file("07-live-call-from-computer-opened"))
     }
 }

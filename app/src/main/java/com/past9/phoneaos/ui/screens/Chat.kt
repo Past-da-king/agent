@@ -697,8 +697,8 @@ fun iconFor(tool: String): ImageVector = when (tool) {
 
 /** A voice call in the chat: one line ("Voice call · 12 messages · last thing said"), tap for the whole conversation. */
 @Composable
-internal fun CallRow(items: List<ChatItem>, agentName: String) {
-    var open by remember { mutableStateOf(false) }
+internal fun CallRow(items: List<ChatItem>, agentName: String, startOpen: Boolean = false) {
+    var open by remember { mutableStateOf(startOpen) }
     val live = LiveCallParts.isLive(items)
     val hands = LiveCallParts.handoffs(items)
     val cs = MaterialTheme.colorScheme

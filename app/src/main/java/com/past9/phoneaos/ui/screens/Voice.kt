@@ -336,13 +336,13 @@ private fun CallApprovalCard(item: com.past9.phoneaos.data.ChatItem, onAnswer: (
  * said, tap for the whole conversation. A row with no transcript in it still shows its own line of text.
  */
 @Composable
-fun CallLogRow(item: com.past9.phoneaos.data.ChatItem, agentName: String) {
+fun CallLogRow(item: com.past9.phoneaos.data.ChatItem, agentName: String, startOpen: Boolean = false) {
     val cs = MaterialTheme.colorScheme
     val meta = remember(item.meta) { runCatching { org.json.JSONObject(item.meta) }.getOrDefault(org.json.JSONObject()) }
     val lines = remember(item.meta) {
         meta.optJSONArray("lines")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { it.optString("who") to it.optString("text").trim() } }.orEmpty().filter { it.second.isNotBlank() }
     }
-    var open by remember { mutableStateOf(false) }
+    var open by remember { mutableStateOf(startOpen) }
     val live = meta.optString("kind") == com.past9.phoneaos.assist.LiveAssistCore.KIND
     val hands = remember(item.meta) { LiveCallParts.fromMeta(meta) }
     val last = if (hands.isNotEmpty()) LiveCallParts.summary("", hands) else (lines.lastOrNull()?.second ?: item.text.trim())
