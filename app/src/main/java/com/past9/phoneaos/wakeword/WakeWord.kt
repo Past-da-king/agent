@@ -70,7 +70,7 @@ object WakeWord {
 
     internal fun ensureChannel(context: Context) {
         context.getSystemService(NotificationManager::class.java)?.createNotificationChannel(
-            NotificationChannel(CHANNEL, "Wake word", NotificationManager.IMPORTANCE_LOW).apply { setSound(null, null); enableVibration(false); setShowBadge(false) })
+            NotificationChannel(CHANNEL, context.getString(com.past9.phoneaos.R.string.settings_wake_word), NotificationManager.IMPORTANCE_LOW).apply { setSound(null, null); enableVibration(false); setShowBadge(false) })
     }
 
     internal fun openApp(context: Context, code: Int): PendingIntent = PendingIntent.getActivity(context, code,
@@ -82,8 +82,8 @@ object WakeWord {
             ensureChannel(context)
             val st = App.graph(context).settings.state.value
             val n = NotificationCompat.Builder(context, CHANNEL).setSmallIcon(Identity.statIcon(context, st.mascot))
-                .setContentTitle("Tap to listen for \"${phrase(context)}\" again")
-                .setContentText("Android stopped the listener. Opening the app starts it.")
+                .setContentTitle(context.getString(com.past9.phoneaos.R.string.wake_nudge_title, phrase(context)))
+                .setContentText(context.getString(com.past9.phoneaos.R.string.wake_nudge_text))
                 .setContentIntent(openApp(context, 31)).setAutoCancel(true).build()
             context.getSystemService(NotificationManager::class.java)?.notify(NUDGE_ID, n)
         }.onFailure { Log.w(TAG, "could not say the listener is down: ${it.message}") }
@@ -117,11 +117,11 @@ object WakeTarget {
         if (started && mayOpen) return true
         return runCatching {
             val nm = context.getSystemService(NotificationManager::class.java) ?: return false
-            nm.createNotificationChannel(NotificationChannel("wake_word_heard", "Wake word heard", NotificationManager.IMPORTANCE_HIGH).apply { setSound(null, null) })
+            nm.createNotificationChannel(NotificationChannel("wake_word_heard", context.getString(com.past9.phoneaos.R.string.wake_heard_channel), NotificationManager.IMPORTANCE_HIGH).apply { setSound(null, null) })
             val st = App.graph(context).settings.state.value
             val pi = PendingIntent.getActivity(context, 32, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             nm.notify(HEARD_ID, NotificationCompat.Builder(context, "wake_word_heard").setSmallIcon(Identity.statIcon(context, st.mascot))
-                .setContentTitle("I heard you").setContentText("Tap to talk. Allow Appear on top in Settings > Wake word to skip this tap.")
+                .setContentTitle(context.getString(com.past9.phoneaos.R.string.wake_heard_title)).setContentText(context.getString(com.past9.phoneaos.R.string.wake_heard_text))
                 .setContentIntent(pi).setFullScreenIntent(pi, true).setAutoCancel(true).setTimeoutAfter(15_000)
                 .setPriority(NotificationCompat.PRIORITY_HIGH).setCategory(NotificationCompat.CATEGORY_CALL).build())
             true

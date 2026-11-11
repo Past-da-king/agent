@@ -92,10 +92,10 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
     fun info(): RuntimeInfo = RuntimeInfo(
         available = available, installedBytes = sizeBytes(), signedIn = signedIn,
         note = when {
-            !available -> "${kind.label} isn't available on this phone yet"
-            !installed -> "Downloads ${RuntimePacks.pendingMb(context, packIds)} MB on first use"
-            !signedIn -> "Installed · sign in with ${kind.label}"
-            else -> "Ready · signed in to ${kind.label}"
+            !available -> context.getString(com.past9.phoneaos.R.string.rt_note_unavailable, kind.label)
+            !installed -> context.getString(com.past9.phoneaos.R.string.rt_note_downloads, RuntimePacks.pendingMb(context, packIds).toString())
+            !signedIn -> context.getString(com.past9.phoneaos.R.string.rt_note_installed, kind.label)
+            else -> context.getString(com.past9.phoneaos.R.string.rt_note_ready, kind.label)
         },
     )
 
@@ -136,7 +136,7 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
         }
         // Prove Android really lets this app execute the downloaded binary (targetSdk 28). If this fails,
         // nothing else will work, so say so here instead of at the first message.
-        progress("Checking the runtime")
+        progress(context.getString(com.past9.phoneaos.R.string.rt_checking_runtime))
         val out = StringBuilder()
         val code = runCatching {
             ProcessBuilder(node.path, "--version").directory(dir).redirectErrorStream(true).apply { environment().putAll(env()) }.start().let { p ->
@@ -145,7 +145,7 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
             }
         }.getOrElse { out.appendLine(it.message); -1 }
         check(code == 0) { "Android blocked the downloaded runtime (exit $code). ${out.toString().take(300)}" }
-        progress("Installed")
+        progress(context.getString(com.past9.phoneaos.R.string.rt_installed))
     }
 
     /** While a sign-in waits for the code the user copies from the browser. */
@@ -158,7 +158,7 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
      * Antigravity show a code: [needsCode] asks for it and [submitCode] types it in.
      */
     suspend fun login(onUrl: (String) -> Unit, progress: (String) -> Unit, needsCode: () -> Unit = {}): String? = withContext(Dispatchers.IO) {
-        if (!installed) return@withContext "The ${kind.label} runtime isn't downloaded yet."
+        if (!installed) return@withContext context.getString(com.past9.phoneaos.R.string.rt_not_downloaded, kind.label)
         val cmd = when (kind) {
             SubKind.CLAUDE -> listOf(File(bin, "claude").path, "auth", "login", "--claudeai")
             SubKind.CODEX -> listOf(File(bin, "codex").path, "login")

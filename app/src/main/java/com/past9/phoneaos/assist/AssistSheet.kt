@@ -1,5 +1,7 @@
 package com.past9.phoneaos.assist
 
+import androidx.compose.ui.res.stringResource
+import com.past9.phoneaos.R
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -71,25 +73,30 @@ data class ScreenLine(val text: String, val reading: Boolean)
 
 object AssistWords {
     /** The line under the agent's name. */
+    @Composable
     fun caption(v: AssistView): String = when (v.phase) {
-        AssistPhase.LISTENING -> "Listening"
-        AssistPhase.TYPING -> "Type it instead"
-        AssistPhase.LOCKED -> "Unlock to carry on"
-        AssistPhase.SENDING -> "Sending"
-        AssistPhase.THINKING -> "Thinking"
-        AssistPhase.ACTING -> v.label.ifBlank { "Working" }
-        AssistPhase.ANSWERING -> "Answered"
-        AssistPhase.APPROVAL -> "Needs your yes"
-        AssistPhase.ASKING -> "Needs you"
-        AssistPhase.ERROR -> "That did not work"
+        AssistPhase.LISTENING -> stringResource(R.string.voice_listening)
+        AssistPhase.TYPING -> stringResource(R.string.assist_type_it_instead)
+        AssistPhase.LOCKED -> stringResource(R.string.assist_unlock_to_carry_on)
+        AssistPhase.SENDING -> stringResource(R.string.assist_sending)
+        AssistPhase.THINKING -> stringResource(R.string.assist_thinking)
+        AssistPhase.ACTING -> v.label.ifBlank { stringResource(R.string.chat_working) }
+        AssistPhase.ANSWERING -> stringResource(R.string.chat_answered)
+        AssistPhase.APPROVAL -> stringResource(R.string.assist_needs_your_yes)
+        AssistPhase.ASKING -> stringResource(R.string.chat_needs_you_title)
+        AssistPhase.ERROR -> stringResource(R.string.assist_did_not_work)
     }
 
     /** One line on what the assistant can see of the screen, or null when there is nothing to say. */
-    fun screenLine(screen: ScreenContext?, readScreenOn: Boolean): ScreenLine? = when {
-        screen == null -> if (readScreenOn) null else ScreenLine("Not reading the screen", false)
-        screen.blocked -> ScreenLine(ScreenGuard.SAYS, false)
-        screen.hasAnything -> ScreenLine("Reading the screen" + (if (screen.label.isNotBlank()) ": ${screen.label}" else "") + (if (screen.screenshot.isNotBlank()) ", with a picture" else ""), true)
-        else -> ScreenLine("This screen can't be read", false)
+    /** @param context when given, the line is in the app's language (English without it). */
+    fun screenLine(screen: ScreenContext?, readScreenOn: Boolean, context: android.content.Context? = null): ScreenLine? {
+        fun t(id: Int, en: String) = context?.getString(id) ?: en
+        return when {
+            screen == null -> if (readScreenOn) null else ScreenLine(t(R.string.assist_not_reading_screen, "Not reading the screen"), false)
+            screen.blocked -> ScreenLine(ScreenGuard.SAYS, false)
+            screen.hasAnything -> ScreenLine(t(R.string.assist_reading_screen, "Reading the screen") + (if (screen.label.isNotBlank()) ": ${screen.label}" else "") + (if (screen.screenshot.isNotBlank()) t(R.string.assist_with_picture, ", with a picture") else ""), true)
+            else -> ScreenLine(t(R.string.assist_screen_unreadable, "This screen can't be read"), false)
+        }
     }
 }
 
@@ -117,7 +124,7 @@ fun AssistSheetBody(view: AssistView, agentName: String, screen: ScreenLine?, ac
         Spacer(Modifier.height(14.dp))
         Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
             when (view.phase) {
-                AssistPhase.LISTENING -> Text(view.heard.ifBlank { "Go ahead, I'm listening" }, style = MaterialTheme.typography.headlineSmall,
+                AssistPhase.LISTENING -> Text(view.heard.ifBlank { stringResource(R.string.assist_go_ahead) }, style = MaterialTheme.typography.headlineSmall,
                     color = if (view.heard.isBlank()) cs.onSurfaceVariant else cs.onSurface, modifier = Modifier.heightIn(min = 64.dp))
                 AssistPhase.TYPING -> TypeBox(view, agentName, actions.onSendTyped)
                 AssistPhase.LOCKED -> {
@@ -125,10 +132,10 @@ fun AssistSheetBody(view: AssistView, agentName: String, screen: ScreenLine?, ac
                     Spacer(Modifier.height(12.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Rounded.Lock, null, Modifier.size(18.dp), tint = cs.onSurfaceVariant); Spacer(Modifier.width(8.dp))
-                        Text("Unlock your phone and it goes.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                        Text(stringResource(R.string.assist_unlock_and_it_goes), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                     }
                     Spacer(Modifier.height(12.dp))
-                    Button(onClick = actions.onUnlock, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("Unlock", style = MaterialTheme.typography.titleMedium) }
+                    Button(onClick = actions.onUnlock, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text(stringResource(R.string.assist_unlock), style = MaterialTheme.typography.titleMedium) }
                 }
                 AssistPhase.SENDING, AssistPhase.THINKING, AssistPhase.ACTING -> {
                     Heard(view.heard)
@@ -154,7 +161,7 @@ fun AssistSheetBody(view: AssistView, agentName: String, screen: ScreenLine?, ac
                     Spacer(Modifier.height(10.dp))
                     Row(verticalAlignment = Alignment.Top) {
                         Icon(Icons.Rounded.ErrorOutline, null, Modifier.size(20.dp), tint = cs.error); Spacer(Modifier.width(8.dp))
-                        Text(view.problem.ifBlank { "Something went wrong. Try again." }, style = MaterialTheme.typography.bodyLarge, color = cs.error)
+                        Text(view.problem.ifBlank { stringResource(R.string.assist_something_wrong) }, style = MaterialTheme.typography.bodyLarge, color = cs.error)
                     }
                 }
             }
@@ -170,19 +177,19 @@ fun AssistSheetBody(view: AssistView, agentName: String, screen: ScreenLine?, ac
         Spacer(Modifier.height(16.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             MorphIconButton(onClick = actions.onKeyboard, size = 52.dp, enabled = view.phase != AssistPhase.SENDING && view.phase != AssistPhase.LOCKED) {
-                Icon(Icons.Rounded.Keyboard, "Type instead", tint = cs.onSurface)
+                Icon(Icons.Rounded.Keyboard, stringResource(R.string.assist_type_instead), tint = cs.onSurface)
             }
             val (icon, label, tap) = when {
-                view.phase == AssistPhase.LISTENING -> Triple(Icons.Rounded.Stop, "Done speaking", actions.onDoneSpeaking)
-                busy -> Triple(Icons.Rounded.Stop, "Stop", actions.onStopAgent)
-                else -> Triple(Icons.Rounded.Mic, "Speak", actions.onMic)
+                view.phase == AssistPhase.LISTENING -> Triple(Icons.Rounded.Stop, stringResource(R.string.assist_done_speaking), actions.onDoneSpeaking)
+                busy -> Triple(Icons.Rounded.Stop, stringResource(R.string.chat_stop), actions.onStopAgent)
+                else -> Triple(Icons.Rounded.Mic, stringResource(R.string.chat_speak), actions.onMic)
             }
             FilledIconButton(onClick = tap, modifier = Modifier.size(68.dp).semantics { contentDescription = label }, enabled = view.phase != AssistPhase.SENDING && view.phase != AssistPhase.LOCKED,
                 colors = IconButtonDefaults.filledIconButtonColors(containerColor = if (view.phase == AssistPhase.LISTENING) cs.primary else if (busy) cs.errorContainer else cs.primaryContainer,
                     contentColor = if (view.phase == AssistPhase.LISTENING) cs.onPrimary else if (busy) cs.onErrorContainer else cs.onPrimaryContainer)) {
                 Icon(icon, null, Modifier.size(30.dp))
             }
-            MorphIconButton(onClick = actions.onOpenApp, size = 52.dp) { Icon(Icons.AutoMirrored.Rounded.OpenInNew, "Open the app", tint = cs.onSurface) }
+            MorphIconButton(onClick = actions.onOpenApp, size = 52.dp) { Icon(Icons.AutoMirrored.Rounded.OpenInNew, stringResource(R.string.share_open_app), tint = cs.onSurface) }
         }
     }
 }
@@ -206,10 +213,10 @@ private fun TypeBox(view: AssistView, agentName: String, onSend: (String) -> Uni
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { delay(80); runCatching { focus.requestFocus() } }
     if (view.problem.isNotBlank()) { Text(view.problem, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant); Spacer(Modifier.height(10.dp)) }
-    AppTextField(text, { text = it }, Modifier.fillMaxWidth().focusRequester(focus), placeholder = { Text("Ask or tell $agentName") }, minLines = 1, maxLines = 4,
+    AppTextField(text, { text = it }, Modifier.fillMaxWidth().focusRequester(focus), placeholder = { Text(stringResource(R.string.assist_ask_or_tell, agentName)) }, minLines = 1, maxLines = 4,
         shape = RoundedCornerShape(Radius.md), keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Send),
         keyboardActions = KeyboardActions(onSend = { if (text.isNotBlank()) onSend(text) }),
-        trailingIcon = { IconButton(onClick = { if (text.isNotBlank()) onSend(text) }, enabled = text.isNotBlank()) { Icon(Icons.AutoMirrored.Rounded.Send, "Send", tint = if (text.isNotBlank()) cs.primary else cs.onSurfaceVariant) } })
+        trailingIcon = { IconButton(onClick = { if (text.isNotBlank()) onSend(text) }, enabled = text.isNotBlank()) { Icon(Icons.AutoMirrored.Rounded.Send, stringResource(R.string.share_send), tint = if (text.isNotBlank()) cs.primary else cs.onSurfaceVariant) } })
 }
 
 /** A few bars that move while the microphone is open. */
@@ -240,18 +247,18 @@ fun ApprovalInSheet(item: ChatItem, onAnswer: (Long, String) -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Shield, null, tint = cs.onTertiaryContainer, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("APPROVE BEFORE I DO THIS", style = Eyebrow, color = cs.onTertiaryContainer)
+                Text(stringResource(R.string.chat_approve_before), style = Eyebrow, color = cs.onTertiaryContainer)
             }
             Spacer(Modifier.height(8.dp))
             Text(a.summary, style = MaterialTheme.typography.titleMedium, color = cs.onTertiaryContainer)
-            Text("Asked by ${a.askedBy}" + if (a.target.isNotBlank()) " · On ${a.target}" else "", style = MaterialTheme.typography.bodySmall, color = cs.onTertiaryContainer.copy(alpha = 0.8f))
+            Text(stringResource(R.string.assist_asked_by, a.askedBy) + if (a.target.isNotBlank()) stringResource(R.string.assist_on_target, a.target) else "", style = MaterialTheme.typography.bodySmall, color = cs.onTertiaryContainer.copy(alpha = 0.8f))
             if (a.details.isNotBlank()) { Spacer(Modifier.height(10.dp)); ApprovalBody(a.details, full = false) }
             if (a.failed) { Spacer(Modifier.height(8.dp)); Text(Approval.FAILED, style = MaterialTheme.typography.bodyMedium, color = cs.error) }
             Spacer(Modifier.height(12.dp))
             HoldToApprove { onAnswer(item.id, "Approve") }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                TextButton(onClick = { onAnswer(item.id, "Decline") }) { Text("Decline", style = MaterialTheme.typography.labelLarge, color = cs.onTertiaryContainer) }
-                if (a.details.isNotBlank()) TextButton(onClick = { open = true }) { Text("Read all of it", style = MaterialTheme.typography.labelLarge, color = cs.onTertiaryContainer) }
+                TextButton(onClick = { onAnswer(item.id, "Decline") }) { Text(stringResource(R.string.chat_decline), style = MaterialTheme.typography.labelLarge, color = cs.onTertiaryContainer) }
+                if (a.details.isNotBlank()) TextButton(onClick = { open = true }) { Text(stringResource(R.string.assist_read_all), style = MaterialTheme.typography.labelLarge, color = cs.onTertiaryContainer) }
             }
         }
     }

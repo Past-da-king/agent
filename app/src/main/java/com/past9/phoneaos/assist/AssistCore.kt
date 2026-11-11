@@ -30,7 +30,7 @@ data class AssistView(
     val phase: AssistPhase,
     /** His words: live while he speaks, then what was sent. */
     val heard: String = "",
-    /** What the agent is doing, in a few words. */
+    /** What the agent is doing, in a few words; blank shows the sheet's own "Working", in the app's language. */
     val label: String = "",
     val answer: String = "",
     /** The approval or question that waits for him. */
@@ -131,8 +131,8 @@ class AssistCore(private val micAvailable: Boolean = true) {
             failure != null && (reply == null || failure.id > reply.id) -> AssistView(AssistPhase.ERROR, heard, problem = failure.text)
             working -> {
                 val label = step?.takeIf { reply == null || it.id > reply.id }?.let { stepLabel(it) }.orEmpty()
-                if (label.isNotEmpty() || step != null && reply == null) AssistView(AssistPhase.ACTING, heard, label = label.ifEmpty { "Working" }, answer = reply?.text.orEmpty(), answerId = reply?.id)
-                else if (reply != null) AssistView(AssistPhase.ACTING, heard, label = "Working", answer = reply.text, answerId = reply.id)
+                if (label.isNotEmpty() || step != null && reply == null) AssistView(AssistPhase.ACTING, heard, label = label, answer = reply?.text.orEmpty(), answerId = reply?.id)
+                else if (reply != null) AssistView(AssistPhase.ACTING, heard, answer = reply.text, answerId = reply.id)
                 else AssistView(AssistPhase.THINKING, heard)
             }
             reply != null -> AssistView(AssistPhase.ANSWERING, heard, answer = reply.text, answerId = reply.id)

@@ -15,10 +15,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.past9.phoneaos.agent.ModelInfo
-import com.past9.phoneaos.ui.StatusPill
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.res.pluralStringResource
 import com.past9.phoneaos.R
+import com.past9.phoneaos.ui.StatusPill
+import androidx.compose.ui.res.pluralStringResource
 import com.past9.phoneaos.ui.theme.Eyebrow
 import java.time.LocalDate
 

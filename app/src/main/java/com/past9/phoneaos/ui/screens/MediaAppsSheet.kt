@@ -10,7 +10,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import com.past9.phoneaos.R
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.past9.phoneaos.media.MediaApp
@@ -26,9 +29,10 @@ data class MediaAppRow(
     /** It has a media session open right now. */
     val sessionNow: Boolean = false,
 ) {
-    /** What it can do, in words. */
-    fun abilities(): List<String> = listOfNotNull(
-        "Plays from search".takeIf { playFromSearch }, "Video links".takeIf { videoLinks }, "Local files".takeIf { audioFiles }, "Playing now".takeIf { sessionNow },
+    /** What it can do, in words. Without a Context (tests) it stays English. */
+    fun abilities(ctx: android.content.Context? = null): List<String> = listOfNotNull(
+        ctx.str(R.string.media_plays_search, "Plays from search").takeIf { playFromSearch }, ctx.str(R.string.media_video_links, "Video links").takeIf { videoLinks },
+        ctx.str(R.string.media_local_files, "Local files").takeIf { audioFiles }, ctx.str(R.string.media_playing_now, "Playing now").takeIf { sessionNow },
     )
     val music: Boolean get() = playFromSearch || audioFiles
     val video: Boolean get() = videoLinks
@@ -50,14 +54,16 @@ data class MediaAppsActions(
     val openSessionAccess: () -> Unit = {},
 )
 
+private fun android.content.Context?.str(id: Int, en: String, vararg a: Any): String = this?.getString(id, *a) ?: en
+
 /** The Settings line under Automation, in words. */
 object MediaAppsUi {
-    fun line(rows: List<MediaAppRow>, music: String, video: String): String {
+    fun line(rows: List<MediaAppRow>, music: String, video: String, ctx: android.content.Context? = null): String {
         val m = rows.firstOrNull { it.pkg == music }?.label
         val v = rows.firstOrNull { it.pkg == video }?.label
         return when {
-            m == null && v == null -> "Which app plays your music and video · automatic"
-            else -> listOfNotNull(m?.let { "Music: $it" }, v?.let { "Video: $it" }).joinToString(" · ")
+            m == null && v == null -> ctx.str(R.string.media_line_auto, "Which app plays your music and video · automatic")
+            else -> listOfNotNull(m?.let { ctx.str(R.string.media_line_music, "Music: $it", it) }, v?.let { ctx.str(R.string.media_line_video, "Video: $it", it) }).joinToString(" · ")
         }
     }
 }
@@ -74,8 +80,8 @@ internal fun MediaAppsSheet(actions: MediaAppsActions, onDismiss: () -> Unit) {
     val access = remember { actions.hasSessionAccess() }
     com.past9.phoneaos.ui.AgentSheet(onDismiss) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 24.dp).navigationBarsPadding()) {
-            com.past9.phoneaos.ui.SheetHead(Icons.Rounded.LibraryMusic, "Media apps", "Play music and video",
-                "When you ask your agent to play something, it uses the app you pick here. Left on automatic, it uses your phone's default, then any app that can play from a search. Nothing leaves the phone except the YouTube search for a video.")
+            com.past9.phoneaos.ui.SheetHead(Icons.Rounded.LibraryMusic, stringResource(R.string.media_title), stringResource(R.string.media_play),
+                stringResource(R.string.media_intro))
             Spacer(Modifier.height(20.dp))
             if (!access) {
                 AppCard(padding = PaddingValues(vertical = 4.dp)) {
@@ -83,19 +89,19 @@ internal fun MediaAppsSheet(actions: MediaAppsActions, onDismiss: () -> Unit) {
                         Icon(Icons.Rounded.NotificationsOff, null, tint = MaterialTheme.colorScheme.error)
                         Spacer(Modifier.width(16.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("Notification access is off", style = MaterialTheme.typography.titleSmall)
-                            Text("Android only shows what is playing, and lets your agent pause or skip, once Agent has notification access.",
+                            Text(stringResource(R.string.media_access_off), style = MaterialTheme.typography.titleSmall)
+                            Text(stringResource(R.string.media_access_body),
                                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Spacer(Modifier.width(8.dp))
-                        OutlinedButton(onClick = actions.openSessionAccess) { Text("Allow", style = MaterialTheme.typography.labelLarge) }
+                        OutlinedButton(onClick = actions.openSessionAccess) { Text(stringResource(R.string.conn_allow), style = MaterialTheme.typography.labelLarge) }
                     }
                 }
                 Spacer(Modifier.height(16.dp))
             }
             if (rows.isEmpty()) {
                 AppCard(padding = PaddingValues(vertical = 4.dp)) {
-                    Text("No app on this phone says it can play music or video for your agent. Install a music app and it shows up here.",
+                    Text(stringResource(R.string.media_none),
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(16.dp))
                 }
             }
@@ -112,22 +118,22 @@ internal fun MediaAppsSheet(actions: MediaAppsActions, onDismiss: () -> Unit) {
                             }
                         }
                         Spacer(Modifier.height(8.dp))
-                        Text(r.abilities().joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(r.abilities(LocalContext.current).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(12.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             FilterChip(selected = music == r.pkg, enabled = r.music, onClick = { music = if (music == r.pkg) "" else r.pkg; actions.setMusic(music) },
-                                label = { Text("Music app", style = MaterialTheme.typography.labelLarge) }, shape = RoundedCornerShape(50),
+                                label = { Text(stringResource(R.string.media_music_app), style = MaterialTheme.typography.labelLarge) }, shape = RoundedCornerShape(50),
                                 leadingIcon = { Icon(Icons.Rounded.MusicNote, null, Modifier.size(18.dp)) },
                                 modifier = Modifier.height(40.dp).testTag("music-${r.pkg}"))
                             FilterChip(selected = video == r.pkg, enabled = r.video, onClick = { video = if (video == r.pkg) "" else r.pkg; actions.setVideo(video) },
-                                label = { Text("Video app", style = MaterialTheme.typography.labelLarge) }, shape = RoundedCornerShape(50),
+                                label = { Text(stringResource(R.string.media_video_app), style = MaterialTheme.typography.labelLarge) }, shape = RoundedCornerShape(50),
                                 leadingIcon = { Icon(Icons.Rounded.PlayCircle, null, Modifier.size(18.dp)) },
                                 modifier = Modifier.height(40.dp).testTag("video-${r.pkg}"))
                         }
                     }
                 }
             }
-            Text("Tap a chosen app again to go back to automatic.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Text(stringResource(R.string.media_tap_again), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp))
         }
     }

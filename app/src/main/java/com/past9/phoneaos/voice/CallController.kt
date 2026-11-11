@@ -41,13 +41,13 @@ class CallController(
     val available: Boolean get() = unavailableReason(linked() != null) == null
 
     /** Why this phone can't place a call right now, in plain words, or null when it can. */
-    fun unavailableReason(linked: Boolean): String? = reason(settings.voiceKey("gemini") != null, linked)
+    fun unavailableReason(linked: Boolean): String? = reason(settings.voiceKey("gemini") != null, linked)?.let { context.getString(com.past9.phoneaos.R.string.svc_call_needs_gemini) }
 
     /** Linked: the computer mints a one-use token from its own key; if it has none, this phone's key (if any) is used. */
     private suspend fun linkedAuth(r: com.past9.phoneaos.remote.RemoteSession): LiveAuth.Token = try {
         LiveAuth.parse(r.call("voice.liveToken", emptyList(), 20_000))
     } catch (e: Exception) {
-        LiveAuth.Token.No(if (LiveAuth.isOldComputer(e.message)) LiveAuth.OLD_COMPUTER else e.message ?: "Your computer didn't answer the call request.", false)
+        LiveAuth.Token.No(if (LiveAuth.isOldComputer(e.message)) LiveAuth.OLD_COMPUTER else e.message ?: context.getString(com.past9.phoneaos.R.string.svc_call_no_answer), false)
     }
 
     companion object {

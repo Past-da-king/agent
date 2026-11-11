@@ -51,7 +51,7 @@ private fun AccountRef.line(appName: String) = label.takeIf { it.isNotBlank() &&
 
 @Composable
 fun ProfilesSection(profiles: List<AgentProfile>, logos: Map<String, String>, readOnly: Boolean = false, onOpen: (String?) -> Unit) {
-    SectionHeader("Profiles", if (readOnly) "Made on your computer. Manage them there." else "Group accounts by part of your life. A helper given a profile can only use its accounts.", Modifier.padding(start = 4.dp, top = 16.dp, bottom = 2.dp))
+    SectionHeader(stringResource(R.string.profiles_title), if (readOnly) stringResource(R.string.profiles_sub_remote) else stringResource(R.string.profiles_sub), Modifier.padding(start = 4.dp, top = 16.dp, bottom = 2.dp))
     if (readOnly) {
         AppCard(padding = PaddingValues(vertical = 4.dp)) { profiles.forEach { p -> ProfileLine(p, logos, null) } }
         return
@@ -176,7 +176,7 @@ fun ProfileSheet(profile: AgentProfile?, accounts: List<AccountRef>, logos: Map<
         },
         secondary = if (profile != null) ({ TextButton(onClick = { actions.onDelete(profile.id); onDismiss() }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) { Text(stringResource(R.string.profiles_delete), color = MaterialTheme.colorScheme.error) } }) else null,
     ) {
-        SheetField(name, { name = it }, "Name", "Acme work", big = true, singleLine = true)
+        SheetField(name, { name = it }, stringResource(R.string.profiles_name), stringResource(R.string.profiles_name_example), big = true, singleLine = true)
         Spacer(Modifier.height(24.dp))
         Text(stringResource(R.string.profiles_colour), style = Eyebrow, color = MaterialTheme.colorScheme.primary)
         Text(stringResource(R.string.profiles_colour_sub), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

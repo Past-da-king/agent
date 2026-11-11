@@ -80,7 +80,7 @@ class RunningListTest {
         assertTrue("stale cards are dropped when the link stays down", session.contains("STALE_CARDS_MS") && session.contains("publishCards(emptyList())"))
         val ui = File(src, "com/past9/phoneaos/remote/LiveCardsUi.kt").readText()
         assertTrue("each card swipes", ui.contains("SwipeToDismissBox"))
-        assertTrue("the sheet has Go to chat", File(src, "com/past9/phoneaos/ui/Helpers.kt").readText().contains("Text(\"Go to chat\")"))
+        assertTrue("the sheet has Go to chat", File(src, "com/past9/phoneaos/ui/Helpers.kt").readText().let { it.contains("Text(\"Go to chat\")") || it.contains("Text(stringResource(R.string.ui_go_to_chat))") })
         val pchat = File(src, "com/past9/phoneaos/ui/screens/ProjectChat.kt").readText()
         assertTrue("a project chat folds its list into the same bubbles as the main chat", pchat.contains("AgentsPill(live") && pchat.contains("LiveCardList(mine, onCollapse") && pchat.contains("rememberAgentsFold()"))
         assertTrue("a project chat's title opens the switcher", pchat.contains("SwitcherTitle(chat"))
@@ -89,7 +89,7 @@ class RunningListTest {
         assertTrue("Home's main agent card shows it too", File(src, "com/past9/phoneaos/ui/screens/Home.kt").readText().contains("HomeRunning("))
         val feed = File(src, "com/past9/phoneaos/remote/RunningListUi.kt").readText()
         assertTrue("projects and chat states follow the link's events, never a timer", feed.contains("s.events.collectLatest") && feed.contains("\"chat.states\"") && feed.contains("listOf(\"project\")"))
-        assertTrue("Connections names the line Mini apps", File(src, "com/past9/phoneaos/ui/screens/Connections.kt").readText().contains("Text(\"Mini apps\""))
+        assertTrue("Connections names the line Mini apps", File(src, "com/past9/phoneaos/ui/screens/Connections.kt").readText().let { it.contains("Text(\"Mini apps\"") || it.contains("Text(stringResource(R.string.conn_mini_apps)") })
     }
 
     // ---- 9 Nov 2026: ONE running list across all projects, one fold for the whole app, and the project switcher ----

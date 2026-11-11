@@ -87,12 +87,12 @@ fun SubSetupScreen(kind: SubKind, signInHelp: String, info: RuntimeInfo, install
                 // 3. Paste the code (Claude)
                 needsCode -> AppCard {
                     var code by remember { mutableStateOf("") }
-                    Text("ALMOST THERE", style = Eyebrow, color = cs.primary)
-                    Text("Paste the code from ${kind.label}", style = MaterialTheme.typography.titleLarge)
+                    Text(stringResource(R.string.sub_almost_there), style = Eyebrow, color = cs.primary)
+                    Text(stringResource(R.string.sub_paste_code_from, kind.label), style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.height(10.dp))
-                    Text("In the browser: tap Authorize. ${kind.label} then shows a code. Copy it, come back here, and paste it below.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    Text(stringResource(R.string.sub_paste_code_body_from, kind.label), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                     Spacer(Modifier.height(14.dp))
-                    com.past9.phoneaos.ui.AppTextField(code, { code = it.trim() }, label = { Text("Code from ${kind.label}") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
+                    com.past9.phoneaos.ui.AppTextField(code, { code = it.trim() }, label = { Text(stringResource(R.string.sub_code_from, kind.label)) }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
                     Spacer(Modifier.height(12.dp))
                     Button(onClick = { onCode(code) }, enabled = code.length > 10, modifier = Modifier.fillMaxWidth().height(56.dp), shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.sub_finish_sign_in)) }
                 }

@@ -1,5 +1,7 @@
 package com.past9.phoneaos.assist
 
+import androidx.compose.ui.res.stringResource
+import com.past9.phoneaos.R
 import android.Manifest
 import android.app.KeyguardManager
 import android.content.Intent
@@ -82,7 +84,7 @@ class AssistActivity : ComponentActivity() {
     private val askMic = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         askingPermission = false
         if (granted && liveMode) startLive()
-        else if (granted) startListening() else { liveMode = false; core.listen(); core.micFailed("The microphone is off for this app, so type it here. You can allow it in the phone's Settings."); refresh() }
+        else if (granted) startListening() else { liveMode = false; core.listen(); core.micFailed(getString(R.string.assist_mic_off)); refresh() }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -112,7 +114,7 @@ class AssistActivity : ComponentActivity() {
         }
         setContent {
             val settings by g.settings.state.collectAsState()
-            AppTheme(accent = settings.accent, mascot = settings.mascot) { Sheet(settings.agentName.takeIf { it.isNotBlank() && it != "Your agent" } ?: "Your agent", settings.onboarded) }
+            AppTheme(accent = settings.accent, mascot = settings.mascot) { Sheet(settings.agentName.takeIf { it.isNotBlank() && it != "Your agent" } ?: stringResource(R.string.svc_your_agent), settings.onboarded) }
         }
         liveMode = st.onboarded && AssistPrefs.liveVoice(this)
         if (st.onboarded) beginListening()
@@ -194,7 +196,7 @@ class AssistActivity : ComponentActivity() {
         if (why.isBlank()) { finish(); return }
         liveMode = false
         core.listen()
-        core.micFailed("Live voice stopped: $why You can type here, or tap the mic.")
+        core.micFailed(getString(R.string.assist_live_stopped, why))
         refresh()
     }
 
@@ -204,7 +206,7 @@ class AssistActivity : ComponentActivity() {
         if (!core.listening) return
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) { if (liveMode) startLive() else startListening(); return }
         // The phone's own permission question cannot be drawn over the lock screen: there the keyboard takes over.
-        if (locked()) { core.micFailed("Unlock the phone once and allow the microphone, then this listens straight away."); refresh(); return }
+        if (locked()) { core.micFailed(getString(R.string.assist_unlock_for_mic)); refresh(); return }
         askingPermission = true
         askMic.launch(Manifest.permission.RECORD_AUDIO)
     }
@@ -252,7 +254,7 @@ class AssistActivity : ComponentActivity() {
         lifecycleScope.launch {
             runCatching { g.runtime.sendAccepted(text, images) }
                 .onSuccess { core.sent(before) }
-                .onFailure { e -> core.sendFailed("That did not send: " + e.message.orEmpty().ifBlank { "the link to your computer dropped" } + ". Your words are still here.") }
+                .onFailure { e -> core.sendFailed(getString(R.string.assist_send_failed, e.message.orEmpty().ifBlank { getString(R.string.assist_link_dropped) })) }
             refresh()
         }
     }
@@ -293,14 +295,14 @@ class AssistActivity : ComponentActivity() {
                 ) {
                     Column(Modifier.navigationBarsPadding().imePadding()) {
                         if (!onboarded) NotSetUp(agentName)
-                        else if (liveMode) LiveSheetBody(liveView, agentName, AssistWords.screenLine(screen, AssistPrefs.readScreen(this@AssistActivity)), LiveActions(
+                        else if (liveMode) LiveSheetBody(liveView, agentName, AssistWords.screenLine(screen, AssistPrefs.readScreen(this@AssistActivity), this@AssistActivity), LiveActions(
                             onEnd = { if (LiveHost.active) LiveHost.end("") else finish() },
                             onMute = { m -> LiveHost.mute(m) },
                             onMinimise = { minimise() },
                             onOpenApp = { openApp() },
                             onAnswer = { id, option -> g.runtime.answer(id, option) },
                         ))
-                        else AssistSheetBody(view, agentName, AssistWords.screenLine(screen, AssistPrefs.readScreen(this@AssistActivity)), AssistActions(
+                        else AssistSheetBody(view, agentName, AssistWords.screenLine(screen, AssistPrefs.readScreen(this@AssistActivity), this@AssistActivity), AssistActions(
                             onMic = { g.stopSpeaking(); core.listen(); refresh(); beginListening() },
                             onDoneSpeaking = { dictation?.finish() ?: heard(core.words) },
                             onStopAgent = { g.runtime.stop() },
@@ -320,11 +322,11 @@ class AssistActivity : ComponentActivity() {
     @Composable
     private fun NotSetUp(agentName: String) {
         Column(Modifier.fillMaxWidth().padding(24.dp)) {
-            Text("Finish setting up first", style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.assist_finish_setup), style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(6.dp))
-            Text("Open the app once and choose what powers $agentName. Then this sheet listens the moment it opens.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.assist_finish_setup_body, agentName), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(16.dp))
-            Button(onClick = { openApp() }, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("Open the app", style = MaterialTheme.typography.titleMedium) }
+            Button(onClick = { openApp() }, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text(stringResource(R.string.share_open_app), style = MaterialTheme.typography.titleMedium) }
         }
     }
 }

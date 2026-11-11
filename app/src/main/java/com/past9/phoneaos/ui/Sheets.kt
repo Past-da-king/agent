@@ -15,6 +15,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.past9.phoneaos.R
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.focus.onFocusChanged
@@ -150,7 +152,7 @@ fun ChoiceRow(c: SheetChoice, onClick: () -> Unit) {
                 Text(c.title, style = MaterialTheme.typography.titleMedium)
                 if (c.line.isNotBlank()) Text(c.line, style = MaterialTheme.typography.bodySmall, color = if (c.selected) cs.onPrimaryContainer.copy(alpha = 0.8f) else cs.onSurfaceVariant)
             }
-            if (c.selected) Icon(androidx.compose.material.icons.Icons.Rounded.Check, "Chosen", tint = cs.onPrimaryContainer)
+            if (c.selected) Icon(androidx.compose.material.icons.Icons.Rounded.Check, stringResource(R.string.ui_chosen), tint = cs.onPrimaryContainer)
             else Icon(androidx.compose.material.icons.Icons.Rounded.ChevronRight, null, tint = cs.onSurfaceVariant)
         }
     }
@@ -161,7 +163,7 @@ fun ChoiceRow(c: SheetChoice, onClick: () -> Unit) {
  * [destructive] paints the action in the error colour.
  */
 @Composable
-fun ConfirmSheet(icon: ImageVector, eyebrow: String, title: String, line: String, confirm: String, onConfirm: () -> Unit, onDismiss: () -> Unit, cancel: String = "Not now", destructive: Boolean = false) {
+fun ConfirmSheet(icon: ImageVector, eyebrow: String, title: String, line: String, confirm: String, onConfirm: () -> Unit, onDismiss: () -> Unit, cancel: String = stringResource(R.string.onb_not_now), destructive: Boolean = false) {
     val cs = MaterialTheme.colorScheme
     AgentSheet(onDismiss) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 20.dp).navigationBarsPadding()) {

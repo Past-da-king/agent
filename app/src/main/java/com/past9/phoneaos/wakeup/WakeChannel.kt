@@ -188,13 +188,13 @@ class WakeChannelService : Service() {
         fun build(context: Context): Notification {
             val nm = context.getSystemService(NotificationManager::class.java)
             if (Build.VERSION.SDK_INT >= 26 && nm?.getNotificationChannel(CHANNEL) == null) {
-                nm?.createNotificationChannel(NotificationChannel(CHANNEL, "Wake-ups ready", NotificationManager.IMPORTANCE_MIN).apply {
-                    description = "Keeps wake-ups able to reach this phone while the app is closed"; setShowBadge(false)
+                nm?.createNotificationChannel(NotificationChannel(CHANNEL, context.getString(com.past9.phoneaos.R.string.wake_ready), NotificationManager.IMPORTANCE_MIN).apply {
+                    description = context.getString(com.past9.phoneaos.R.string.wake_ready_channel_desc); setShowBadge(false)
                 })
             }
             val open = PendingIntent.getActivity(context, 7302, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
             return NotificationCompat.Builder(context, CHANNEL).setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-                .setContentTitle("Wake-ups ready").setContentText("Your agent can ring this phone when something needs you now")
+                .setContentTitle(context.getString(com.past9.phoneaos.R.string.wake_ready)).setContentText(context.getString(com.past9.phoneaos.R.string.wake_ready_text))
                 .setOngoing(true).setPriority(NotificationCompat.PRIORITY_MIN).setContentIntent(open).build()
         }
     }

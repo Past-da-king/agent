@@ -75,7 +75,7 @@ class AndroidPhone(private val context: Context) : PhoneBridge {
             Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("open", "chat"), PendingIntent.FLAG_IMMUTABLE)
         val shown = short(text)
         val b = NotificationCompat.Builder(context, CH_MESSAGES).setSmallIcon(Identity.statIcon(context, st.mascot))
-            .setColor(tint(st.accent)).setContentTitle(st.agentName.ifBlank { "Your agent" }).setContentText(shown)
+            .setColor(tint(st.accent)).setContentTitle(st.agentName.ifBlank { context.getString(com.past9.phoneaos.R.string.svc_your_agent) }).setContentText(shown)
             .setAutoCancel(true).setContentIntent(open)
         Identity.asAgent(context, b, "", shown)
         runCatching { NotificationManagerCompat.from(context).notify(NID_REPLY, b.build()) }

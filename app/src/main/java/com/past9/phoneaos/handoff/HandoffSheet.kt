@@ -58,7 +58,7 @@ fun HandoffSheet(onDone: () -> Unit) {
     }
     com.past9.phoneaos.ui.AgentSheet(onDone) {
         Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
-            com.past9.phoneaos.ui.SheetHead(androidx.compose.material.icons.Icons.Rounded.SyncAlt, "Your computers", "Hand-offs")
+            com.past9.phoneaos.ui.SheetHead(androidx.compose.material.icons.Icons.Rounded.SyncAlt, stringResource(R.string.handoff_your_computers), stringResource(R.string.handoff_title))
             Spacer(Modifier.height(8.dp))
             Text(stringResource(R.string.handoff_intro),
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

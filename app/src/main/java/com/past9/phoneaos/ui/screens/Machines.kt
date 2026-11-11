@@ -256,9 +256,9 @@ fun MachineSheet(existing: Machine?, others: List<Machine>, actions: MachineActi
             }
         }
     }
-    if (confirmDelete && existing != null) com.past9.phoneaos.ui.ConfirmSheet(androidx.compose.material.icons.Icons.Rounded.Dns, "Machine", "Remove ${existing.name}?",
-        "Your agent loses access, and its saved password or key is deleted from this phone.",
-        confirm = "Remove", onConfirm = { confirmDelete = false; actions.onDelete(existing.id) }, onDismiss = { confirmDelete = false }, cancel = "Keep it", destructive = true)
+    if (confirmDelete && existing != null) com.past9.phoneaos.ui.ConfirmSheet(androidx.compose.material.icons.Icons.Rounded.Dns, stringResource(R.string.machines_machine), stringResource(R.string.machines_remove_confirm, existing.name),
+        stringResource(R.string.machines_remove_confirm_body),
+        confirm = stringResource(R.string.machines_remove), onConfirm = { confirmDelete = false; actions.onDelete(existing.id) }, onDismiss = { confirmDelete = false }, cancel = stringResource(R.string.machines_keep_it), destructive = true)
 }
 
 @Composable

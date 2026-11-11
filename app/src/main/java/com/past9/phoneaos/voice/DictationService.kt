@@ -39,16 +39,16 @@ class DictationService : Service() {
 
     private fun notification(): Notification {
         val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Dictation", NotificationManager.IMPORTANCE_LOW).apply { setSound(null, null); enableVibration(false) })
+        nm.createNotificationChannel(NotificationChannel(CHANNEL, getString(com.past9.phoneaos.R.string.svc_dictation_channel), NotificationManager.IMPORTANCE_LOW).apply { setSound(null, null); enableVibration(false) })
         val st = App.graph(this).settings.state.value
         val open = PendingIntent.getActivity(this, 17, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val stop = PendingIntent.getService(this, 18, Intent(this, DictationService::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_IMMUTABLE)
         return NotificationCompat.Builder(this, CHANNEL).setSmallIcon(Identity.statIcon(this, st.mascot))
-            .setContentTitle("Listening")
-            .setContentText("Your words go into the message box. Tap to go back.")
+            .setContentTitle(getString(com.past9.phoneaos.R.string.voice_listening))
+            .setContentText(getString(com.past9.phoneaos.R.string.svc_dictation_text))
             .setOngoing(true).setSilent(true).setUsesChronometer(true).setWhen(System.currentTimeMillis())
-            .setContentIntent(open).addAction(0, "Stop", stop)
+            .setContentIntent(open).addAction(0, getString(com.past9.phoneaos.R.string.chat_stop), stop)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .build()
     }

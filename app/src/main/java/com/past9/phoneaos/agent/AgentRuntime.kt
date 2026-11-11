@@ -1007,7 +1007,7 @@ class AgentRuntime(
         val provider = providerFactory(settings)
         if (provider == null) {
             val why = if (settings.state.value.mode == PowerMode.SUBSCRIPTION)
-                "Your ${settings.state.value.subKind.label} subscription isn't set up on this phone yet. Open Settings to finish setup, or switch to an API key." else "Add an API key in Settings so I can start working."
+                context.getString(com.past9.phoneaos.R.string.rt_sub_not_setup, settings.state.value.subKind.label) else context.getString(com.past9.phoneaos.R.string.rt_add_key)
             db.chat().insert(ChatItem(kind = "notice", text = why))
             // Nothing started, so nothing will end: tell them now instead of leaving the phone quiet (issue #15).
             phone.replyPosted(why)
@@ -1635,7 +1635,7 @@ class AgentRuntime(
     internal suspend fun clearChat() {
         val outcome = runCatching { newChatOnComputer("main") }.getOrElse { NewChatOutcome.of(it) }
         clearLocalChat()
-        clearNotice(outcome)?.let { line -> db.chat().insert(ChatItem(kind = "notice", text = line)) }
+        clearNotice(outcome, context)?.let { line -> db.chat().insert(ChatItem(kind = "notice", text = line)) }
     }
 
     /** What the phone itself keeps: the rows, both threads' turns, and every id a turn picks up from. */
@@ -1842,10 +1842,11 @@ class GuardedAppsRunTool(private val inner: AppsRunTool, private val guard: com.
  * computer too old to know memory.newChat and one that cannot be reached need different things done about them, so
  * they are never one message (issue #14).
  */
-internal fun clearNotice(outcome: NewChatOutcome): String? = when (outcome) {
+/** @param context when given, the line is in the app's language (English without it). */
+internal fun clearNotice(outcome: NewChatOutcome, context: Context? = null): String? = when (outcome) {
     NewChatOutcome.STARTED, NewChatOutcome.NOT_LINKED -> null
-    NewChatOutcome.COMPUTER_OLDER ->
+    NewChatOutcome.COMPUTER_OLDER -> context?.getString(com.past9.phoneaos.R.string.rt_clear_computer_older) ?:
         "This phone's chat is cleared. Your computer's chat is not: the Agent app on it is older than this one, so it cannot start a new chat. Update the app on your computer, then clear again."
-    NewChatOutcome.UNREACHABLE ->
+    NewChatOutcome.UNREACHABLE -> context?.getString(com.past9.phoneaos.R.string.rt_clear_unreachable) ?:
         "This phone's chat is cleared. Your computer could not be reached just now, so its chat is still there and will show again when it syncs. Clear again once it is back."
 }

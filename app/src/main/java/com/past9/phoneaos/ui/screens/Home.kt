@@ -182,12 +182,12 @@ fun HomeScreen(s: HomeState, actions: HomeActions, bottomPadding: Dp = 120.dp,
             }
         }
         if (needs.isNotEmpty()) {
-            item { SectionHeader("Needs you", "Tap to open. Swipe to clear, hold for more", Modifier.padding(start = 4.dp, top = 6.dp)) }
+            item { SectionHeader(stringResource(R.string.home_needs_you), stringResource(R.string.home_needs_you_hint), Modifier.padding(start = 4.dp, top = 6.dp)) }
             items(needs, key = { it.key }) { n ->
                 val goneLine = gone[n.key]
                 if (goneLine != null) GoneNeedCard(n.title, goneLine) { clear(n) }
                 else NeedSwipe(n.title, onCleared = { clear(n) }) {
-                    Box(Modifier.fillMaxWidth().combinedClickable(onClick = { open(n) }, onLongClick = { sheetFor = n.key }, onLongClickLabel = "More", onClickLabel = "Open")) {
+                    Box(Modifier.fillMaxWidth().combinedClickable(onClick = { open(n) }, onLongClick = { sheetFor = n.key }, onLongClickLabel = stringResource(R.string.home_more_label), onClickLabel = stringResource(R.string.ui_open))) {
                         val task = s.tasks.firstOrNull { it.id == n.taskId }
                         val q = s.items.firstOrNull { it.id == n.itemId }
                         if (task != null) BlockedNeedCard(task) { sheetFor = n.key }
@@ -362,7 +362,7 @@ fun TodoLine(t: TaskRow, today: LocalDate, onToggle: (TaskRow) -> Unit,
         due == today.plusDays(1) -> stringResource(R.string.home_due_tomorrow) to cs.onSurfaceVariant
         else -> dueLabel(t.dueAt) to cs.onSurfaceVariant
     }
-    Row(Modifier.fillMaxWidth().then(if (onOpen == null) Modifier.clickable { onToggle(t) } else Modifier.combinedClickable(onClick = onOpen, onLongClick = onMore, onClickLabel = "Open", onLongClickLabel = "More"))
+    Row(Modifier.fillMaxWidth().then(if (onOpen == null) Modifier.clickable { onToggle(t) } else Modifier.combinedClickable(onClick = onOpen, onLongClick = onMore, onClickLabel = stringResource(R.string.ui_open), onLongClickLabel = stringResource(R.string.home_more_label)))
         .heightIn(min = 56.dp).padding(start = 8.dp, end = if (onMore == null) 8.dp else 0.dp), verticalAlignment = Alignment.CenterVertically) {
         Checkbox(checked = t.status == "done", onCheckedChange = { onToggle(t) })
         Column(Modifier.weight(1f)) {
@@ -370,7 +370,7 @@ fun TodoLine(t: TaskRow, today: LocalDate, onToggle: (TaskRow) -> Unit,
             if (label != null) Text(label, style = MaterialTheme.typography.labelMedium, color = color)
         }
         if (t.status == "blocked") StatusPill(stringResource(R.string.home_task_blocked), cs.tertiaryContainer, cs.onTertiaryContainer, Modifier.padding(end = 8.dp))
-        if (onMore != null) IconButton(onClick = onMore) { Icon(Icons.Rounded.MoreVert, "More", tint = cs.onSurfaceVariant) }
+        if (onMore != null) IconButton(onClick = onMore) { Icon(Icons.Rounded.MoreVert, stringResource(R.string.home_more_label), tint = cs.onSurfaceVariant) }
     }
 }
 

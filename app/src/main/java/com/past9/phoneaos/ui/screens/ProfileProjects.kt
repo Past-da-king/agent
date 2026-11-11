@@ -12,9 +12,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.past9.phoneaos.R
 import com.past9.phoneaos.remote.ProjectRow
 import com.past9.phoneaos.remote.ProjectsApi
 import com.past9.phoneaos.remote.RemoteHub
@@ -52,17 +56,18 @@ fun rememberProfileProjects(): ProfileProjects {
 }
 
 /** Open a new chat in [project] (an empty one is reused), or say why not. */
-private suspend fun openNewChat(projects: ProfileProjects, project: ProjectRow, actions: ProfileActions): String {
-    val api = projects.api ?: return "Not linked to a computer right now."
+private suspend fun openNewChat(ctx: android.content.Context, projects: ProfileProjects, project: ProjectRow, actions: ProfileActions): String {
+    val api = projects.api ?: return ctx.getString(R.string.proj_not_linked_now)
     return runCatching { api.startChat(project) }.fold(
         { ref -> projects.reload(); actions.onProjectChat(ref.chat, project.name); "" },
-        { "Couldn't start a chat in ${project.name}: ${it.message?.trim()?.trimEnd('.')?.ifBlank { null } ?: "your computer did not answer"}." })
+        { ctx.getString(R.string.proj_start_chat_failed, project.name, it.message?.trim()?.trimEnd('.')?.ifBlank { null } ?: ctx.getString(R.string.proj_no_answer)) })
 }
 
 /** The profile's Projects section: each project with its icon, name and last activity; a tap opens its latest chat. */
 @Composable
 fun ProjectsSection(projects: ProfileProjects, actions: ProfileActions, now: Long = System.currentTimeMillis()) {
     val cs = MaterialTheme.colorScheme
+    val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var adding by remember { mutableStateOf(false) }
     var all by remember { mutableStateOf(false) }
@@ -70,22 +75,22 @@ fun ProjectsSection(projects: ProfileProjects, actions: ProfileActions, now: Lon
     if (adding) NewProjectSheet(onDismiss = { adding = false }, onCreated = { id ->
         adding = false; projects.reload()
         // A new project opens on its first chat, ready to type in.
-        scope.launch { projects.api?.let { api -> runCatching { api.list().firstOrNull { it.id == id } }.getOrNull()?.let { p -> problem = openNewChat(projects, p, actions) } } }
+        scope.launch { projects.api?.let { api -> runCatching { api.list().firstOrNull { it.id == id } }.getOrNull()?.let { p -> problem = openNewChat(ctx, projects, p, actions) } } }
     }, api = projects.api)
     val rows = projects.rows
     Column(Modifier.fillMaxWidth()) {
-        SectionHeader("Projects", when {
-            !projects.linked -> "Projects live on a linked computer."
-            !projects.loaded -> "Reading them from your computer"
-            rows.isEmpty() -> "None yet. A project has its own chats, files and agent."
-            else -> "${rows.size} on your computer. Tap one to open its chat."
+        SectionHeader(stringResource(R.string.proj_projects), when {
+            !projects.linked -> stringResource(R.string.proj_live_on_computer)
+            !projects.loaded -> stringResource(R.string.proj_reading)
+            rows.isEmpty() -> stringResource(R.string.proj_none_section)
+            else -> stringResource(R.string.proj_on_computer_count, rows.size)
         }, Modifier.padding(horizontal = 20.dp)) {
-            TextButton(onClick = { adding = true }, modifier = Modifier.heightIn(min = 48.dp)) { Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("New project") }
+            TextButton(onClick = { adding = true }, modifier = Modifier.heightIn(min = 48.dp)) { Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text(stringResource(R.string.proj_new)) }
         }
         if (problem.isNotBlank()) Text(problem, Modifier.padding(horizontal = 20.dp, vertical = 6.dp), style = MaterialTheme.typography.bodyMedium, color = cs.error)
         val openProject: (ProjectRow) -> Unit = { p ->
             problem = ""
-            if (p.latestChat.isNotBlank()) actions.onProjectChat(p.latestChat, p.name) else scope.launch { problem = openNewChat(projects, p, actions) }
+            if (p.latestChat.isNotBlank()) actions.onProjectChat(p.latestChat, p.name) else scope.launch { problem = openNewChat(ctx, projects, p, actions) }
         }
         // Folded (the default): one row of the first few, side by side, and "All" for the rest. Never a long list by itself.
         if (rows.isNotEmpty() && !all) {
@@ -96,11 +101,11 @@ fun ProjectsSection(projects: ProfileProjects, actions: ProfileActions, now: Lon
                         Column(Modifier.padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             ProjectIconTile(p.name, p.glyph, p.color, p.image, 44.dp)
                             Spacer(Modifier.height(6.dp))
-                            Text(if (p.isArchive) p.name.ifBlank { "Earlier chats" } else p.name, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 4.dp))
+                            Text(if (p.isArchive) p.name.ifBlank { stringResource(R.string.proj_earlier_chats) } else p.name, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 4.dp))
                         }
                     }
                 }
-                if (rows.size > PROJECTS_SHOWN) TextButton(onClick = { all = true }, modifier = Modifier.heightIn(min = 60.dp)) { Text("All ${rows.size}") }
+                if (rows.size > PROJECTS_SHOWN) TextButton(onClick = { all = true }, modifier = Modifier.heightIn(min = 60.dp)) { Text(stringResource(R.string.proj_all_n, rows.size)) }
             }
         }
         if (rows.isNotEmpty() && all) {
@@ -113,15 +118,15 @@ fun ProjectsSection(projects: ProfileProjects, actions: ProfileActions, now: Lon
                                 ProjectIconTile(p.name, p.glyph, p.color, p.image, 40.dp)
                                 Spacer(Modifier.width(14.dp))
                                 Column(Modifier.weight(1f)) {
-                                    Text(if (p.isArchive) p.name.ifBlank { "Earlier chats" } else p.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(when { p.chats.isEmpty() -> "No chats yet"; else -> ProjectsApi.ago(p.activeAt, now).ifBlank { if (p.chats.size == 1) "1 chat" else "${p.chats.size} chats" } },
+                                    Text(if (p.isArchive) p.name.ifBlank { stringResource(R.string.proj_earlier_chats) } else p.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(when { p.chats.isEmpty() -> stringResource(R.string.proj_no_chats_yet); else -> ProjectsApi.ago(p.activeAt, now).ifBlank { pluralStringResource(R.plurals.proj_chats_count, p.chats.size, p.chats.size) } },
                                         style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                                 Icon(Icons.Rounded.ChevronRight, null, tint = cs.onSurfaceVariant)
                             }
                         }
                     }
-                    TextButton(onClick = { all = false }, modifier = Modifier.padding(horizontal = 8.dp).heightIn(min = 48.dp)) { Text("Show fewer") }
+                    TextButton(onClick = { all = false }, modifier = Modifier.padding(horizontal = 8.dp).heightIn(min = 48.dp)) { Text(stringResource(R.string.proj_show_fewer)) }
                 }
             }
         }
@@ -131,13 +136,15 @@ fun ProjectsSection(projects: ProfileProjects, actions: ProfileActions, now: Lon
 /** "New chat" from the profile: the main chat, or any project, as a slide-up choice. */
 @Composable
 fun NewChatChoice(projects: ProfileProjects, actions: ProfileActions, onDismiss: () -> Unit) {
+    val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var problem by remember { mutableStateOf("") }
-    val choices = listOf(SheetChoice("", "Main chat", "Start fresh. What was said so far is saved to memory.", icon = Icons.Rounded.Forum)) +
-        projects.rows.filter { !it.isArchive }.map { p -> SheetChoice(p.id, p.name, "A new chat in this project", mark = accentOf(p.color).lP) }
-    ChoiceSheet(Icons.Rounded.AddComment, "New chat", "Where do you want to start?", choices, onPick = { c ->
+    val newHere = stringResource(R.string.proj_new_chat_in_project)
+    val choices = listOf(SheetChoice("", stringResource(R.string.proj_main_chat), stringResource(R.string.proj_main_chat_line), icon = Icons.Rounded.Forum)) +
+        projects.rows.filter { !it.isArchive }.map { p -> SheetChoice(p.id, p.name, newHere, mark = accentOf(p.color).lP) }
+    ChoiceSheet(Icons.Rounded.AddComment, stringResource(R.string.proj_new_chat), stringResource(R.string.proj_where_start), choices, onPick = { c ->
         val p = projects.rows.firstOrNull { it.id == c.id && c.id.isNotEmpty() }
         if (p == null) { onDismiss(); actions.onNewMainChat() }
-        else scope.launch { problem = openNewChat(projects, p, actions); if (problem.isEmpty()) onDismiss() }
-    }, onDismiss = onDismiss, line = problem.ifBlank { if (projects.linked) null else "Link a computer to start chats in projects." })
+        else scope.launch { problem = openNewChat(ctx, projects, p, actions); if (problem.isEmpty()) onDismiss() }
+    }, onDismiss = onDismiss, line = problem.ifBlank { if (projects.linked) null else stringResource(R.string.proj_link_to_start) })
 }

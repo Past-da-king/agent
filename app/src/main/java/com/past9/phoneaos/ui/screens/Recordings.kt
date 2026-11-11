@@ -40,6 +40,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.past9.phoneaos.R
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -64,12 +66,13 @@ private fun whenLine(d: SavedDictation): String =
 private fun length(ms: Long): String { val s = (ms + 500) / 1000; return if (s >= 60) "${s / 60} min ${s % 60} s" else "$s s" }
 
 /** Plain words for how it ended. Empty: nothing to say. */
+@Composable
 private fun stateLine(d: SavedDictation): String = when {
-    d.state == "recording" -> "Recording now"
-    d.state == "interrupted" -> "Cut off"
-    d.state == "kept" -> "Some of it was not written down"
-    d.text.isBlank() && d.audio != null -> "Audio saved, no words yet"
-    d.audio == null -> "Audio gone, words kept"
+    d.state == "recording" -> stringResource(R.string.rec_recording_now)
+    d.state == "interrupted" -> stringResource(R.string.rec_cut_off)
+    d.state == "kept" -> stringResource(R.string.rec_partly)
+    d.text.isBlank() && d.audio != null -> stringResource(R.string.rec_no_words)
+    d.audio == null -> stringResource(R.string.rec_audio_gone)
     else -> ""
 }
 
@@ -88,19 +91,19 @@ fun RecordingsScreen(boxKey: String, onBack: () -> Unit) {
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
+                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.ui_back)) }
                 Spacer(Modifier.width(6.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Recordings", style = MaterialTheme.typography.titleMedium)
-                    Text("What you dictated, kept on this phone", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.rec_title), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.rec_sub), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         },
     ) { pad ->
         if (rows.isEmpty()) Column(Modifier.fillMaxSize().padding(pad).padding(24.dp)) {
-            Text("Nothing here yet", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.rec_empty), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(4.dp))
-            Text("Tap the mic in any message box. The audio and the words are saved as you talk.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.rec_empty_body), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else LazyColumn(Modifier.fillMaxSize().padding(pad), verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp)) {
             items(rows, key = { it.id }) { d -> RecordingRow(d) { open = d.id } }
@@ -143,35 +146,35 @@ private fun RecordingSheet(d: SavedDictation, boxKey: String, onDone: () -> Unit
             SheetHead(Icons.Rounded.Mic, length(d.durationMs), whenLine(d), stateLine(d).ifEmpty { null })
             Spacer(Modifier.height(16.dp))
             if (d.text.isNotBlank()) SelectionContainer { Text(d.text, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.heightIn(min = 48.dp)) }
-            else Text("No words saved for this one yet.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            else Text(stringResource(R.string.rec_no_words_yet), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(16.dp))
             if (d.text.isNotBlank()) {
                 FilledTonalButton(onClick = {
                     val box = ComposerBoxes.box(boxKey)
                     box.draft = Words.join(box.draft, d.text)
                     onDone()
-                }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Insert into message") }
+                }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.rec_insert)) }
                 Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = { clip.setText(AnnotatedString(d.text)); AppNotice.say("Copied") }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Copy") }
+                OutlinedButton(onClick = { clip.setText(AnnotatedString(d.text)); AppNotice.say(ctx.getString(R.string.machines_copied)) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.rec_copy)) }
                 Spacer(Modifier.height(8.dp))
             }
             val audio = d.audio
             if (audio != null && d.state != "recording") {
                 OutlinedButton(enabled = again == null, onClick = {
-                    Again.running[d.id] = "Writing it down..."
+                    Again.running[d.id] = ctx.getString(R.string.rec_writing)
                     val g = App.graph(ctx)
                     g.scope.launch {
                         try {
-                            Dictations.of(ctx).transcribeAgain(d.id, { pcm -> PieceTranscriber.transcribe(ctx, pcm) }) { i, n -> Again.running[d.id] = "Writing it down: part ${minOf(i + 1, n)} of $n" }
+                            Dictations.of(ctx).transcribeAgain(d.id, { pcm -> PieceTranscriber.transcribe(ctx, pcm) }) { i, n -> Again.running[d.id] = ctx.getString(R.string.rec_writing_part, minOf(i + 1, n), n) }
                             com.past9.phoneaos.remote.RemoteHub.session.value?.pushDictations()
                         } catch (e: kotlinx.coroutines.CancellationException) { throw e
-                        } catch (e: Exception) { AppNotice.say("Couldn't write it down: ${e.message}. The audio is still here.") }
+                        } catch (e: Exception) { AppNotice.say(ctx.getString(R.string.rec_failed, e.message)) }
                         finally { Again.running.remove(d.id) }
                     }
-                }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(again ?: "Transcribe again") }
+                }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(again ?: stringResource(R.string.rec_transcribe_again)) }
                 Spacer(Modifier.height(4.dp))
                 val mb = audio.length() * 4 / 3 / (1024.0 * 1024.0)
-                Text("From the saved audio. Uses about ${if (mb < 1) "1" else String.format(java.util.Locale.US, "%.0f", kotlin.math.ceil(mb))} MB of data.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.rec_data_use, if (mb < 1) "1" else String.format(java.util.Locale.US, "%.0f", kotlin.math.ceil(mb))), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

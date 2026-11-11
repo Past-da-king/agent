@@ -17,9 +17,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.past9.phoneaos.R
 import com.past9.phoneaos.data.ChatItem
 import com.past9.phoneaos.ui.AgentSheet
 import com.past9.phoneaos.ui.AppCard
@@ -102,25 +104,25 @@ fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
             }
             Spacer(Modifier.width(10.dp))
             Text(a.summary, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Text(a.decided, style = MaterialTheme.typography.labelMedium, color = if (a.approved) LocalExtra.current.success else cs.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
-            Icon(Icons.Rounded.ChevronRight, "Show what was ${a.decided.lowercase()}", tint = cs.onSurfaceVariant)
+            Text(decidedLabel(a), style = MaterialTheme.typography.labelMedium, color = if (a.approved) LocalExtra.current.success else cs.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
+            Icon(Icons.Rounded.ChevronRight, stringResource(R.string.chat_show_what_was, decidedLabel(a).lowercase()), tint = cs.onSurfaceVariant)
         }
         }
     } else AppCard(container = cs.tertiaryContainer, onClick = { open = true }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(if (a.isCommand) Icons.Rounded.Terminal else Icons.Rounded.Shield, null, tint = cs.onTertiaryContainer, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text("APPROVE BEFORE I DO THIS", style = Eyebrow, color = cs.onTertiaryContainer)
+            Text(stringResource(R.string.chat_approve_before), style = Eyebrow, color = cs.onTertiaryContainer)
         }
         Spacer(Modifier.height(8.dp))
         Text(a.summary, style = MaterialTheme.typography.titleLarge, color = cs.onTertiaryContainer)
         Spacer(Modifier.height(4.dp))
-        Text("Asked by ${a.askedBy}" + if (a.target.isNotBlank()) " · On ${a.target}" else "", style = MaterialTheme.typography.bodySmall, color = cs.onTertiaryContainer.copy(alpha = 0.8f))
+        Text(stringResource(R.string.chat_asked_by, shown(a.askedBy)) + if (a.target.isNotBlank()) stringResource(R.string.chat_on_target, shown(a.target)) else "", style = MaterialTheme.typography.bodySmall, color = cs.onTertiaryContainer.copy(alpha = 0.8f))
         if (a.details.isNotBlank()) { Spacer(Modifier.height(12.dp)); ApprovalBody(a.details, full = false) }
-        if (a.failed) { Spacer(Modifier.height(10.dp)); Text(Approval.FAILED, style = MaterialTheme.typography.bodyMedium, color = cs.error) }
+        if (a.failed) { Spacer(Modifier.height(10.dp)); Text(stringResource(R.string.chat_approval_failed), style = MaterialTheme.typography.bodyMedium, color = cs.error) }
         Spacer(Modifier.height(14.dp))
         Button(onClick = { open = true }, modifier = Modifier.fillMaxWidth().height(52.dp), shapes = ButtonDefaults.shapes()) {
-            Text("Review", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.chat_review), style = MaterialTheme.typography.titleMedium)
         }
     }
     if (open) ApprovalSheet(a, onDecide = { sent = true; onAnswer(item.id, it) }, onDismiss = { open = false })
@@ -146,13 +148,13 @@ fun ApprovalSheet(a: Approval, onDecide: (String) -> Unit, onDismiss: () -> Unit
     AgentSheet(onDismiss) {
         Column(Modifier.fillMaxWidth()) {
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
-                SheetHead(if (a.isCommand) Icons.Rounded.Terminal else Icons.Rounded.Shield, if (a.pending) "Approve before I do this" else a.decided, a.summary)
+                SheetHead(if (a.isCommand) Icons.Rounded.Terminal else Icons.Rounded.Shield, if (a.pending) stringResource(R.string.chat_approve_before_title) else decidedLabel(a), a.summary)
                 Spacer(Modifier.height(20.dp))
-                Fact("Asked by", a.askedBy)
-                if (a.why.isNotBlank()) Fact("Why", a.why)
-                if (a.target.isNotBlank()) Fact("On", a.target)
+                Fact(stringResource(R.string.chat_fact_asked_by), shown(a.askedBy))
+                if (a.why.isNotBlank()) Fact(stringResource(R.string.chat_fact_why), a.why)
+                if (a.target.isNotBlank()) Fact(stringResource(R.string.chat_fact_on), shown(a.target))
                 if (a.details.isNotBlank()) {
-                    Text(if (a.isCommand) "Command" else "What it will do", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                    Text(if (a.isCommand) stringResource(R.string.chat_command) else stringResource(R.string.chat_what_it_will_do), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                     Spacer(Modifier.height(6.dp))
                     ApprovalBody(a.details, full = true)
                 }
@@ -161,24 +163,35 @@ fun ApprovalSheet(a: Approval, onDecide: (String) -> Unit, onDismiss: () -> Unit
             HorizontalDivider(color = cs.outlineVariant.copy(alpha = 0.5f))
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 12.dp, bottom = 20.dp).navigationBarsPadding()) {
                 if (a.pending) {
-                    if (a.failed) { Text(Approval.FAILED, style = MaterialTheme.typography.bodyMedium, color = cs.error); Spacer(Modifier.height(10.dp)) }
+                    if (a.failed) { Text(stringResource(R.string.chat_approval_failed), style = MaterialTheme.typography.bodyMedium, color = cs.error); Spacer(Modifier.height(10.dp)) }
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         OutlinedButton(onClick = { onDecide("Decline") }, modifier = Modifier.weight(1f).height(56.dp), shapes = ButtonDefaults.shapes()) {
-                            Text("Decline", style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(R.string.chat_decline), style = MaterialTheme.typography.titleMedium)
                         }
                         Button(onClick = { onDecide("Approve") }, modifier = Modifier.weight(1.4f).height(56.dp), shapes = ButtonDefaults.shapes()) {
-                            Text("Approve", style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(R.string.chat_approve), style = MaterialTheme.typography.titleMedium)
                         }
                     }
                 } else Row(Modifier.heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(if (a.approved) Icons.Rounded.Check else Icons.Rounded.Close, null, Modifier.size(20.dp), tint = if (a.approved) LocalExtra.current.success else cs.onSurfaceVariant)
                     Spacer(Modifier.width(8.dp))
-                    Text(when { a.approved -> "You approved this"; a.answer == "Decline" -> "You declined this"; else -> "You answered: ${a.answer}" },
+                    Text(when { a.approved -> stringResource(R.string.chat_you_approved); a.answer == "Decline" -> stringResource(R.string.chat_you_declined); else -> stringResource(R.string.chat_you_answered_x, a.answer) },
                         style = MaterialTheme.typography.titleMedium, color = if (a.approved) LocalExtra.current.success else cs.onSurfaceVariant)
                 }
             }
         }
     }
+}
+
+/** [Approval.decided] in the phone's language; the English stays in the model for its tests. */
+@Composable
+private fun decidedLabel(a: Approval) = when { a.approved -> stringResource(R.string.chat_approved); a.answer == "Decline" -> stringResource(R.string.chat_declined); else -> stringResource(R.string.chat_answered) }
+
+/** The stock words [Approval.of] fills in, in the phone's language; names from the row are shown as they are. */
+@Composable
+private fun shown(s: String) = when (s) {
+    "Your agent" -> stringResource(R.string.chat_your_agent); "A project chat" -> stringResource(R.string.chat_a_project_chat)
+    "your computer" -> stringResource(R.string.chat_your_computer); "this phone" -> stringResource(R.string.chat_this_phone); else -> s
 }
 
 @Composable
@@ -213,7 +226,7 @@ fun ApprovalBody(details: String, full: Boolean) {
                         Text(v, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface, maxLines = if (full) Int.MAX_VALUE else 2, overflow = TextOverflow.Ellipsis)
                     }
                 }
-                if (!full && fields.size > 4) Text("${fields.size - 4} more in Review", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                if (!full && fields.size > 4) Text(stringResource(R.string.chat_more_in_review, fields.size - 4), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             }
         }
         else -> Surface(shape = MaterialTheme.shapes.medium, color = cs.surfaceContainerLowest, modifier = Modifier.fillMaxWidth()) {
