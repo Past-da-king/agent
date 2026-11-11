@@ -23,6 +23,9 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
     <!-- Optional, asked for in Settings: meeting prep notes and after-meeting action items from the phone's calendar. -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <!-- People (issue #13): names only, and the permission is asked for when the person taps Import on the People
+         screen, never at app start. People can always be added by hand without it. -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />

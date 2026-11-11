@@ -136,6 +136,8 @@ class MainActivity : ComponentActivity() {
         if (i == null) return
         // A home-screen shortcut to one mini-app.
         i.getStringExtra("miniapp")?.let { com.past9.phoneaos.miniapps.MiniAppsHub.pendingOpen.value = it }
+        // An important date's reminder (People): open that person's page.
+        i.getStringExtra("person")?.toLongOrNull()?.let { id -> com.past9.phoneaos.people.PeopleNav.open.value = id }
         // A link code (agent://pair?...) from the phone's own camera app, a shared QR, or adb.
         i.data?.takeIf { it.scheme == "agent" && it.host == "pair" }?.let { com.past9.phoneaos.remote.RemoteHub.pendingOffer.value = it.toString(); return }
         // A mini-app card in the chat, or the computer opening one here (miniapp_open): agent://miniapp/<id>.
@@ -234,11 +236,22 @@ class MainActivity : ComponentActivity() {
         val goals by remember(dataDb) { dataDb.tasks().goals() }.collectAsStateWithLifecycle(emptyList())
         val tasks by remember(dataDb) { dataDb.tasks().tasks() }.collectAsStateWithLifecycle(emptyList())
         val memories by remember(dataDb) { dataDb.memory().all() }.collectAsStateWithLifecycle(emptyList())
+        // People (issue #13): Home counts who is going quiet. The rows come from the database, the names from the one
+        // repository that opens them, so Home never holds a copy in plain text either.
+        val personRows by remember(dataDb) { dataDb.people().all() }.collectAsStateWithLifecycle(emptyList())
+        var everyPerson by remember { mutableStateOf<List<com.past9.phoneaos.people.Person>>(emptyList()) }
+        LaunchedEffect(personRows) { everyPerson = runCatching { g.people.people() }.getOrDefault(emptyList()) }
         val allRoutines by remember(dataDb) { dataDb.triggers().all() }.collectAsStateWithLifecycle(emptyList())
         // A card's refresh schedule is part of the card, and a wake is a one-off follow-up (see wake_list), not a routine of its own.
         val routines = allRoutines.filter { it.kind != com.past9.phoneaos.cards.CardScripts.KIND && it.kind != com.past9.phoneaos.triggers.Wakes.KIND }
         val browserLive by BrowserService.running.collectAsStateWithLifecycle()
         val nav = rememberNavController()
+        val personToOpen by com.past9.phoneaos.people.PeopleNav.open.collectAsStateWithLifecycle()
+        LaunchedEffect(personToOpen) {
+            val id = personToOpen ?: return@LaunchedEffect
+            com.past9.phoneaos.people.PeopleNav.open.value = null
+            nav.navigate("person/$id") { launchSingleTop = true }
+        }
         LaunchedEffect(openFromCard) {
             val (chat, name) = openFromCard ?: return@LaunchedEffect
             openFromCard = null
@@ -503,7 +516,8 @@ class MainActivity : ComponentActivity() {
         val needStore = remember { NeedStore.of(applicationContext) }
         var refreshingCard by remember { mutableStateOf<String?>(null) }
         val home = HomeState(settings.agentName, settings.userName, status, items, goals, tasks, routines,
-            notifRows.count { it.postedAt > System.currentTimeMillis() - 86_400_000L }, settings.notifApps.size, browserLive, cards = cards.filter { it.pinned }, miniApps = miniApps)
+            notifRows.count { it.postedAt > System.currentTimeMillis() - 86_400_000L }, settings.notifApps.size, browserLive, cards = cards.filter { it.pinned }, miniApps = miniApps,
+            people = everyPerson)
         val barRoutes = setOf("home", "tasks", "memory", "routines", "connections")
         // The floating bar sits above the system navigation inset. Pages built on SubScreen already get that inset from
         // their scaffold; Home draws to the screen edge, so it adds the inset itself (3-button navigation is 48dp).
@@ -532,6 +546,7 @@ class MainActivity : ComponentActivity() {
                             onTasks = { go("tasks") }, onGoal = { nav.navigate("profile") }, onRoutines = { go("routines") },
                             onSettings = { nav.navigate("settings") }, onCall = { startCall() }, onBrowser = { nav.navigate("browser") }, onNotifications = { nav.navigate("notifications") },
                             onCard = { openCard = it.id },
+                            onPeople = { nav.navigate("people") { launchSingleTop = true } }, onPerson = { p -> nav.navigate("person/${p.id}") { launchSingleTop = true } },
                             onMiniApp = { nav.navigate("miniapp/$it") }, onMiniApps = { nav.navigate("miniapps") },
                             onNeed = { t -> when (t) {
                                 is NeedTarget.ChatAt -> { ChatFocus.id.value = t.itemId; nav.navigate("chat") }
@@ -631,6 +646,58 @@ class MainActivity : ComponentActivity() {
                         onDelete = { t -> ops.deleteTask(t.id) },
                         onAsk = { prompt -> g.runtime.send(prompt); nav.navigate("chat") },
                     ))
+                }
+                // People: the personal CRM (GitHub issue #13). The permission for contacts is asked when Import is
+                // tapped, never at app start.
+                composable("people") {
+                    val peopleRows by remember(dataDb) { dataDb.people().all() }.collectAsStateWithLifecycle(emptyList())
+                    var peopleList by remember { mutableStateOf<List<com.past9.phoneaos.people.Person>>(emptyList()) }
+                    LaunchedEffect(peopleRows) { peopleList = g.people.people() }
+                    val importContacts: () -> Unit = {
+                        scope.launch {
+                            val added = runCatching { com.past9.phoneaos.people.ContactsImport.into(this@MainActivity, g.people) }.getOrDefault(-1)
+                            com.past9.phoneaos.ui.AppNotice.say(if (added < 0) "Couldn't read your contacts." else if (added == 0) "Nobody new in your contacts." else "Added $added ${if (added == 1) "person" else "people"} from your contacts.")
+                        }
+                    }
+                    val askContacts = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+                        if (ok) importContacts() else com.past9.phoneaos.ui.AppNotice.say("That's fine. Nobody is added without it, and you can still add people by hand.")
+                    }
+                    PeopleScreen(peopleList, bottomPadding = barPad, actions = PeopleActions(
+                        onBack = { nav.popBackStack() },
+                        onOpen = { nav.navigate("person/${it.id}") },
+                        onAdd = { name, note -> scope.launch { g.people.add(name, note) } },
+                        onImport = { if (com.past9.phoneaos.people.ContactsImport.allowed(this@MainActivity)) importContacts() else askContacts.launch(android.Manifest.permission.READ_CONTACTS) },
+                        onAsk = { prompt -> g.runtime.send(prompt); nav.navigate("chat") },
+                    ))
+                }
+                composable("person/{id}") { e ->
+                    val id = e.arguments?.getString("id")?.toLongOrNull() ?: -1L
+                    val peopleRows by remember(dataDb) { dataDb.people().all() }.collectAsStateWithLifecycle(emptyList())
+                    var person by remember { mutableStateOf<com.past9.phoneaos.people.Person?>(null) }
+                    var logs by remember { mutableStateOf<List<com.past9.phoneaos.people.PersonLog>>(emptyList()) }
+                    LaunchedEffect(id, peopleRows) { person = g.people.person(id); logs = g.people.logs(id) }
+                    val p = person
+                    if (p == null) {
+                        LaunchedEffect(id, peopleRows) {
+                            // Gone (removed here or by the agent): back to the list rather than an empty page.
+                            if (peopleRows.none { it.id == id }) nav.popBackStack()
+                        }
+                    } else {
+                        PersonScreen(p, logs, bottomPadding = barPad, actions = PersonActions(
+                            onBack = { nav.popBackStack() },
+                            onLog = { kind, text -> scope.launch { g.people.log(p.id, kind, text) } },
+                            onAddDate = { label, yearly, date, days -> scope.launch {
+                                val day = com.past9.phoneaos.people.parsePersonDate(date)
+                                if (day == null) com.past9.phoneaos.ui.AppNotice.say("I couldn't read that date.")
+                                else { g.people.addDate(p.id, label, day, yearly, days); g.runtime.peopleChanged() }
+                            } },
+                            onAddGift = { idea, occasion -> scope.launch { g.people.addGift(p.id, idea, occasion) } },
+                            onRemoveDate = { key -> scope.launch { g.people.removeDate(p.id, key); g.runtime.peopleChanged() } },
+                            onRemoveGift = { key -> scope.launch { g.people.removeGift(p.id, key) } },
+                            onDelete = { scope.launch { g.people.delete(p.id); g.runtime.peopleChanged(); nav.popBackStack() } },
+                            onAsk = { prompt -> g.runtime.send(prompt); nav.navigate("chat") },
+                        ))
+                    }
                 }
                 composable("memory") {
                     LaunchedEffect(Unit) { com.past9.phoneaos.remote.RemoteHub.session.value?.need("memory") }

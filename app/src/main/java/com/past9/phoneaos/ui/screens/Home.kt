@@ -60,6 +60,8 @@ data class HomeState(
     val cards: List<com.past9.phoneaos.cards.Card> = emptyList(),
     /** Mini-apps from the linked computer (pinned ones show as a row, in the sidebar's order). */
     val miniApps: List<com.past9.phoneaos.miniapps.MiniAppInfo> = emptyList(),
+    /** People (the personal CRM, issue #13), opened for the row on Home. */
+    val people: List<com.past9.phoneaos.people.Person> = emptyList(),
 )
 
 data class HomeActions(
@@ -75,6 +77,8 @@ data class HomeActions(
     val onSettings: () -> Unit = {},
     val onBrowser: () -> Unit = {},
     val onNotifications: () -> Unit = {},
+    val onPeople: () -> Unit = {},
+    val onPerson: (com.past9.phoneaos.people.Person) -> Unit = {},
     /** Live voice call with the agent; null when live calls are off. */
     val onCall: (() -> Unit)? = null,
     val onCard: (com.past9.phoneaos.cards.Card) -> Unit = {},
@@ -217,6 +221,44 @@ fun HomeScreen(s: HomeState, actions: HomeActions, bottomPadding: Dp = 120.dp,
                         }
                     }
                     if (myTodos.size > 5) TextButton(onClick = actions.onTasks, modifier = Modifier.padding(start = 8.dp)) { Text("${myTodos.size - 5} more") }
+                }
+            }
+        }
+        // People: who is going quiet, and who has a birthday coming. Always here, so the screen is one tap away.
+        run {
+            val quiet = s.people.filter { com.past9.phoneaos.people.daysQuiet(it.lastLogAt, s.now) >= com.past9.phoneaos.people.QUIET_DAYS }
+            val dueSoon = s.people.mapNotNull { p -> com.past9.phoneaos.people.nextDate(p, java.time.Instant.ofEpochMilli(s.now).atZone(ZoneId.systemDefault()))?.let { p to it } }
+                .filter { it.second.inDays <= 30 }.sortedBy { it.second.inDays }
+            item(key = "people") {
+                SectionHeader("People", when {
+                    s.people.isEmpty() -> "Keep up with the people who matter"
+                    quiet.isNotEmpty() -> "${quiet.size} going quiet"
+                    else -> "${s.people.size} people, all in touch"
+                }, Modifier.padding(start = 4.dp, top = 6.dp)) { TextButton(onClick = actions.onPeople) { Text("All") } }
+            }
+            item(key = "people-card") {
+                Surface(shape = MaterialTheme.shapes.extraLarge, color = cs.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(vertical = 6.dp)) {
+                        if (s.people.isEmpty()) Text("Add your family and friends and it keeps track of when you last spoke, their birthdays and what to buy them.",
+                            Modifier.padding(18.dp), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                        val show = (dueSoon.map { it.first } + quiet).distinctBy { it.id }.take(3)
+                        show.forEach { p ->
+                            val next = dueSoon.firstOrNull { it.first.id == p.id }?.second
+                            Row(Modifier.fillMaxWidth().clickable { actions.onPerson(p) }.padding(horizontal = 18.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(36.dp).clip(CircleShape).background(cs.secondaryContainer), contentAlignment = Alignment.Center) {
+                                    Text(p.name.take(1).uppercase(), style = MaterialTheme.typography.titleSmall, color = cs.onSecondaryContainer)
+                                }
+                                Spacer(Modifier.width(14.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(p.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(buildList {
+                                        add(com.past9.phoneaos.people.spokeLine(p.lastLogAt, s.now))
+                                        if (next != null) add("${next.date.label} in ${next.inDays} days")
+                                    }.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
