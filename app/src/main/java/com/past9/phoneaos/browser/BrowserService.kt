@@ -26,13 +26,13 @@ class BrowserService : Service() {
     override fun onCreate() {
         super.onCreate()
         val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Background browsing", NotificationManager.IMPORTANCE_LOW))
+        nm.createNotificationChannel(NotificationChannel(CHANNEL, getString(com.past9.phoneaos.R.string.svc_browser_channel), NotificationManager.IMPORTANCE_LOW))
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java).putExtra("open", "browser"), PendingIntent.FLAG_IMMUTABLE)
         val n = {
             val st = com.past9.phoneaos.App.graph(this).settings.state.value
             com.past9.phoneaos.system.Identity.asAgent(this, androidx.core.app.NotificationCompat.Builder(this, CHANNEL)
-                .setContentTitle("${st.agentName.ifBlank { "Your agent" }} is browsing").setContentText("Tap to watch or take over")
-                .setSmallIcon(com.past9.phoneaos.system.Identity.statIcon(this, st.mascot)).setOngoing(true).setContentIntent(open), "", "I'm browsing. Tap to watch or take over.").build()
+                .setContentTitle(if (st.agentName.isBlank() || st.agentName == "Your agent") getString(com.past9.phoneaos.R.string.svc_browser_title_default) else getString(com.past9.phoneaos.R.string.svc_browser_title, st.agentName)).setContentText(getString(com.past9.phoneaos.R.string.svc_browser_text))
+                .setSmallIcon(com.past9.phoneaos.system.Identity.statIcon(this, st.mascot)).setOngoing(true).setContentIntent(open), "", getString(com.past9.phoneaos.R.string.svc_browser_body)).build()
         }
         // Foreground first, through the guard (system/ForegroundGuard.kt): never stopped before it gets there.
         if (!com.past9.phoneaos.system.ForegroundGuard.enter(this, ID, if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0, n)) return

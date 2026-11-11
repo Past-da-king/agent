@@ -246,4 +246,6 @@
     <string name="data_sub_codex_needs_pack">OpenAI\'s Codex runs inside the app on your plan. Needs the runtime pack.</string>
     <string name="data_sub_opencode_plan">Zen or Go</string>
     <string name="data_sub_opencode_line">Paste your OpenCode key and your agent runs on your OpenCode plan.</string>
+    <string name="data_sub_antigravity_plan">Free or Google AI</string>
+    <string name="data_sub_antigravity_line">Antigravity CLI runs inside the app on your Google account.</string>
 </resources>

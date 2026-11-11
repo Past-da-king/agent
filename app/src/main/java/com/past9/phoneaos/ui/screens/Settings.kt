@@ -1,5 +1,7 @@
 package com.past9.phoneaos.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -17,6 +19,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.past9.phoneaos.data.AgentSettings
 import com.past9.phoneaos.data.PowerMode
+import com.past9.phoneaos.R
 import com.past9.phoneaos.data.Provider
 import com.past9.phoneaos.ui.AppCard
 import com.past9.phoneaos.ui.SectionHeader
@@ -26,6 +29,9 @@ data class SettingsActions(
     val onBack: () -> Unit = {},
     val setUserName: (String) -> Unit = {},
     val setAgentName: (String) -> Unit = {},
+    /** The app's language tag, "" when it follows the phone. */
+    val language: String = "",
+    val setLanguage: (String) -> Unit = {},
     val setMode: (PowerMode) -> Unit = {},
     val setProvider: (Provider) -> Unit = {},
     val setModel: (String) -> Unit = {},
@@ -95,6 +101,7 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
     var editValue by remember { mutableStateOf("") }
     var confirmReset by remember { mutableStateOf(false) }
     var pickSub by remember { mutableStateOf(false) }
+    var pickLanguage by remember { mutableStateOf(false) }
     var voiceSheet by remember { mutableStateOf(false) }
     var automationSheet by remember { mutableStateOf(false) }
     var macroSheet by remember { mutableStateOf(false) }
@@ -104,35 +111,39 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
     var automationAllowedNow by remember { mutableStateOf(automation.allowed) }
     var automationTokenNow by remember { mutableStateOf(automation.token) }
     if (voiceSheet) VoiceSheet(s, actions.voice) { voiceSheet = false }
-    SubScreen("Settings", null, actions.onBack) { pad ->
+    SubScreen(stringResource(R.string.settings_title), null, actions.onBack) { pad ->
         Column(Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(horizontal = com.past9.phoneaos.ui.sidePad(16.dp)).padding(bottom = 48.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            SectionHeader("You", "How your agent knows you", Modifier.padding(start = 4.dp, top = 4.dp))
+            SectionHeader(stringResource(R.string.settings_you), stringResource(R.string.settings_you_sub), Modifier.padding(start = 4.dp, top = 4.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
-                Line(Icons.Rounded.Person, "Your name", s.userName.ifBlank { "Not set" }) { editValue = s.userName; edit = "Your name" to actions.setUserName }
-                Line(Icons.Rounded.Face, "Your agent's name", s.agentName) { editValue = s.agentName; edit = "Your agent's name" to actions.setAgentName }
-                Line(Icons.Rounded.AddToHomeScreen, "Put ${s.agentName} on your home screen", "An icon with ${s.agentName}'s name and face") { actions.onPinHome() }
-                Line(Icons.Rounded.Palette, "Colour and sidekick", "${com.past9.phoneaos.ui.theme.accentOf(s.accent).label} · ${com.past9.phoneaos.ui.mascotOf(s.mascot).label}") { actions.onStyle() }
+                val yourName = stringResource(R.string.settings_your_name)
+                val agentNameLabel = stringResource(R.string.settings_agent_name)
+                Line(Icons.Rounded.Person, yourName, s.userName.ifBlank { stringResource(R.string.settings_not_set) }) { editValue = s.userName; edit = yourName to actions.setUserName }
+                Line(Icons.Rounded.Face, agentNameLabel, s.agentName) { editValue = s.agentName; edit = agentNameLabel to actions.setAgentName }
+                Line(Icons.Rounded.AddToHomeScreen, stringResource(R.string.settings_pin_home, s.agentName), stringResource(R.string.settings_pin_home_sub, s.agentName)) { actions.onPinHome() }
+                Line(Icons.Rounded.Palette, stringResource(R.string.settings_style), "${com.past9.phoneaos.ui.theme.accentOf(s.accent).label} · ${com.past9.phoneaos.ui.mascotOf(s.mascot).label}") { actions.onStyle() }
+                Line(Icons.Rounded.Language, stringResource(R.string.settings_language),
+                    com.past9.phoneaos.system.AppLocale.choices.firstOrNull { it.first == actions.language }?.second ?: stringResource(R.string.settings_language_phone)) { pickLanguage = true }
             }
-            SectionHeader("Power", "What your agent thinks with", Modifier.padding(start = 4.dp, top = 12.dp))
+            SectionHeader(stringResource(R.string.settings_power), stringResource(R.string.settings_power_sub), Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
-                Line(Icons.Rounded.Key, "API key", if (s.mode == PowerMode.API_KEY) "${s.provider.label}${if (s.hasKey) " · key saved" else " · no key yet"}" else "Not in use",
+                Line(Icons.Rounded.Key, stringResource(R.string.settings_api_key), if (s.mode == PowerMode.API_KEY) "${s.provider.label} · ${stringResource(if (s.hasKey) R.string.settings_key_saved else R.string.settings_no_key)}" else stringResource(R.string.settings_not_in_use),
                     trailing = { RadioButton(s.mode == PowerMode.API_KEY, { actions.setMode(PowerMode.API_KEY) }) }) { actions.setMode(PowerMode.API_KEY) }
-                Line(Icons.Rounded.AutoAwesome, "Subscription", if (s.mode == PowerMode.SUBSCRIPTION) "${s.subKind.label} ${s.subKind.plan} · ${runtime.note}" else "Claude, ChatGPT or OpenCode plan",
+                Line(Icons.Rounded.AutoAwesome, stringResource(R.string.settings_subscription), if (s.mode == PowerMode.SUBSCRIPTION) "${s.subKind.label} ${stringResource(s.subKind.plan)} · ${runtime.note}" else stringResource(R.string.settings_subscription_sub),
                     trailing = { RadioButton(s.mode == PowerMode.SUBSCRIPTION, { pickSub = true }) }) { pickSub = true }
             }
             if (s.mode == PowerMode.API_KEY) AppCard(padding = PaddingValues(vertical = 4.dp)) {
-                Line(Icons.Rounded.Hub, "Provider", s.provider.label) { actions.onChangeKey() }
-                Line(Icons.Rounded.Psychology, "Model", s.model + " · tap to switch") { actions.onModel() }
-                Line(Icons.Rounded.Groups, "Helpers", helpersLine(s.helperRoster, s.helperModel.substringAfterLast('/').ifBlank { "Same as your agent" })) { actions.onHelperModel() }
-                Line(Icons.Rounded.Password, "Change key", "Paste a new key or switch provider") { actions.onChangeKey() }
+                Line(Icons.Rounded.Hub, stringResource(R.string.settings_provider), s.provider.label) { actions.onChangeKey() }
+                Line(Icons.Rounded.Psychology, stringResource(R.string.settings_model), stringResource(R.string.settings_tap_to_switch, s.model)) { actions.onModel() }
+                Line(Icons.Rounded.Groups, stringResource(R.string.settings_helpers), helpersLine(s.helperRoster, s.helperModel.substringAfterLast('/').ifBlank { stringResource(R.string.settings_same_as_agent) })) { actions.onHelperModel() }
+                Line(Icons.Rounded.Password, stringResource(R.string.settings_change_key), stringResource(R.string.settings_change_key_sub)) { actions.onChangeKey() }
             }
             if (s.mode == PowerMode.SUBSCRIPTION || runtime.installedBytes > 0) AppCard(padding = PaddingValues(vertical = 4.dp)) {
-                Line(Icons.Rounded.Terminal, "${s.subKind.label} runtime", runtime.note) { actions.onClaudeSetup() }
-                if (s.mode == PowerMode.SUBSCRIPTION) Line(Icons.Rounded.Psychology, "Model", s.subModel.ifBlank { "Default" }.replaceFirstChar { it.uppercase() } + " · tap to switch") { actions.onModel() }
-                if (s.mode == PowerMode.SUBSCRIPTION) Line(Icons.Rounded.Groups, "Helpers", helpersLine(s.helperRoster, s.subHelperModel.ifBlank { "Same as your agent" }.replaceFirstChar { it.uppercase() })) { actions.onHelperModel() }
-                if (runtime.installedBytes > 0) Line(Icons.Rounded.DeleteSweep, "Delete runtime data", "Frees ${runtime.installedBytes / 1_000_000} MB. You can set it up again later.") { actions.onDeleteRuntime() }
+                Line(Icons.Rounded.Terminal, stringResource(R.string.settings_runtime, s.subKind.label), runtime.note) { actions.onClaudeSetup() }
+                if (s.mode == PowerMode.SUBSCRIPTION) Line(Icons.Rounded.Psychology, stringResource(R.string.settings_model), stringResource(R.string.settings_tap_to_switch, s.subModel.ifBlank { stringResource(R.string.settings_default) }.replaceFirstChar { it.uppercase() })) { actions.onModel() }
+                if (s.mode == PowerMode.SUBSCRIPTION) Line(Icons.Rounded.Groups, stringResource(R.string.settings_helpers), helpersLine(s.helperRoster, s.subHelperModel.ifBlank { stringResource(R.string.settings_same_as_agent) }.replaceFirstChar { it.uppercase() })) { actions.onHelperModel() }
+                if (runtime.installedBytes > 0) Line(Icons.Rounded.DeleteSweep, stringResource(R.string.settings_delete_runtime), stringResource(R.string.settings_delete_runtime_sub, runtime.installedBytes / 1_000_000)) { actions.onDeleteRuntime() }
             }
-            SectionHeader("Voice", "Talking instead of typing", Modifier.padding(start = 4.dp, top = 12.dp))
+            SectionHeader(stringResource(R.string.settings_voice), stringResource(R.string.settings_voice_sub), Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 Line(Icons.Rounded.RecordVoiceOver, "Voice",
                     mapOf("system" to "Phone voice", "gemini" to "Google voice", "openai" to "OpenAI voice", "elevenlabs" to "ElevenLabs voice")[s.ttsProvider] ?: "Phone voice") { voiceSheet = true }
@@ -145,15 +156,15 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
                 Line(Icons.Rounded.Assistant, "Default assistant", com.past9.phoneaos.assist.AssistRole.line(assistHeld)) { assistant = true }
                 if (assistant) AssistantSheet(s.agentName, onDismiss = { assistant = false })
             }
-            SectionHeader("Background", "So routines and browsing keep going", Modifier.padding(start = 4.dp, top = 12.dp))
+            SectionHeader(stringResource(R.string.settings_background), stringResource(R.string.settings_background_sub), Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 val ctx = androidx.compose.ui.platform.LocalContext.current
                 var reliability by remember { mutableStateOf(false) }
-                val problems = remember(reliability) { com.past9.phoneaos.system.Background.problems(com.past9.phoneaos.system.Background.check(ctx)) }
-                Line(Icons.Rounded.NotificationsActive, "Reminders on time", if (problems.isEmpty()) "All set: it can speak up by itself" else problems.first().replaceFirstChar { it.uppercase() }) { reliability = true }
+                val problems = remember(reliability) { com.past9.phoneaos.system.Background.problems(com.past9.phoneaos.system.Background.check(ctx), ctx) }
+                Line(Icons.Rounded.NotificationsActive, stringResource(R.string.settings_reminders_on_time), if (problems.isEmpty()) stringResource(R.string.settings_reminders_all_set) else problems.first().replaceFirstChar { it.uppercase() }) { reliability = true }
                 if (reliability) ReliabilitySheet { reliability = false }
                 var handoffs by remember { mutableStateOf(false) }
-                Line(Icons.Rounded.Sync, "Hand-offs", com.past9.phoneaos.handoff.HandoffStore.peek(ctx)?.let { "Signed in as $it" } ?: "Let your computers do jobs and report back") { handoffs = true }
+                Line(Icons.Rounded.Sync, stringResource(R.string.settings_handoffs), com.past9.phoneaos.handoff.HandoffStore.peek(ctx)?.let { stringResource(R.string.settings_handoffs_signed_in, it) } ?: stringResource(R.string.settings_handoffs_sub)) { handoffs = true }
                 if (handoffs) com.past9.phoneaos.handoff.HandoffSheet { handoffs = false }
                 var wakeups by remember { mutableStateOf(false) }
                 Line(Icons.Rounded.Alarm, "Wake-ups", "Rings through Do Not Disturb until you answer: permissions and a test") { wakeups = true }
@@ -162,7 +173,7 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
                 val wakeWordOn by com.past9.phoneaos.wakeword.WakeWord.store(androidx.compose.ui.platform.LocalContext.current).state.collectAsState()
                 Line(Icons.Rounded.RecordVoiceOver, "Wake word", if (wakeWordOn.enabled) "Listening for \"" + wakeWordOn.customPhrase.ifBlank { com.past9.phoneaos.wakeword.WakePhrase.defaultFor(s.agentName) } + "\"" else "Off. Say your agent's name to open it from anywhere") { wakeWord = true }
                 if (wakeWord) WakeWordSheet { wakeWord = false }
-                Line(Icons.Rounded.BatteryChargingFull, "Battery: unrestricted", "Samsung and others stop background apps. Allow this one to keep working.") { actions.onBattery() }
+                Line(Icons.Rounded.BatteryChargingFull, stringResource(R.string.settings_battery), stringResource(R.string.settings_battery_sub)) { actions.onBattery() }
             }
             SectionHeader("Automation", "Other apps, both ways", Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
@@ -204,18 +215,23 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
             SectionHeader("Your data", "It all lives on this phone", Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 Line(Icons.Rounded.Mic, "Recordings", "What you dictated: the words and the audio") { actions.onRecordings() }
-                Line(Icons.Rounded.ChatBubbleOutline, "Clear the conversation", "Memory, tasks and routines stay") { actions.onClearChat() }
-                Line(Icons.Rounded.RestartAlt, "Reset everything", "Deletes keys, memory, tasks and routines", danger = true) { confirmReset = true }
+                Line(Icons.Rounded.ChatBubbleOutline, stringResource(R.string.settings_clear_chat), stringResource(R.string.settings_clear_chat_sub)) { actions.onClearChat() }
+                Line(Icons.Rounded.RestartAlt, stringResource(R.string.settings_reset), stringResource(R.string.settings_reset_sub), danger = true) { confirmReset = true }
             }
-            Text("Version $version · No account, no servers of ours. Your AI provider sees your messages; nothing else leaves the phone.",
+            Text(stringResource(R.string.settings_footer, version),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp, vertical = 16.dp))
         }
     }
     // Slide-up sheets, never pop-up dialogs.
     if (pickSub) com.past9.phoneaos.ui.ChoiceSheet(androidx.compose.material.icons.Icons.Rounded.Bolt, "What powers it", "Which subscription?",
-        com.past9.phoneaos.data.SubKind.entries.map { k -> com.past9.phoneaos.ui.SheetChoice(k.name, "${k.label} ${k.plan}", if (k == com.past9.phoneaos.data.SubKind.OPENCODE) "Paste your OpenCode key" else "Sign in with your ${k.label} account",
+        com.past9.phoneaos.data.SubKind.entries.map { k -> com.past9.phoneaos.ui.SheetChoice(k.name, "${k.label} ${stringResource(k.plan)}", if (k == com.past9.phoneaos.data.SubKind.OPENCODE) "Paste your OpenCode key" else "Sign in with your ${k.label} account",
             selected = s.mode == PowerMode.SUBSCRIPTION && s.subKind == k) },
         onPick = { c -> pickSub = false; actions.onChooseSub(com.past9.phoneaos.data.SubKind.valueOf(c.id)) }, onDismiss = { pickSub = false })
+    // The language picker slides up from the bottom (never a centred dialog) and is built from the app's own sheet.
+    if (pickLanguage) com.past9.phoneaos.ui.ChoiceSheet(Icons.Rounded.Language, stringResource(R.string.settings_you), stringResource(R.string.settings_language),
+        com.past9.phoneaos.system.AppLocale.choices.map { (tag, label) ->
+            com.past9.phoneaos.ui.SheetChoice(tag, label ?: stringResource(R.string.settings_language_phone), selected = tag == actions.language) },
+        onPick = { c -> pickLanguage = false; if (c.id != actions.language) actions.setLanguage(c.id) }, onDismiss = { pickLanguage = false })
     edit?.let { (label, save) ->
         com.past9.phoneaos.ui.AppSheet(androidx.compose.material.icons.Icons.Rounded.Edit, "Settings", label, { edit = null }, primary = "Save", primaryEnabled = true, onPrimary = { save(editValue); edit = null }) {
             com.past9.phoneaos.ui.SheetField(editValue, { editValue = it }, label, "", singleLine = true)
@@ -254,9 +270,10 @@ private fun Line(icon: ImageVector, title: String, value: String, danger: Boolea
 }
 
 /** "3 helpers: Sonnet, Haiku, DeepSeek" or the single default. */
+@Composable
 private fun helpersLine(roster: List<com.past9.phoneaos.data.HelperModel>, single: String): String =
-    if (roster.isEmpty()) "$single · tap to add more and tag what each is good for"
-    else "${roster.size} helper${if (roster.size > 1) "s" else ""}: " + roster.joinToString(", ") { it.name.substringAfterLast('/') }
+    if (roster.isEmpty()) stringResource(R.string.settings_helpers_single, single)
+    else pluralStringResource(R.plurals.settings_helpers_count, roster.size, roster.size, roster.joinToString(", ") { it.name.substringAfterLast('/') })
 
 /**
  * Settings > Automation from other apps (GitHub issue #18): the address, the token and the switch. A slide-up sheet,
