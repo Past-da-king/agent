@@ -421,6 +421,7 @@ class AgentRuntime(
         list += AskUserTool(); list += ApprovalTool(); list += NotifyTool()
         list += com.past9.phoneaos.automation.AndroidIntentTool(context, settings.intentSettings); list += com.past9.phoneaos.automation.AndroidAppsTool(context)
         list += com.past9.phoneaos.automation.MacroDroidRunTool(context, settings.macroSettings)
+        list += com.past9.phoneaos.media.MediaTools.tools(context)
         // The background screen is off until the person switches it on (Settings > Background screen): no tools before that.
         if (com.past9.phoneaos.screen.Screens.on(context)) list += com.past9.phoneaos.tools.screenTools(context) + com.past9.phoneaos.tools.screenSkillTools(context)
         list += SkillFindTool(db.memory()); list += SkillSaveTool(db.memory())

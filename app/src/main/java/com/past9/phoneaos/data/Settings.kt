@@ -268,6 +268,10 @@ class SettingsStore(context: Context) {
     fun macroWebhookId(): String = secrets.getString("macro_webhook_id", null).orEmpty()
     fun setMacroWebhookId(id: String) { secrets.edit().apply { val v = id.trim(); if (v.isEmpty()) remove("macro_webhook_id") else putString("macro_webhook_id", v) }.apply() }
 
+    /** Settings > Media apps: the app the user picked to play music, and the one for video. Null is automatic. */
+    fun mediaDefault(video: Boolean): String? = extra(if (video) "media_default_video" else "media_default_music")?.takeIf { it.isNotBlank() }
+    fun setMediaDefault(video: Boolean, pkg: String) = setExtra(if (video) "media_default_video" else "media_default_music", pkg.ifBlank { null })
+
     /** Intents the agent may send without asking: one "action | package" per line, "*" for any app. */
     fun intentAllowlistText(): String = extra("intent_allowlist").orEmpty()
     fun setIntentAllowlistText(text: String) = setExtra("intent_allowlist", text.trim().ifEmpty { null })

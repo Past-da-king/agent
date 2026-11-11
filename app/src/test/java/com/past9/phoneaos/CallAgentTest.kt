@@ -37,7 +37,7 @@ class CallAgentTest {
     fun theCallDeclaresTheHandOffTheAnswerAndTheStatusTools() {
         val decls = CallController.callTools(true).getJSONObject(0).getJSONArray("functionDeclarations")
         val names = (0 until decls.length()).map { decls.getJSONObject(it).getString("name") }
-        assertEquals(listOf("start_work", "answer_question", "work_status"), names)
+        assertEquals(listOf("start_work", "answer_question", "work_status", "play_media", "media_control"), names)
         assertTrue(decls.getJSONObject(0).getString("description").contains("on their computer"))
         assertTrue(decls.getJSONObject(1).getJSONObject("parameters").getJSONObject("properties").has("user_said"))
     }
