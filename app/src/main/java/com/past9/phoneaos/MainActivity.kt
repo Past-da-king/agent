@@ -238,7 +238,7 @@ class MainActivity : ComponentActivity() {
         val memories by remember(dataDb) { dataDb.memory().all() }.collectAsStateWithLifecycle(emptyList())
         // People (issue #13): Home counts who is going quiet. The rows come from the database, the names from the one
         // repository that opens them, so Home never holds a copy in plain text either.
-        val personRows by remember(dataDb) { dataDb.people().all() }.collectAsStateWithLifecycle(emptyList())
+        val personRows by remember(g.db) { g.db.people().all() }.collectAsStateWithLifecycle(emptyList())
         var everyPerson by remember { mutableStateOf<List<com.past9.phoneaos.people.Person>>(emptyList()) }
         LaunchedEffect(personRows) { everyPerson = runCatching { g.people.people() }.getOrDefault(emptyList()) }
         val allRoutines by remember(dataDb) { dataDb.triggers().all() }.collectAsStateWithLifecycle(emptyList())
@@ -650,7 +650,7 @@ class MainActivity : ComponentActivity() {
                 // People: the personal CRM (GitHub issue #13). The permission for contacts is asked when Import is
                 // tapped, never at app start.
                 composable("people") {
-                    val peopleRows by remember(dataDb) { dataDb.people().all() }.collectAsStateWithLifecycle(emptyList())
+                    val peopleRows by remember(g.db) { g.db.people().all() }.collectAsStateWithLifecycle(emptyList())
                     var peopleList by remember { mutableStateOf<List<com.past9.phoneaos.people.Person>>(emptyList()) }
                     LaunchedEffect(peopleRows) { peopleList = g.people.people() }
                     val importContacts: () -> Unit = {
@@ -672,7 +672,7 @@ class MainActivity : ComponentActivity() {
                 }
                 composable("person/{id}") { e ->
                     val id = e.arguments?.getString("id")?.toLongOrNull() ?: -1L
-                    val peopleRows by remember(dataDb) { dataDb.people().all() }.collectAsStateWithLifecycle(emptyList())
+                    val peopleRows by remember(g.db) { g.db.people().all() }.collectAsStateWithLifecycle(emptyList())
                     var person by remember { mutableStateOf<com.past9.phoneaos.people.Person?>(null) }
                     var logs by remember { mutableStateOf<List<com.past9.phoneaos.people.PersonLog>>(emptyList()) }
                     LaunchedEffect(id, peopleRows) { person = g.people.person(id); logs = g.people.logs(id) }
