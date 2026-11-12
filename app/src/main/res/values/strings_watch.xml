@@ -13,6 +13,8 @@
     <string name="watch_pair_synced" translatable="false">The watch follows the agent name, mascot, accent, language and voice you set on this phone.</string>
     <string name="watch_sheet_title" translatable="false">Pair your watch</string>
     <string name="watch_sheet_pairing" translatable="false">Pairing</string>
+    <string name="watch_sheet_step_bluetooth" translatable="false">Reaching the watch over Bluetooth</string>
+    <string name="watch_sheet_step_wifi" translatable="false">Trying Wi-Fi</string>
     <string name="watch_sheet_pairing_body" translatable="false">Talking to the watch. Keep its pairing screen open.</string>
     <string name="watch_sheet_paired_body" translatable="false">Your watch is paired and ready.</string>
     <string name="watch_sheet_or_type" translatable="false">Or type the code on the watch</string>

@@ -55,7 +55,7 @@ enum class PairStage { SCAN, PULLING, DONE }
  * engine's; this draws it.
  */
 @Composable
-fun PairFlowScreen(stage: PairStage, qr: String, code: String, step: Int, name: String, kind: MascotKind, onStart: () -> Unit) {
+fun PairFlowScreen(stage: PairStage, qr: String, code: String, step: Int, name: String, kind: MascotKind, notice: String = "", onStart: () -> Unit) {
     val look = LocalLook.current; val pal = look.pal
     val rows = remember(qr) { if (qr.isBlank()) emptyList() else QrMatrix.encode(qr) }
     ExStage(if (stage == PairStage.PULLING) pal.deep else Color.Black) { g ->
@@ -63,14 +63,19 @@ fun PairFlowScreen(stage: PairStage, qr: String, code: String, step: Int, name: 
         when (stage) {
             PairStage.SCAN -> {
                 TopLabel(stringResource(R.string.pair_title).uppercase(), pal.primary, 10f, FontWeight.Bold, 2f)
-                val side = g.d * 0.47f
+                // With a line to say (low battery, power saving) the QR is a little smaller, so the line fits inside a round glass too.
+                val warn = notice.isNotBlank()
+                val side = g.d * (if (warn) 0.37f else 0.47f)
+                val top = H * (if (warn) 0.165f else 0.19f)
                 Canvas(Modifier.fillMaxSize()) {
-                    val s = side.toPx(); val tl = Offset(cx.toPx() - s / 2, (H * 0.19f).toPx())
+                    val s = side.toPx(); val tl = Offset(cx.toPx() - s / 2, top.toPx())
                     shapeBlob(MaterialShapes.Cookie12Sided, Offset(cx.toPx(), tl.y + s / 2), s * 1.22f, pal.container, 0f)
                     if (rows.isNotEmpty()) qrTile(rows, tl, s, 20.dp.toPx())
                 }
-                Box(Modifier.offset(cx - g.dp(80f), H * 0.19f + side + g.dp(10f)).width(g.dp(160f)), contentAlignment = Alignment.Center) { Txt(code, 24f, Color.White, FontWeight.Black, 2.5f, maxLines = 1) }
-                Box(Modifier.offset(cx - g.dp(92f), H * 0.19f + side + g.dp(38f)).width(g.dp(184f)), contentAlignment = Alignment.Center) { Txt(stringResource(R.string.pair_hint), 10.5f, Color.White.copy(alpha = 0.6f), lh = 12.5f, maxLines = 2) }
+                Box(Modifier.offset(cx - g.dp(80f), top + side + g.dp(if (warn) 8f else 10f)).width(g.dp(160f)), contentAlignment = Alignment.Center) { Txt(code, if (warn) 20f else 24f, Color.White, FontWeight.Black, 2.5f, maxLines = 1) }
+                // One line under the code: the usual hint, or, when something may slow pairing (low battery, power saving), that instead, in amber.
+                if (!warn) Box(Modifier.offset(cx - g.dp(92f), top + side + g.dp(38f)).width(g.dp(184f)), contentAlignment = Alignment.Center) { Txt(stringResource(R.string.pair_hint), 10.5f, Color.White.copy(alpha = 0.6f), lh = 12.5f, maxLines = 2) }
+                else Box(Modifier.offset(cx - g.dp(66f), top + side + g.dp(34f)).width(g.dp(132f)), contentAlignment = Alignment.Center) { Txt(notice, 10f, com.past9.phoneaos.wear.ui.ex.V2.amber, FontWeight.Bold, lh = 11.5f, maxLines = 4) }
             }
             PairStage.PULLING -> {
                 val cy = H * 0.30f

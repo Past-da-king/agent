@@ -67,7 +67,8 @@ class WatchPairShotsTest(private val dark: Boolean, private val width: Int) {
         cam = false; shot("3-camera-off"); cam = true
         code = "9H4T"; shot("4-typing")
         code = "9H4T-5PBS"; shot("5-code-ready")
-        state = WatchPairState.Pairing; shot("6-pairing")
+        state = WatchPairState.Pairing(); shot("6-pairing")
+        state = WatchPairState.Pairing(listOf(com.past9.phoneaos.wearproto.PairStep.BLUETOOTH, com.past9.phoneaos.wearproto.PairStep.WIFI)); shot("6b-pairing-bluetooth-and-wifi")
         state = WatchPairState.Paired("Galaxy Watch4 Classic"); shot("7-paired")
         state = WatchPairState.Problem(PairProblem.NOT_MAIN_PROFILE); shot("8-error-secure-folder")
         state = WatchPairState.Problem(PairProblem.WATCH_NOT_CONNECTED); shot("9-error-not-connected")

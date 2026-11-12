@@ -33,7 +33,10 @@ class AgentTile : TileService() {
     override fun onTileRequest(requestParams: RequestBuilders.TileRequest): ListenableFuture<TileBuilders.Tile> {
         val s = WatchStore.cached(this)
         val waiting = s?.pending?.size ?: 0
+        // Power saving or a very low battery may stop the app from opening: the tile (which the system draws for us) is where that can still be said.
+        val limit = WatchHealth.line(this, WatchHealth.limit(this))
         val line = when {
+            limit != null && waiting == 0 -> limit
             waiting == 1 -> getString(R.string.tile_one_waits)
             waiting > 1 -> getString(R.string.tile_many_wait, waiting)
             else -> getString(R.string.tile_nothing_waits)
@@ -64,7 +67,7 @@ class AgentTile : TileService() {
         }
     }
 
-    private fun versionNow(needs: Boolean): String { WatchCustomisationState.load(this); val c = WatchCustomisationState.state.value; return "$VERSION-${c.mascot}-${c.accent}-$needs" }
+    private fun versionNow(needs: Boolean): String { WatchCustomisationState.load(this); val c = WatchCustomisationState.state.value; return "$VERSION-${c.mascot}-${c.accent}-$needs-${WatchHealth.limit(this)}" }
 
     private fun launch(go: String): ModifiersBuilders.Clickable = ModifiersBuilders.Clickable.Builder()
         .setId(go)
@@ -74,7 +77,7 @@ class AgentTile : TileService() {
         .build()
 
     private fun text(s: String, size: Float, color: Int, bold: Boolean = false): LayoutElementBuilders.LayoutElement =
-        Text.Builder().setText(s).setMaxLines(1)
+        Text.Builder().setText(s).setMaxLines(2)
             .setFontStyle(FontStyle.Builder().setSize(sp(size)).setColor(argb(color)).setWeight(if (bold) LayoutElementBuilders.FONT_WEIGHT_BOLD else LayoutElementBuilders.FONT_WEIGHT_NORMAL).build()).build()
 
     private fun layout(name: String, line: String, needsYou: Boolean): LayoutElementBuilders.LayoutElement {

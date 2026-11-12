@@ -8,6 +8,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -35,6 +37,7 @@ import com.past9.phoneaos.wear.ui.ExchangeScreen
 import com.past9.phoneaos.wear.ui.ListeningScreen
 import com.past9.phoneaos.wear.ui.RecentScreen
 import com.past9.phoneaos.wear.ui.TalkScreen
+import com.past9.phoneaos.wearproto.PairLog
 import com.past9.phoneaos.wearproto.Phase
 import com.past9.phoneaos.wearproto.Via
 import kotlinx.coroutines.launch
@@ -47,12 +50,28 @@ class MainActivity : ComponentActivity() {
     private var go by androidx.compose.runtime.mutableStateOf("")
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val started = android.os.SystemClock.elapsedRealtime()
         super.onCreate(savedInstanceState)
         go = intentGo(intent)
-        val controller = (application as WatchApp).controller
-        controller.opened()
-        askNotificationsOnce()
-        setContent { AgentWatchTheme { AppScaffold { PairGate { WatchNav(controller, (application as WatchApp).call, go) } } } }
+        // Nothing heavy before the first frame: the window is black from the first instant (the theme), the first composition is one line of
+        // text, and the controller, the pairing state and the notification ask come after that frame is on screen (docs/wear.md, "When the app will not open").
+        setContent {
+            AgentWatchTheme {
+                AppScaffold {
+                    var ready by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+                    LaunchedEffect(Unit) {
+                        androidx.compose.runtime.withFrameNanos { }
+                        ready = true
+                        PairLog.i("watch: first frame after ${android.os.SystemClock.elapsedRealtime() - started} ms")
+                    }
+                    if (!ready) FirstFrame() else {
+                        val app = application as WatchApp
+                        LaunchedEffect(Unit) { app.controller.opened(); askNotificationsOnce() }
+                        PairGate { WatchNav(app.controller, app.call, go) }
+                    }
+                }
+            }
+        }
     }
 
     // Sensors for the gestures he mapped run while this screen is up (and during a call or a ring), and not otherwise.
@@ -76,6 +95,14 @@ class MainActivity : ComponentActivity() {
         i?.getStringExtra("go") != null -> i.getStringExtra("go").orEmpty()
         i?.action == Intent.ACTION_ASSIST || i?.action == "android.intent.action.VOICE_ASSIST" -> "talk"
         else -> ""
+    }
+}
+
+/** The first thing drawn: black and one word, so the app answers the tap at once while the rest loads. */
+@Composable
+private fun FirstFrame() {
+    androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black), contentAlignment = androidx.compose.ui.Alignment.Center) {
+        androidx.wear.compose.material3.Text(stringResource(R.string.app_name), color = androidx.compose.ui.graphics.Color.White)
     }
 }
 

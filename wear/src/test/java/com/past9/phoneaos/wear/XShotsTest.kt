@@ -155,9 +155,11 @@ abstract class XShots(private val size: String, private val round: Boolean = tru
     @Test fun s37() = shot("37-home-setting-agent-home") { HomeSettingsScreen(HomeGuide.State.HELD_BY_THIS_APP, true, "", {}, {}, {}) }
     @Test fun s38() = shot("38-switch-back-sheet") { HomeSettingsScreen(HomeGuide.State.HELD_BY_THIS_APP, true, "", {}, {}, {}, previewSheet = 2) }
     @Test fun s39() = shot("39-settings") { WatchSettingsScreen("Nova", {}, {}, {}) }
-    @Test fun s40() = shot("40-pair-scan") { PairFlowScreen(PairStage.SCAN, "agent://watch-pair?code=482913&id=7K2QX", "482 913", 0, "Nova", MascotKind.Scout, {}) }
-    @Test fun s41() = shot("41-pair-pulling") { PairFlowScreen(PairStage.PULLING, "", "", 1, "Nova", MascotKind.Scout, {}) }
-    @Test fun s42() = shot("42-pair-done") { PairFlowScreen(PairStage.DONE, "", "", 3, "Nova", MascotKind.Bloom, {}) }
+    @Test fun s40() = shot("40-pair-scan") { PairFlowScreen(PairStage.SCAN, "agent://watch-pair?code=482913&id=7K2QX", "482 913", 0, "Nova", MascotKind.Scout, onStart = {}) }
+    @Test fun s41() = shot("41-pair-pulling") { PairFlowScreen(PairStage.PULLING, "", "", 1, "Nova", MascotKind.Scout, onStart = {}) }
+    @Test fun s42() = shot("42-pair-done") { PairFlowScreen(PairStage.DONE, "", "", 3, "Nova", MascotKind.Bloom, onStart = {}) }
+    @Test fun s44() = shot("44-pair-scan-battery-low") { PairFlowScreen(PairStage.SCAN, "agent://watch-pair?code=482913&id=7K2QX", "482 913", 0, "Nova", MascotKind.Scout, notice = "Battery low, pairing may be slow. Keep the watch awake on this screen", onStart = {}) }
+    @Test fun s45() = shot("45-pair-scan-power-saving") { PairFlowScreen(PairStage.SCAN, "agent://watch-pair?code=482913&id=7K2QX", "482 913", 0, "Nova", MascotKind.Scout, notice = "Power saving is limiting Agent. Charge the watch or turn power saving off.", onStart = {}) }
     @Test fun s43() = shot("43-look-synced-accent") {
             CompositionLocalProvider(LocalLook provides AgentLook(MascotKind.Gem, Pal.of(Color(0xFF7FD6B2)))) { TalkScreen("Nova", "local", 0, true, quick, true, null, {}, {}, {}, {}, {}, {}, {}, {}, {}) }
         }
@@ -190,7 +192,7 @@ class XShots227 : XShots("round-227") {
         frames("ring", 45) { t -> RingScreen(RingItem("w", RingKind.WAKE, "urgent", "Design review in 5 min", "Thabo is presenting your numbers"), {}, {}, {}) }
         frames("pairing", 90) { t ->
             val stage = when { t < 2.0f -> PairStage.SCAN; t < 5.0f -> PairStage.PULLING; else -> PairStage.DONE }
-            PairFlowScreen(stage, "agent://watch-pair?code=482913&id=7K2QX", "482 913", ((t - 2f) / 1f).toInt().coerceIn(0, 2), "Nova", MascotKind.Bloom, {})
+            PairFlowScreen(stage, "agent://watch-pair?code=482913&id=7K2QX", "482 913", ((t - 2f) / 1f).toInt().coerceIn(0, 2), "Nova", MascotKind.Bloom, onStart = {})
         }
         val apps = listOf(AppEntry("me", "Agent", "m.A"), AppEntry("a", "Alarm", "a.A"), AppEntry("b", "Maps", "b.B"), AppEntry("c", "Weather", "c.C"), AppEntry("d", "Fitness", "d.D"), AppEntry("e", "Music", "e.E"), AppEntry("f", "Notes", "f.F"), AppEntry("g", "Timer", "g.G"))
         frames("launcher-grid", 30) { t ->
