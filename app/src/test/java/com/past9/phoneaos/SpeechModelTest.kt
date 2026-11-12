@@ -1,5 +1,6 @@
 package com.past9.phoneaos
 
+import com.past9.phoneaos.voice.SpeechLanguages
 import com.past9.phoneaos.voice.SpeechModel
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -42,11 +43,19 @@ class SpeechModelTest {
     }
 
     @Test
-    fun theLanguageHintIsThePhonesOwnAndNothingInvented() {
-        // en-ZA, not isiZulu: adding zu-ZA made "My guy" come back as "Shumayela" on his own recordings.
-        assertEquals(listOf("en-ZA"), SpeechModel.languages(Locale.forLanguageTag("en-ZA")))
-        assertEquals(listOf("en-GB"), SpeechModel.languages(Locale.forLanguageTag("en-GB")))
-        assertEquals(listOf("zu-ZA"), SpeechModel.languages(Locale.forLanguageTag("zu-ZA")))
+    fun theLanguageHintIsEveryLanguageOfThePhoneAndItsCountryNotOne() {
+        // One language (even en-ZA) made the model DROP the isiZulu in a mixed dictation (12 Nov 2026, measured).
+        val za = SpeechModel.languages(listOf(Locale.forLanguageTag("en-ZA")))
+        assertEquals("en-ZA", za[0])
+        assertTrue(za.containsAll(listOf("zu-ZA", "af-ZA", "st-ZA", "xh-ZA")))
+        assertTrue(za.size <= SpeechLanguages.MAX)
+        // The person's own tag for a language is kept, and not added twice.
+        val own = SpeechModel.languages(listOf(Locale.forLanguageTag("en-ZA"), Locale.forLanguageTag("zu-ZA")))
+        assertEquals(1, own.count { it.startsWith("zu") })
+        // A country with no neighbours listed: their own list, nothing invented.
+        assertEquals(listOf("en-GB"), SpeechModel.languages(listOf(Locale.forLanguageTag("en-GB"))))
+        assertEquals(listOf("en-US", "es-US"), SpeechModel.languages(listOf(Locale.forLanguageTag("en-US"), Locale.forLanguageTag("es-US"))))
+        assertEquals(emptyList<String>(), SpeechModel.languages(emptyList()))
     }
 
     @Test
