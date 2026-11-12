@@ -135,7 +135,7 @@ interface ComposerTools {
 val LocalComposerTools = staticCompositionLocalOf<ComposerTools?> { null }
 
 /** A message that has not gone through in this long is FAILED, with its words still in the box and Retry beside them. */
-const val BOX_GIVE_UP_MS = 180_000L
+const val BOX_GIVE_UP_MS = 660_000L
 
 /**
  * The full set of actions for [box], sending with [send] (words with the documents' text, and every picture).
