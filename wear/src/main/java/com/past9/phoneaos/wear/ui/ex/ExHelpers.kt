@@ -53,6 +53,25 @@ class Pal(
             return Pal(seed, hsv(h, 0.79f, 0.48f), hsv(h, 0.73f, 0.69f), hsv(h, 0.11f, 1f), hsv(h, 0.78f, 0.31f), hsv(h, 0.18f, 0.35f), hsv(h, 0.07f, 0.95f), hsv(h, 0.08f, 0.19f), hsv(h, 0.08f, 0.78f))
         }
         val Iris = of(V2.iris)
+
+        /** The phone's accents (ui/theme/Theme.kt Accents), dark: primary, on primary, container, on container. */
+        private val accents: Map<String, List<Long>> = mapOf(
+            "iris" to listOf(0xFFC3BBFF, 0xFF241A7A, 0xFF3A2FB0, 0xFFE7E3FF), "ocean" to listOf(0xFFA9C7FF, 0xFF003064, 0xFF004A99, 0xFFD6E4FF),
+            "teal" to listOf(0xFF7FD6D4, 0xFF003737, 0xFF004F50, 0xFFB9F0EE), "forest" to listOf(0xFF9CD89A, 0xFF0A390D, 0xFF1B5220, 0xFFC6EFBC),
+            "ember" to listOf(0xFFFFB591, 0xFF5A1C00, 0xFF853000, 0xFFFFDBCB), "rose" to listOf(0xFFFFB1C8, 0xFF650033, 0xFF8E0D48, 0xFFFFD9E2),
+            "red" to listOf(0xFFFF5A4F, 0xFF2D0001, 0xFF93000F, 0xFFFFDAD6), "tangerine" to listOf(0xFFFF8F3A, 0xFF2A1100, 0xFF8A3D00, 0xFFFFDCC4),
+            "sunflower" to listOf(0xFFFFD233, 0xFF231A00, 0xFF5B4300, 0xFFFFE08A), "lime" to listOf(0xFF9BE34A, 0xFF132100, 0xFF2E5200, 0xFFD2F5A6),
+            "mint" to listOf(0xFF4FDDB4, 0xFF00201A, 0xFF00513E, 0xFFB2F2DF), "sky" to listOf(0xFF52B8FF, 0xFF00182B, 0xFF004B78, 0xFFCDE5FF),
+            "violet" to listOf(0xFFB98AFF, 0xFF25005A, 0xFF5A00C6, 0xFFEADDFF), "magenta" to listOf(0xFFFF6BC1, 0xFF3D0026, 0xFF8F005B, 0xFFFFD8EA),
+            "graphite" to listOf(0xFFE6E4EC, 0xFF1B1A1F, 0xFF3A3940, 0xFFE6E4EC),
+        )
+
+        /** The palette for the accent id the phone syncs (unknown or empty: iris), with the container steps the phone itself uses. */
+        fun ofAccent(id: String?): Pal {
+            val a = accents[id ?: ""] ?: return Iris
+            val base = of(Color(a[0].toInt()))
+            return Pal(Color(a[0].toInt()), Color(a[1].toInt()), Color(a[2].toInt()), Color(a[3].toInt()), base.deep, base.secC, base.onSecC, base.surfHi, base.dimText)
+        }
     }
 }
 

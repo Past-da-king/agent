@@ -252,11 +252,11 @@ fun breathe(t: Float): Float { val ph = (t / 1.4f) % 2f; return androidx.compose
  * Speaking and Call are "working" (the voice level adds a little scale); Needs is the tertiary (amber) colour. Around it,
  * only light: a soft halo, listening rings, a speaking ring of bars, a thinking comet.
  */
-fun DrawScope.orb(c: Offset, r: Float, mood: Mood, t: Float, level: Float = 0f, kind: MascotKind = MascotKind.Scout, glow: Float = 1f, dpx: Float = 1f) {
+fun DrawScope.orb(c: Offset, r: Float, mood: Mood, t: Float, level: Float = 0f, kind: MascotKind = MascotKind.Scout, glow: Float = 1f, dpx: Float = 1f, tint: Color = V2.iris, ink: Color = V2.ink) {
     val needs = mood == Mood.Needs
     val muted = mood == Mood.Muted || mood == Mood.Asleep
-    val fill = when { needs -> V2.amber; muted -> V2.faint; else -> V2.iris }
-    val eye = if (needs) V2.inkAmber else V2.ink
+    val fill = when { needs -> V2.amber; muted -> V2.faint; else -> tint }
+    val eye = if (needs) V2.inkAmber else ink
     val working = when (mood) { Mood.Listening, Mood.Thinking, Mood.Speaking, Mood.Call -> 1f; else -> 0f }
     val br = breathe(t)
     val size = r * 2f
@@ -307,9 +307,9 @@ fun DrawScope.orb(c: Offset, r: Float, mood: Mood, t: Float, level: Float = 0f, 
 }
 
 @Composable
-fun Orb(cx: Dp, cy: Dp, r: Dp, mood: Mood, t: Float, level: Float = 0f, kind: MascotKind = MascotKind.Scout, glow: Float = 1f) {
+fun Orb(cx: Dp, cy: Dp, r: Dp, mood: Mood, t: Float, level: Float = 0f, kind: MascotKind = MascotKind.Scout, glow: Float = 1f, tint: Color = V2.iris, ink: Color = V2.ink) {
     // Drawn on the whole stage so the halo is never clipped and the centre is exactly where the layout says.
-    Canvas(Modifier.fillMaxSize()) { orb(Offset(cx.toPx(), cy.toPx()), r.toPx(), mood, t, level, kind, glow, 1.dp.toPx()) }
+    Canvas(Modifier.fillMaxSize()) { orb(Offset(cx.toPx(), cy.toPx()), r.toPx(), mood, t, level, kind, glow, 1.dp.toPx(), tint, ink) }
 }
 
 // ───────── stage dressing ─────────

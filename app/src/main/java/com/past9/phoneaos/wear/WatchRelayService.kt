@@ -33,6 +33,16 @@ class WatchRelayService : WearableListenerService() {
     override fun onMessageReceived(e: MessageEvent) {
         if (!e.path.startsWith("/agent/")) return
         val g = App.graph(this)
+        // Pairing comes first, and is the only thing an unpaired watch may say (docs/wear.md, "Pairing").
+        when (e.path) {
+            com.past9.phoneaos.wearproto.PairPaths.RESULT -> { com.past9.phoneaos.wearproto.PairWire.parseResult(e.data)?.let { WatchPairing.onResult(g, e.sourceNodeId, it) }; return }
+            com.past9.phoneaos.wearproto.PairPaths.UNPAIR -> { WatchPairing.onUnpair(g, e.sourceNodeId); return }
+        }
+        // Anything else is served only for the watch this phone is paired with; any other gets told to pair, and nothing is run.
+        if (!WatchPairing.serves(g, e.sourceNodeId)) {
+            send(e.sourceNodeId, WearPaths.ACK, Wire.ack(com.past9.phoneaos.wearproto.Ack("", false, com.past9.phoneaos.wearproto.PairReason.NOT_PAIRED)))
+            return
+        }
         WatchRelay.seen(g, e.sourceNodeId)
         scope.launch {
             val reply = runCatching { WatchRelay.router(g).route(e.path, e.data) }.onFailure { Log.w(TAG, "route ${e.path}: ${it.message}") }.getOrNull() ?: return@launch
@@ -42,6 +52,7 @@ class WatchRelayService : WearableListenerService() {
 
     /** A voice take from the watch's mic: written down with the phone's own dictation pass, then sent to the agent. */
     override fun onChannelOpened(channel: ChannelClient.Channel) {
+        if (!WatchPairing.serves(App.graph(this), channel.nodeId)) { runCatching { Wearable.getChannelClient(this).close(channel) }; return }
         // The watch's microphone for a call with the agent: streamed live into the call's session (WatchCallBridge).
         if (channel.path.startsWith(com.past9.phoneaos.wearproto.CallPaths.MIC_CHANNEL + "/")) {
             WatchCallBridge.onMicChannel(App.graph(this), channel)

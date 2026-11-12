@@ -61,7 +61,11 @@ class WatchController(private val app: Context, val link: PhoneLink = PhoneLink(
     /** The watch opened: ask the phone for a fresh picture and read the last one it left. */
     fun opened() {
         scope.launch {
+            // Not paired: nothing is read and nothing is asked. The pairing screen is all the watch shows.
+            if (WatchPairingState.phone(app) == null) { WatchPairingState.newOffer(app); return@launch }
+            WatchCustomisationState.load(app)
             WatchStore.cached(app)
+            WatchCustomisationState.pull(app)
             link.readRing()?.let { WatchRing.onRing(app, it) }
             val sent = link.send(WearPaths.HELLO)
             _reach.value = if (sent) "ok" else "none"

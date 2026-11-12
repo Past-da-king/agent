@@ -7,6 +7,9 @@ import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.WearableListenerService
 import com.past9.phoneaos.wearproto.CallPaths
 import com.past9.phoneaos.wearproto.CallWire
+import com.past9.phoneaos.wearproto.PairPaths
+import com.past9.phoneaos.wearproto.PairReason
+import kotlinx.coroutines.launch
 import com.past9.phoneaos.wearproto.RingPaths
 import com.past9.phoneaos.wearproto.RingWire
 import com.past9.phoneaos.wearproto.WearPaths
@@ -20,7 +23,10 @@ class WearListener : WearableListenerService() {
     override fun onDataChanged(events: DataEventBuffer) {
         for (e in events) {
             val path = e.dataItem.uri.path
+            // Only what the paired phone put there is believed (the item's host is the node that wrote it).
+            if (e.dataItem.uri.host != WatchPairingState.phone(applicationContext)) continue
             when {
+                path == PairPaths.SETTINGS -> WatchCustomisationState.onItem(applicationContext, e.dataItem.uri.host, if (e.type == DataEvent.TYPE_CHANGED) e.dataItem.data else null)
                 e.type == DataEvent.TYPE_CHANGED && path == WearPaths.STATE -> Wire.parseState(e.dataItem.data)?.let { WatchStore.update(applicationContext, it) }
                 // An empty list is a real answer (nothing rings); a deleted item is the same.
                 path == RingPaths.RING -> WatchRing.onRing(applicationContext, if (e.type == DataEvent.TYPE_CHANGED) RingWire.parseItems(e.dataItem.data).orEmpty() else emptyList())
@@ -31,8 +37,17 @@ class WearListener : WearableListenerService() {
     override fun onMessageReceived(e: MessageEvent) {
         val app = applicationContext as WatchApp
         val c = app.controller
+        // Pairing first: a phone asks to pair, or the paired phone unpairs. Everything else counts only from the paired phone.
         when (e.path) {
-            WearPaths.ACK -> Wire.parseAck(e.data)?.let { c.onAck(it); app.call.onAck(it) }
+            PairPaths.REQUEST -> { app.controller.scope.launch { WatchPairingState.onRequest(applicationContext, e.sourceNodeId, e.data) }; return }
+            PairPaths.UNPAIR -> { WatchPairingState.onUnpair(applicationContext, e.sourceNodeId); return }
+        }
+        if (e.sourceNodeId != WatchPairingState.phone(applicationContext)) return
+        when (e.path) {
+            // The phone says it does not know this watch (it was unpaired there): the watch goes back to its pairing screen.
+            WearPaths.ACK -> Wire.parseAck(e.data)?.let {
+                if (it.reason == PairReason.NOT_PAIRED) WatchPairingState.onUnpair(applicationContext, e.sourceNodeId) else { c.onAck(it); app.call.onAck(it) }
+            }
             WearPaths.HEARD -> Wire.parseHeard(e.data)?.let(c::onHeard)
             CallPaths.PLAN -> CallWire.parsePlan(e.data)?.let(app.call::onPlan)
             CallPaths.STATE -> CallWire.parseView(e.data)?.let(app.call::onPhone)

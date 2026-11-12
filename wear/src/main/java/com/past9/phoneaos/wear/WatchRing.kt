@@ -51,7 +51,7 @@ object WatchRing {
     val ringing: StateFlow<List<RingItem>> = _ringing
 
     private fun prefs(c: Context) = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-    fun approvalMode(c: Context): String = prefs(c).getString("approval_mode", ApprovalRingMode.FULL)?.takeIf { it in ApprovalRingMode.ALL } ?: ApprovalRingMode.FULL
+    fun approvalMode(c: Context): String = prefs(c).getString("approval_mode", ApprovalRingMode.BUZZ)?.takeIf { it in ApprovalRingMode.ALL } ?: ApprovalRingMode.BUZZ
     fun setApprovalMode(c: Context, mode: String) { if (mode in ApprovalRingMode.ALL) { prefs(c).edit().putString("approval_mode", mode).apply(); recompute(c) } }
 
     private fun rung(c: Context): MutableSet<Long> = runCatching {

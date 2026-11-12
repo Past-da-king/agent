@@ -17,7 +17,8 @@ import androidx.graphics.shapes.RoundedPolygon
 fun LiveOrb(cx: Dp, cy: Dp, r: Dp, mood: Mood, level: Float = 0f, kind: MascotKind = LocalLook.current.kind) {
     val moves = mood == Mood.Listening || mood == Mood.Thinking || mood == Mood.Speaking || mood == Mood.Call
     val t = if (moves) rememberT() else 0f
-    Orb(cx, cy, r, mood, t, level, kind, glow = 0f)
+    val pal = LocalLook.current.pal
+    Orb(cx, cy, r, mood, t, level, kind, glow = 0f, tint = pal.primary, ink = pal.onPrimary)
 }
 
 /** A tonal Material shape behind the agent, turning slowly while it works. */

@@ -117,6 +117,11 @@
                 <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
                 <data android:scheme="wear" android:host="*" android:path="/agent/ring" />
             </intent-filter>
+            <!-- The phone's customisations (agent name, mascot, accent, theme, language, voice), kept in step while paired. -->
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
+                <data android:scheme="wear" android:host="*" android:path="/agent/settings" />
+            </intent-filter>
             <!-- The agent's voice during a call: the phone opens this channel to the watch. -->
             <intent-filter>
                 <action android:name="com.google.android.gms.wearable.CHANNEL_EVENT" />

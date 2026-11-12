@@ -63,6 +63,8 @@ dependencies {
   implementation(libs.wear.protolayout)
   implementation(libs.wear.complications.ktx)
   implementation(libs.concurrent.futures)
+  // Draws the pairing QR (zxing core only, pure Java, the version the phone reads it with).
+  implementation("com.google.zxing:core:3.5.3")
   implementation(libs.play.services.wearable)
   implementation(libs.kotlinx.coroutines.play.services)
 

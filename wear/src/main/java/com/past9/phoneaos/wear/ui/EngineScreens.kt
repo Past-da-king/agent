@@ -156,7 +156,7 @@ fun RingScreen(item: RingItem, onAck: () -> Unit, onSnooze: () -> Unit, onReview
             shapeBlob(MaterialShapes.Cookie12Sided, c, g.d.toPx() * 0.4f, if (critical) Color(0xFF8C1D18) else pal.amberC, t * 8f)
         }
         val shake = sin(t * 38f) * 2.4f * (if (sin(t * 3.1f) > 0.1f) 1f else 0f)
-        Box(Modifier.fillMaxSize().graphicsLayerRotate(shake)) { Orb(cx, cy, g.d * 0.115f, Mood.Needs, 0f, 0f, LocalLook.current.kind, 0f) }
+        Box(Modifier.fillMaxSize().graphicsLayerRotate(shake)) { Orb(cx, cy, g.d * 0.115f, Mood.Needs, 0f, 0f, LocalLook.current.kind, 0f, pal.primary, pal.onPrimary) }
         TopLabel(stringResource(if (item.kind == RingKind.APPROVAL) R.string.needs_you else R.string.ring_wake).uppercase(), accent, 10f, FontWeight.Bold, 2f)
         val half = g.chord(H * 0.62f, 14.dp)
         Box(Modifier.offset(cx - half, H * 0.455f).width(half * 2), contentAlignment = Alignment.Center) { Txt(item.title, 17f, Color.White, FontWeight.Black, -0.3f, lh = 19f, maxLines = 2) }
@@ -210,7 +210,7 @@ fun CallScreen(s: WatchCallCore.State, agent: String, onMute: () -> Unit, onEnd:
         }
         if (!over) LiveWavy(cx, cy, g.d * 0.18f, g.d * (0.004f + 0.014f * level), 13, pal.primary, 3.dp * g.k)
         TopLabel(((agent.ifBlank { stringResource(R.string.agent_default) }) + "  ·  " + phaseText(s)).uppercase(), if (s.degraded || s.phase == WatchCallCore.FAILED) err else pal.onContainer, 9.5f, FontWeight.Bold, 1.6f)
-        Orb(cx, cy, g.d * 0.125f, mood, t, level, look.kind, 0f)
+        Orb(cx, cy, g.d * 0.125f, mood, t, level, look.kind, 0f, pal.primary, pal.onPrimary)
         if (!over) {
             Box(Modifier.offset(cx - g.dp(80f), H * 0.535f).width(g.dp(160f)), contentAlignment = Alignment.Center) { Txt("%02d:%02d".format(secs / 60, secs % 60), 30f, Color.White, FontWeight.Black, -0.5f) }
             val route = s.plan?.let { stringResource(if (it.spk == Side.WATCH) R.string.call_route_watch else R.string.call_route_phone) }.orEmpty()
@@ -280,7 +280,7 @@ private fun ringModeName(m: String) = stringResource(when (m) { ApprovalRingMode
 @Composable
 fun GesturesScreen(
     map: GestureMap, profile: DeviceProfile, approvalMode: String,
-    onMap: (GestureMap) -> Unit, onApprovalMode: (String) -> Unit, onNotificationAccess: () -> Unit, onHomeScreen: () -> Unit,
+    onMap: (GestureMap) -> Unit, onApprovalMode: (String) -> Unit, onNotificationAccess: () -> Unit, onHomeScreen: () -> Unit, onUnpair: (() -> Unit)? = null,
     previewPick: Gesture? = null, previewMode: Boolean = false,
 ) {
     val pal = LocalLook.current.pal
@@ -309,6 +309,7 @@ fun GesturesScreen(
                 ExPill(stringResource(R.string.rings_approvals), { pickingMode = true }, secondary = ringModeName(approvalMode), height = 52f)
                 ExPill(stringResource(R.string.rings_dnd), onNotificationAccess)
                 ExPill(stringResource(R.string.home_settings), onHomeScreen, icon = Ic.apps)
+                if (onUnpair != null) ExPill(stringResource(R.string.pair_unpair), onUnpair)
             }
         }
         EdgeFades(0.19f, 0.14f)
@@ -477,7 +478,7 @@ private fun BoxScope.AppGrid(g: Geo, apps: List<AppEntry>, icons: Map<String, Im
                 val alpha = ((1f - (dist / maxDist - 0.65f) * 2.4f)).coerceIn(0f, 1f); if (alpha <= 0.02f) return
                 if (isAgent) {
                     shapeBlob(MaterialShapes.Cookie12Sided, ctr, sz * 1.1f, pal.container.copy(alpha = alpha))
-                    orb(ctr, sz * 0.36f, Mood.Idle, 0f, 0f, look.kind, 0f, density)
+                    orb(ctr, sz * 0.36f, Mood.Idle, 0f, 0f, look.kind, 0f, density, pal.primary, pal.onPrimary)
                 } else {
                     val tone = if (idx % 3 == 0) pal.container else if (idx % 3 == 1) pal.secC else pal.surfHi
                     shapeBlob(MaterialShapes.Cookie9Sided, ctr, sz, tone.copy(alpha = alpha))

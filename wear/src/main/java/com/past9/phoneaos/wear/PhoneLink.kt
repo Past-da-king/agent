@@ -13,12 +13,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 /** The watch's one way to the phone: the Wearable Data Layer. Nothing else leaves the watch. */
 class PhoneLink(private val context: Context) {
     /** The paired phone that runs the relay (it declares [WearPaths.CAP_PHONE]); any connected phone when none does. */
-    suspend fun phoneNode(): String? = runCatching {
-        val caps = Wearable.getCapabilityClient(context).getCapability(WearPaths.CAP_PHONE, CapabilityClient.FILTER_REACHABLE).await()
-        (caps.nodes.firstOrNull { it.isNearby } ?: caps.nodes.firstOrNull())?.id
-    }.getOrNull() ?: runCatching {
-        Wearable.getNodeClient(context).connectedNodes.await().let { n -> (n.firstOrNull { it.isNearby } ?: n.firstOrNull())?.id }
-    }.getOrNull()
+    // The phone this watch is paired with, and no other: with none paired nothing is sent to anybody (docs/wear.md, "Pairing").
+    suspend fun phoneNode(): String? = WatchPairingState.phone(context)
 
     suspend fun send(path: String, data: ByteArray = ByteArray(0)): Boolean {
         val node = phoneNode() ?: return false

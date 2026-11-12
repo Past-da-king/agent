@@ -45,19 +45,13 @@ private val WatchColors = ColorScheme(
     error = WatchTokens.error, onError = WatchTokens.onError, errorContainer = WatchTokens.errorContainer, onErrorContainer = WatchTokens.onErrorContainer,
 )
 
-/** The agent's look, synced from the phone: the mascot the user picked and the accent the colours are seeded from. */
-object WatchLook {
-    private val _look = kotlinx.coroutines.flow.MutableStateFlow(com.past9.phoneaos.wear.ui.ex.AgentLook(com.past9.phoneaos.wear.ui.ex.MascotKind.Scout, com.past9.phoneaos.wear.ui.ex.Pal.Iris))
-    val look: kotlinx.coroutines.flow.StateFlow<com.past9.phoneaos.wear.ui.ex.AgentLook> = _look
-    /** [accent] is an ARGB colour or null for the default iris. */
-    fun set(mascotId: String?, accent: Int?) {
-        _look.value = com.past9.phoneaos.wear.ui.ex.AgentLook(com.past9.phoneaos.wear.ui.ex.MascotKind.of(mascotId), accent?.let { com.past9.phoneaos.wear.ui.ex.Pal.of(Color(it)) } ?: com.past9.phoneaos.wear.ui.ex.Pal.Iris)
-    }
-}
-
 @Composable
 fun AgentWatchTheme(content: @Composable () -> Unit) {
-    val look by WatchLook.look.collectAsState()
+    // The agent's look is the phone's: the mascot the user picked and the accent, synced while paired (WatchCustomisationState).
+    val cust by com.past9.phoneaos.wear.WatchCustomisationState.state.collectAsState()
+    val look = androidx.compose.runtime.remember(cust.mascot, cust.accent) {
+        com.past9.phoneaos.wear.ui.ex.AgentLook(com.past9.phoneaos.wear.ui.ex.MascotKind.of(cust.mascot), com.past9.phoneaos.wear.ui.ex.Pal.ofAccent(cust.accent))
+    }
     androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.wear.ui.ex.LocalLook provides look) { MaterialTheme(colorScheme = WatchColors, content = content) }
 }
 

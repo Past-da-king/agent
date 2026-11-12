@@ -20,7 +20,6 @@
     <string name="home_back_title">Back to the standard home?</string>
     <string name="home_back_body">The agent stays on your watch as a normal app.</string>
     <string name="home_keep">Keep the agent home</string>
-    <string name="pair_title">Pair with your phone</string>
     <string name="pair_hint">Phone: Agent, Watch, Scan</string>
     <string name="pair_pairing">Pairing</string>
     <string name="pair_paired">Paired</string>

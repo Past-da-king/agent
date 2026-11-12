@@ -55,7 +55,7 @@ enum class PairStage { SCAN, PULLING, DONE }
  * engine's; this draws it.
  */
 @Composable
-fun PairingScreen(stage: PairStage, qr: String, code: String, step: Int, name: String, kind: MascotKind, onStart: () -> Unit) {
+fun PairFlowScreen(stage: PairStage, qr: String, code: String, step: Int, name: String, kind: MascotKind, onStart: () -> Unit) {
     val look = LocalLook.current; val pal = look.pal
     val rows = remember(qr) { if (qr.isBlank()) emptyList() else QrMatrix.encode(qr) }
     ExStage(if (stage == PairStage.PULLING) pal.deep else Color.Black) { g ->

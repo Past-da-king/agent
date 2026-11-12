@@ -155,6 +155,9 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
                 val assistHeld = remember(assistant, assistTick) { com.past9.phoneaos.assist.AssistRole.held(actx) }
                 Line(Icons.Rounded.Assistant, stringResource(R.string.settings_default_assistant), com.past9.phoneaos.assist.AssistRole.line(assistHeld)) { assistant = true }
                 if (assistant) AssistantSheet(s.agentName, onDismiss = { assistant = false })
+                var watchPair by remember { mutableStateOf(false) }
+                Line(Icons.Rounded.Watch, stringResource(R.string.watch_pair_title), stringResource(R.string.watch_pair_row)) { watchPair = true }
+                if (watchPair) WatchPairSheet(onDismiss = { watchPair = false })
             }
             SectionHeader(stringResource(R.string.settings_background), stringResource(R.string.settings_background_sub), Modifier.padding(start = 4.dp, top = 12.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
