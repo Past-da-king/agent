@@ -29,6 +29,9 @@ object SpokenResult {
         "Never say the two marker lines aloud. You may add one short closing offer, nothing more. " +
         "Say numbers, names and times naturally and skip symbols. If it ends with \"$REST\", say that too."
 
+    /** The same rule for a voice call, where the voice IS the agent and speaks of its own work in the first person. */
+    val RULE_CALL: String get() = RULE.replace("is the agent's answer", "is the result of your own work")
+
     /** What the agent is told in a hand-off: its reply is read aloud, word for word. */
     const val AGENT_NOTE = "Your reply will be read aloud word for word by the voice, so write it as speech: plain sentences, the main point first, " +
         "no markdown, tables, code or long links, and every detail the user needs. The voice will not shorten it."

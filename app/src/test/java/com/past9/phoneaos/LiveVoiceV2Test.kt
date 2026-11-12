@@ -259,6 +259,13 @@ class LiveVoiceV2Test {
         assertTrue(p.contains("a pause is not the end of their turn"))
     }
 
+    @Test fun theVoiceCallReadsMarkedResultsAsWrittenToo() {
+        val p = com.past9.phoneaos.voice.CallController.systemPrompt("Nova", "Sam", linked = true)
+        assertTrue(p.contains(SpokenResult.HEAD)); assertTrue(p.contains("Never summarise a summary"))
+        assertTrue(p.contains("a pause is not the end of their turn"))
+        assertFalse("first person: no 'the agent'", Regex("\\bthe agent\\b").containsMatchIn(p))
+    }
+
     @Test fun theHandOffTellsTheAgentItsReplyIsReadAloudSoItWritesTheSpokenVersion() {
         val note = LiveAssistCore.liveNote("find the invoices")
         assertTrue(note.contains(SpokenResult.AGENT_NOTE))
