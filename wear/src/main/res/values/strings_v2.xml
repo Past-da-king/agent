@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The Material 3 Expressive screens (docs/wear.md, "Look"): words the new screens add. -->
+    <string name="hold">Hold</string>
+    <string name="not_now">Not now</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_gestures_sub">Wrist gestures and rings</string>
+    <string name="settings_home_sub">Use the agent as your home</string>
+    <string name="call_sound_title">Call sound</string>
+    <string name="call_route_watch">On the watch</string>
+    <string name="call_route_phone">On the phone</string>
+    <string name="home_no_recent">Nothing opened from here yet</string>
+    <string name="home_card_agent">Agent home</string>
+    <string name="home_card_agent_sub">The agent opens first. Apps are a swipe away.</string>
+    <string name="home_card_standard">Standard home</string>
+    <string name="home_card_standard_sub">Your watch as it came</string>
+    <string name="home_optional">Optional. Change it any time.</string>
+    <string name="home_choose_title">Use the agent as your watch home?</string>
+    <string name="home_choose_body">Apps, tiles and notifications work as usual. You can switch back in one tap.</string>
+    <string name="home_back_title">Back to the standard home?</string>
+    <string name="home_back_body">The agent stays on your watch as a normal app.</string>
+    <string name="home_keep">Keep the agent home</string>
+    <string name="pair_hint">Phone: Agent, Watch, Scan</string>
+    <string name="pair_pairing">Pairing</string>
+    <string name="pair_paired">Paired</string>
+    <string name="pair_ready">Ready on your wrist</string>
+    <string name="pair_start">Start</string>
+    <string name="pair_step_paired">Paired with your phone</string>
+    <string name="pair_step_look">Getting your name and look</string>
+    <string name="pair_step_sync">Syncing what needs you</string>
+    <string name="home_use_short">Use the agent</string>
+    <string name="home_back_short">Switch back</string>
+    <string name="call_use_phone_short">Use phone sound</string>
+    <string name="face_mascot_label">The agent</string>
+</resources>

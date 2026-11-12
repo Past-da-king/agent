@@ -82,7 +82,7 @@ class MainActivity : ComponentActivity() {
 private object Routes {
     const val HOME = "home"; const val LISTEN = "listen"; const val ANSWER = "answer"
     const val APPROVAL = "approval"; const val RECENT = "recent"; const val EXCHANGE = "exchange"; const val DONE = "done"
-    const val CALL = "call"; const val GESTURES = "gestures"; const val HOME_SETTINGS = "home_settings"
+    const val CALL = "call"; const val GESTURES = "gestures"; const val HOME_SETTINGS = "home_settings"; const val SETTINGS = "settings"
 }
 
 @Composable
@@ -98,7 +98,8 @@ private fun WatchNav(c: WatchController, call: WatchCall, go: String) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    val agent = state?.agent.orEmpty()
+    val cust by WatchCustomisationState.state.collectAsState()
+    val agent = cust.agentName.ifBlank { state?.agent.orEmpty() }
     val pending = state?.pending.orEmpty()
     val micUsable = !MicPolicy.preferFallback(micDeadAt, System.currentTimeMillis())
 
@@ -187,12 +188,13 @@ private fun WatchNav(c: WatchController, call: WatchCall, go: String) {
                 onQuick = { q -> scope.launch { if (c.ask(q, Via.QUICK)) toAnswer() } },
                 onWaiting = { pending.firstOrNull()?.let { nav.navigate(Routes.APPROVAL + "/" + it.id) } },
                 onRecent = { nav.navigate(Routes.RECENT) }, onTryMic = { c.tryMicAgain(); c.clearNotice() },
-                onCall = { placeCall() }, onMore = { nav.navigate(Routes.GESTURES) },
+                onCall = { placeCall() }, onMore = { nav.navigate(Routes.SETTINGS) },
             )
         }
         composable(Routes.CALL) {
             CallScreen(callState, agent, onMute = call::toggleMute, onEnd = call::end, onAgain = { placeCall() }, onPhoneAudio = { placeCall(phoneAudio = true) })
         }
+        composable(Routes.SETTINGS) { com.past9.phoneaos.wear.ui.WatchSettingsScreen(agent, onGestures = { nav.navigate(Routes.GESTURES) }, onHome = { nav.navigate(Routes.HOME_SETTINGS) }) }
         composable(Routes.GESTURES) {
             var map by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(WatchGestures.map(context)) }
             var mode by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(WatchRing.approvalMode(context)) }

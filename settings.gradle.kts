@@ -34,3 +34,9 @@ rootProject.name = "Agent"
 include(":app")
 include(":wearproto")
 include(":wear")
+
+// The three Agent watch faces (Watch Face Format, resources only, one face per package): watchface/still, orb, data.
+include(":facestill", ":faceorb", ":facedata")
+project(":facestill").projectDir = file("watchface/still")
+project(":faceorb").projectDir = file("watchface/orb")
+project(":facedata").projectDir = file("watchface/data")

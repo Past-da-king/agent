@@ -1,6 +1,8 @@
 package com.past9.phoneaos.wear.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -44,7 +46,14 @@ private val WatchColors = ColorScheme(
 )
 
 @Composable
-fun AgentWatchTheme(content: @Composable () -> Unit) = MaterialTheme(colorScheme = WatchColors, content = content)
+fun AgentWatchTheme(content: @Composable () -> Unit) {
+    // The agent's look is the phone's: the mascot the user picked and the accent, synced while paired (WatchCustomisationState).
+    val cust by com.past9.phoneaos.wear.WatchCustomisationState.state.collectAsState()
+    val look = androidx.compose.runtime.remember(cust.mascot, cust.accent) {
+        com.past9.phoneaos.wear.ui.ex.AgentLook(com.past9.phoneaos.wear.ui.ex.MascotKind.of(cust.mascot), com.past9.phoneaos.wear.ui.ex.Pal.ofAccent(cust.accent))
+    }
+    androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.wear.ui.ex.LocalLook provides look) { MaterialTheme(colorScheme = WatchColors, content = content) }
+}
 
 private fun vec(name: String, path: String): ImageVector =
     ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f).addPath(PathParser().parsePathString(path).toNodes(), fill = SolidColor(Color.Black)).build()

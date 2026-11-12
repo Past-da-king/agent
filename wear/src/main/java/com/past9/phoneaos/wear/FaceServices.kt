@@ -109,7 +109,7 @@ class TalkComplication : FaceSource() {
 }
 
 object FaceSurfaces {
-    private val all = listOf(AgentComplication::class.java, PendingComplication::class.java, NextTaskComplication::class.java, StatusComplication::class.java, TalkComplication::class.java)
+    private val all = listOf(AgentComplication::class.java, PendingComplication::class.java, NextTaskComplication::class.java, StatusComplication::class.java, TalkComplication::class.java, MascotComplication::class.java)
 
     /** Ask the system to redraw every face source of this app: the state changed, a face on the wrist may show it. */
     fun refresh(context: Context) {
