@@ -76,4 +76,17 @@ Where it goes: `g.runtime.answer(ask.id, answer)`, the same path the question ca
 - **Logged.** Tag : ,  (trimmed to 700 chars) and .
 - The desktop token (fieldMask ) keeps the phone instruction: proven by  and by the sessions of 12 Nov where tools worked.
 
-Tests:  (fake socket: the setup carries agents, steps and asks; a reconnect setup is built from now; note is a no-answer client turn; known/unknown/failed context; callTargets fallback; cap keeps asks and agents first).
+## Live voice always knows (0.15.63, 13 Nov 2026)
+
+0.15.61 and 0.15.62 shipped the context but Live voice still answered "nothing is running" and "I cannot see previous conversations". Causes and fixes:
+
+- **The start read was dropped after 700 ms.** `LiveAssistant.start` waited 700 ms for the snapshot and opened the session with NO context when it was slower (a cold link, a large chat table). Now the snapshot is read in parallel with the token and the setup waits for it up to 3.5 s; the microphone never waits.
+- **A cold link read the phone's own empty database.** In remote mode `RemoteHub.session` can still be null at the first moment, so the snapshot read the phone's local chat (empty). `AssistContextSource.snapshot` now waits for the link (3 s), then for the computer's cards (1.2 s), then falls back to `voice.callTargets` (who is at work on the computer) and otherwise marks the agents unknown.
+- **Never silent.** An empty but known list says "Agents: none are working right now." Unknown says the voice could not read them and must not say none are running. A snapshot that failed entirely gives a block that says so. Agents now carry what they were started for and their two latest steps (this is how "waiting for the watch to come back on adb" reaches the voice).
+- **No baseline, no delta.** When the session opened without context, later changes only told new questions and never listed the agents. Now every change to the context sends the whole current text as a quiet client turn (`LiveSession.note`: `clientContent` with `turnComplete` false) headed "[Context update]", debounced 1.2 s, at most every 4 s, retried until the line is ready. Spoken deltas (a new question, an agent finished) stay as before.
+- **A fresh reconnect used a stale prompt.** `LiveSession.systemFrom` makes every setup (first and reconnect) build its instruction from the current context.
+- **Calls.** `CallController` appends the same `AssistContextSource` block to its prompt.
+- **Logged.** Tag `LiveAssist`: `context primed: agents=N known=B asks=N turns=N chars=N`, `context: ...` (trimmed to 700 chars) and `context update sent: ...`.
+- The desktop token (`fieldMask: 'model'`) keeps the phone's instruction: proven by `voice.test.ts` and by the 12 Nov sessions, where the tools worked.
+
+Tests: `LiveContextAlwaysTest` (fake socket: the setup carries agents, steps and asks; a reconnect's setup is built from now; a note is a no-answer client turn; known, unknown and failed context; the callTargets fallback; the cap keeps asks and agents first).
