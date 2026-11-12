@@ -1,6 +1,8 @@
 package com.past9.phoneaos.wear
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import com.google.android.gms.wearable.Wearable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -48,6 +50,14 @@ fun PairGate(content: @Composable () -> Unit) {
         if (offer == null) WatchPairingState.newOffer(ctx)
         else { delay((offer!!.expiresAt - System.currentTimeMillis()).coerceAtLeast(0)); expired = true }
     }
-    val qr = remember(offer?.secret) { offer?.let { QrImage.make(it.qr()) } }
-    PairingScreen(offer, qr, expired) { scope.launch { WatchPairingState.newOffer(ctx) } }
+    // While this screen is up the watch also answers over the local network, and listens for the phone's request itself (the system may not start the service).
+    var lanHost by remember { mutableStateOf("") }
+    DisposableEffect(Unit) {
+        lanHost = WatchLanPair.start(ctx)
+        val l = WatchPairingState.listener(ctx, scope)
+        runCatching { Wearable.getMessageClient(ctx).addListener(l) }
+        onDispose { runCatching { Wearable.getMessageClient(ctx).removeListener(l) }; WatchLanPair.stop() }
+    }
+    val qr = remember(offer?.secret, lanHost) { offer?.let { QrImage.make(it.qr(lanHost)) } }
+    PairingScreen(offer, qr, expired, lanHost) { scope.launch { WatchPairingState.newOffer(ctx) } }
 }
