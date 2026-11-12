@@ -46,6 +46,7 @@ dependencies {
   implementation(project(":wearproto"))
   implementation(platform(libs.androidx.compose.bom))
   implementation(libs.androidx.core.ktx)
+  implementation(libs.androidx.compose.material3)
   implementation(libs.androidx.graphics.shapes)
   implementation(libs.androidx.activity.compose)
   implementation(libs.androidx.lifecycle.runtime.compose)
@@ -74,4 +75,10 @@ dependencies {
   testImplementation("org.json:json:20240303")
   debugImplementation(libs.androidx.compose.ui.test.manifest)
   debugImplementation(libs.androidx.compose.ui.tooling)
+}
+
+kotlin {
+  compilerOptions {
+    optIn.addAll("androidx.compose.material3.ExperimentalMaterial3Api", "androidx.compose.material3.ExperimentalMaterial3ExpressiveApi")
+  }
 }

@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.platform.LocalConfiguration
@@ -53,11 +54,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.mutableStateOf
-import androidx.graphics.shapes.CornerRounding
+import androidx.compose.material3.MaterialShapes
 import androidx.graphics.shapes.Morph
 import androidx.graphics.shapes.RoundedPolygon
-import androidx.graphics.shapes.star
-import androidx.graphics.shapes.circle
 import com.past9.phoneaos.wear.ui.WatchTokens
 import kotlin.math.PI
 import kotlin.math.abs
@@ -204,22 +203,34 @@ fun IconBox(d: String, size: Dp, color: Color, modifier: Modifier = Modifier, ro
 
 enum class Mood { Idle, Listening, Thinking, Speaking, Needs, Call, Muted, Asleep, Ambient }
 
-enum class MascotKind(val label: String) { Scout("Scout"), Bloom("Bloom"), Puff("Puff"), Gem("Gem"), Pebble("Pebble") }
-
-private val polyCache = HashMap<MascotKind, Pair<RoundedPolygon, RoundedPolygon>>()
-private fun polys(k: MascotKind): Pair<RoundedPolygon, RoundedPolygon> = polyCache.getOrPut(k) {
-    when (k) {
-        MascotKind.Scout -> RoundedPolygon.star(9, 1f, 0.9f, CornerRounding(0.6f)).normalized() to RoundedPolygon.star(9, 1f, 0.68f, CornerRounding(0.35f)).normalized()
-        MascotKind.Bloom -> RoundedPolygon.star(5, 1f, 0.78f, CornerRounding(0.7f)).normalized() to RoundedPolygon.star(5, 1f, 0.58f, CornerRounding(0.5f)).normalized()
-        MascotKind.Puff -> RoundedPolygon.star(8, 1f, 0.92f, CornerRounding(0.6f)).normalized() to RoundedPolygon.star(12, 1f, 0.9f, CornerRounding(0.5f)).normalized()
-        MascotKind.Gem -> RoundedPolygon.star(4, 1f, 0.78f, CornerRounding(0.3f)).normalized() to RoundedPolygon.star(4, 1f, 0.62f, CornerRounding(0.2f)).normalized()
-        MascotKind.Pebble -> RoundedPolygon.circle(8).normalized() to RoundedPolygon.star(6, 1f, 0.9f, CornerRounding(0.8f)).normalized()
-    }
+/**
+ * The agent's mascot, the SAME one the phone and the desktop draw (phone: ui/Components.kt Mascots + AgentAvatar, desktop:
+ * ui/Mascot.tsx). A flat iris shape with two pill eyes; at rest it sits still, while the agent works it breathes into its busy
+ * shape (and turns, if the shape is radially symmetric, else it bobs). The shapes are Material's own [MaterialShapes], the
+ * same polygons the phone uses; the colours are the phone's primary (iris) and tertiary (amber, "needs you").
+ */
+enum class MascotKind(val id: String, val label: String, val spins: Boolean) {
+    Scout("scout", "Scout", true), Ghost("ghost", "Ghost", false), Clover("clover", "Clover", true), Bloom("bloom", "Bloom", true),
+    Puff("puff", "Puff", false), Gem("gem", "Gem", false), Pebble("pebble", "Pebble", false), Heart("heart", "Heart", false), Bun("bun", "Bun", false);
+    companion object { fun of(id: String?) = values().firstOrNull { it.id == id } ?: Scout }
 }
-private val morphCache = HashMap<MascotKind, Morph>()
-private fun morphOf(k: MascotKind) = morphCache.getOrPut(k) { val (a, b) = polys(k); Morph(a, b) }
 
-private fun morphPath(k: MascotKind, progress: Float, cx: Float, cy: Float, size: Float): Path {
+private fun restOf(k: MascotKind): RoundedPolygon = when (k) {
+    MascotKind.Scout -> MaterialShapes.Cookie9Sided; MascotKind.Ghost -> MaterialShapes.Ghostish; MascotKind.Clover -> MaterialShapes.Clover4Leaf
+    MascotKind.Bloom -> MaterialShapes.Flower; MascotKind.Puff -> MaterialShapes.Puffy; MascotKind.Gem -> MaterialShapes.Gem
+    MascotKind.Pebble -> MaterialShapes.Pill; MascotKind.Heart -> MaterialShapes.Heart; MascotKind.Bun -> MaterialShapes.Bun
+}
+private fun busyOf(k: MascotKind): RoundedPolygon = when (k) {
+    MascotKind.Scout -> MaterialShapes.SoftBurst; MascotKind.Ghost -> MaterialShapes.Ghostish; MascotKind.Clover -> MaterialShapes.Clover8Leaf
+    MascotKind.Bloom -> MaterialShapes.Sunny; MascotKind.Puff -> MaterialShapes.Cookie12Sided; MascotKind.Gem -> MaterialShapes.PuffyDiamond
+    MascotKind.Pebble -> MaterialShapes.Oval; MascotKind.Heart -> MaterialShapes.Heart; MascotKind.Bun -> MaterialShapes.Arch
+}
+
+private val morphCache = HashMap<MascotKind, Morph>()
+private fun morphOf(k: MascotKind) = morphCache.getOrPut(k) { Morph(restOf(k).normalized(), busyOf(k).normalized()) }
+
+/** The mascot's outline at [progress] (0 rest, 1 busy), [size] px wide, centred on (cx, cy). */
+fun mascotPath(k: MascotKind, progress: Float, cx: Float, cy: Float, size: Float): Path {
     val cubics = morphOf(k).asCubics(progress.coerceIn(0f, 1f))
     val p = Path()
     fun x(u: Float) = cx + (u - 0.5f) * size
@@ -232,104 +243,66 @@ private fun morphPath(k: MascotKind, progress: Float, cx: Float, cy: Float, size
 
 private fun hash(i: Int, t: Float): Float = abs(sin(i * 0.93f + t * 7.1f) * cos(i * 0.37f - t * 3.3f))
 
+/** The phone's breathe: a 1.4 s tween that reverses, eased. */
+fun breathe(t: Float): Float { val ph = (t / 1.4f) % 2f; return androidx.compose.animation.core.FastOutSlowInEasing.transform(if (ph < 1f) ph else 2f - ph) }
+
 /**
- * Draws the agent at [c] with radius [r] (the body is about 2r wide). [level] 0..1 is the voice (the user's while
- * listening, the agent's while speaking). Pure function of t, so it can be a still or a frame.
+ * Draws the agent at [c], radius [r] (the body is about 2r wide), exactly as the phone's AgentAvatar does: flat fill, rest
+ * shape still, busy shape breathing and turning. Moods map onto the phone's own states: Idle is rest; Thinking, Listening,
+ * Speaking and Call are "working" (the voice level adds a little scale); Needs is the tertiary (amber) colour. Around it,
+ * only light: a soft halo, listening rings, a speaking ring of bars, a thinking comet.
  */
 fun DrawScope.orb(c: Offset, r: Float, mood: Mood, t: Float, level: Float = 0f, kind: MascotKind = MascotKind.Scout, glow: Float = 1f, dpx: Float = 1f) {
     val needs = mood == Mood.Needs
-    val hi = if (needs) V2.amberHi else V2.irisHi
-    val mid = if (needs) V2.amber else V2.iris
-    val lo = if (needs) V2.amberLo else V2.irisLo
-    val ink = if (needs) V2.inkAmber else V2.ink
     val muted = mood == Mood.Muted || mood == Mood.Asleep
-    val bodyHi = if (muted) Color(0xFFD9D6E4) else hi
-    val bodyMid = if (muted) Color(0xFF9E9AAF) else mid
-    val bodyLo = if (muted) Color(0xFF55526A) else lo
-    val breathe = sin(t * 2f * PI.toFloat() / 4.2f) * 0.5f + 0.5f
-    val amt = when (mood) {
-        Mood.Idle -> 0.10f + 0.14f * breathe
-        Mood.Listening -> 0.20f + 0.75f * level
-        Mood.Thinking -> 0.55f + 0.45f * (sin(t * 2.6f) * 0.5f + 0.5f)
-        Mood.Speaking -> 0.30f + 0.6f * level
-        Mood.Needs -> 0.25f + 0.25f * (sin(t * 3.4f) * 0.5f + 0.5f)
-        Mood.Call -> 0.20f + 0.7f * level
-        Mood.Muted -> 0.05f
-        Mood.Asleep -> 0.03f + 0.05f * breathe
-        Mood.Ambient -> 0f
-    }
-    val rot = when (mood) { Mood.Thinking -> t * 46f; Mood.Needs -> 0f; Mood.Ambient, Mood.Asleep -> 0f; else -> t * 7f }
-    val scaleBreath = 1f + when (mood) {
-        Mood.Idle -> 0.035f * breathe; Mood.Listening -> 0.05f * level; Mood.Speaking, Mood.Call -> 0.05f * level
-        Mood.Needs -> 0.04f * (sin(t * 3.4f) * 0.5f + 0.5f); else -> 0f
-    }
-    val rr = r * scaleBreath
+    val fill = when { needs -> V2.amber; muted -> V2.faint; else -> V2.iris }
+    val eye = if (needs) V2.inkAmber else V2.ink
+    val working = when (mood) { Mood.Listening, Mood.Thinking, Mood.Speaking, Mood.Call -> 1f; else -> 0f }
+    val br = breathe(t)
+    val size = r * 2f
+    val spin = if (working > 0f && kind.spins) (t / 9f * 360f) % 360f * working else 0f
+    val sc = 1f + 0.04f * br * working + (if (mood == Mood.Listening || mood == Mood.Speaking || mood == Mood.Call) 0.06f * level else 0f)
+    val bobY = if (working > 0f && !kind.spins) -size * 0.05f * br * working else 0f
+    val progress = (0.15f + 0.85f * br) * working
 
     if (mood != Mood.Ambient) {
-        // halo
-        val ga = glow * when (mood) { Mood.Idle -> 0.50f + 0.18f * breathe; Mood.Asleep -> 0.18f; Mood.Muted -> 0.14f; else -> 0.62f + 0.4f * level } * (if (needs) 1.1f else 1f)
-        drawCircle(Brush.radialGradient(0.0f to bodyMid.copy(alpha = 0.55f * ga), 0.42f to bodyMid.copy(alpha = 0.20f * ga), 1f to Color.Transparent, center = c, radius = rr * 2.5f), rr * 2.5f, c)
-        // listening rings
-        if (mood == Mood.Listening || mood == Mood.Call) {
-            for (k in 0 until 3) {
-                val ph = ((t * 0.65f + k / 3f) % 1f)
-                val rad = rr * (1.12f + ph * 0.75f)
-                drawCircle(bodyMid.copy(alpha = (1f - ph) * (0.14f + 0.45f * level)), rad, c, style = Stroke(1.5f * dpx))
-            }
+        val ga = glow * (if (muted) 0.16f else 0.55f + 0.35f * level + (if (working > 0f) 0.15f else 0f))
+        drawCircle(Brush.radialGradient(0.0f to fill.copy(alpha = 0.40f * ga), 0.45f to fill.copy(alpha = 0.14f * ga), 1f to Color.Transparent, center = c, radius = r * 2.4f), r * 2.4f, c)
+        if (mood == Mood.Listening || mood == Mood.Call) for (k in 0 until 3) {
+            val ph = ((t * 0.65f + k / 3f) % 1f)
+            drawCircle(fill.copy(alpha = (1f - ph) * (0.14f + 0.45f * level)), r * (1.12f + ph * 0.75f), c, style = Stroke(1.5f * dpx))
         }
-        // speaking ring of bars
         if (mood == Mood.Speaking || mood == Mood.Call) {
             val n = 56
             for (i in 0 until n) {
                 val a = i * 2f * PI.toFloat() / n
-                val len = rr * (0.04f + 0.26f * level * (0.25f + hash(i, t)))
-                val r0 = rr * 1.2f
-                drawLine(
-                    Brush.linearGradient(listOf(bodyMid.copy(alpha = 0.25f), bodyHi.copy(alpha = 0.95f)), Offset(c.x + cos(a) * r0, c.y + sin(a) * r0), Offset(c.x + cos(a) * (r0 + len), c.y + sin(a) * (r0 + len))),
-                    Offset(c.x + cos(a) * r0, c.y + sin(a) * r0), Offset(c.x + cos(a) * (r0 + len), c.y + sin(a) * (r0 + len)),
-                    strokeWidth = 2.2f * dpx, cap = StrokeCap.Round,
-                )
+                val len = r * (0.04f + 0.26f * level * (0.25f + hash(i, t)))
+                val r0 = r * 1.2f
+                val p0 = Offset(c.x + cos(a) * r0, c.y + sin(a) * r0); val p1 = Offset(c.x + cos(a) * (r0 + len), c.y + sin(a) * (r0 + len))
+                drawLine(fill.copy(alpha = 0.85f), p0, p1, strokeWidth = 2.2f * dpx, cap = StrokeCap.Round)
             }
         }
-        // thinking: a comet of dots on an orbit
-        if (mood == Mood.Thinking) {
-            for (k in 0 until 3) {
-                val base = t * 2.4f + k * 2f * PI.toFloat() / 3f
-                for (j in 0 until 7) {
-                    val a = base - j * 0.11f
-                    val orbitR = rr * (1.34f + 0.06f * sin(t * 2f + k))
-                    drawCircle(hi.copy(alpha = (1f - j / 7f) * 0.9f), rr * (0.075f - j * 0.007f), Offset(c.x + cos(a) * orbitR, c.y + sin(a) * orbitR))
-                }
+        if (mood == Mood.Thinking) for (k in 0 until 3) {
+            val base = t * 2.4f + k * 2f * PI.toFloat() / 3f
+            for (j in 0 until 7) {
+                val a = base - j * 0.11f; val orbitR = r * (1.34f + 0.06f * sin(t * 2f + k))
+                drawCircle(fill.copy(alpha = (1f - j / 7f) * 0.9f), r * (0.075f - j * 0.007f), Offset(c.x + cos(a) * orbitR, c.y + sin(a) * orbitR))
             }
         }
     }
 
-    val path = morphPath(kind, amt, c.x, c.y, rr * 2f)
+    val path = mascotPath(kind, progress, c.x, c.y + bobY, size)
     if (mood == Mood.Ambient) {
-        rotate(rot, pivot = c) { drawPath(path, V2.ambientInk, style = Stroke(1.6f * dpx)) }
-        // outline eyes: burn-in safe
-        for (s in listOf(-1f, 1f)) drawRoundRect(V2.ambientInk.copy(alpha = 0.75f), Offset(c.x + s * rr * 0.27f - rr * 0.045f, c.y - rr * 0.14f), Size(rr * 0.09f, rr * 0.28f), CornerRadius(rr * 0.045f))
-        return
+        rotate(spin, pivot = c) { drawPath(path, V2.ambientInk, style = Stroke(1.6f * dpx)) }
+    } else {
+        withTransform({ rotate(spin, pivot = c); scale(sc, sc, pivot = c) }) { drawPath(path, fill) }
     }
-    rotate(rot, pivot = c) {
-        drawPath(path, Brush.radialGradient(0f to bodyHi, 0.22f to bodyMid, 0.78f to bodyLo, 1f to bodyLo, center = Offset(c.x - rr * 0.38f, c.y - rr * 0.5f), radius = rr * 1.9f))
-        clipPath(path) {
-            // soft lower shade and a rim of light
-            drawCircle(Brush.radialGradient(0.55f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.34f), center = c, radius = rr * 1.05f), rr * 1.1f, c)
-            drawCircle(Brush.radialGradient(0f to Color.White.copy(alpha = 0.55f), 1f to Color.Transparent, center = Offset(c.x - rr * 0.38f, c.y - rr * 0.52f), radius = rr * 0.46f), rr * 0.46f, Offset(c.x - rr * 0.38f, c.y - rr * 0.52f))
-        }
-        drawPath(path, Brush.sweepGradient(listOf(Color.White.copy(alpha = 0.55f), Color.White.copy(alpha = 0.0f), Color.White.copy(alpha = 0.18f), Color.White.copy(alpha = 0.55f)), c), style = Stroke(1.2f * dpx))
-    }
-    // eyes: stay upright as the body turns
-    val blink = run { val ph = (t % 4.2f); if (ph > 3.95f && ph < 4.1f) 1f - 0.85f * sin((ph - 3.95f) / 0.15f * PI.toFloat()) else 1f }
-    val look = when (mood) { Mood.Thinking -> Offset(sin(t * 1.7f) * rr * 0.08f, -rr * 0.07f); Mood.Listening -> Offset(0f, rr * 0.02f); else -> Offset(sin(t * 0.7f) * rr * 0.03f, 0f) }
-    val eyeH = rr * when (mood) { Mood.Listening -> 0.40f; Mood.Asleep -> 0.06f; Mood.Muted -> 0.18f; Mood.Speaking, Mood.Call -> 0.32f + 0.08f * level; else -> 0.33f } * blink
-    val eyeW = rr * 0.19f
-    val bob = if (mood == Mood.Speaking || mood == Mood.Call) -rr * 0.04f * level else 0f
+    // the eyes: the phone's two pills, 0.09 x 0.15 of the body, 0.14 apart, upright while the body turns
+    val ew = size * 0.09f; val eh = size * 0.15f; val gap = size * 0.14f
+    val ey = c.y + bobY
     for (s in listOf(-1f, 1f)) {
-        val ex = c.x + s * rr * 0.27f + look.x; val ey = c.y + look.y + bob
-        drawRoundRect(ink, Offset(ex - eyeW / 2f, ey - eyeH / 2f), Size(eyeW, eyeH), CornerRadius(eyeW / 2f))
-        if (eyeH > rr * 0.2f) drawCircle(Color.White.copy(alpha = 0.55f), eyeW * 0.17f, Offset(ex - eyeW * 0.12f, ey - eyeH * 0.26f))
+        val ex = c.x + s * (gap + ew) / 2f
+        drawRoundRect(if (mood == Mood.Ambient) V2.ambientInk.copy(alpha = 0.85f) else eye, Offset(ex - ew / 2f, ey - eh / 2f), Size(ew, eh), CornerRadius(ew / 2f))
     }
 }
 

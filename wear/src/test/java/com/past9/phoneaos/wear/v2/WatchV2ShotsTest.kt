@@ -11,6 +11,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -34,10 +36,10 @@ import java.io.File
  */
 abstract class WatchV2Shots(private val size: String, private val round: Boolean = true) {
     @get:Rule val rule = createComposeRule()
-    private var cur by mutableStateOf<@Composable () -> Unit>({})
+    protected var cur by mutableStateOf<@Composable () -> Unit>({})
     private var started = false
 
-    private fun host() {
+    protected fun host() {
         if (started) return
         started = true
         rule.setContent {
@@ -58,6 +60,22 @@ abstract class WatchV2Shots(private val size: String, private val round: Boolean
             tt = i / fps.toFloat(); rule.waitForIdle()
             rule.onRoot().captureRoboImage(File("build/design/v2/clips/$name/f%03d.png".format(i)).path)
         }
+    }
+
+    /** The phone's own AgentAvatar code (top row) next to the watch mascot (bottom row): rest, working, needs you, and four of the nine. */
+    @Test fun mascotMatchesPhone() {
+        host(); cur = {
+            androidx.compose.foundation.layout.Column(Modifier.fillMaxSize().background(Color(0xFF131218)), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally, verticalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly) {
+                androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)) {
+                    PhoneAgentAvatar(false, 48.dp); PhoneAgentAvatar(true, 48.dp); PhoneAgentAvatar(false, 48.dp, needsYou = true); PhoneAgentAvatar(false, 48.dp, mascot = "bloom")
+                }
+                androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)) {
+                    for ((i, m) in listOf(Mood.Idle, Mood.Thinking, Mood.Needs, Mood.Idle).withIndex()) Stage(Modifier.size(48.dp)) { Orb(24.dp, 24.dp, 23.dp, m, if (i == 1) 0.7f else 0f, 0f, if (i == 3) MascotKind.Bloom else MascotKind.Scout, glow = 0f) }
+                }
+            }
+        }
+        rule.mainClock.advanceTimeBy(700); rule.waitForIdle()
+        rule.onRoot().captureRoboImage(File("build/design/v2/mascot-compare-$size.png").path)
     }
 
     @Test fun screens() {
@@ -94,6 +112,9 @@ abstract class WatchV2Shots(private val size: String, private val round: Boolean
         shot("31-switch-back-sheet") { SwitchBackScreen(1.0f, sheet = 1f) }
         shot("32-switched-back") { SwitchedBackDone(1.0f) }
         shot("33-mascots") { MascotStrip(1.0f) }
+        shot("34-pair-scan") { PairScan(1.0f) }
+        shot("35-pair-busy") { PairBusy(1.0f, 1) }
+        shot("36-pair-done") { PairDone(1.0f, "Nova", MascotKind.Bloom) }
     }
 }
 
@@ -150,5 +171,65 @@ class WatchV2Faces : WatchV2Shots("face-450") {
     @Test fun faceClips() {
         frames("face-orb-to-ambient", 75, 15) { t -> val a = smooth((t - 3.6f) / 0.6f); Box(Modifier.fillMaxSize()) { Box(Modifier.fillMaxSize()) { WatchFace(1, t) }; Box(Modifier.fillMaxSize().alpha(a)) { WatchFace(1, t, ambient = true) } } }
         frames("face-still-to-ambient", 75, 15) { t -> val a = smooth((t - 3.6f) / 0.6f); Box(Modifier.fillMaxSize()) { Box(Modifier.fillMaxSize()) { WatchFace(0, t) }; Box(Modifier.fillMaxSize().alpha(a)) { WatchFace(0, t, ambient = true) } } }
+    }
+}
+
+
+/** Direction B, Material 3 Expressive for Wear, same screens and file names as direction A, in ex-<size>/. */
+abstract class WatchExShots(private val dir: String, private val round: Boolean = true) {
+    @get:Rule val rule = createComposeRule()
+    private var cur by mutableStateOf<@Composable () -> Unit>({})
+    private var started = false
+    private fun host() {
+        if (started) return
+        started = true
+        rule.setContent { AgentWatchTheme { Box(Modifier.fillMaxSize().background(Color.Black).clip(if (round) CircleShape else RectangleShape)) { cur() } } }
+    }
+    protected fun shot(name: String, content: @Composable () -> Unit) {
+        host(); cur = content; rule.waitForIdle()
+        rule.onRoot().captureRoboImage(File("build/design/v2/$dir/$name.png").path)
+    }
+    protected fun frames(name: String, n: Int, fps: Int, content: @Composable (Float) -> Unit) {
+        host()
+        var tt by mutableFloatStateOf(0f)
+        cur = { content(tt) }
+        for (i in 0 until n) { tt = i / fps.toFloat(); rule.waitForIdle(); rule.onRoot().captureRoboImage(File("build/design/v2/clips/$name/f%03d.png".format(i)).path) }
+    }
+    @Test fun home() {
+        shot("01-home-idle") { ExHome(1.3f) }
+        shot("02-home-needs-you") { ExHome(1.5f, pending = 1) }
+    }
+    @Test fun talk() {
+        shot("03-listening") { ExListening(2.0f, 0.62f) }
+        shot("04-thinking") { ExThinking(1.2f) }
+        shot("05-answer-speaking") { ExAnswer(1.0f) }
+        shot("07-approval") { ExApproval(1.0f) }
+        shot("08-approval-holding") { ExApproval(1.0f, hold = 0.6f) }
+        shot("11-call-active") { ExCall(1.6f, 0.6f) }
+    }
+    @Test fun pairing() {
+        shot("34-pair-scan") { ExPairScan(1.0f) }
+        shot("35-pair-busy") { ExPairBusy(1.0f, 1) }
+        shot("36-pair-done") { ExPairDone(1.0f, "Nova", MascotKind.Bloom) }
+    }
+}
+
+@RunWith(RobolectricTestRunner::class) @GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [34], qualifiers = "w227dp-h227dp-round-xhdpi")
+class WatchExShots227 : WatchExShots("ex-round-227")
+
+@RunWith(RobolectricTestRunner::class) @GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [34], qualifiers = "w192dp-h192dp-round-xhdpi")
+class WatchExShots192 : WatchExShots("ex-round-192")
+
+@RunWith(RobolectricTestRunner::class) @GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [34], qualifiers = "w225dp-h225dp-round-xhdpi")
+class WatchExFaces : WatchExShots("ex-faces") {
+    @Test fun faces() {
+        val names = listOf("a-still", "b-orb", "c-data")
+        for (i in 0..2) {
+            shot("face-${names[i]}-active") { ExFace(i, 1.9f) }
+            shot("face-${names[i]}-ambient") { ExFace(i, 1.9f, ambient = true) }
+        }
     }
 }

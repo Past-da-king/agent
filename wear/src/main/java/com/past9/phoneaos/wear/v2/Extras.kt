@@ -514,17 +514,18 @@ fun WatchFace(style: Int, t: Float, ambient: Boolean = false) {
     }
 }
 
-/** The five mascots on the home screen's agent, to show the watch follows the user's choice. */
+/** The nine mascots the phone offers, at rest and working, so the watch can be seen to follow the user's choice. */
 @Composable
 fun MascotStrip(t: Float) {
     Stage { g ->
         val cx = g.w / 2
-        Backdrop(Mood.Idle, t, 0.5f, 0.5f)
+        Backdrop(Mood.Idle, t, 0.5f, 0.4f)
         TopLabel("YOUR AGENT'S FACE", V2.iris, 9.5f, FontWeight.Bold, 2f)
         val ks = MascotKind.values()
-        val pos = listOf(Offset(-0.22f, -0.14f), Offset(0.22f, -0.14f), Offset(-0.30f, 0.17f), Offset(0.0f, 0.17f), Offset(0.30f, 0.17f))
         for ((i, k) in ks.withIndex()) {
-            Orb(cx + g.d * pos[i].x, g.h / 2 + g.d * pos[i].y, g.d * (if (i < 2) 0.12f else 0.1f), Mood.Idle, t + i * 0.3f, 0f, k, glow = 0.5f)
+            val col = i % 3; val row = i / 3
+            val x = cx + g.d * (col - 1) * 0.27f; val y = g.h / 2 + g.d * (row - 1) * 0.25f
+            Orb(x, y, g.d * 0.085f, if (row == 1) Mood.Thinking else Mood.Idle, t + 0.3f * i, 0f, k, glow = 0.3f)
         }
     }
 }
