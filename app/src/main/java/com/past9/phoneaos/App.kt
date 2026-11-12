@@ -34,6 +34,8 @@ class Graph(context: Context) {
     }
     init {
         com.past9.phoneaos.triggers.Routines.appContext = app
+        // A paired Wear OS watch (only once it has said hello): keep its picture current. docs/wear.md.
+        runCatching { com.past9.phoneaos.wear.WatchRelay.attach(this) }
         scope.launch { runCatching { com.past9.phoneaos.triggers.Overnight.ensureRoutine(this@Graph) } }
         // Anything scheduled that was missed while the app was dead runs once now.
         scope.launch { runCatching { Routines.catchUp(app) } }

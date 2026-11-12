@@ -32,3 +32,5 @@ dependencyResolutionManagement {
 rootProject.name = "Agent"
 
 include(":app")
+include(":wearproto")
+include(":wear")

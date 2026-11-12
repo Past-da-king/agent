@@ -160,6 +160,9 @@ dependencies {
   implementation("dev.rikka.shizuku:api:13.1.5")
   implementation("dev.rikka.shizuku:provider:13.1.5")
   implementation(libs.kotlinx.coroutines.android)
+  // The watch relay (docs/wear.md): the protocol shared with the watch app, and the Wearable Data Layer.
+  implementation(project(":wearproto"))
+  implementation(libs.play.services.wearable)
   // Wake word: on-device keyword spotting (sherpa-onnx with onnxruntime linked in, one .so, arm64 only). No network, no key.
   implementation("com.k2fsa.sherpa.onnx:sherpa-onnx-static-link-onnxruntime:2.0.1@aar")
   implementation(libs.androidx.credentials)

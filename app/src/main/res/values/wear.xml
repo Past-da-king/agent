@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The watch app finds this phone with it (CapabilityClient): docs/wear.md. -->
+    <string-array name="android_wear_capabilities" translatable="false">
+        <item>agent_phone_relay</item>
+    </string-array>
+</resources>
