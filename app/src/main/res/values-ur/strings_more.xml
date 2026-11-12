@@ -743,4 +743,11 @@
     <string name="rt_not_downloaded">%1$s رن ٹائم ابھی ڈاؤن لوڈ نہیں ہوا۔</string>
     <string name="live_sees_screen">لائیو آپ کی اسکرین دیکھ سکتا ہے</string>
     <string name="live_screen_private">نجی اسکرین: لائیو اسے نہیں دیکھ سکتا</string>
+    <string name="routing_title">ماڈل روٹنگ</string>
+    <string name="routing_sub">چیٹ، روٹینز اور واچرز کو الگ الگ ماڈلز پر چلائیں۔ یہ اس وقت لاگو ہوتا ہے جب ایجنٹ API کلید پر چلتا ہے۔</string>
+    <string name="routing_watchers">واچرز</string>
+    <string name="routing_default">ڈیفالٹ جیسا</string>
+    <string name="routing_sheet_line">اس کام کے لیے اکاؤنٹ اور ماڈل منتخب کریں۔ مددگار اپنا ماڈل خود منتخب کرتے رہتے ہیں۔</string>
+    <string name="routing_reset">ڈیفالٹ استعمال کریں</string>
+    <string name="routing_no_accounts">پہلے کسی فراہم کنندہ کی API کلید محفوظ کریں، پھر وہ یہاں نظر آئے گی۔</string>
 </resources>

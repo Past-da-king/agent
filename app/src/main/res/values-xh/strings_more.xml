@@ -743,4 +743,11 @@
     <string name="rt_not_downloaded">Ixesha lokusebenza le-%1$s alilandwanga okwangoku.</string>
     <string name="live_sees_screen">I-Live inokubona isikrini sakho</string>
     <string name="live_screen_private">Isikrini esingasese: I-Live ayikwazi ukusibona</string>
+    <string name="routing_title">Ukuhanjiswa kweemodeli</string>
+    <string name="routing_sub">Qhuba ingxoxo, iinkqubo eziqhelekileyo nabagcini kwiimodeli ezahlukeneyo. Isetyenziswa xa ummeli esebenza ngesitshixo se-API.</string>
+    <string name="routing_watchers">Abagcini</string>
+    <string name="routing_default">Efana nesiseko</string>
+    <string name="routing_sheet_line">Khetha iakhawunti nemodeli yalo msebenzi. Abancedisi baqhubeka bekhetha eyabo.</string>
+    <string name="routing_reset">Sebenzisa esiseko</string>
+    <string name="routing_no_accounts">Qala ugcine isitshixo se-API somboneleli, emva koko siza kubonakala apha.</string>
 </resources>

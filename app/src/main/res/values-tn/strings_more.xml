@@ -743,4 +743,11 @@
     <string name="rt_not_downloaded">Nako ya go dira ya %1$s ga e ise e tsenngwe.</string>
     <string name="live_sees_screen">Live e ka bona sekirini sa gago</string>
     <string name="live_screen_private">Sekirini sa sephiri: Live ga e kgone go se bona</string>
+    <string name="routing_title">Tsamaiso ya mmotlele</string>
+    <string name="routing_sub">Dirisa puisano, ditlwaelo le babogedi mo mebotleleng e e farologaneng. E dirisiwa fa moemedi a dira ka senotlolo sa API.</string>
+    <string name="routing_watchers">Babogedi</string>
+    <string name="routing_default">Se se tshwanang le se se tlwaelegileng</string>
+    <string name="routing_sheet_line">Tlhopha akhaonto le mmotlele wa tiro eno. Bathusi ba tla tswelela ba itlhophela wa bone.</string>
+    <string name="routing_reset">Dirisa se se tlwaelegileng</string>
+    <string name="routing_no_accounts">Tshwara pele senotlolo sa API sa motlamedi, mme se tla bonala fano.</string>
 </resources>

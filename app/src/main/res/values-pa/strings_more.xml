@@ -743,4 +743,11 @@
     <string name="rt_not_downloaded">%1$s ਰਨਟਾਈਮ ਅਜੇ ਡਾਊਨਲੋਡ ਨਹੀਂ ਹੋਇਆ।</string>
     <string name="live_sees_screen">ਲਾਈਵ ਤੁਹਾਡੀ ਸਕ੍ਰੀਨ ਦੇਖ ਸਕਦਾ ਹੈ</string>
     <string name="live_screen_private">ਨਿੱਜੀ ਸਕ੍ਰੀਨ: ਲਾਈਵ ਇਸਨੂੰ ਦੇਖ ਨਹੀਂ ਸਕਦਾ</string>
+    <string name="routing_title">ਮਾਡਲ ਰੂਟਿੰਗ</string>
+    <string name="routing_sub">ਚੈਟ, ਰੁਟੀਨ ਅਤੇ ਵਾਚਰ ਨੂੰ ਵੱਖ-ਵੱਖ ਮਾਡਲਾਂ ਉੱਤੇ ਚਲਾਓ। ਇਹ ਉਦੋਂ ਲਾਗੂ ਹੁੰਦਾ ਹੈ ਜਦੋਂ ਏਜੰਟ API ਕੁੰਜੀ ਨਾਲ ਚੱਲਦਾ ਹੈ।</string>
+    <string name="routing_watchers">ਵਾਚਰ</string>
+    <string name="routing_default">ਡਿਫੌਲਟ ਵਾਂਗ</string>
+    <string name="routing_sheet_line">ਇਸ ਕੰਮ ਲਈ ਖਾਤਾ ਅਤੇ ਮਾਡਲ ਚੁਣੋ। ਸਹਾਇਕ ਆਪਣਾ ਮਾਡਲ ਆਪ ਚੁਣਦੇ ਰਹਿੰਦੇ ਹਨ।</string>
+    <string name="routing_reset">ਡਿਫੌਲਟ ਵਰਤੋ</string>
+    <string name="routing_no_accounts">ਪਹਿਲਾਂ ਪ੍ਰਦਾਤਾ ਦੀ API ਕੁੰਜੀ ਸੰਭਾਲੋ, ਫਿਰ ਇਹ ਇੱਥੇ ਦਿਸੇਗੀ।</string>
 </resources>

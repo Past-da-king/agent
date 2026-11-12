@@ -743,4 +743,11 @@
     <string name="rt_not_downloaded">Isikhathi sokusebenza se-%1$s asilandwanga okwamanje.</string>
     <string name="live_sees_screen">I-Live ingabona isikrini sakho</string>
     <string name="live_screen_private">Isikrini esiyimfihlo: I-Live ayikwazi ukusibona</string>
+    <string name="routing_title">Ukuhanjiswa kwamamodeli</string>
+    <string name="routing_sub">Gijimisa ingxoxo, amaroutine nabaqaphi kumamodeli ahlukene. Kusebenza uma i-agent isebenza ngokhiye we-API.</string>
+    <string name="routing_watchers">Abaqaphi</string>
+    <string name="routing_default">Okufana nokuzenzakalelayo</string>
+    <string name="routing_sheet_line">Khetha i-akhawunti nemodeli yalo msebenzi. Abasizi baqhubeka bezikhethela eyabo.</string>
+    <string name="routing_reset">Sebenzisa okuzenzakalelayo</string>
+    <string name="routing_no_accounts">Qala ngokulondoloza ukhiye we-API womhlinzeki, bese uvela lapha.</string>
 </resources>

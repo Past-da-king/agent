@@ -743,4 +743,11 @@
     <string name="rt_not_downloaded">%1$s रनटाइम अहिलेसम्म डाउनलोड भएको छैन।</string>
     <string name="live_sees_screen">लाइभले तपाईंको स्क्रिन देख्न सक्छ</string>
     <string name="live_screen_private">निजी स्क्रिन: लाइभले यो देख्न सक्दैन</string>
+    <string name="routing_title">मोडेल रुटिङ</string>
+    <string name="routing_sub">च्याट, रुटिन र वाचरहरूलाई फरक-फरक मोडेलमा चलाउनुहोस्। एजेन्ट API कुञ्जीमा चल्दा यो लागू हुन्छ।</string>
+    <string name="routing_watchers">वाचरहरू</string>
+    <string name="routing_default">पूर्वनिर्धारित जस्तै</string>
+    <string name="routing_sheet_line">यो कामका लागि खाता र मोडेल छान्नुहोस्। सहायकहरूले आफ्नै मोडेल छान्न जारी राख्छन्।</string>
+    <string name="routing_reset">पूर्वनिर्धारित प्रयोग गर्नुहोस्</string>
+    <string name="routing_no_accounts">पहिले प्रदायकको API कुञ्जी सुरक्षित गर्नुहोस्, त्यसपछि यहाँ देखिन्छ।</string>
 </resources>

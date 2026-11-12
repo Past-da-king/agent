@@ -763,4 +763,11 @@
     <string name="rt_not_downloaded">סביבת הריצה של %1$s עדיין לא הורדה.</string>
     <string name="live_sees_screen">Live יכול לראות את המסך שלך</string>
     <string name="live_screen_private">מסך פרטי: Live לא יכול לראות אותו</string>
+    <string name="routing_title">ניתוב מודלים</string>
+    <string name="routing_sub">הריצו את הצ\'אט, השגרות והשומרים על מודלים שונים. חל כשהסוכן פועל עם מפתח API.</string>
+    <string name="routing_watchers">שומרים</string>
+    <string name="routing_default">כמו ברירת המחדל</string>
+    <string name="routing_sheet_line">בחרו חשבון ומודל לעבודה הזו. העוזרים ממשיכים לבחור בעצמם.</string>
+    <string name="routing_reset">שימוש בברירת המחדל</string>
+    <string name="routing_no_accounts">שמרו קודם מפתח API של ספק, ואז הוא יופיע כאן.</string>
 </resources>

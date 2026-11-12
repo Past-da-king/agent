@@ -743,4 +743,11 @@
     <string name="rt_not_downloaded">Nako ea ho sebetsa ea %1$s ha e so kengoa.</string>
     <string name="live_sees_screen">Live e ka bona skrine sa hao</string>
     <string name="live_screen_private">Skrine sa lekunutu: Live ha e khone ho se bona</string>
+    <string name="routing_title">Tsamaiso ea mohlala</string>
+    <string name="routing_sub">Tsamaisa moqoqo, mesebetsi ea tloaelo le basebetsi ba hlokomelang ka mehlala e fapaneng. E sebelisoa ha moemeli a sebetsa ka senotlolo sa API.</string>
+    <string name="routing_watchers">Balebeli</string>
+    <string name="routing_default">E tšoanang le ea kamehla</string>
+    <string name="routing_sheet_line">Khetha akhaonto le mohlala bakeng sa mosebetsi ona. Bathusi ba ntse ba iketsetsa khetho ea bona.</string>
+    <string name="routing_reset">Sebelisa ea kamehla</string>
+    <string name="routing_no_accounts">Qala ka ho boloka senotlolo sa API sa mofani, ebe se hlaha mona.</string>
 </resources>

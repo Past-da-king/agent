@@ -742,4 +742,11 @@
     <string name="rt_not_downloaded">Mazingira ya uendeshaji ya %1$s bado hayajapakuliwa.</string>
     <string name="live_sees_screen">Live inaweza kuona skrini yako</string>
     <string name="live_screen_private">Skrini ya faragha: Live haiwezi kuiona</string>
+    <string name="routing_title">Uelekezaji wa miundo</string>
+    <string name="routing_sub">Endesha gumzo, ratiba na wachunguzi kwenye miundo tofauti. Hutumika wakala anapofanya kazi kwa ufunguo wa API.</string>
+    <string name="routing_watchers">Wachunguzi</string>
+    <string name="routing_default">Sawa na chaguo-msingi</string>
+    <string name="routing_sheet_line">Chagua akaunti na muundo wa kazi hii. Wasaidizi wataendelea kuchagua wao wenyewe.</string>
+    <string name="routing_reset">Tumia chaguo-msingi</string>
+    <string name="routing_no_accounts">Hifadhi kwanza ufunguo wa API wa mtoa huduma, kisha utaonekana hapa.</string>
 </resources>

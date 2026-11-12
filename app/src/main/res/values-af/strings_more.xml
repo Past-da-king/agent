@@ -742,4 +742,11 @@
     <string name="rt_not_downloaded">Die %1$s-looptyd is nog nie afgelaai nie.</string>
     <string name="live_sees_screen">Live kan jou skerm sien</string>
     <string name="live_screen_private">Private skerm: Live kan dit nie sien nie</string>
+    <string name="routing_title">Modelroetering</string>
+    <string name="routing_sub">Laat klets, roetines en kykers op verskillende modelle loop. Gebruik wanneer die agent op \'n API-sleutel loop.</string>
+    <string name="routing_watchers">Kykers</string>
+    <string name="routing_default">Dieselfde as verstek</string>
+    <string name="routing_sheet_line">Kies die rekening en model vir hierdie taak. Helpers kies steeds hul eie.</string>
+    <string name="routing_reset">Gebruik die verstek</string>
+    <string name="routing_no_accounts">Stoor eers \'n API-sleutel vir \'n verskaffer, dan verskyn dit hier.</string>
 </resources>

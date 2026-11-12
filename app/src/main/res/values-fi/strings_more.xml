@@ -742,4 +742,11 @@
     <string name="rt_not_downloaded">%1$s-suoritusympäristöä ei ole vielä ladattu.</string>
     <string name="live_sees_screen">Live näkee näyttösi</string>
     <string name="live_screen_private">Yksityinen näyttö: Live ei näe sitä</string>
+    <string name="routing_title">Mallien reititys</string>
+    <string name="routing_sub">Aja chat, rutiinit ja tarkkailijat eri malleilla. Käytössä, kun agentti toimii API-avaimella.</string>
+    <string name="routing_watchers">Tarkkailijat</string>
+    <string name="routing_default">Sama kuin oletus</string>
+    <string name="routing_sheet_line">Valitse tili ja malli tälle työlle. Apulaiset valitsevat edelleen omansa.</string>
+    <string name="routing_reset">Käytä oletusta</string>
+    <string name="routing_no_accounts">Tallenna ensin palveluntarjoajan API-avain, niin se näkyy tässä.</string>
 </resources>

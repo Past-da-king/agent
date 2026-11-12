@@ -742,4 +742,11 @@
     <string name="rt_not_downloaded">Körmiljön för %1$s är inte nedladdad ännu.</string>
     <string name="live_sees_screen">Live kan se din skärm</string>
     <string name="live_screen_private">Privat skärm: Live kan inte se den</string>
+    <string name="routing_title">Modelldirigering</string>
+    <string name="routing_sub">Kör chatt, rutiner och bevakare på olika modeller. Gäller när agenten körs med en API-nyckel.</string>
+    <string name="routing_watchers">Bevakare</string>
+    <string name="routing_default">Samma som standard</string>
+    <string name="routing_sheet_line">Välj konto och modell för det här jobbet. Hjälpare väljer fortfarande sin egen.</string>
+    <string name="routing_reset">Använd standard</string>
+    <string name="routing_no_accounts">Spara först en API-nyckel för en leverantör, så dyker den upp här.</string>
 </resources>

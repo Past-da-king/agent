@@ -69,7 +69,7 @@ object Watchers {
             g.db.triggers().upsert(t.copy(cursor = meta.toString()))
             if (breaks >= BREAKS_BEFORE_REPAIR) {
                 meta.put("breaks", 0); g.db.triggers().upsert(t.copy(cursor = meta.toString()))
-                g.runtime.runBackground("Fix watcher: ${t.name}", "Your watcher #${t.id} \"${t.name}\" broke (the site probably changed). Output:\n${o.raw}\n\nCurrent script:\n```js\n${file.readText()}\n```\nFind out what changed (browser, run_code), fix the script, test it with run_code, then save it with watcher_save using id ${t.id}. Only tell the user if you can't fix it.")
+                g.runtime.runBackground("Fix watcher: ${t.name}", "Your watcher #${t.id} \"${t.name}\" broke (the site probably changed). Output:\n${o.raw}\n\nCurrent script:\n```js\n${file.readText()}\n```\nFind out what changed (browser, run_code), fix the script, test it with run_code, then save it with watcher_save using id ${t.id}. Only tell the user if you can't fix it.", route = com.past9.phoneaos.data.ModelRoute.WATCHER)
                 return context.getString(com.past9.phoneaos.R.string.svc_watch_broke_twice)
             }
             return context.getString(com.past9.phoneaos.R.string.svc_watch_retry)
@@ -77,7 +77,7 @@ object Watchers {
         meta.put("breaks", 0).put("state", o.state)
         g.db.triggers().upsert(t.copy(cursor = meta.toString()))
         if (o.fire) {
-            g.runtime.runBackground(t.name, "Your watcher \"${t.name}\" just fired: ${o.message}\n\n${t.prompt}")
+            g.runtime.runBackground(t.name, "Your watcher \"${t.name}\" just fired: ${o.message}\n\n${t.prompt}", route = com.past9.phoneaos.data.ModelRoute.WATCHER)
             return context.getString(com.past9.phoneaos.R.string.svc_watch_fired, o.message)
         }
         return o.message.ifBlank { context.getString(com.past9.phoneaos.R.string.svc_watch_nothing_yet) }

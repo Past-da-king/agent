@@ -783,4 +783,11 @@
     <string name="rt_not_downloaded">لم تُنزَّل بيئة تشغيل %1$s بعد.</string>
     <string name="live_sees_screen">يمكن للمباشر رؤية شاشتك</string>
     <string name="live_screen_private">شاشة خاصة: لا يستطيع المباشر رؤيتها</string>
+    <string name="routing_title">توجيه النماذج</string>
+    <string name="routing_sub">شغّل المحادثة والروتينات والمراقبات على نماذج مختلفة. يُستخدم عندما يعمل الوكيل بمفتاح API.</string>
+    <string name="routing_watchers">المراقبات</string>
+    <string name="routing_default">مثل الافتراضي</string>
+    <string name="routing_sheet_line">اختر الحساب والنموذج لهذه المهمة. يواصل المساعدون اختيار نماذجهم بأنفسهم.</string>
+    <string name="routing_reset">استخدم الافتراضي</string>
+    <string name="routing_no_accounts">احفظ مفتاح API لمزوّد أولاً، ثم يظهر هنا.</string>
 </resources>

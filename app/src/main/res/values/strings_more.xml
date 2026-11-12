@@ -743,4 +743,11 @@
     <string name="rt_not_downloaded">The %1$s runtime isn\'t downloaded yet.</string>
     <string name="live_sees_screen">Live can see your screen</string>
     <string name="live_screen_private">Private screen: Live can\'t see it</string>
+    <string name="routing_title">Model routing</string>
+    <string name="routing_sub">Run chat, routines and watchers on different models. Used when the agent runs on an API key.</string>
+    <string name="routing_watchers">Watchers</string>
+    <string name="routing_default">Same as default</string>
+    <string name="routing_sheet_line">Choose the account and model for this job. Helpers keep choosing their own.</string>
+    <string name="routing_reset">Use the default</string>
+    <string name="routing_no_accounts">Save an API key for a provider first, then it shows up here.</string>
 </resources>

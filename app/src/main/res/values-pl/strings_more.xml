@@ -763,4 +763,11 @@
     <string name="rt_not_downloaded">Środowisko %1$s nie zostało jeszcze pobrane.</string>
     <string name="live_sees_screen">Live widzi twój ekran</string>
     <string name="live_screen_private">Ekran prywatny: Live go nie widzi</string>
+    <string name="routing_title">Kierowanie modeli</string>
+    <string name="routing_sub">Uruchamiaj czat, rutyny i obserwatorów na różnych modelach. Działa, gdy agent pracuje na kluczu API.</string>
+    <string name="routing_watchers">Obserwatorzy</string>
+    <string name="routing_default">Tak samo jak domyślny</string>
+    <string name="routing_sheet_line">Wybierz konto i model dla tego zadania. Pomocnicy nadal wybierają własny.</string>
+    <string name="routing_reset">Użyj domyślnego</string>
+    <string name="routing_no_accounts">Najpierw zapisz klucz API dostawcy, a pojawi się tutaj.</string>
 </resources>
