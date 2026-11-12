@@ -90,9 +90,12 @@ class LiveTurnShotsTest(private val dark: Boolean) {
         assertEquals("very", AssistPrefs.livePatience(context))
         rule.onNodeWithText("Quick").performClick()
         assertEquals("quick", AssistPrefs.livePatience(context))
-        rule.onNodeWithText("Wait for me").performClick()
+        // The two switches are the last two toggleable nodes (the chips are selectable, not toggleable).
+        val switches = rule.onAllNodes(androidx.compose.ui.test.isToggleable()).fetchSemanticsNodes().size
+        assertTrue("two switches", switches >= 2)
+        rule.onAllNodes(androidx.compose.ui.test.isToggleable())[switches - 2].performClick()
         assertTrue(AssistPrefs.liveWaitForMe(context))
-        rule.onNodeWithText("Follow my language").performClick()
+        rule.onAllNodes(androidx.compose.ui.test.isToggleable())[switches - 1].performClick()
         assertTrue(AssistPrefs.liveAutoLanguage(context))
         val t = AssistPrefs.liveTuning(context, listOf("Nova"))
         assertTrue(t.waitForMe && t.autoLanguage && t.vocabulary == listOf("Nova"))
