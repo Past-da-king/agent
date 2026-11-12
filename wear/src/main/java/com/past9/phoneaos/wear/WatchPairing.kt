@@ -19,6 +19,7 @@ import com.past9.phoneaos.wearproto.PairPaths
 import com.past9.phoneaos.wearproto.PairReply
 import com.past9.phoneaos.wearproto.PairWire
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.tasks.await
@@ -109,7 +110,12 @@ object WatchPairingState {
      * The code on show: the same one while it is still good (so backing out of the screen and coming back within ten minutes changes nothing),
      * a fresh one the first time or when the last expired. [force] is "New code" pressed on purpose.
      */
-    suspend fun newOffer(c: Context, force: Boolean = false): PairOffer? {
+    suspend fun newOffer(c: Context, force: Boolean = false): PairOffer? = offerLock.withLock { makeOffer(c, force) }
+
+    /** The screen asks on every resume and when it has no code: one at a time, so two asks never make two codes. */
+    private val offerLock = kotlinx.coroutines.sync.Mutex()
+
+    private suspend fun makeOffer(c: Context, force: Boolean): PairOffer? {
         val h = host(c)
         if (h.paired) return null
         val now = System.currentTimeMillis()
