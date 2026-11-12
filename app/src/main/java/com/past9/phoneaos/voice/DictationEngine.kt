@@ -104,6 +104,8 @@ class DictationEngine(
     /** The whole take written down from the saved audio at the end: better words than any live caption. */
     private var polished: String? = null
     private var polishJob: Job? = null
+    /** The whole-take pass could not be had: the caption stays, the tape is kept and Retry writes it down again. */
+    private var polishLost = false
     private val startedAt = clock()
     private var stoppedAt = 0L
 
@@ -332,7 +334,10 @@ class DictationEngine(
         runCatching { live?.cancel() }
         live = null
         val missedMs = segs.filter { it.state == State.MISSED || it.state == State.FIXING }.sumOf { DictationTape.ms(it.end - it.start) }
-        val limit = minOf(FINISH_MAX_MS, FINISH_BASE_MS + missedMs / 2)
+        // The whole-take pass has its own limit per piece (20 s plus half the audio): the finish limit must not cut it
+        // short, or a long take over a slow link loses its better words (12 Nov 2026).
+        val polishMs = if (transcribe != null && Quiet.hasSpeech(tape.levels(), 0, tape.bytes)) pieceLimitMs(minOf(tape.bytes, DictationTape.bytesFor(PIECE_MS))) else 0L
+        val limit = minOf(FINISH_MAX_MS, FINISH_BASE_MS + missedMs / 2 + polishMs)
         scope.launch {
             delay(limit)
             if (!phase.let { it == DictationView.Phase.DONE || it == DictationView.Phase.KEPT || it == DictationView.Phase.CANCELLED }) {
@@ -354,7 +359,7 @@ class DictationEngine(
         if (segs.any { it.state == State.MISSED || it.state == State.FIXING }) return
         // The whole take is being written down once more: wait for it, it is the text he gets.
         if (polishJob?.isActive == true) return
-        phase = if (segs.any { it.state == State.LOST }) DictationView.Phase.KEPT else DictationView.Phase.DONE
+        phase = if (segs.any { it.state == State.LOST } || polishLost) DictationView.Phase.KEPT else DictationView.Phase.DONE
         runCatching { tape.seal() }
         log("ended: $phase")
         show()
@@ -373,16 +378,20 @@ class DictationEngine(
     fun retry() {
         if (phase != DictationView.Phase.KEPT || transcribe == null) return
         segs.filter { it.state == State.LOST }.forEach { it.state = State.MISSED }
+        if (polishLost) { polishLost = false; polishJob = null }
         phase = DictationView.Phase.FINISHING
         val missedMs = segs.filter { it.state == State.MISSED }.sumOf { DictationTape.ms(it.end - it.start) }
-        val limit = minOf(FINISH_MAX_MS, FINISH_BASE_MS + missedMs / 2)
+        val limit = minOf(FINISH_MAX_MS, FINISH_BASE_MS + missedMs / 2 + pieceLimitMs(minOf(tape.bytes, DictationTape.bytesFor(PIECE_MS))))
         scope.launch {
             delay(limit)
-            if (phase == DictationView.Phase.FINISHING) { queueJob?.cancel(); segs.filter { it.state == State.MISSED || it.state == State.FIXING }.forEach { it.state = State.LOST }; phase = DictationView.Phase.KEPT; show() }
+            if (phase == DictationView.Phase.FINISHING) { polishJob?.cancel(); queueJob?.cancel(); segs.filter { it.state == State.MISSED || it.state == State.FIXING }.forEach { it.state = State.LOST }; phase = DictationView.Phase.KEPT; show() }
         }
         queueJob = scope.launch {
+            // The whole-take pass first, so the settling at the end of drain() waits for it.
+            polishFromTape()
             drain()
-            if (phase == DictationView.Phase.FINISHING) { phase = if (segs.any { it.state == State.LOST }) DictationView.Phase.KEPT else DictationView.Phase.DONE; show() }
+            if (polishJob?.isActive == true) polishJob?.join()
+            if (phase == DictationView.Phase.FINISHING) { phase = if (segs.any { it.state == State.LOST } || polishLost) DictationView.Phase.KEPT else DictationView.Phase.DONE; show() }
         }
         show()
     }
@@ -414,7 +423,7 @@ class DictationEngine(
                     }
                     if (r != null) { text = r; break }
                 }
-                if (text == null) { log("polish gave up: the live words stay"); settle(); show(); return@launch }
+                if (text == null) { log("polish gave up: the live words stay"); polishLost = true; settle(); show(); return@launch }
                 texts[index] = text
             }
             val whole = texts.filterNotNull().filter { it.isNotBlank() }.joinToString(" ").trim()
@@ -446,7 +455,7 @@ class DictationEngine(
 
     fun view(): DictationView {
         val pending = segs.filter { it.state == State.MISSED || it.state == State.FIXING }.sumOf { DictationTape.ms(it.end - it.start) }
-        val lost = segs.filter { it.state == State.LOST }.sumOf { DictationTape.ms(it.end - it.start) }
+        val lost = segs.filter { it.state == State.LOST }.sumOf { DictationTape.ms(it.end - it.start) }.let { if (polishLost && it == 0L) DictationTape.ms(tape.bytes) else it }
         val p = when {
             phase == DictationView.Phase.DONE || phase == DictationView.Phase.KEPT || phase == DictationView.Phase.CANCELLED -> phase
             finishing || phase == DictationView.Phase.FINISHING -> DictationView.Phase.FINISHING
