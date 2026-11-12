@@ -21,6 +21,9 @@ import androidx.wear.tiles.TileService
 import androidx.compose.ui.graphics.toArgb
 import com.google.common.util.concurrent.ListenableFuture
 import com.past9.phoneaos.wear.ui.WatchTokens
+import com.past9.phoneaos.wear.ui.ex.MascotKind
+import com.past9.phoneaos.wear.ui.ex.Pal
+import com.past9.phoneaos.wear.ui.ex.V2
 
 /**
  * The tile: the agent's name, what needs him, and one big Ask button that opens the talk screen. It reads the last
@@ -36,15 +39,32 @@ class AgentTile : TileService() {
             else -> getString(R.string.tile_nothing_waits)
         }
         val tile = TileBuilders.Tile.Builder()
-            .setResourcesVersion(VERSION)
+            .setResourcesVersion(versionNow(waiting > 0))
             .setFreshnessIntervalMillis(0)
             .setTileTimeline(TimelineBuilders.Timeline.fromLayoutElement(layout(s?.agent?.ifBlank { null } ?: getString(R.string.agent_default), line, waiting > 0)))
             .build()
         return ResolvableFuture.create<TileBuilders.Tile>().also { it.set(tile) }
     }
 
-    override fun onTileResourcesRequest(requestParams: RequestBuilders.ResourcesRequest): ListenableFuture<ResourceBuilders.Resources> =
-        ResolvableFuture.create<ResourceBuilders.Resources>().also { it.set(ResourceBuilders.Resources.Builder().setVersion(VERSION).build()) }
+    /** The agent's mascot as the tile's picture: the phone's own shape and the synced accent, amber when something needs the user. */
+    private fun mascotPng(needs: Boolean): ByteArray {
+        WatchCustomisationState.load(this)
+        val cust = WatchCustomisationState.state.value
+        val pal = Pal.ofAccent(cust.accent)
+        val bmp = MascotBitmap.make(MascotKind.of(cust.mascot), if (needs) V2.amber.toArgb() else pal.primary.toArgb(), if (needs) V2.inkAmber.toArgb() else pal.onPrimary.toArgb(), 160)
+        return java.io.ByteArrayOutputStream().also { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+    }
+
+    override fun onTileResourcesRequest(requestParams: RequestBuilders.ResourcesRequest): ListenableFuture<ResourceBuilders.Resources> {
+        val needs = (WatchStore.cached(this)?.pending?.size ?: 0) > 0
+        val img = ResourceBuilders.ImageResource.Builder().setInlineResource(
+            ResourceBuilders.InlineImageResource.Builder().setData(mascotPng(needs)).setWidthPx(160).setHeightPx(160).setFormat(ResourceBuilders.IMAGE_FORMAT_UNDEFINED).build()).build()
+        return ResolvableFuture.create<ResourceBuilders.Resources>().also {
+            it.set(ResourceBuilders.Resources.Builder().setVersion(versionNow(needs)).addIdToImageMapping("mascot", img).build())
+        }
+    }
+
+    private fun versionNow(needs: Boolean): String { WatchCustomisationState.load(this); val c = WatchCustomisationState.state.value; return "$VERSION-${c.mascot}-${c.accent}-$needs" }
 
     private fun launch(go: String): ModifiersBuilders.Clickable = ModifiersBuilders.Clickable.Builder()
         .setId(go)
@@ -62,15 +82,17 @@ class AgentTile : TileService() {
             .setWidth(expand()).setHeight(dp(52f))
             .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_CENTER).setVerticalAlignment(LayoutElementBuilders.VERTICAL_ALIGN_CENTER)
             .setModifiers(ModifiersBuilders.Modifiers.Builder().setClickable(launch("talk"))
-                .setBackground(ModifiersBuilders.Background.Builder().setColor(argb(WatchTokens.irisContainer.toArgbInt()))
+                .setBackground(ModifiersBuilders.Background.Builder().setColor(argb((if (needsYou) V2.amber else WatchTokens.iris).toArgbInt()))
                     .setCorner(ModifiersBuilders.Corner.Builder().setRadius(dp(26f)).build()).build()).build())
-            .addContent(text(getString(R.string.tile_ask), 18f, WatchTokens.onIrisContainer.toArgbInt(), bold = true)).build()
+            .addContent(text(getString(R.string.tile_ask), 18f, (if (needsYou) V2.inkAmber else WatchTokens.onIris).toArgbInt(), bold = true)).build()
         val status = LayoutElementBuilders.Box.Builder().setWidth(wrap()).setHeight(wrap())
             .setModifiers(ModifiersBuilders.Modifiers.Builder().setClickable(launch(if (needsYou) "approvals" else "talk")).build())
             .addContent(text(line, 14f, (if (needsYou) WatchTokens.amber else WatchTokens.onSurfaceVariant).toArgbInt())).build()
         return Column.Builder().setWidth(expand()).setHeight(expand())
             .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_CENTER)
-            .setModifiers(ModifiersBuilders.Modifiers.Builder().setPadding(ModifiersBuilders.Padding.Builder().setAll(dp(22f)).build()).build())
+            .setModifiers(ModifiersBuilders.Modifiers.Builder().setPadding(ModifiersBuilders.Padding.Builder().setAll(dp(18f)).build()).build())
+            .addContent(LayoutElementBuilders.Image.Builder().setResourceId("mascot").setWidth(dp(50f)).setHeight(dp(50f)).build())
+            .addContent(Spacer.Builder().setHeight(dp(2f)).build())
             .addContent(text(name, 15f, WatchTokens.onSurface.toArgbInt(), bold = true))
             .addContent(Spacer.Builder().setHeight(dp(4f)).build())
             .addContent(status)

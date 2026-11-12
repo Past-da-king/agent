@@ -31,4 +31,5 @@
     <string name="home_use_short">Use the agent</string>
     <string name="home_back_short">Switch back</string>
     <string name="call_use_phone_short">Use phone sound</string>
+    <string name="face_mascot_label">The agent</string>
 </resources>

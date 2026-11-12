@@ -3,6 +3,11 @@ plugins {
   alias(libs.plugins.kotlin.compose)
 }
 
+// Release signing lives OUTSIDE the repo, as for the phone app: ~/phone-aos/keys/signing.properties, or -PsigningProps=<file>.
+// The watch app MUST be signed with the same published key as the phone app, or the Data Layer will not pair them.
+val releaseSigning: Map<String, String> = file((project.findProperty("signingProps") as String?) ?: "${System.getProperty("user.home")}/phone-aos/keys/signing.properties")
+  .takeIf { it.exists() }?.readLines()?.filter { "=" in it && !it.startsWith("#") }?.associate { it.substringBefore("=").trim() to it.substringAfter("=").trim() } ?: emptyMap()
+
 // The Wear OS app (docs/wear.md). Same applicationId and the same signing key as the phone app, so the Data Layer pairs
 // them. It holds no account, key or model: the phone relays to the agent.
 android {
@@ -20,7 +25,19 @@ android {
     resValue("string", "app_name", (project.findProperty("agentName") as String?) ?: "Agent")
     (project.findProperty("appIdSuffix") as String?)?.let { applicationIdSuffix = it }
   }
-  buildTypes { release { isMinifyEnabled = false } }
+  signingConfigs {
+    if (releaseSigning.isNotEmpty()) create("release") { storeFile = file(releaseSigning.getValue("storeFile")); storePassword = releaseSigning["storePassword"]; keyAlias = releaseSigning["keyAlias"]; keyPassword = releaseSigning["keyPassword"] }
+  }
+  buildTypes {
+    release {
+      isMinifyEnabled = false
+      // Never signed with whatever key is on the machine: the watch app must carry the published key (tools/check-apk-signature.sh).
+      val wanted = gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
+      val release = signingConfigs.findByName("release")
+      if (release != null) signingConfig = release
+      else if (wanted) throw GradleException("No release key. Pass -PsigningProps=<file> (storeFile, storePassword, keyAlias, keyPassword); the watch app must be signed with the published key.")
+    }
+  }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
