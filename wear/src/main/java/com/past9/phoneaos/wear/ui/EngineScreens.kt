@@ -286,6 +286,7 @@ fun GesturesScreen(
     val pal = LocalLook.current.pal
     var picking by remember { mutableStateOf<Gesture?>(previewPick) }
     var pickingMode by remember { mutableStateOf(previewMode) }
+    LaunchedEffect(previewPick) { if (previewPick != null) picking = previewPick }
     ExStage { g ->
         val W = g.w; val H = g.h
         CrownColumn(Modifier.fillMaxSize()) {
@@ -370,6 +371,7 @@ fun HomeScreen(
     val look = LocalLook.current; val pal = look.pal
     var grid by remember(resetKey) { mutableStateOf(previewGrid) }
     var recentSheet by remember { mutableStateOf(previewRecents) }
+    LaunchedEffect(previewGrid) { if (previewGrid) grid = true }
     val clock = rememberClock()
     val date = remember { java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM")).uppercase() }
     val needs = waiting > 0
