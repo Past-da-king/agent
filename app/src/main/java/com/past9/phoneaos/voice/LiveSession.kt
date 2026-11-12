@@ -394,6 +394,7 @@ class LiveSession(
             if (dictation) Log.d(TAG, "serverContent keys: ${sc.keys().asSequence().toList()}")
             // The model was cut off mid-sentence: drop anything still queued or it talks over itself.
             if (sc.optBoolean("interrupted")) {
+                hold.model(false, System.currentTimeMillis())
                 val q = speaker
                 if (q != null) q.interrupt()
                 else if (external != null) { runCatching { external?.flush() }; onEvent(Event.Speaking(false)) }
@@ -406,6 +407,8 @@ class LiveSession(
 
             val parts = sc.optJSONObject("modelTurn")?.optJSONArray("parts")
             if (parts != null) {
+                // The model is mid-answer: anything meant for it waits (a client turn would cut in on it).
+                hold.model(true, System.currentTimeMillis())
                 if (speaker == null) onEvent(Event.Speaking(true))
                 for (i in 0 until parts.length()) {
                     val data = parts.optJSONObject(i)?.optJSONObject("inlineData")?.optString("data")
@@ -418,6 +421,7 @@ class LiveSession(
                     }
                 }
             }
+            if (sc.optBoolean("turnComplete")) hold.model(false, System.currentTimeMillis())
             if (sc.optBoolean("turnComplete") || sc.optBoolean("generationComplete")) {
                 val q = speaker
                 if (q != null) q.turnComplete() else onEvent(Event.Speaking(false))

@@ -172,6 +172,17 @@ class LiveVoiceV2Test {
         assertEquals(0, h.waiting)
     }
 
+    @Test fun aNoteIsHeldWhileTheModelIsMidAnswerAndGoesOutWhenItIsDone() {
+        // Google: clientContent interrupts current generation; gemini-3.8-live was derailed by a note sent mid-speech.
+        val h = TurnHold(quietMs = 1_000)
+        h.model(true, 5_000)
+        assertTrue(h.offer("[Context update]", false, 5_100))
+        assertTrue("still speaking", h.due(9_000).isEmpty())
+        h.model(false, 9_500)
+        assertEquals(listOf("[Context update]"), h.due(9_600).map { it.text })
+        assertFalse("model idle and nobody speaking: straight through", h.offer("later", true, 20_000))
+    }
+
     @Test fun aHeldMessageNeverWaitsForeverAndTheQueueIsBounded() {
         val h = TurnHold(quietMs = 1_000, maxHoldMs = 3_000, limit = 3)
         h.voice(0)
