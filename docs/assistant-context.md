@@ -67,19 +67,6 @@ Where it goes: `g.runtime.answer(ask.id, answer)`, the same path the question ca
 
 0.15.61 and 0.15.62 shipped the context but Live voice still answered "nothing is running" and "I cannot see previous conversations". Causes and fixes:
 
-- **The start read was dropped after 700 ms.**  waited 700 ms for the snapshot and opened the session with NO context when it was slower (a cold link, a large chat table). Now the snapshot is read in parallel with the token and the setup waits for it up to 3.5 s; the microphone never waits.
-- **Cold link read the phone own empty database.** In remote mode  can still be null at the first moment, so the snapshot read the phone local chat (empty).  now waits for the link (3 s), then for the computer cards (1.2 s), then falls back to  (who is at work on the computer) and otherwise marks the agents unknown.
-- **Never silent.** An empty but known list says "Agents: none are working right now." Unknown says the voice could not read them and must not say none are running. A snapshot that failed entirely gives a block that says so. Agents now carry what they were started for and their two latest steps (this is how "waiting for the watch to come back on adb" reaches the voice).
-- **No baseline, no delta.** When the session opened without context, later changes only told new questions and never listed the agents. Now every change to the context sends the whole current text as a quiet client turn (, ,  false) headed "[Context update]", debounced 1.2 s, at most every 4 s, retried until the line is ready. Spoken deltas (new question, an agent finished) stay as before.
-- **A fresh reconnect used a stale prompt.**  makes every setup (first and reconnect) build its instruction from the current context.
-- **Calls.**  appends the same  block to its prompt.
-- **Logged.** Tag : ,  (trimmed to 700 chars) and .
-- The desktop token (fieldMask ) keeps the phone instruction: proven by  and by the sessions of 12 Nov where tools worked.
-
-## Live voice always knows (0.15.63, 13 Nov 2026)
-
-0.15.61 and 0.15.62 shipped the context but Live voice still answered "nothing is running" and "I cannot see previous conversations". Causes and fixes:
-
 - **The start read was dropped after 700 ms.** `LiveAssistant.start` waited 700 ms for the snapshot and opened the session with NO context when it was slower (a cold link, a large chat table). Now the snapshot is read in parallel with the token and the setup waits for it up to 3.5 s; the microphone never waits.
 - **A cold link read the phone's own empty database.** In remote mode `RemoteHub.session` can still be null at the first moment, so the snapshot read the phone's local chat (empty). `AssistContextSource.snapshot` now waits for the link (3 s), then for the computer's cards (1.2 s), then falls back to `voice.callTargets` (who is at work on the computer) and otherwise marks the agents unknown.
 - **Never silent.** An empty but known list says "Agents: none are working right now." Unknown says the voice could not read them and must not say none are running. A snapshot that failed entirely gives a block that says so. Agents now carry what they were started for and their two latest steps (this is how "waiting for the watch to come back on adb" reaches the voice).
