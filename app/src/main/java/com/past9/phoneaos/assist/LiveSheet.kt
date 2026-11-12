@@ -44,6 +44,8 @@ import com.past9.phoneaos.ui.theme.Radius
 data class LiveActions(
     val onEnd: () -> Unit = {},
     val onMute: (Boolean) -> Unit = {},
+    /** Wait-for-me: Tap to talk, then I'm done. */
+    val onTurn: () -> Unit = {},
     val onOpenApp: () -> Unit = {},
     val onAnswer: (Long, String) -> Unit = { _, _ -> },
     /** Shrink the sheet to a floating bubble; the session keeps going. */
@@ -149,6 +151,15 @@ fun LiveSheetBody(view: LiveView, agentName: String, screen: ScreenLine?, action
                 Icon(if (screen.reading) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff, null, Modifier.size(16.dp), tint = cs.onSurfaceVariant)
                 Spacer(Modifier.width(6.dp))
                 Text(screen.text, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        if (view.manual && view.phase != LivePhase.ERROR) {
+            // Wait for me: Live answers only after this is tapped again, so a long pause can never end his turn.
+            Spacer(Modifier.height(12.dp))
+            val turnLabel = if (view.talking) "I'm done" else "Tap to talk"
+            Button(onClick = actions.onTurn, enabled = view.phase != LivePhase.CONNECTING, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).semantics { contentDescription = turnLabel },
+                colors = if (view.talking) ButtonDefaults.buttonColors(containerColor = cs.primary) else ButtonDefaults.filledTonalButtonColors()) {
+                Icon(if (view.talking) Icons.Rounded.Check else Icons.Rounded.Mic, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text(turnLabel)
             }
         }
         Spacer(Modifier.height(16.dp))

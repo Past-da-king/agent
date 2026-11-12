@@ -53,6 +53,8 @@ class LiveSession(
     private val dictation: Boolean = false,
     /** A fresh URL for a reconnect (a token is good for one new call), run off the main thread. Null keeps [url]. */
     private val renew: (() -> String?)? = null,
+    /** How turns are taken and a long conversation kept (patience, wait-for-me, language, vocabulary). Dictation ignores it. */
+    tuning: LiveTuning = LiveTuning(),
     private val onEvent: (Event) -> Unit,
 ) : LiveLink {
     sealed class Event {
@@ -104,6 +106,60 @@ class LiveSession(
     @Volatile private var resumeFields = true
     @Volatile private var retries = 0
     @Volatile private var everReady = false
+    /** Turned off if this model rejects the turn-taking or vocabulary fields, so a call still starts with the server's defaults. */
+    @Volatile private var tuneFields = true
+    /** Tries before the first setup completes: one quick retry, two when a refused field was just dropped. */
+    @Volatile private var maxFirstRetries = 1
+
+    /** The turn-taking and vocabulary the next setup carries; replaced when the voice learns the names it will hear. */
+    @Volatile var tune: LiveTuning = tuning
+
+    /** Anything meant for the model waits here while he is speaking (see [TurnHold]). */
+    private val hold = TurnHold()
+    private val flusher = AtomicBoolean(false)
+    private val manual: Boolean get() = tune.waitForMe && !dictation
+
+    /** Wait-for-me mode: true between his "Tap to talk" and "I'm done". Audio is only sent while it is true. */
+    @Volatile private var turnOpen = false
+    val talking: Boolean get() = turnOpen
+
+    /** Wait-for-me: marks the start of his turn. Audio goes out from now until [endTurn]. */
+    fun beginTurn() {
+        if (!manual || turnOpen) return
+        turnOpen = true
+        hold.voice(System.currentTimeMillis())
+        gate.submit(ACTIVITY_START) { ws?.send(it) }
+    }
+
+    /** Wait-for-me: marks the end of his turn, so the model answers now (and not before). */
+    fun endTurn() {
+        if (!manual || !turnOpen) return
+        turnOpen = false
+        gate.submit(ACTIVITY_END) { ws?.send(it) }
+    }
+
+    /** Sends held messages once he has been quiet; a small thread for the life of the session. */
+    private fun startFlusher() {
+        if (flusher.getAndSet(true)) return
+        thread(name = "aos-live-hold", isDaemon = true) {
+            while (running.get()) {
+                runCatching { Thread.sleep(250) }
+                if (!ready.get()) continue
+                if (manual && turnOpen) { hold.voice(System.currentTimeMillis()); continue }
+                hold.due(System.currentTimeMillis()).forEach { sendClient(it.text, it.turnComplete) }
+            }
+        }
+    }
+
+    private fun sendClient(text: String, turnComplete: Boolean): Boolean {
+        val msg = JSONObject().put("clientContent", JSONObject()
+            .put("turns", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", text)))))
+            .put("turnComplete", turnComplete))
+        return ws?.send(msg.toString()) == true
+    }
+
+    /** His voice, heard in a chunk of microphone sound: holds back anything for the model while he talks. */
+    private fun heard(pcm: ByteArray, n: Int) { if (loudness(pcm, n) >= HOLD_LOUD) hold.voice(System.currentTimeMillis()) }
 
     override fun start() {
         if (running.getAndSet(true)) return
@@ -163,10 +219,13 @@ class LiveSession(
     /** 16 kHz mono PCM16 from outside the phone, sent as the caller's voice. False when it was not sent (not ready, muted, ended). */
     override fun sendAudio(pcm: ByteArray): Boolean {
         if (!running.get() || !micOpen.get() || muted || !ready.get() || pcm.isEmpty()) return false
+        if (manual && !turnOpen) return false
+        heard(pcm, pcm.size)
         return ws?.send(audioMessage(pcm, pcm.size)) == true
     }
 
     private fun connect() {
+        startFlusher()
         ws = http.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 if (webSocket !== ws) return
@@ -195,7 +254,13 @@ class LiveSession(
                 if (webSocket !== ws) return
                 Log.i(TAG, "socket closed $code $reason")
                 // 1007: this model refused a setup field. Try once more without the resumption fields.
-                if (code == 1007 && resumeFields && !ready.get()) { resumeFields = false; resumeHandle = null; if (tryReconnect("setup refused: $reason")) return }
+                // First the turn-taking and vocabulary fields go (the call still works with the server's defaults), then resumption.
+                if (code == 1007 && !ready.get() && (tuneFields || resumeFields)) {
+                    if (tuneFields) tuneFields = false else { resumeFields = false; resumeHandle = null }
+                    maxFirstRetries = 2
+                    Log.w(TAG, "setup refused ($reason): retrying with ${if (!tuneFields && resumeFields) "default turn-taking" else "no resumption"}")
+                    if (tryReconnect("setup refused: $reason")) return
+                }
                 if (!tryReconnect("closed $code $reason")) {
                     // Closed before the call ever got going (a bad key, a refused model): say why, not a bare "Call ended".
                     onEvent(if (!everReady) Event.Failed(reason.ifBlank { "The call could not start." }) else Event.Closed(reason.ifBlank { "closed" }, code)); stop()
@@ -209,7 +274,7 @@ class LiveSession(
         if (!running.get() || !resumable || retries >= 4) return false
         // Nothing to resume (it never got going): one quick retry only, for a flaky first connection.
         if (resumeHandle == null && everReady && resumeFields) return false
-        if (!everReady && retries >= 1) return false
+        if (!everReady && retries >= maxFirstRetries) return false
         retries++
         ready.set(false)
         gate.close()
@@ -241,10 +306,8 @@ class LiveSession(
      */
     fun note(text: String): Boolean {
         if (!ready.get()) return false
-        val msg = JSONObject().put("clientContent", JSONObject()
-            .put("turns", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", text)))))
-            .put("turnComplete", false))
-        return ws?.send(msg.toString()) == true
+        if (hold.offer(text, false, System.currentTimeMillis())) return true
+        return sendClient(text, false)
     }
 
     private fun setupMessage(): JSONObject {
@@ -259,13 +322,11 @@ class LiveSession(
                 "speechConfig",
                 // Without a language the model guessed his accent: all four 11 Sep sessions had English
                 // transcribed as German, French or Italian.
-                JSONObject().put("languageCode", language.ifEmpty { "en-US" }).put(
-                    "voiceConfig",
-                    JSONObject().put(
-                        "prebuiltVoiceConfig",
-                        JSONObject().put("voiceName", voice.ifEmpty { "Puck" })
-                    )
-                )
+                JSONObject().apply {
+                    // Dictation always pins its language. A call pins it too unless the setting says to follow whatever is spoken.
+                    LiveTuning.languageToPin(!dictation && tune.autoLanguage, language)?.let { put("languageCode", it) }
+                    put("voiceConfig", JSONObject().put("prebuiltVoiceConfig", JSONObject().put("voiceName", voice.ifEmpty { "Puck" })))
+                }
             )
         val setup = JSONObject()
             .put("model", if (model.startsWith("models/")) model else "models/$model")
@@ -275,15 +336,15 @@ class LiveSession(
                 JSONObject().put("parts", JSONArray().put(JSONObject().put("text", currentSystem())))
             )
             // Transcripts both ways so the call can be written to Voice history like any other session.
-            .put("inputAudioTranscription", JSONObject())
-            .put("realtimeInputConfig", JSONObject().put("automaticActivityDetection", JSONObject()))
+            .put("inputAudioTranscription", if (dictation || !tuneFields) JSONObject() else tune.inputTranscription())
+            .put("realtimeInputConfig", if (dictation || !tuneFields) JSONObject().put("automaticActivityDetection", JSONObject()) else tune.realtimeInputConfig())
         // Only the call needs to hear ITSELF back; dictation only ever wants his own words.
         if (!dictation) setup.put("outputAudioTranscription", JSONObject())
         if (tools != null && !dictation) setup.put("tools", tools)
         if (resumable && resumeFields) {
             setup.put("sessionResumption", JSONObject().apply { resumeHandle?.let { put("handle", it) } })
             // Without compression an audio session ends at ~15 minutes however often we reconnect.
-            setup.put("contextWindowCompression", JSONObject().put("slidingWindow", JSONObject()))
+            setup.put("contextWindowCompression", if (tuneFields && !dictation) tune.compression() else JSONObject().put("slidingWindow", JSONObject()))
         }
         return JSONObject().put("setup", setup)
     }
@@ -296,6 +357,8 @@ class LiveSession(
                 Log.i(TAG, "setup complete${if (everReady) " (reconnected)" else ""}")
                 ready.set(true); retries = 0
                 gate.open { ws?.send(it) }
+                // A reconnect in the middle of his turn: the new connection needs to know the turn is open.
+                if (manual && turnOpen) ws?.send(ACTIVITY_START)
                 val again = everReady; everReady = true
                 if (!again) onEvent(Event.SetupComplete) else onEvent(Event.Speaking(false))
                 return
@@ -331,6 +394,7 @@ class LiveSession(
             if (dictation) Log.d(TAG, "serverContent keys: ${sc.keys().asSequence().toList()}")
             // The model was cut off mid-sentence: drop anything still queued or it talks over itself.
             if (sc.optBoolean("interrupted")) {
+                hold.model(false, System.currentTimeMillis())
                 val q = speaker
                 if (q != null) q.interrupt()
                 else if (external != null) { runCatching { external?.flush() }; onEvent(Event.Speaking(false)) }
@@ -343,6 +407,8 @@ class LiveSession(
 
             val parts = sc.optJSONObject("modelTurn")?.optJSONArray("parts")
             if (parts != null) {
+                // The model is mid-answer: anything meant for it waits (a client turn would cut in on it).
+                hold.model(true, System.currentTimeMillis())
                 if (speaker == null) onEvent(Event.Speaking(true))
                 for (i in 0 until parts.length()) {
                     val data = parts.optJSONObject(i)?.optJSONObject("inlineData")?.optString("data")
@@ -355,6 +421,7 @@ class LiveSession(
                     }
                 }
             }
+            if (sc.optBoolean("turnComplete")) hold.model(false, System.currentTimeMillis())
             if (sc.optBoolean("turnComplete") || sc.optBoolean("generationComplete")) {
                 val q = speaker
                 if (q != null) q.turnComplete() else onEvent(Event.Speaking(false))
@@ -366,20 +433,9 @@ class LiveSession(
 
     /** Send a text turn as if the operator had said it — used to deliver the agent's briefing. */
     override fun announce(text: String) {
-        val msg = JSONObject().put(
-            "clientContent",
-            JSONObject()
-                .put(
-                    "turns",
-                    JSONArray().put(
-                        JSONObject()
-                            .put("role", "user")
-                            .put("parts", JSONArray().put(JSONObject().put("text", text)))
-                    )
-                )
-                .put("turnComplete", true)
-        )
-        ws?.send(msg.toString())
+        // Never while he is mid-sentence: a completed client turn makes the model answer at once, on top of him.
+        if (hold.offer(text, true, System.currentTimeMillis())) return
+        sendClient(text, true)
     }
 
     override fun sendToolResult(id: String, name: String, result: JSONObject) {
@@ -524,6 +580,9 @@ class LiveSession(
                     if (n <= 0) { runCatching { Thread.sleep(20) }; continue }
                     if (muted) continue
                     onEvent(Event.Level(true, loudness(buf, n)))
+                    // Wait-for-me: nothing is sent between his taps, so nothing can end his turn early.
+                    if (manual && !turnOpen) continue
+                    heard(buf, n)
                     val b64 = Base64.encodeToString(buf.copyOf(n), Base64.NO_WRAP)
                     val msg = JSONObject().put(
                         "realtimeInput",
@@ -610,6 +669,10 @@ class LiveSession(
         private const val CHUNK_BYTES = 3200 // 100ms of 16k mono PCM16
         /** About ten seconds of speech may wait for the connection. */
         private const val MAX_PRE_CHUNKS = 100
+        /** How loud a microphone chunk must be to count as him speaking (same scale as [loudness]). */
+        private const val HOLD_LOUD = 0.25f
+        private const val ACTIVITY_START = "{\"realtimeInput\":{\"activityStart\":{}}}"
+        private const val ACTIVITY_END = "{\"realtimeInput\":{\"activityEnd\":{}}}"
 
         /** One piece of the caller's voice on the wire: realtimeInput.audio, 16 kHz PCM16, base64. */
         fun audioMessage(pcm: ByteArray, n: Int): String = JSONObject().put(

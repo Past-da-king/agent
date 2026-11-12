@@ -89,6 +89,9 @@ object LiveHost {
 
     fun mute(on: Boolean) { assistant?.mute(on) }
 
+    /** Wait-for-me: tap to talk / I'm done. */
+    fun turn() { assistant?.toggleTurn() }
+
     /** He picked which waiting question his answer is for (the choice sheet), or closed the sheet without picking. */
     fun pickAsk(ask: CtxAsk, answer: String) { assistant?.pickAsk(ask, answer) }
     fun dismissChoice() { assistant?.dismissChoice() }

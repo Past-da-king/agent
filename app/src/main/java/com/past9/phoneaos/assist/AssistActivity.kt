@@ -330,6 +330,7 @@ class AssistActivity : ComponentActivity() {
                         else if (liveMode) LiveSheetBody(liveView, agentName, AssistWords.screenLine(screen, AssistPrefs.readScreen(this@AssistActivity), this@AssistActivity), LiveActions(
                             onEnd = { if (LiveHost.active) LiveHost.end("") else finish() },
                             onMute = { m -> LiveHost.mute(m) },
+                            onTurn = { LiveHost.turn() },
                             onMinimise = { minimise() },
                             onOpenApp = { openApp() },
                             onAnswer = { id, option -> g.runtime.answer(id, option) },

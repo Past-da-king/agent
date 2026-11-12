@@ -35,6 +35,26 @@ object AssistPrefs {
         AssistService.live?.let { runCatching { it.applyShowContext() } }
     }
 
+    /** How patient Live is before it answers: quick, patient (default) or very. See LiveTuning.Patience. */
+    fun livePatience(context: Context): String = prefs(context).getString("x_live_patience", com.past9.phoneaos.voice.LiveTuning.Patience.PATIENT.key) ?: com.past9.phoneaos.voice.LiveTuning.Patience.PATIENT.key
+    fun setLivePatience(context: Context, key: String) { prefs(context).edit().putString("x_live_patience", key).apply() }
+
+    /** "Wait for me": Live only listens between "Tap to talk" and "I'm done". Off by default. */
+    fun liveWaitForMe(context: Context): Boolean = prefs(context).getBoolean("x_live_wait_for_me", false)
+    fun setLiveWaitForMe(context: Context, on: Boolean) { prefs(context).edit().putBoolean("x_live_wait_for_me", on).apply() }
+
+    /** "Follow my language": no language is pinned, so several languages in one sentence are understood. Off by default (English is pinned). */
+    fun liveAutoLanguage(context: Context): Boolean = prefs(context).getBoolean("x_live_auto_language", false)
+    fun setLiveAutoLanguage(context: Context, on: Boolean) { prefs(context).edit().putBoolean("x_live_auto_language", on).apply() }
+
+    /** The turn-taking and language choices as one value for a session. [vocabulary] is what the transcriber should know (names). */
+    fun liveTuning(context: Context, vocabulary: List<String> = emptyList()): com.past9.phoneaos.voice.LiveTuning = com.past9.phoneaos.voice.LiveTuning(
+        patience = com.past9.phoneaos.voice.LiveTuning.Patience.of(livePatience(context)),
+        waitForMe = liveWaitForMe(context),
+        autoLanguage = liveAutoLanguage(context),
+        vocabulary = vocabulary,
+    )
+
     /** Whether the phone should gather a picture at all: the sheet's own picture switch, or Live's frames. */
     fun screenshotAllowed(context: Context): Boolean = readScreenshot(context) || (liveVoice(context) && liveSees(context))
 

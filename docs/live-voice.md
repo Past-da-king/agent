@@ -72,3 +72,32 @@ as a quote.
 tool, record), `LiveFrames` + `FrameLogic` (frames, gate, throttle, diff), `AssistScreenNow` (looks), `LiveBubble*`,
 `LiveService` (microphone and media foreground service), `LiveToken`. `voice/`: `LiveSession` (the socket, resumption),
 `SendGate`, `Earcon`, `LiveTiming`.
+
+
+## Patient turn-taking, wait-for-me and answers read as written (0.15.64)
+
+Sources: Google Live API capabilities, session management, tools and API reference
+(https://aistudio.google.com/docs/live-api/capabilities, https://aistudio.google.com/docs/live-api/session-management,
+https://aistudio.google.com/docs/live-api/tools, https://aistudio.google.com/api-reference/live).
+
+**Setup values (every Live session except dictation)**
+
+| Field | Default | Why |
+|---|---|---|
+| `realtimeInputConfig.automaticActivityDetection.endOfSpeechSensitivity` | `END_SENSITIVITY_LOW` | the server waits longer before it decides the turn is over |
+| `...startOfSpeechSensitivity` | `START_SENSITIVITY_LOW` | a cough or a noise does not start a turn |
+| `...silenceDurationMs` | 1400 (Quick 800, Very patient 2400) | Google's server default is about 800, so a 1.1 s pause mid-sentence ended his turn |
+| `...prefixPaddingMs` | 200 (Quick 100, Very 250) | |
+| Wait for me | off | `automaticActivityDetection.disabled: true`; the phone sends `activityStart` on Tap to talk and `activityEnd` on I'm done, and no sound in between |
+| `contextWindowCompression` | `slidingWindow` and `triggerTokens` 100000 | a long call is trimmed instead of ending at about 15 minutes |
+| `sessionResumption` | handle kept, used on goAway and drops | unchanged |
+| `inputAudioTranscription.customVocabulary` | the agent's name, the user's name, the names of agents at work (up to 60) | names are transcribed right |
+| `speechConfig.languageCode` | `en-US`; "Follow my language" leaves it out | |
+
+Settings: Settings > Default assistant > How Live takes turns (Quick, Patient, Very patient; Wait for me; Follow my language). They apply to the next Live session.
+
+If the server refuses a tuned field (close code 1007 before setup completes) the session retries once with the server's defaults, then without resumption fields.
+
+**Nothing is sent to the model while he talks or while it is mid-answer.** `TurnHold` keeps announcements and [Context update] notes until he has been quiet for 1.8 s and the model has finished (Google: a clientContent message interrupts current generation; on gemini-3.8-live a note sent mid-speech derailed the answer).
+
+**Answers are read as written.** A finished answer reaches Live as `[Agent result, speak as written] ... [End of agent result]` (markdown removed, up to 4000 characters, then "(The rest is in the chat.)"). Live's instruction says to read it as written and never summarise a summary. The hand-off to the agent says its reply is read aloud, so it writes the spoken version.
