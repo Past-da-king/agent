@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="assist_ctx_waiting">Menunggu anda: %d</string>
+    <string name="assist_ctx_working">Sedang bekerja: %d</string>
+    <string name="assist_ctx_which">Ini untuk yang mana?</string>
+    <string name="assist_ctx_your_words">Anda berkata: %1$s</string>
+    <string name="assist_ctx_sent_to">Dihantar kepada %1$s: %2$s</string>
+</resources>

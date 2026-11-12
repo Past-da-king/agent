@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="assist_ctx_waiting">Чекають на вас: %d</string>
+    <string name="assist_ctx_working">Працюють: %d</string>
+    <string name="assist_ctx_which">Для якого це?</string>
+    <string name="assist_ctx_your_words">Ви сказали: %1$s</string>
+    <string name="assist_ctx_sent_to">Надіслано: %1$s: %2$s</string>
+</resources>

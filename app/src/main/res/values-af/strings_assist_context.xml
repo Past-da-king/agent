@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="assist_ctx_waiting">Wag op jou: %d</string>
+    <string name="assist_ctx_working">Aan die werk: %d</string>
+    <string name="assist_ctx_which">Vir watter een is dit?</string>
+    <string name="assist_ctx_your_words">Jy het gesê: %1$s</string>
+    <string name="assist_ctx_sent_to">Gestuur na %1$s: %2$s</string>
+</resources>

@@ -520,7 +520,7 @@ class MediaToolsTest {
         assertEquals("automation", lent.groupOf("play_media")); assertEquals("automation", lent.groupOf("media_control"))
         val live = com.past9.phoneaos.assist.LiveAssistCore.tools().getJSONObject(0).getJSONArray("functionDeclarations")
         val names = (0 until live.length()).map { live.getJSONObject(it).getString("name") }
-        assertEquals(listOf("hand_to_agent", "play_media", "media_control"), names)
+        assertEquals(listOf("hand_to_agent", "answer_ask", "play_media", "media_control"), names)
         val call = com.past9.phoneaos.voice.CallController.callTools(linked = true).getJSONObject(0).getJSONArray("functionDeclarations")
         assertTrue((0 until call.length()).map { call.getJSONObject(it).getString("name") }.containsAll(listOf("play_media", "media_control")))
         assertTrue(com.past9.phoneaos.assist.LiveAssistCore.systemPrompt("A", "B", true).contains("play_media"))

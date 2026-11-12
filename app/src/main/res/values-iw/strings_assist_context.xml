@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="assist_ctx_waiting">ממתינים לך: %d</string>
+    <string name="assist_ctx_working">בעבודה: %d</string>
+    <string name="assist_ctx_which">עבור איזה מהם?</string>
+    <string name="assist_ctx_your_words">אמרת: %1$s</string>
+    <string name="assist_ctx_sent_to">נשלח אל %1$s: %2$s</string>
+</resources>

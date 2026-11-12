@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="assist_ctx_waiting">بانتظارك: %d</string>
+    <string name="assist_ctx_working">قيد العمل: %d</string>
+    <string name="assist_ctx_which">لأي واحد هذا؟</string>
+    <string name="assist_ctx_your_words">قلت: %1$s</string>
+    <string name="assist_ctx_sent_to">أُرسل إلى %1$s: %2$s</string>
+</resources>

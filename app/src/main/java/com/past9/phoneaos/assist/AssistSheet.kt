@@ -66,6 +66,9 @@ data class AssistActions(
     val onOpenApp: () -> Unit = {},
     val onAnswer: (Long, String) -> Unit = { _, _ -> },
     val onUnlock: () -> Unit = {},
+    /** He picked which waiting question his words answer (the choice sheet), or closed it without picking. */
+    val onPickAsk: (CtxAsk, String) -> Unit = { _, _ -> },
+    val onDismissChoice: () -> Unit = {},
 )
 
 /** What the sheet says it knows about the screen: a line and whether anything is being read. */
@@ -105,7 +108,7 @@ object AssistWords {
  * needs him, and three buttons (keyboard, mic or stop, the full app). It only draws [view]; the activity owns the state.
  */
 @Composable
-fun AssistSheetBody(view: AssistView, agentName: String, screen: ScreenLine?, actions: AssistActions, modifier: Modifier = Modifier) {
+fun AssistSheetBody(view: AssistView, agentName: String, screen: ScreenLine?, actions: AssistActions, modifier: Modifier = Modifier, context: AssistContext? = null, choice: AskChoice? = null) {
     val cs = MaterialTheme.colorScheme
     val busy = view.phase == AssistPhase.SENDING || view.phase == AssistPhase.THINKING || view.phase == AssistPhase.ACTING
     Column(modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 10.dp, bottom = 14.dp)) {
@@ -122,6 +125,12 @@ fun AssistSheetBody(view: AssistView, agentName: String, screen: ScreenLine?, ac
             if (view.phase == AssistPhase.LISTENING) ListeningBars()
         }
         Spacer(Modifier.height(14.dp))
+        // What is going on right now, so he never has to say it again: shown while he is about to speak or read an answer.
+        if (context != null && (context.asks.isNotEmpty() || context.agents.isNotEmpty()) &&
+            (view.phase == AssistPhase.LISTENING || view.phase == AssistPhase.TYPING || view.phase == AssistPhase.ANSWERING)) {
+            ContextStrip(context, agentName)
+            Spacer(Modifier.height(12.dp))
+        }
         Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
             when (view.phase) {
                 AssistPhase.LISTENING -> Text(view.heard.ifBlank { stringResource(R.string.assist_go_ahead) }, style = MaterialTheme.typography.headlineSmall,
@@ -192,6 +201,8 @@ fun AssistSheetBody(view: AssistView, agentName: String, screen: ScreenLine?, ac
             MorphIconButton(onClick = actions.onOpenApp, size = 52.dp) { Icon(Icons.AutoMirrored.Rounded.OpenInNew, stringResource(R.string.share_open_app), tint = cs.onSurface) }
         }
     }
+    // More than one waiting question could take his words: a slide-up sheet, never a centred dialog.
+    choice?.let { c -> AskChoiceSheet(c, agentName, onPick = { k -> actions.onPickAsk(k, c.answer) }, onDismiss = actions.onDismissChoice) }
 }
 
 /** His words once they are sent: small, in his own bubble colour, like the chat. */

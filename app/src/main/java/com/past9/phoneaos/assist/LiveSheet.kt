@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.CallEnd
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloseFullscreen
 import androidx.compose.material.icons.rounded.PictureInPictureAlt
@@ -47,6 +48,9 @@ data class LiveActions(
     val onAnswer: (Long, String) -> Unit = { _, _ -> },
     /** Shrink the sheet to a floating bubble; the session keeps going. */
     val onMinimise: () -> Unit = {},
+    /** He picked which waiting question his words answer (the choice sheet), or closed it. */
+    val onPickAsk: (CtxAsk, String) -> Unit = { _, _ -> },
+    val onDismissChoice: () -> Unit = {},
 )
 
 object LiveWords {
@@ -90,6 +94,10 @@ fun LiveSheetBody(view: LiveView, agentName: String, screen: ScreenLine?, action
             }
         }
         Spacer(Modifier.height(14.dp))
+        if (view.phase != LivePhase.ERROR) {
+            ContextStrip(view.context, agentName)
+            if (view.context != null && (view.context.asks.isNotEmpty() || view.context.agents.isNotEmpty())) Spacer(Modifier.height(12.dp))
+        }
         Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).heightIn(min = 72.dp)) {
             if (view.phase == LivePhase.ERROR) {
                 Row(verticalAlignment = Alignment.Top) {
@@ -107,6 +115,13 @@ fun LiveSheetBody(view: LiveView, agentName: String, screen: ScreenLine?, action
                 view.card?.let { card ->
                     Spacer(Modifier.height(12.dp))
                     if (com.past9.phoneaos.ui.screens.Approval.isApproval(card)) ApprovalInSheet(card, actions.onAnswer) else QuestionCard(card, actions.onAnswer, onBrowser = actions.onOpenApp)
+                }
+                if (view.routed.isNotBlank()) {
+                    Spacer(Modifier.height(12.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Check, null, Modifier.size(18.dp), tint = cs.primary); Spacer(Modifier.width(8.dp))
+                        Text(view.routed, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
                 }
                 if (view.phase == LivePhase.WORKING) {
                     Spacer(Modifier.height(12.dp))
@@ -148,6 +163,8 @@ fun LiveSheetBody(view: LiveView, agentName: String, screen: ScreenLine?, action
             MorphIconButton(onClick = actions.onOpenApp, size = 52.dp) { Icon(Icons.AutoMirrored.Rounded.OpenInNew, stringResource(R.string.share_open_app), tint = cs.onSurface) }
         }
     }
+    // More than one waiting question could take his words: a slide-up sheet, never a centred dialog.
+    view.choice?.let { c -> AskChoiceSheet(c, agentName, onPick = { k -> actions.onPickAsk(k, c.answer) }, onDismiss = actions.onDismissChoice) }
 }
 
 @Composable

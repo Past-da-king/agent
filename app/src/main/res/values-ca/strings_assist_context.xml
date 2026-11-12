@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="assist_ctx_waiting">Esperen la teva resposta: %d</string>
+    <string name="assist_ctx_working">En marxa: %d</string>
+    <string name="assist_ctx_which">Per a quin és?</string>
+    <string name="assist_ctx_your_words">Has dit: %1$s</string>
+    <string name="assist_ctx_sent_to">Enviat a %1$s: %2$s</string>
+</resources>
