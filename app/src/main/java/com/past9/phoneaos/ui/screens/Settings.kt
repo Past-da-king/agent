@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -65,6 +66,8 @@ data class SettingsActions(
     val media: MediaAppsActions = MediaAppsActions(),
     /** Settings > Browser: sites that may use shared memory in the agent's browser, and the agent's voice in WhatsApp calls. */
     val browser: BrowserSettingsActions = BrowserSettingsActions(),
+    /** Settings > Model routing: which account and model chat, routines and watchers run on (issue #64). */
+    val routing: RoutingActions = RoutingActions(),
     val linkedLine: String = "Use the agent on your computer from this phone",
 )
 
@@ -107,6 +110,7 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
     var macroSheet by remember { mutableStateOf(false) }
     var mediaSheet by remember { mutableStateOf(false) }
     var browserSheet by remember { mutableStateOf(false) }
+    var routeSheet by remember { mutableStateOf<com.past9.phoneaos.data.ModelRoute?>(null) }
     // The sheet keeps what it shows, so a flip of the switch or a new token lands without re-reading Settings.
     var automationAllowedNow by remember { mutableStateOf(automation.allowed) }
     var automationTokenNow by remember { mutableStateOf(automation.token) }
@@ -136,6 +140,15 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
                 Line(Icons.Rounded.Psychology, stringResource(R.string.settings_model), stringResource(R.string.settings_tap_to_switch, s.model)) { actions.onModel() }
                 Line(Icons.Rounded.Groups, stringResource(R.string.settings_helpers), helpersLine(s.helperRoster, s.helperModel.substringAfterLast('/').ifBlank { stringResource(R.string.settings_same_as_agent) })) { actions.onHelperModel() }
                 Line(Icons.Rounded.Password, stringResource(R.string.settings_change_key), stringResource(R.string.settings_change_key_sub)) { actions.onChangeKey() }
+            }
+            // Only while the agent runs on an API key: routes choose between the user's API accounts.
+            if (s.mode == PowerMode.API_KEY) {
+                SectionHeader(stringResource(R.string.routing_title), stringResource(R.string.routing_sub), Modifier.padding(start = 4.dp, top = 12.dp))
+                AppCard(padding = PaddingValues(vertical = 4.dp)) {
+                    com.past9.phoneaos.data.ModelRoute.entries.forEach { r ->
+                        Line(routeIcon(r), routeName(r), routeSummary(s.routes[r]) ?: stringResource(R.string.routing_default), tag = "routing-row-${r.name}") { routeSheet = r }
+                    }
+                }
             }
             if (s.mode == PowerMode.SUBSCRIPTION || runtime.installedBytes > 0) AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 Line(Icons.Rounded.Terminal, stringResource(R.string.settings_runtime, s.subKind.label), runtime.note) { actions.onClaudeSetup() }
@@ -255,14 +268,15 @@ fun SettingsScreen(s: AgentSettings, runtime: RuntimeInfo, version: String, acti
     if (macroSheet) MacroSheet(actions.macro) { macroSheet = false }
     if (mediaSheet) MediaAppsSheet(actions.media) { mediaSheet = false }
     if (browserSheet) BrowserSheet(actions.browser) { browserSheet = false }
+    routeSheet?.let { r -> ModelRoutingSheet(r, s.routes[r], actions.routing) { routeSheet = null } }
     if (confirmReset) com.past9.phoneaos.ui.ConfirmSheet(androidx.compose.material.icons.Icons.Rounded.DeleteForever, stringResource(R.string.settings_this_phone), stringResource(R.string.settings_reset_confirm),
         stringResource(R.string.settings_reset_confirm_body),
         confirm = stringResource(R.string.settings_reset), onConfirm = { confirmReset = false; actions.onResetAll() }, onDismiss = { confirmReset = false }, cancel = stringResource(R.string.settings_keep), destructive = true)
 }
 
 @Composable
-private fun Line(icon: ImageVector, title: String, value: String, danger: Boolean = false, trailing: @Composable (() -> Unit)? = null, onClick: () -> Unit) {
-    Surface(onClick = onClick, color = androidx.compose.ui.graphics.Color.Transparent) {
+private fun Line(icon: ImageVector, title: String, value: String, danger: Boolean = false, trailing: @Composable (() -> Unit)? = null, tag: String? = null, onClick: () -> Unit) {
+    Surface(onClick = onClick, color = androidx.compose.ui.graphics.Color.Transparent, modifier = if (tag != null) Modifier.testTag(tag) else Modifier) {
         Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, null, tint = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
             Spacer(Modifier.width(16.dp))

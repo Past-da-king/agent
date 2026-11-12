@@ -753,4 +753,11 @@
     <string name="rt_not_downloaded">L\'environnement d\'exécution %1$s n\'est pas encore téléchargé.</string>
     <string name="live_sees_screen">Live peut voir votre écran</string>
     <string name="live_screen_private">Écran privé : Live ne peut pas le voir</string>
+    <string name="routing_title">Routage des modèles</string>
+    <string name="routing_sub">Exécutez le chat, les routines et les veilleurs sur des modèles différents. S\'applique quand l\'agent fonctionne avec une clé API.</string>
+    <string name="routing_watchers">Veilleurs</string>
+    <string name="routing_default">Comme par défaut</string>
+    <string name="routing_sheet_line">Choisissez le compte et le modèle pour cette tâche. Les assistants continuent de choisir le leur.</string>
+    <string name="routing_reset">Utiliser le défaut</string>
+    <string name="routing_no_accounts">Enregistrez d\'abord une clé API pour un fournisseur, elle apparaîtra ici.</string>
 </resources>

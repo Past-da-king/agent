@@ -733,4 +733,11 @@
     <string name="rt_not_downloaded">รันไทม์ %1$s ยังไม่ได้ดาวน์โหลด</string>
     <string name="live_sees_screen">Live เห็นหน้าจอของคุณได้</string>
     <string name="live_screen_private">หน้าจอส่วนตัว: Live มองไม่เห็น</string>
+    <string name="routing_title">การกำหนดเส้นทางโมเดล</string>
+    <string name="routing_sub">รันแชต กิจวัตร และตัวเฝ้าดูบนโมเดลที่ต่างกัน ใช้เมื่อเอเจนต์ทำงานด้วยคีย์ API</string>
+    <string name="routing_watchers">ตัวเฝ้าดู</string>
+    <string name="routing_default">เหมือนค่าเริ่มต้น</string>
+    <string name="routing_sheet_line">เลือกบัญชีและโมเดลสำหรับงานนี้ ผู้ช่วยยังเลือกโมเดลของตัวเองเช่นเดิม</string>
+    <string name="routing_reset">ใช้ค่าเริ่มต้น</string>
+    <string name="routing_no_accounts">บันทึกคีย์ API ของผู้ให้บริการก่อน แล้วจะแสดงที่นี่</string>
 </resources>

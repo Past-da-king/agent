@@ -733,4 +733,11 @@
     <string name="rt_not_downloaded">%1$s 运行环境尚未下载。</string>
     <string name="live_sees_screen">实时语音可以看到你的屏幕</string>
     <string name="live_screen_private">隐私屏幕：实时语音看不到</string>
+    <string name="routing_title">模型路由</string>
+    <string name="routing_sub">让聊天、例行任务和监视器使用不同的模型。当智能体使用 API 密钥运行时生效。</string>
+    <string name="routing_watchers">监视器</string>
+    <string name="routing_default">与默认相同</string>
+    <string name="routing_sheet_line">为这项工作选择账户和模型。助手仍会自己选择模型。</string>
+    <string name="routing_reset">使用默认值</string>
+    <string name="routing_no_accounts">请先保存某个提供商的 API 密钥，它就会显示在这里。</string>
 </resources>

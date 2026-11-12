@@ -78,6 +78,8 @@ data class AgentSettings(
     val liveEnabled: Boolean = false,
     /** Play voice notes (and read replies) automatically while earphones are in. */
     val autoPlayEarphones: Boolean = true,
+    /** Which account and model each kind of turn runs on (issue #64). A kind with no entry runs on the default above. */
+    val routes: Map<ModelRoute, RouteChoice> = emptyMap(),
 ) {
     val ready: Boolean get() = when (mode) {
         PowerMode.API_KEY -> hasKey
@@ -134,6 +136,7 @@ class SettingsStore(context: Context) {
             browserProfiles = (prefs.getString("browserProfiles", null) ?: "Personal").split("\n").filter { it.isNotBlank() }.ifEmpty { listOf("Personal") },
             subKind = runCatching { SubKind.valueOf(prefs.getString("subKind", "CLAUDE")!!) }.getOrDefault(SubKind.CLAUDE),
             helperRoster = HelperModel.listFrom(prefs.getString(rosterKey(), null)),
+            routes = ModelRoute.entries.mapNotNull { r -> RouteChoice.fromJson(prefs.getString("x_route_${r.name}", null))?.let { r to it } }.toMap(),
         )
     }
 
@@ -167,6 +170,18 @@ class SettingsStore(context: Context) {
     fun setSubHelperModel(m: String) = edit { putString("subHelperModel_" + _state.value.subKind.name, m) }
     fun setTts(provider: String, voice: String) = edit { putString("ttsProvider", provider); putString("ttsVoice", voice) }
     fun setAutoPlayEarphones(on: Boolean) = edit { putBoolean("autoPlayEarphones", on) }
+    /**
+     * Run this kind of turn on [provider]'s [model] (issue #64). Written to disk before it returns, and kept when the main
+     * power source changes: a route is its own choice. A blank model clears the route.
+     */
+    fun setRoute(route: ModelRoute, provider: Provider, model: String) {
+        if (model.isBlank()) return clearRoute(route)
+        prefs.edit().putString("x_route_${route.name}", RouteChoice(provider, model.trim()).toJson()).commit(); _state.value = read()
+    }
+    /** Back to the default power source for this kind of turn. */
+    fun clearRoute(route: ModelRoute) { prefs.edit().remove("x_route_${route.name}").commit(); _state.value = read() }
+    /** The providers the user has saved a key for: the accounts a route can pick from. */
+    fun accounts(): List<Provider> = Provider.entries.filter { !secrets.getString("key_${it.name}", null).isNullOrBlank() }
     fun setLive(on: Boolean) = edit { putBoolean("liveEnabled", on) }
     /** A voice key: its own, or the user's main API key when it's the same provider. */
     fun voiceKey(provider: String): String? = secrets.getString("voice_$provider", null)?.takeIf { it.isNotBlank() } ?: when (provider) {

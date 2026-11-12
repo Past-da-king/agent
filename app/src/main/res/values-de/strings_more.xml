@@ -743,4 +743,11 @@
     <string name="rt_not_downloaded">Die %1$s-Laufzeit ist noch nicht heruntergeladen.</string>
     <string name="live_sees_screen">Live kann deinen Bildschirm sehen</string>
     <string name="live_screen_private">Privater Bildschirm: Live kann ihn nicht sehen</string>
+    <string name="routing_title">Modell-Routing</string>
+    <string name="routing_sub">Chat, Routinen und Beobachter mit verschiedenen Modellen ausführen. Gilt, wenn der Agent mit einem API-Schlüssel läuft.</string>
+    <string name="routing_watchers">Beobachter</string>
+    <string name="routing_default">Wie Standard</string>
+    <string name="routing_sheet_line">Wähle Konto und Modell für diese Aufgabe. Helfer wählen weiterhin ihr eigenes.</string>
+    <string name="routing_reset">Standard verwenden</string>
+    <string name="routing_no_accounts">Speichere zuerst einen API-Schlüssel für einen Anbieter, dann erscheint er hier.</string>
 </resources>

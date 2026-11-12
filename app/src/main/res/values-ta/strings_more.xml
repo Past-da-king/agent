@@ -743,4 +743,11 @@
     <string name="rt_not_downloaded">%1$s runtime இன்னும் பதிவிறக்கப்படவில்லை.</string>
     <string name="live_sees_screen">Live உங்கள் திரையைப் பார்க்க முடியும்</string>
     <string name="live_screen_private">தனிப்பட்ட திரை: Live அதைப் பார்க்க முடியாது</string>
+    <string name="routing_title">மாடல் வழிப்படுத்தல்</string>
+    <string name="routing_sub">அரட்டை, வழக்கங்கள் மற்றும் கண்காணிப்பாளர்களை வெவ்வேறு மாடல்களில் இயக்குங்கள். முகவர் API விசையில் இயங்கும்போது இது பொருந்தும்.</string>
+    <string name="routing_watchers">கண்காணிப்பாளர்கள்</string>
+    <string name="routing_default">இயல்புநிலை போலவே</string>
+    <string name="routing_sheet_line">இந்த வேலைக்கான கணக்கையும் மாடலையும் தேர்ந்தெடுக்கவும். உதவியாளர்கள் தங்களுடையதையே தொடர்ந்து தேர்ந்தெடுப்பார்கள்.</string>
+    <string name="routing_reset">இயல்புநிலையைப் பயன்படுத்து</string>
+    <string name="routing_no_accounts">முதலில் ஒரு வழங்குநருக்கான API விசையைச் சேமியுங்கள், பிறகு அது இங்கே தோன்றும்.</string>
 </resources>

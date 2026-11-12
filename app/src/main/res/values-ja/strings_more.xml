@@ -733,4 +733,11 @@
     <string name="rt_not_downloaded">%1$s ランタイムはまだダウンロードされていません。</string>
     <string name="live_sees_screen">Live は画面を見られます</string>
     <string name="live_screen_private">非公開の画面：Live は見られません</string>
+    <string name="routing_title">モデルのルーティング</string>
+    <string name="routing_sub">チャット、ルーティン、ウォッチャーをそれぞれ別のモデルで動かします。エージェントが API キーで動いているときに使われます。</string>
+    <string name="routing_watchers">ウォッチャー</string>
+    <string name="routing_default">既定と同じ</string>
+    <string name="routing_sheet_line">この作業に使うアカウントとモデルを選びます。ヘルパーは引き続き自分のモデルを選びます。</string>
+    <string name="routing_reset">既定を使う</string>
+    <string name="routing_no_accounts">先にプロバイダーの API キーを保存すると、ここに表示されます。</string>
 </resources>

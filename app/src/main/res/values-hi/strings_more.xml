@@ -743,4 +743,11 @@
     <string name="rt_not_downloaded">%1$s रनटाइम अभी डाउनलोड नहीं हुआ है।</string>
     <string name="live_sees_screen">लाइव आपकी स्क्रीन देख सकता है</string>
     <string name="live_screen_private">निजी स्क्रीन: लाइव इसे देख नहीं सकता</string>
+    <string name="routing_title">मॉडल रूटिंग</string>
+    <string name="routing_sub">चैट, रूटीन और वॉचर को अलग-अलग मॉडल पर चलाएँ। यह तब लागू होता है जब एजेंट API कुंजी पर चलता है।</string>
+    <string name="routing_watchers">वॉचर</string>
+    <string name="routing_default">डिफ़ॉल्ट जैसा</string>
+    <string name="routing_sheet_line">इस काम के लिए खाता और मॉडल चुनें। सहायक अपना मॉडल खुद चुनते रहते हैं।</string>
+    <string name="routing_reset">डिफ़ॉल्ट इस्तेमाल करें</string>
+    <string name="routing_no_accounts">पहले किसी प्रदाता की API कुंजी सहेजें, फिर वह यहाँ दिखेगी।</string>
 </resources>

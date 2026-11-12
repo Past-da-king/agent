@@ -743,4 +743,11 @@
     <string name="rt_not_downloaded">Το περιβάλλον εκτέλεσης %1$s δεν έχει κατέβει ακόμη.</string>
     <string name="live_sees_screen">Το Live βλέπει την οθόνη σου</string>
     <string name="live_screen_private">Ιδιωτική οθόνη: το Live δεν τη βλέπει</string>
+    <string name="routing_title">Δρομολόγηση μοντέλων</string>
+    <string name="routing_sub">Εκτελέστε τη συνομιλία, τις ρουτίνες και τους παρατηρητές σε διαφορετικά μοντέλα. Ισχύει όταν ο πράκτορας τρέχει με κλειδί API.</string>
+    <string name="routing_watchers">Παρατηρητές</string>
+    <string name="routing_default">Ίδιο με το προεπιλεγμένο</string>
+    <string name="routing_sheet_line">Επιλέξτε λογαριασμό και μοντέλο για αυτή τη δουλειά. Οι βοηθοί συνεχίζουν να επιλέγουν το δικό τους.</string>
+    <string name="routing_reset">Χρήση προεπιλογής</string>
+    <string name="routing_no_accounts">Αποθηκεύστε πρώτα ένα κλειδί API για έναν πάροχο και θα εμφανιστεί εδώ.</string>
 </resources>

@@ -753,4 +753,11 @@
     <string name="rt_not_downloaded">L\'entorn d\'execució de %1$s encara no s\'ha baixat.</string>
     <string name="live_sees_screen">Live pot veure la teva pantalla</string>
     <string name="live_screen_private">Pantalla privada: Live no la pot veure</string>
+    <string name="routing_title">Enrutament de models</string>
+    <string name="routing_sub">Executa el xat, les rutines i els vigilants amb models diferents. S\'usa quan l\'agent funciona amb una clau d\'API.</string>
+    <string name="routing_watchers">Vigilants</string>
+    <string name="routing_default">Igual que el predeterminat</string>
+    <string name="routing_sheet_line">Tria el compte i el model per a aquesta feina. Els ajudants continuen triant el seu.</string>
+    <string name="routing_reset">Usa el predeterminat</string>
+    <string name="routing_no_accounts">Desa primer una clau d\'API d\'un proveïdor i després apareixerà aquí.</string>
 </resources>

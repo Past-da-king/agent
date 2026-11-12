@@ -743,4 +743,11 @@
     <string name="rt_not_downloaded">A(z) %1$s futtatókörnyezet még nincs letöltve.</string>
     <string name="live_sees_screen">A Live látja a képernyődet</string>
     <string name="live_screen_private">Privát képernyő: a Live nem látja</string>
+    <string name="routing_title">Modell-útválasztás</string>
+    <string name="routing_sub">Futtasd a csevegést, a rutinokat és a figyelőket különböző modelleken. Akkor érvényes, ha az ügynök API-kulccsal fut.</string>
+    <string name="routing_watchers">Figyelők</string>
+    <string name="routing_default">Ugyanaz, mint az alapértelmezett</string>
+    <string name="routing_sheet_line">Válaszd ki a fiókot és a modellt ehhez a feladathoz. A segítők továbbra is a sajátjukat választják.</string>
+    <string name="routing_reset">Alapértelmezett használata</string>
+    <string name="routing_no_accounts">Előbb mentsd el egy szolgáltató API-kulcsát, aztán itt megjelenik.</string>
 </resources>

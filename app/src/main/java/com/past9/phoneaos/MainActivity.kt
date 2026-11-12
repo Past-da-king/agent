@@ -831,6 +831,12 @@ class MainActivity : ComponentActivity() {
                             hasSessionAccess = { this@MainActivity.packageName in androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(this@MainActivity) },
                             openSessionAccess = { runCatching { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
                         ),
+                        routing = com.past9.phoneaos.ui.screens.RoutingActions(
+                            accounts = g.settings::accounts,
+                            models = { p -> val st = g.settings.state.value; val mine = p == st.provider
+                                com.past9.phoneaos.agent.ModelCatalog.forKey(this@MainActivity, p, g.settings.apiKey(p).orEmpty(), if (mine) st.baseUrl else p.baseUrl, mine && st.allowHttp) },
+                            set = g.settings::setRoute, clear = g.settings::clearRoute,
+                        ),
                         browser = com.past9.phoneaos.ui.screens.BrowserSettingsActions(
                             origins = g.settings::isolatedOrigins,
                             addOrigin = { typed -> g.settings.addIsolatedOrigin(typed).also { if (it == null) com.past9.phoneaos.browser.BrowserService.applyIsolation(g.settings.isolatedOrigins()) } },

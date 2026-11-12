@@ -743,4 +743,11 @@
     <string name="rt_not_downloaded">%1$s çalışma ortamı henüz indirilmedi.</string>
     <string name="live_sees_screen">Live ekranını görebilir</string>
     <string name="live_screen_private">Gizli ekran: Live bunu göremez</string>
+    <string name="routing_title">Model yönlendirme</string>
+    <string name="routing_sub">Sohbeti, rutinleri ve gözcüleri farklı modellerde çalıştırın. Ajan bir API anahtarıyla çalışırken geçerlidir.</string>
+    <string name="routing_watchers">Gözcüler</string>
+    <string name="routing_default">Varsayılanla aynı</string>
+    <string name="routing_sheet_line">Bu iş için hesabı ve modeli seçin. Yardımcılar kendi modellerini seçmeye devam eder.</string>
+    <string name="routing_reset">Varsayılanı kullan</string>
+    <string name="routing_no_accounts">Önce bir sağlayıcının API anahtarını kaydedin, sonra burada görünür.</string>
 </resources>

@@ -733,4 +733,11 @@
     <string name="rt_not_downloaded">runtime %1$s មិនទាន់បានទាញយកទេ។</string>
     <string name="live_sees_screen">Live អាចមើលឃើញអេក្រង់របស់អ្នក</string>
     <string name="live_screen_private">អេក្រង់ឯកជន៖ Live មើលមិនឃើញ</string>
+    <string name="routing_title">ការបញ្ជូនម៉ូដែល</string>
+    <string name="routing_sub">ដំណើរការជជែក ទម្លាប់ និងអ្នកឃ្លាំមើលលើម៉ូដែលផ្សេងៗគ្នា។ ប្រើនៅពេលភ្នាក់ងារដំណើរការដោយសោ API។</string>
+    <string name="routing_watchers">អ្នកឃ្លាំមើល</string>
+    <string name="routing_default">ដូចលំនាំដើម</string>
+    <string name="routing_sheet_line">ជ្រើសរើសគណនី និងម៉ូដែលសម្រាប់ការងារនេះ។ អ្នកជំនួយនៅតែជ្រើសរើសផ្ទាល់ខ្លួន។</string>
+    <string name="routing_reset">ប្រើលំនាំដើម</string>
+    <string name="routing_no_accounts">រក្សាទុកសោ API សម្រាប់អ្នកផ្តល់សេវាជាមុនសិន បន្ទាប់មកវានឹងបង្ហាញនៅទីនេះ។</string>
 </resources>
