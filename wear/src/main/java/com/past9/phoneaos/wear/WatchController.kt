@@ -62,6 +62,7 @@ class WatchController(private val app: Context, val link: PhoneLink = PhoneLink(
     fun opened() {
         scope.launch {
             WatchStore.cached(app)
+            link.readRing()?.let { WatchRing.onRing(app, it) }
             val sent = link.send(WearPaths.HELLO)
             _reach.value = if (sent) "ok" else "none"
             link.readState()?.let { WatchStore.update(app, it) }

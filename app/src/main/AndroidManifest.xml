@@ -639,6 +639,11 @@
                 <action android:name="com.google.android.gms.wearable.CHANNEL_EVENT" />
                 <data android:scheme="wear" android:host="*" android:pathPrefix="/agent/audio" />
             </intent-filter>
+            <!-- The watch's microphone during a call from the watch (wear/WatchCallBridge.kt). -->
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.CHANNEL_EVENT" />
+                <data android:scheme="wear" android:host="*" android:pathPrefix="/agent/call/mic" />
+            </intent-filter>
         </service>
     </application>
 </manifest>

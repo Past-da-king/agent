@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Call, ring, gestures, face data sources and the home screen (docs/wear.md). Kept apart from strings.xml so the design pass can restyle without a clash. -->
+<resources>
+    <!-- Call -->
+    <string name="call">Call</string>
+    <string name="call_connecting">Connecting</string>
+    <string name="call_listening">Listening</string>
+    <string name="call_thinking">Thinking</string>
+    <string name="call_speaking">Speaking</string>
+    <string name="call_reconnecting">Reconnecting</string>
+    <string name="call_ended">Call ended</string>
+    <string name="call_failed">Call failed</string>
+    <string name="call_mute">Mute</string>
+    <string name="call_unmute">Unmute</string>
+    <string name="call_end">End</string>
+    <string name="call_again">Call again</string>
+    <string name="call_use_phone">Use the phone\'s sound</string>
+    <string name="call_sound">Mic: %1$s. Sound: %2$s.</string>
+    <string name="sound_watch">watch</string>
+    <string name="sound_phone">phone</string>
+    <string name="call_could_not_start">The call could not start.</string>
+    <string name="call_channel">Call</string>
+    <string name="call_ongoing">In a call</string>
+
+    <!-- Ring -->
+    <string name="ring_wake">Wake-up</string>
+    <string name="ring_on_it">I\'m on it</string>
+    <string name="ring_snooze">Snooze</string>
+    <string name="ring_review">Review</string>
+    <string name="ring_dismiss">Not now</string>
+    <string name="ring_ch_critical">Critical wake-ups</string>
+    <string name="ring_ch_urgent">Urgent wake-ups</string>
+    <string name="ring_ch_heads_up">Heads-up wake-ups</string>
+    <string name="ring_ch_approval">Approvals</string>
+    <string name="ring_ch_silent">Quiet</string>
+
+    <!-- Gestures and rings -->
+    <string name="gestures_title">Gestures</string>
+    <string name="gestures_channel">Gestures</string>
+    <string name="gestures_on">Gestures are on</string>
+    <string name="g_flick">Flick the wrist</string>
+    <string name="g_double_flick">Flick twice</string>
+    <string name="g_shake">Shake</string>
+    <string name="g_double_tap">Double tap on the watch</string>
+    <string name="g_raise">Raise to talk</string>
+    <string name="g_unavailable">Not on this watch</string>
+    <string name="g_recommended">Recommended</string>
+    <string name="g_always_on">Also when the app is closed</string>
+    <string name="g_battery_note">Sensors run only while the app is open, or during a call or a ring, unless the switch above is on.</string>
+    <string name="g_system_yes">This watch also has the system gestures (double pinch, wrist turn): screens use them where they fit.</string>
+    <string name="g_system_no">The system gestures (double pinch, wrist turn) need Wear OS 7 or newer.</string>
+    <string name="act_none">Nothing</string>
+    <string name="act_talk">Talk</string>
+    <string name="act_dismiss">Dismiss</string>
+    <string name="act_call">Call</string>
+    <string name="act_approve">Approve (twice)</string>
+    <string name="on">On</string>
+    <string name="off">Off</string>
+    <string name="rings_title">Rings</string>
+    <string name="rings_approvals">Approvals ring the watch</string>
+    <string name="rings_dnd">Allow rings in Do Not Disturb</string>
+    <string name="mode_off">Off</string>
+    <string name="mode_buzz">Buzz</string>
+    <string name="mode_full">Full screen</string>
+
+    <!-- Watch face data sources -->
+    <string name="face_title_approvals">Needs you</string>
+    <string name="face_title_task">Next task</string>
+    <string name="face_title_status">Agent</string>
+    <string name="face_nothing_waits">All clear</string>
+    <plurals name="face_waiting">
+        <item quantity="one">%d needs you</item>
+        <item quantity="other">%d need you</item>
+    </plurals>
+    <string name="face_none">None</string>
+    <string name="face_no_task">No task</string>
+    <string name="face_idle_short">Idle</string>
+    <string name="face_idle">Idle</string>
+    <string name="face_working_short">Busy</string>
+    <string name="face_working">Working</string>
+    <string name="face_needs_short">Needs</string>
+    <string name="face_needs">Needs you</string>
+    <string name="face_call_short">Call</string>
+    <string name="face_call">In a call</string>
+    <string name="face_offline_short">Offline</string>
+    <string name="face_offline">Computer offline</string>
+    <string name="face_talk_label">Talk to the agent</string>
+    <string name="face_pending_label">Approvals waiting</string>
+    <string name="face_task_label">Next task</string>
+    <string name="face_status_label">Agent status</string>
+
+    <!-- Home screen -->
+    <string name="home_label">Agent home</string>
+    <string name="home_open_agent">Open the agent</string>
+    <string name="home_recent">Recent</string>
+    <string name="home_apps">Apps</string>
+    <string name="home_settings">Home screen</string>
+    <string name="home_use">Use as home screen</string>
+    <string name="home_back">Back to the stock home</string>
+    <string name="home_open_system">Open the system setting</string>
+    <string name="home_state_off">Off. The watch uses its own home screen.</string>
+    <string name="home_state_asked">On here. Choose the agent in the system\'s home setting to finish.</string>
+    <string name="home_state_mine">The agent is your home screen.</string>
+    <string name="home_state_other">Another app is the home screen. Choose the agent in the system\'s home setting.</string>
+    <string name="home_no_picker">This watch has no home screen setting. Turning this off always goes back to the stock home.</string>
+</resources>
