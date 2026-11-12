@@ -42,6 +42,11 @@ class WatchRelayService : WearableListenerService() {
 
     /** A voice take from the watch's mic: written down with the phone's own dictation pass, then sent to the agent. */
     override fun onChannelOpened(channel: ChannelClient.Channel) {
+        // The watch's microphone for a call with the agent: streamed live into the call's session (WatchCallBridge).
+        if (channel.path.startsWith(com.past9.phoneaos.wearproto.CallPaths.MIC_CHANNEL + "/")) {
+            WatchCallBridge.onMicChannel(App.graph(this), channel)
+            return
+        }
         if (!channel.path.startsWith(WearPaths.AUDIO_CHANNEL + "/")) return
         val id = channel.path.substringAfterLast('/')
         val node = channel.nodeId

@@ -3,6 +3,7 @@ package com.past9.phoneaos.wear
 import com.past9.phoneaos.assist.AssistCore
 import com.past9.phoneaos.assist.AssistMessage
 import com.past9.phoneaos.data.ChatItem
+import com.past9.phoneaos.data.TaskRow
 import com.past9.phoneaos.remote.Sender
 import com.past9.phoneaos.ui.openui.OpenUiLang
 import com.past9.phoneaos.ui.screens.Approval
@@ -10,6 +11,7 @@ import com.past9.phoneaos.wearproto.Exchange
 import com.past9.phoneaos.wearproto.Limits
 import com.past9.phoneaos.wearproto.Pending
 import com.past9.phoneaos.wearproto.Phase
+import com.past9.phoneaos.wearproto.TaskView
 import com.past9.phoneaos.wearproto.TurnView
 import com.past9.phoneaos.wearproto.WatchState
 import org.json.JSONObject
@@ -22,8 +24,18 @@ object WatchStateBuilder {
     /** Where the watch's conversation starts: rows after [afterId] are this turn's. */
     data class Follow(val afterId: Long, val heard: String = "")
 
-    fun build(rows: List<ChatItem>, working: Boolean, follow: Follow?, agentName: String, link: String): WatchState =
-        WatchState(agent = agentName, link = link, working = working, turn = turn(rows, working, follow), pending = pending(rows), recent = recent(rows))
+    fun build(rows: List<ChatItem>, working: Boolean, follow: Follow?, agentName: String, link: String, nextTask: TaskView? = null, callLive: Boolean = false): WatchState =
+        WatchState(agent = agentName, link = link, working = working, turn = turn(rows, working, follow), pending = pending(rows), recent = recent(rows),
+            nextTask = nextTask, callLive = callLive)
+
+    /**
+     * The task a watch face shows: the next thing on HIS list (not the agent's own steps), one that can be acted on (not done, not
+     * blocked); the soonest due first, then the oldest.
+     */
+    fun nextTask(tasks: List<TaskRow>): TaskView? = tasks
+        .filter { it.owner == "user" && it.status in setOf("todo", "doing") && it.title.isNotBlank() }
+        .sortedWith(compareBy<TaskRow> { it.dueAt == null }.thenBy { it.dueAt ?: 0L }.thenBy { it.createdAt })
+        .firstOrNull()?.let { TaskView(it.id, Limits.clip(it.title.trim(), 80), it.dueAt ?: 0L) }
 
     /** Every approval and question that waits for him, newest last. */
     fun pending(rows: List<ChatItem>): List<Pending> = rows.filter { AssistCore.waits(it) }.takeLast(Limits.PENDING_MAX).map { r ->

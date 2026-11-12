@@ -190,11 +190,36 @@ class CallController(
     /** Moves the sound to the next place it can go (earphones, loudspeaker, earpiece). */
     fun nextRoute() { live?.nextRoute() }
 
+    /**
+     * Where the sound goes in a call placed from the watch (wear/WatchCallBridge): [phoneMic] / [phoneSpeaker] say which of this
+     * phone's own mic and speaker the call uses; the others are the watch's, [out] being where the voice is sent and
+     * [feedWatchAudio] where the watch's mic comes in. Null for an ordinary call on the phone.
+     */
+    class WatchAudio(val phoneMic: Boolean, val phoneSpeaker: Boolean, val out: ExternalAudio?)
+    @Volatile private var watchAudio: WatchAudio? = null
+
+    /** Start a call whose sound is split with the watch. False when a call is already on (nothing changes). */
+    fun startFromWatch(audio: WatchAudio): Boolean {
+        if (state.value.active) return false
+        watchAudio = audio
+        start()
+        return true
+    }
+
+    /** The watch's mic, 16 kHz mono PCM16 (the watch call only). False when it was not used (muted, not ready, ended). */
+    fun feedWatchAudio(pcm: ByteArray): Boolean {
+        val s = live ?: return false
+        if (!state.value.active) return false
+        core.level(gen, true, LiveSession.loudness(pcm, pcm.size))
+        return s.sendAudio(pcm)
+    }
+
     fun start() {
         // One call at a time: a second tap while it connects or is live changes nothing.
         val g = core.begin() ?: return
         gen = g
-        if (!hasMic()) { core.refuse(g, CallCore.NO_MIC, needsMic = true); return }
+        // The phone's mic is needed only when the call uses it (a watch call with the watch's own mic does not).
+        if (watchAudio?.phoneMic != false && !hasMic()) { core.refuse(g, CallCore.NO_MIC, needsMic = true); return }
         remote = linked()
         val r = remote
         val key = settings.voiceKey("gemini")
@@ -237,7 +262,7 @@ class CallController(
         if (!core.current(g)) return
         callStart = System.currentTimeMillis(); callLines.clear(); callTimes.clear()
         serviceUp = true
-        CallService.start(context)
+        CallService.start(context, phoneMic = watchAudio?.phoneMic != false)
         // A computer's token is locked to the Live model its key reaches, so the call uses that model.
         val phoneVoice = s.ttsVoice.takeIf { s.ttsProvider == "gemini" && it.isNotBlank() }
         live = LiveSession(url, model?.ifBlank { null } ?: "gemini-3.1-flash-live-preview", phoneVoice ?: voice?.ifBlank { null } ?: "Kore", system,
@@ -368,7 +393,9 @@ class CallController(
         val g = gen
         when (e) {
             is LiveSession.Event.SetupComplete -> {
-                live?.openAudio(context.getSystemService(AudioManager::class.java))
+                val w = watchAudio
+                if (w == null) live?.openAudio(context.getSystemService(AudioManager::class.java))
+                else live?.openSplit(context.getSystemService(AudioManager::class.java), w.phoneMic, w.out)
                 // Muted while it was still connecting: the session starts muted too.
                 if (state.value.muted) live?.setMuted(true)
                 core.live(g)
@@ -501,6 +528,6 @@ class CallController(
         callLines.clear(); callTimes.clear()
         watcher?.cancel(); watcher = null; cardWatcher?.cancel(); cardWatcher = null
         sentTo.clear(); sentAt.clear(); workingSeen.clear()
-        live = null; remote = null
+        live = null; remote = null; watchAudio = null
     }
 }

@@ -44,4 +44,12 @@ class PhoneLink(private val context: Context) {
             try { if (buf.count > 0) Wire.parseState(buf[0].data) else null } finally { buf.release() }
         }.getOrNull()
     }
+
+    /** What the phone last said rings (a watch that was off while a wake-up began still rings when it comes back). Null = unknown. */
+    suspend fun readRing(): List<com.past9.phoneaos.wearproto.RingItem>? = withTimeoutOrNull(5_000) {
+        runCatching {
+            val buf = Wearable.getDataClient(context).getDataItems(Uri.Builder().scheme("wear").path(com.past9.phoneaos.wearproto.RingPaths.RING).build()).await()
+            try { if (buf.count > 0) com.past9.phoneaos.wearproto.RingWire.parseItems(buf[0].data) else null } finally { buf.release() }
+        }.getOrNull()
+    }
 }
