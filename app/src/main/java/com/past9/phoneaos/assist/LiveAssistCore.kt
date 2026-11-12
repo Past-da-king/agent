@@ -312,11 +312,13 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
          * the voice never asks for something the user already told another agent, and answers a waiting question straight away.
          */
         fun contextBlock(context: AssistContext?, linked: Boolean): String {
-            if (context == null || context.isEmpty) return ""
+            // Never silent: when the context could not be read the voice is told so, instead of being left to say "nothing is running".
+            if (context == null) return "\n\nWhat is going on right now: you could not read it just now (your agents, what waits on the user, the recent chat). If they ask about your agents, or about what was said before, say you cannot see it at this moment and offer to ask the main agent with hand_to_agent. Never say that nothing is running or that nothing was said."
             val route = if (context.questions.isEmpty()) "" else """
                 When what they say answers a question in "Waiting on the user" (a code, a choice, a yes to a question with Yes and No), call answer_ask with its ref, the answer, and their own words in user_said, then confirm in ONE short line who it went to ("Sent the code to the pairing helper"). Do not ask which one when it is clear. If two waiting questions could fit and you cannot tell, call answer_ask without a ref and the screen asks them. A code or number must be in what they actually said: never make one up. Do not call hand_to_agent for an answer to a waiting question.""".trimIndent()
             val aim = if (!linked) "" else "\nTo send a job to a named project or helper from the list, pass its name as target in hand_to_agent; leave target out for your main chat."
-            return "\n\n" + context.prompt() + (if (route.isEmpty()) "" else "\n" + route) + aim
+            val fresh = "\nThis list is kept up to date: a later message starting [Context update] holds the newest one and replaces this one. Answer questions about your agents and the recent chat from it, at once, and never say you cannot see them."
+            return "\n\n" + context.prompt() + fresh + (if (route.isEmpty()) "" else "\n" + route) + aim
         }
 
         /** The one tool Live has. */

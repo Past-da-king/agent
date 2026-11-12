@@ -67,8 +67,8 @@ class AssistContextTest {
         val dead = row(4, "helper", "Old", JSONObject().put("label", "Old").put("state", "working").put("startedAt", now - 9L * 86_400_000).put("beat", now - 9L * 86_400_000)).copy(createdAt = now - 9L * 86_400_000)
         val c = build(listOf(dead), notes = listOf(CtxNote("Old news", "x", now - 7 * 3_600_000L)))
         assertTrue(c.agents.isEmpty()); assertTrue(c.notes.isEmpty()); assertTrue(c.isEmpty)
-        assertEquals("", c.prompt())
-        assertEquals("", LiveAssistCore.contextBlock(c, linked = true))
+        assertTrue(c.prompt(), c.prompt().contains("Agents: none are working right now."))
+        assertTrue(LiveAssistCore.contextBlock(c, linked = true).contains("none are working right now"))
     }
 
     @Test fun anAnsweredCardIsNotWaitingAndOnlyTheMainChatMakesTheTail() {

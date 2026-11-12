@@ -17,7 +17,13 @@ data class CtxTurn(val who: String, val text: String)
  * An agent the assistant should know about: the main agent, a project agent or a helper. [state] is working, waiting
  * (it needs the user) or done (finished a moment ago).
  */
-data class CtxAgent(val name: String, val kind: String, val state: String, val doing: String, val waitingOn: String = "") {
+data class CtxAgent(
+    val name: String, val kind: String, val state: String, val doing: String, val waitingOn: String = "",
+    /** What it was started for, short. */
+    val task: String = "",
+    /** Its newest steps, newest first, short: how the voice can tell what a working agent is stuck on. */
+    val recent: List<String> = emptyList(),
+) {
     companion object { const val WORKING = "working"; const val WAITING = "waiting"; const val DONE = "done" }
 }
 
@@ -40,6 +46,8 @@ data class AssistContext(
     val agents: List<CtxAgent> = emptyList(),
     val asks: List<CtxAsk> = emptyList(),
     val notes: List<CtxNote> = emptyList(),
+    /** False when the agents could not be read (no link yet, no answer): the voice must say it cannot see them, never "none". */
+    val agentsKnown: Boolean = true,
 ) {
     val isEmpty get() = turns.isEmpty() && agents.isEmpty() && asks.isEmpty() && notes.isEmpty()
     /** Questions the assistant may answer for the user. Approvals are never answered by words: they are held to approve. */
@@ -48,7 +56,6 @@ data class AssistContext(
 
     /** The context as the instruction block the voice reads. Never longer than [cap] characters. */
     fun prompt(cap: Int = MAX_CHARS): String {
-        if (isEmpty) return ""
         var a = asks; var g = agents; var t = turns; var n = notes
         fun render(): String {
             val out = StringBuilder("What is going on right now, from your own agents (this is all you know; nothing else):")
@@ -61,9 +68,15 @@ data class AssistContext(
                 }
             }
             if (g.isNotEmpty()) {
-                out.append("\nAgents:")
-                g.forEach { x -> out.append("\n- ${x.name} (${x.kind}), ${x.state}" + (if (x.doing.isNotBlank()) ": ${x.doing}" else "") + (if (x.waitingOn.isNotBlank()) ". Waiting on: ${x.waitingOn}" else "")) }
-            }
+                out.append("\nAgents (working, waiting or just finished):")
+                g.forEach { x ->
+                    out.append("\n- ${x.name} (${x.kind}), ${x.state}" + (if (x.doing.isNotBlank()) ": ${x.doing}" else "") +
+                        (if (x.task.isNotBlank() && x.task != x.doing) ". Started for: ${x.task}" else "") +
+                        (if (x.recent.isNotEmpty()) ". Latest steps: ${x.recent.joinToString("; ")}" else "") +
+                        (if (x.waitingOn.isNotBlank()) ". Waiting on: ${x.waitingOn}" else ""))
+                }
+            } else if (agentsKnown) out.append("\nAgents: none are working right now.")
+            else out.append("\nAgents: you could not read them just now. Say you cannot see them at this moment; never say none are running. Ask the main agent with hand_to_agent if they want to know.")
             if (t.isNotEmpty()) {
                 out.append("\nThe last of the main chat:")
                 t.forEach { x -> out.append("\n- ${if (x.who == "user") "User" else "You"}: ${x.text}") }
@@ -80,6 +93,7 @@ data class AssistContext(
             when {
                 n.isNotEmpty() -> n = n.dropLast(1)
                 t.size > 2 -> t = t.drop(1)
+                g.any { it.recent.isNotEmpty() } -> g = g.map { it.copy(recent = emptyList()) }
                 g.size > 3 -> g = g.dropLast(1)
                 t.isNotEmpty() -> t = t.drop(1)
                 g.isNotEmpty() -> g = g.dropLast(1)
@@ -92,7 +106,7 @@ data class AssistContext(
     }
 
     companion object {
-        const val MAX_CHARS = 3_200
+        const val MAX_CHARS = 3_600
         const val TURNS = 6
         const val TURN_CHARS = 180
         const val AGENTS = 8
@@ -121,12 +135,18 @@ object AssistContextBuilder {
     fun build(
         rows: List<ChatItem>, cards: List<LiveCard>?, notes: List<CtxNote>, mainWorking: Boolean, mainDoing: String,
         now: Long, refs: AskRefs = AskRefs(), agentName: String = "",
+        /** Agents read another way when the cards did not come (the computer's voice.callTargets). */
+        extra: List<CtxAgent>? = null,
+        /** False when a linked computer's agents could not be read at all. */
+        agentsKnown: Boolean = true,
     ): AssistContext {
         val asks = asks(rows, refs)
         val agents = ArrayList<CtxAgent>()
         if (mainWorking) agents += CtxAgent(agentName.ifBlank { "Main chat" }, "main", CtxAgent.WORKING, clip(mainDoing, 120))
-        agents += if (cards != null) fromCards(cards, asks, now) else fromRows(rows, asks, now)
+        // The agents come from the computer's cards, else its own list of who is at work, else (this phone as its own brain) the helper rows.
+        agents += if (cards != null) fromCards(cards, asks, now) else if (extra != null) extra else fromRows(rows, asks, now)
         return AssistContext(
+            agentsKnown = agentsKnown,
             turns = turns(rows), agents = agents.take(AssistContext.AGENTS), asks = asks,
             notes = notes.filter { now - it.at in 0..AssistContext.NOTE_MS }.sortedByDescending { it.at }.take(AssistContext.NOTES).reversed(),
         )
@@ -164,7 +184,10 @@ object AssistContextBuilder {
         }
         val name = if (c.isProject) "project " + c.ownerName.ifBlank { c.label } else c.label
         val on = if (state == CtxAgent.WAITING) asks.firstOrNull { it.by.equals(c.label, true) || (c.ownerName.isNotBlank() && it.by.equals(c.ownerName, true)) }?.text.orEmpty() else ""
-        CtxAgent(clip(name, 60), if (c.isProject) "project" else "helper", state, clip(LiveCards.line(c), 140), clip(on, 100))
+        CtxAgent(
+            clip(name, 60), if (c.isProject) "project" else "helper", state, clip(LiveCards.line(c), 140), clip(on, 100),
+            task = clip(c.brief, 140), recent = c.steps.sortedByDescending { it.at }.map { clip(it.text, 90) }.filter { it.isNotBlank() }.distinct().take(2),
+        )
     }.sortedBy { when (it.state) { CtxAgent.WAITING -> 0; CtxAgent.WORKING -> 1; else -> 2 } }
 
     /** This phone's own agent (or a computer too old to list cards): its helper rows. */
@@ -178,8 +201,29 @@ object AssistContextBuilder {
             else -> return@mapNotNull null
         }
         val doing = if (state == CtxAgent.WORKING) m.optString("now").ifBlank { m.optString("summary") } else m.optString("result")
-        CtxAgent(clip(h.label, 60), "helper", state, clip(doing, 140), asks.firstOrNull { it.by.equals(h.label, true) }?.text?.let { clip(it, 100) }.orEmpty())
+        CtxAgent(clip(h.label, 60), "helper", state, clip(doing, 140), asks.firstOrNull { it.by.equals(h.label, true) }?.text?.let { clip(it, 100) }.orEmpty(), task = clip(r.text, 140))
     }.sortedBy { if (it.state == CtxAgent.WORKING) 0 else 1 }
+
+    /**
+     * The computer's voice.callTargets (main chat, projects with their chats, helpers): used when its cards are not on the
+     * phone yet. Only what is running is an agent; an idle project or a finished helper is not.
+     */
+    fun fromTargets(targets: org.json.JSONArray?): List<CtxAgent> {
+        if (targets == null) return emptyList()
+        return (0 until targets.length()).mapNotNull { targets.optJSONObject(it) }.mapNotNull { t ->
+            val kind = t.optString("kind")
+            val running = t.optBoolean("running")
+            val doing = clip(t.optString("doing"), 140)
+            val chats = t.optJSONArray("chats")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } }.orEmpty().filter { it.optBoolean("running") }
+            when {
+                kind == "main" -> null
+                kind == "project" && !running && chats.isEmpty() -> null
+                kind == "project" -> CtxAgent("project " + clip(t.optString("name"), 50), "project", CtxAgent.WORKING, doing.ifBlank { clip(chats.firstOrNull()?.optString("title").orEmpty(), 100) })
+                running -> CtxAgent(clip(t.optString("name"), 60), "helper", CtxAgent.WORKING, doing)
+                else -> null
+            }
+        }
+    }
 
     fun clip(s: String, max: Int): String {
         val one = s.replace(Regex("\\s+"), " ").trim()

@@ -225,6 +225,28 @@ class LiveSession(
         return true
     }
 
+    /**
+     * The instruction is asked for each time a setup goes out (the first connect and every fresh reconnect), so it holds
+     * what is going on NOW, not what was true when the session object was made. Null keeps the one it was built with.
+     */
+    @Volatile private var systemProvider: (() -> String)? = null
+    fun systemFrom(provider: () -> String) { systemProvider = provider }
+
+    /** The instruction a setup carries right now. */
+    fun currentSystem(): String = systemProvider?.let { runCatching { it() }.getOrNull() } ?: systemInstruction
+
+    /**
+     * Gives the model something to know, with no answer asked for: a client turn with turnComplete false. It sits in the
+     * conversation and the model uses it on the next thing the user says. False when the line is not up yet.
+     */
+    fun note(text: String): Boolean {
+        if (!ready.get()) return false
+        val msg = JSONObject().put("clientContent", JSONObject()
+            .put("turns", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", text)))))
+            .put("turnComplete", false))
+        return ws?.send(msg.toString()) == true
+    }
+
     private fun setupMessage(): JSONObject {
         // AUDIO even for dictation. The live model REFUSES text-only:
         //   1007 The requested combination of response modalities (TEXT) is not supported by the
@@ -250,7 +272,7 @@ class LiveSession(
             .put("generationConfig", generation)
             .put(
                 "systemInstruction",
-                JSONObject().put("parts", JSONArray().put(JSONObject().put("text", systemInstruction)))
+                JSONObject().put("parts", JSONArray().put(JSONObject().put("text", currentSystem())))
             )
             // Transcripts both ways so the call can be written to Voice history like any other session.
             .put("inputAudioTranscription", JSONObject())
