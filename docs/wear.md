@@ -1,0 +1,214 @@
+# The agent on the wrist: the Wear OS app (v1)
+
+The agent lives on any Wear OS watch as an assistant: open it from the app list, a tile, a complication or a key; talk or tap; read the answer; approve what needs you; get its notifications. It is a product feature for every user. Nothing here is tuned to one watch or one person: the agent's name comes from the phone's settings.
+
+- Module `wear` (the watch app) and `wearproto` (the protocol both apps share) sit next to `app` (the phone).
+- The watch holds **no account, key, model or memory**. The phone relays to the agent, so it works whichever brain the phone uses (its own agent, or the computer in remote mode).
+- Same `applicationId` (`com.past9.phoneaos`) and the same signing key on both, so the Wearable Data Layer pairs them.
+
+## 1. Transport (watch to phone, over the Wearable Data Layer)
+
+The watch only ever talks to the phone it is paired with, through Google Play services' Data Layer (Bluetooth, or Wi-Fi/LTE via the cloud relay Google runs for paired devices). No server of ours, no third party. See `wearproto/.../Wire.kt`.
+
+| Direction | API | Path | Payload (JSON) | Reply |
+|---|---|---|---|---|
+| watch to phone | MessageClient | `/agent/ask` | `{id, text, via}` via = keyboard, quick, speech, phone | `/agent/ack {id, ok, reason}` |
+| watch to phone | MessageClient | `/agent/answer` | `{card, option}` | `/agent/ack {id:"card:<n>", ok, reason}` |
+| watch to phone | MessageClient | `/agent/stop`, `/agent/speak-on-phone`, `/agent/hello` | empty | ack / none (hello is answered by a fresh state) |
+| watch to phone | ChannelClient | `/agent/audio/<id>` | 16 kHz mono PCM16, up to 30 s | `/agent/heard {id, ok, text, reason}` |
+| phone to watch | DataClient | `/agent/state` | the whole picture, one item, replaced each time | none |
+
+`/agent/state` is `{v, agent, link, working, turn, pending[], recent[]}`:
+- `agent`: the agent's name from the phone's settings ("" until named; the watch then writes "Agent" in its own language).
+- `link`: `local` (the phone runs the agent), `pc` (the computer does), `offline` (the computer is not answering).
+- `turn`: `{phase, heard, label, answer, answerId, problem}`; phase is sending, thinking, acting, answering, approval, asking or error, read from the phone's own chat rows by the same state machine the phone's assist sheet uses (`AssistCore`), so the watch can never say something the phone does not.
+- `pending[]`: every approval or question that waits, `{id, kind, title, details, options[], by}`. An approval always carries exactly `Approve` and `Decline`.
+- `recent[]`: the last 8 exchanges (what was said, the answer), newest first.
+
+Why these APIs: a DataItem is kept by the system until the watch reads it, so a watch that was off or out of range wakes to the newest state; `setUrgent()` is used when something waits for him so a card reaches the wrist at once. Messages are for commands, which are small and need an answer. A Channel carries the voice take, which is too big for a message.
+
+**The phone side** (`app/.../wear/`): `WatchRelayService` (a `WearableListenerService`, started by the system when a message arrives, so the watch works with the phone app closed) hands every message to `WatchRouter`, which calls the phone's own paths:
+- ask: `runtime.sendAccepted(...)` (the call the assist sheet makes), with the same note the chat already hides.
+- answer: `runtime.answer(itemId, option)`, the call the phone's buttons and its notification buttons make. **No new approval path.** The relay first checks that the card still waits and that the option is one the card itself offers (`WatchStateBuilder.checkAnswer`); anything else is refused. An approval can only be approved or declined, never anything else.
+- stop: `runtime.stop()`. speak-on-phone: `AssistEntry.open(...)`, the phone's own listening sheet.
+- A request that arrives twice (the Data Layer retries) runs once (ask ids are remembered).
+- `WatchRelay` publishes the state (debounced 300 ms, identical states are not re-sent) and **starts only after a watch has said hello**, so a phone with no watch pays nothing. The phone declares the capability `agent_phone_relay` (`res/values/wear.xml`); the watch finds it with `CapabilityClient`.
+
+**Watches away from the phone (LTE or Bluetooth-only).** The relay is the only path in v1. A watch that cannot reach the phone shows a clear **"Phone not reachable"** line on the talk screen and a failed send says so with a Try again button; nothing is lost silently. An LTE watch away from its phone still has the Data Layer over the cloud relay when the phone has internet, so it keeps working in most cases; with the phone off or offline it cannot, by design (no keys on the wrist). A direct watch-to-agent link (the watch calling the computer on its own LTE) is a later option and needs a watch-held credential, which this version deliberately avoids.
+
+## 2. Screens
+
+Wear Compose Material 3 (`androidx.wear.compose:compose-material3`), dark only (Wear is dark-first; the background is pure black so an OLED switches it off). Colours, the amber that means "this needs you", and the corner steps are the phone app's own tokens (`ui/theme/Theme.kt`) adapted in `wear/.../ui/Theme.kt`. Layouts are built for round and for square or rectangular glass: nothing assumes a circle (`ScreenScaffold`, `TransformingLazyColumn`, `EdgeButton`). Mocks are real Compose renders, in `docs/wear/<shape>-<size>/` at round 192 and 227 dp, square 192 dp and rectangular 180 x 220 dp.
+
+1. **Talk** (home): the agent's name, what needs him (an amber button when something waits), then the ways to ask. **The watch mic leads**: a big edge button, Talk. Below it Speak on phone, Type (keyboard), quick replies (Yes, No, Not now, Remind me later, What is next, Tell me more) and Recent. If the mic is missing or fails, the screen **picks up the fallbacks by itself**: the edge button becomes Speak on phone, a line says the watch mic is not available, and a Try the watch mic button resets it.
+2. **Listening**: a ring that grows with the voice, Stop at the bottom. It stops by itself when speech ends. Then **Sending** while the phone writes the words down.
+3. **Answer**: what he said, a status line (Thinking, Reading your calendar, Needs you), the answer in a scrolling list (the crown and the bezel scroll it), and an edge button that is Reply, Stop (while working), Review (when a card waits) or Try again (on an error). Swipe right to go back.
+4. **Approval / question**: an amber "Needs you 1/2", the summary, who asked, the details. **Approve is hold-to-approve**: press and hold 0.9 s while a bar fills (a tap cannot approve; the haptic fires when it counts; an accessibility long-click action exists for TalkBack). Decline is a normal button. A question shows its own answers; one with none says "Answer on your phone". After an answer a **full-screen confirmation** shows (Approved, Declined, Sent) for 1.4 s, then the next card or the conversation. **No centred pop-up dialogs anywhere**; everything is a full screen with swipe-to-dismiss.
+5. **Recent** and **Exchange**: the last 8 exchanges; a tap opens one with the full answer and a Reply button.
+
+## 3. Tile and complication
+
+- **Tile** (`AgentTile`, ProtoLayout, tiles 1.6): the agent's name, one line (All clear, or "2 need you" in amber) and a big Ask pill. Ask opens the talk screen already listening (or on the phone's mic when this watch's is gone); the amber line opens the first card. It reads the last state from disk, so it draws instantly, and the app asks the system to redraw it when the state changes. No tile layout can run code, so it never does anything the app does not.
+- **Complication** (`AgentComplication`, SHORT_TEXT and MONOCHROMATIC_IMAGE): the number of things that need him, or "Ask" with a mic when nothing does. A tap opens the card or the talk screen. Updated by push when the state changes (no polling).
+
+## 4. Assistant entry: what Wear OS and One UI Watch really allow
+
+**Read from a real Galaxy Watch4 Classic (SM-R880) over adb, read only, 12 Nov 2026:** Wear OS 6 / Android 16 (API 36), One UI Watch 8 (`ro.build.version.oneui=80000`), Wear SDK level 7, build `R880XXS2JZG3`, security patch 2026-08-05.
+- The digital-assistant **role** (`android.app.role.ASSISTANT`) is held by `com.google.android.wearable.assistant` (Gemini, which replaced Google Assistant on Wear OS 4 and later; Google's own announcement: [Yahoo Tech](https://tech.yahoo.com/wearables/articles/wearos-starting-transition-gemini-first-223738249.html)). `Settings.Secure assistant` = `com.google.android.wearable.assistant/.MainActivity`; `voice_interaction_service` is empty.
+- `ACTION_ASSIST` and `ACTION_VOICE_ASSIST` each resolve to exactly one activity, Google's. `ACTION_VOICE_COMMAND` resolves to Google's settings stub and to Bixby's `HeadSetReceiver`. Bixby (`com.samsung.android.bixby.agent` 1.5.29.4, `bixby.wakeup`) is installed. Samsung's voice input is `com.samsung.android.wear.samsungvoiceinput`; the keyboard is Samsung's and Gboard.
+- The system settings that drive the keys (`Settings.Global`): `setting_home_key_long_press = googlevoiceassistant/googlevoiceassistant` (press and hold Home is the assistant), `setting_home_key_double_press = lastapp`, `setting_raise_to_talk_assistant = gemini` (raise to talk, off here), `setting_recent_key_short_press = 1`, `setting_action_button_press = None/None`. Wear's own `power_button_*` and `stem_primary_button_*` are null.
+- A **Choose default apps** screen exists (`com.google.android.permissioncontroller/...role.ui.DefaultAppListActivity`, reached from Settings > Apps > Choose default apps).
+- The microphone: the watch reports `android.hardware.microphone` even though its mic is dead, which is why the app judges the mic from what it records (section 5), not from the feature flag.
+
+**What is therefore possible, and what v1 does:**
+1. **Digital assistant app** (Settings > Apps > Choose default apps > Digital assistant app). Home Assistant's watch app is selectable there with an `ACTION_ASSIST` plus `ACTION_VOICE_ASSIST` activity alias ([its manifest](https://github.com/home-assistant/android/blob/master/wear/src/main/AndroidManifest.xml), [its docs](https://www.home-assistant.io/docs/assist/android)); on Android 15 and later the role needs a `VoiceInteractionService` too, so the watch app declares all of: the alias, a `VoiceInteractionService` + session service + recognition service (the same trio the phone app declares). When it holds the role, the Samsung "press and hold Home = Assistant" key opens it, and so does the system assistant gesture. **Not yet proven on a watch** (nothing may be installed yet): after install, check `adb shell cmd role get-role-holders android.app.role.ASSISTANT` and the list on the watch.
+2. **Customize keys** (Settings > Advanced features > Customize keys, Home key > double press): Samsung lets a double press open any app ([Samsung](https://www.samsung.com/ae/support/mobile-devices/customize-your-galaxy-watch-double-press-key-functions/), Galaxy Watch4 to Watch7 and later; Home Assistant uses exactly this for its assist key). The app is a normal launcher app, so it appears in the list. Press and hold only offers the assistant choices (Samsung's page does not list Bixby or Gemini as selectable apps). The exact value Samsung stores for a chosen app is read back from `settings get global setting_home_key_double_press` after the first choice.
+3. **Tile and complication** work on every Wear OS watch and need no role: they are the guaranteed way in. The app list and the launcher icon are the third.
+4. Bixby cannot be replaced by an app (it is Samsung's own agent behind `setting_bixby_launching_disallowed`); the way is to turn Bixby's key off in the same Customize keys screen and give the key to the app.
+
+Fallback order if the role is refused: double press Home, then tile, then complication, then the app list.
+
+## 5. Voice: the watch mic leads, the fallbacks are automatic
+
+1. **Normal case, a working mic**: Talk opens `AudioRecord` (VOICE_RECOGNITION, 16 kHz mono PCM16), a ring shows the level, it stops when speech ends, and the take goes to the phone over a Channel. The phone writes it down with its existing dictation pass (`PieceTranscriber`: the linked computer's `voice.transcribe`, which knows his names, or the phone's own Gemini speech model when not linked) and **sends the words to the agent itself**, then answers `/agent/heard` so the watch can show what was heard. One hop, no second send.
+2. **Detecting a dead or missing mic** (`MicPolicy`, pure and tested): before recording, the hardware feature, a built-in input and the RECORD_AUDIO permission; during recording, a take of at least 1.5 s whose every 100 ms window peaks at 3 or less (digital silence, what a broken mic records) marks the mic dead; so does a recorder that fails to start. A dead note is kept for a day, or until he taps "Try the watch mic".
+3. **Automatic fallbacks**, in the Talk screen: **Speak on phone** (the phone opens its own listening sheet; the words go to the agent and the answer comes back to the watch, nothing to retype), **Type** (the system keyboard through Wear's `RemoteInput`, so the watch's own keyboard, handwriting and dictation are all available), and the **quick replies**.
+4. Nothing is installed or changed on a watch to do this, and no audio leaves the watch except to the paired phone.
+
+## 6. Notifications
+
+The phone app's notifications (a finished reply, a question or approval with its Approve and Decline buttons) are **bridged to the watch by Wear OS itself**, and their buttons run on the phone through the same receivers (`AnswerReceiver`), so approving from a watch notification is the phone's own path. The watch app does not set `NO_BRIDGING`. Its own notifications are the rings (section 8), the call's ongoing notification (section 7) and the optional always-on gestures notice (section 9). A watch-local notification with a bridge tag (to survive a phone that is away) and an Ongoing Activity chip while the agent works are follow-ups.
+
+
+## 7. Call: a live voice call with the agent, from the watch
+
+A **Call** row on the talk screen (and `go=call` from a face or a notification, the Call gesture, and the call's own ongoing notification) starts a live voice session with the agent. The session is the **phone's own** Live voice call (`CallController`, the one its Call button starts), so it works with the phone's Gemini key alone or, in remote mode, through the linked computer: the computer mints the one-use Live token (`voice.liveToken`) and hands work to its agent (`voice.callHandoff`, `voice.callTargets`, `voice.callSave`) exactly as for a call made on the phone. The watch holds no key and no model. The **watch is the call surface**: state, one caption line, mute, end; and, when it can, the sound.
+
+| Direction | API | Path | Payload |
+|---|---|---|---|
+| watch to phone | MessageClient | `/agent/call/start` | `{id, mic, speaker, earbuds, phoneAudio}`; phone answers `/agent/ack {id}` |
+| watch to phone | MessageClient | `/agent/call/end`, `/agent/call/mute {id, on}`, `/agent/call/beat` | `{id}`; a beat every 2 s proves the watch is there |
+| watch to phone | ChannelClient | `/agent/call/mic/<id>` | 16 kHz mono PCM16, frames of 100 ms, only when the plan uses the watch mic |
+| phone to watch | MessageClient | `/agent/call/plan` | `{id, mic, spk, why}`, each `watch` or `phone`; sent before the voice starts |
+| phone to watch | MessageClient | `/agent/call/state` | `{id, phase, muted, line, who, mic, spk, error, agent}` every second while the call lives (and three times at the end) |
+| phone to watch | ChannelClient | `/agent/call/spk/<id>` | 24 kHz mono PCM16 (the model's voice), only when the plan uses the watch speaker |
+| phone to watch | MessageClient | `/agent/call/flush` | `{id}`: the agent was cut off, drop what is queued |
+
+**Where the sound goes** (`CallAudioPlan`, pure and tested): each direction is chosen on its own. The watch mic is used only when the watch has one **that works** (v1's rule: judged from what it records, never from the feature flag, `MicPolicy`). The watch speaker is used when the watch says it has audio output and lists a built-in speaker, **or** when earbuds, a headset or a hearing aid are connected to the watch (`AudioProbe`, from `AudioManager.getDevices(OUTPUTS)`). A direction the watch cannot do falls back to the phone (its mic, its speaker, or the earbuds connected to the phone, which its own `AudioRouter` already picks). So there are four cases, all handled: watch mic and watch speaker or earbuds; watch mic and phone speaker; phone mic and watch speaker; phone mic and speaker (the watch is then only the screen). "Use the phone's sound" on the call screen forces the last. The plan is shown on the call screen ("Mic: watch. Sound: phone.").
+
+**The phone side** (`WatchCallBridge`, `PhoneCallGate`, `MicFramer`): one call from the watch at a time (a second tap changes nothing; a phone call already on is refused with a reason). `CallController.startFromWatch` takes a `WatchAudio(phoneMic, phoneSpeaker, out)`: `LiveSession.openSplit` then opens only the side of the phone that the plan needs and sends the voice to the watch through `ExternalAudio` (the seam the browser call already uses). The phone asks for the microphone permission and the microphone foreground-service type only when the plan uses its mic. The watch's mic frames go to `LiveSession.sendAudio`. A writer thread owns the speaker channel, so a slow link never blocks the Live socket; more than 2 s queued drops the oldest.
+
+**The watch side** (`WatchCall`, `WatchCallCore`, `PcmJitter`, `WatchCallService`): the call's state machine is pure (`WatchCallCore`: starting, live, ended, failed; `release` runs exactly once however it ends). Mic capture uses the voice-communication source (the platform's echo canceller; mic and speaker are centimetres apart); a **foreground service of type microphone and media playback** keeps it alive with the screen off, and its notification shows the call and ends it. Playback holds back 200 ms (`PcmJitter`) against Bluetooth bursts, drops a backlog down to 400 ms when the link stalls and catches up (a voice that lags the conversation is worse than a skipped syllable), and drops everything queued when the agent is cut off.
+
+**Latency and drop-outs.** Frames are 100 ms; the phone's one-second state doubles as the watch's heartbeat. A gap of 6 s shows "Reconnecting" (sound keeps running); 20 s with nothing ends the call cleanly on **both** sides: the watch frees its mic and speaker, and the phone ends its session when the watch carried the sound (`PhoneCallGate`; a watch whose mic stream broke but which still beats is ended too, because nobody can speak into the call). A call on the phone's own sound carries on whatever the watch does. A call that never starts fails after 25 s. A watch mic that records digital silence for 3 s of the call (`CallMicHealth`) is marked dead and the call restarts on the phone's mic by itself. Muted frames still flow (they keep the link alive) but carry silence: nothing the mic hears leaves the watch while muted.
+
+## 8. Ring: the agent rings the watch
+
+The phone's wake-ups (`WakeHub`: critical, urgent, heads-up, through Do Not Disturb, escalation, quiet hours, answered on any device) and the approvals that wait ring the watch, and **an answer on any device stops them all**. The phone stays the one place that decides and the one place that hears an answer.
+
+- **Wakes**: `WatchRingRelay` publishes `WakeHub.ringing` as one data item, `/agent/ring` (replaced each time, urgent; an empty list means nothing rings, and a watch that was off reads the last item when it opens). The watch follows it with `RingBoard` (pure, tested): what starts gets a notification, what leaves the list is cancelled at once.
+- **Approvals**: they arrive in the ordinary state item (`pending`). `RingPolicy` rings each card once, in the mode he chose in Gestures (Just buzz, Full screen ring, Off; the default is Just buzz: one haptic and a tappable card), and never for the card he is already looking at. The notification goes when the card leaves the list. Approving still takes **Hold to approve** on the card (the same `/agent/answer` path as before, checked by `WatchStateBuilder.checkAnswer`): ringing never approves anything.
+- **The ring itself** (`WatchRing`, `RingActivity`): a notification with `setFullScreenIntent` (shows over the lock screen and turns the screen on), `CATEGORY_ALARM`, a channel per severity with its own vibration pattern (critical and urgent bypass Do Not Disturb where the user has allowed it, see below), and `FLAG_INSISTENT` on a wake, so **the system repeats the vibration until the notification is cancelled**: no service has to stay alive, and nothing can leave the wrist buzzing after the process dies. A heads-up in quiet hours with no sound shows silently (`ring2_silent`). Buttons: I'm on it and Snooze (a wake); Review and Not now (an approval).
+- **Answering** (`/agent/ring/answer {id, what: ack|snooze}`): the watch stops its own ring at once and tells the phone, which checks that the wake rings now and that the word is ack or snooze (`RingRules`), then calls `WakeHub.ack` or `WakeHub.snooze`, the very functions the phone's own buttons call. `WakeHub` then stops the phone's ring, tells the computer (which stops the other devices) and the next `/agent/ring` item empties the watch. A late list that still holds an answered wake does not start it again (`RingBoard`), and a snooze that comes back rings again.
+- **Do Not Disturb**: a channel can only bypass DND where the user allowed it; "Allow rings in Do Not Disturb" opens the watch's own notification-policy screen. Without it the vibration respects DND.
+- **Doubling**: the phone's own approval notification is bridged to the watch by Wear OS (section 6), and the ring is a second, full-screen notification for the same card. Both go when the card is answered. If that is one too many, Approvals ring the watch can be set to Buzz or Off. Decided 12 Nov: the default is Just buzz.
+
+## 9. Gestures
+
+### What the platform really offers (checked 12 Nov 2026)
+
+| Mechanism | What an app gets | Source |
+|---|---|---|
+| **Wear OS 7 one-handed gestures framework** (API 37) and Compose `Modifier.oneHandedGesture` (compose-material3 1.7) | Two gestures: **primary action** (double pinch) and **dismiss action** (wrist turn, defaults to system back). A callback, no raw data. First shipped on Pixel Watch with Wear OS 6.1; "adopted exclusively by Pixel Watch devices (Pixel Watch 3 and newer)" and "available to all manufacturers". On other watches the API no-ops. Test with `adb shell cmd IWearGestureService gesture DoublePinch` (Wear OS 7 only). Rules: never hide a gesture-only action, wrist turn only means dismiss or silence, no gestures while the screen is off or ambient. | [One-handed gestures with Compose](https://developer.android.com/training/wearables/compose/one-handed-gestures), [design guide](https://developer.android.com/design/ui/wear/guides/patterns/gestures), [Android Developers Blog, 12 Aug 2026](https://android-developers.googleblog.com/2026/08/one-handed-gestures-wear-os.html) |
+| **Samsung One UI Watch** double pinch and shake (Galaxy Watch8 era, Settings > Buttons and Gestures) | Built-in actions only (answer or dismiss a call, dismiss an alarm or alert, pause music, open the Now Bar, shake to return to the watch face). **No third-party API found**: press reviews do not describe one. | [Android Central](https://www.androidcentral.com/wearables/first-10-things-to-do-with-new-samsung-galaxy-watch-8-or-watch-8-classic), [Android Authority](https://www.androidauthority.com/samsung-one-ui-8-watch-update-ditch-pixel-watch-3572376/) |
+| **Samsung Universal gestures** (Galaxy Watch4 and Watch5 and later, One UI Watch 5+; Accessibility > Interaction and dexterity) | An accessibility feature: shake twice to start, pinch = next item, double pinch = previous, fist = tap. It drives the **system's focus and tap**, not an app callback. An app benefits only by being a normal, focusable, well-labelled UI (these screens are). | [9to5Google](https://9to5google.com/2023/06/09/interactive-gestures-galaxy-watch/) |
+| Old Wear 2.0 **wrist gestures** (flick as navigate next and previous) | Android Wear 2.0 Preview 2 gave developers wrist-gesture key events. That is the old mechanism; the current docs do not offer it again, and it is not relied on here. | [GSMArena, 2016](https://m.gsmarena.com/with_android_wear_20_preview_2_developers_gain_access_to_wrist_gestures-blog-19359.php) |
+| Raw **accelerometer and gyroscope** (`SensorManager`) | Available to an app on every watch that has the sensors, with no permission. The pinch itself cannot be seen this way (the system detects it with other sensors); a flick, a shake, a knock and a raise can. | Android `SensorManager` |
+
+So: the platform's **double pinch and wrist turn** are for screens where they fit (Wear OS 7 on a Pixel Watch; nothing happens elsewhere, by the API's own design), and **every watch** gets the gestures the app detects itself.
+
+### What the app detects (`wearproto/gesture`, pure, tested on synthetic traces)
+
+| Gesture | Sensor | How |
+|---|---|---|
+| Flick the wrist | gyroscope | a quick twist about the forearm and back (out above 4 rad/s, back above 2.5, inside 500 ms); slow turns, one-way twists and a nod about the wrong axis are rejected; works on either wrist and either crown side |
+| Flick twice | gyroscope | two flicks within 1.1 s; a single flick then waits that long when this one is on, so one flick is never reported as both |
+| Shake | accelerometer | four hard reversals within 0.9 s after removing gravity; walking and arm swing stay far below |
+| Double tap on the watch (or the back of the hand it is on) | accelerometer | two sharp jolts out of stillness that die at once, 120 to 500 ms apart; a shake or jostling is not a tap |
+| Raise to talk | accelerometer | the glass goes from edge-on to facing up within 1.2 s and is held still 0.5 s |
+
+After any gesture the others stay quiet for half a second. **The thresholds come from synthetic traces and physics, not from a real wrist: they need tuning on a watch** (a trace recorder is the first thing to build when a watch is at hand).
+
+### What a gesture does, and the battery
+
+He maps each gesture to **Talk, Dismiss, Call, Approve or Nothing** (Gestures screen, tap a row). **Everything starts as Nothing.** Recommended is one tap (flick = talk, double flick = dismiss). A gesture this watch has no sensor for shows "Not on this watch" and cannot be chosen.
+- Talk starts the mic (or the phone's). Call starts or ends a call. Dismiss snoozes the wake that rings (it comes back) or leaves an approval screen without answering it. While something rings only Dismiss is honoured.
+- **Approve** is two-step and screen-bound (`GestureRouter`): it only works while that approval is on the screen, the first gesture arms it (a double buzz), the same gesture again within 3 s approves, and any other gesture in between disarms it. A gesture can never approve something he has not seen, and a stray movement alone cannot approve anything.
+- **Battery** (`SensorPlan`): no gesture mapped means **no sensor registered at all**. Only the sensors the mapped gestures need are asked for: the gyroscope at 40 Hz only for the flick gestures; the accelerometer at 25 Hz, or 50 Hz when double tap is on. Sensors run **only while the app is in front, or during a call or a ring** (the ongoing activities that a gesture can end or dismiss). **Also when the app is closed** is a switch, off by default: a foreground service with a visible notification keeps listening while the screen is on, lets the sensor hub batch up to 500 ms for everything except a tap, and lets go of the sensors when the screen turns off. With the app closed the system may refuse to open a screen from the background, so Talk may not open; Dismiss, End call and Call work without a screen.
+
+### Capability matrix
+
+| | Galaxy Watch4 Classic (SM-R880, Wear OS 6, One UI Watch 8) | Galaxy Watch8 Classic | Pixel Watch 3 and newer |
+|---|---|---|---|
+| Flick, double flick | works (gyroscope present) | works | works |
+| Shake, double tap, raise | works (accelerometer present) | works | works |
+| Platform double pinch and wrist turn for apps (`oneHandedGesture`) | **no**: needs Wear OS 7, and Samsung has not adopted the framework | no app API: Samsung's own double pinch runs Samsung's actions only | **yes**, on Wear OS 7 (the API) |
+| Samsung double pinch (Now Bar, answer or dismiss) | not on this watch | system only, no app API | n/a |
+| Universal gestures (accessibility) | yes, drives focus and tap in any app | yes | n/a |
+| Always-on listening | works while the screen is on | works while the screen is on | works while the screen is on |
+
+Only the Pixel Watch and Wear OS 7 cells come from documentation. The sensor cells are proven only by the synthetic traces. The Watch8 column is from public reports and was not tested.
+
+## 10. Watch face data sources
+
+Besides the combined complication, four data sources a watch face of any maker can pick (`FaceServices.kt`, values from `FaceData`, tested): **Needs you** (how many approvals and questions wait; SHORT_TEXT, LONG_TEXT, image; a tap opens the first card, or the talk screen), **Next task** (the soonest-due open task on his own list, never the agent's own steps; SHORT_TEXT "Send", LONG_TEXT the title; a tap opens the talk screen), **Agent status** (Idle, Busy, Needs you, In a call, Computer offline; a tap goes to the card, the call or the talk screen) and **Talk** (tap to talk). They are pushed when the state changes, never polled. The state item now also carries `task {id, title, due}` and `call` (a call is live); an older phone sends neither and the faces say "None". The look of a face is the watch face's own.
+
+## 11. The agent as the watch's home screen (optional)
+
+**Off until he asks, never forced.** The app ships **no HOME handler**: `HomeAlias` (category HOME and DEFAULT, targeting `HomeActivity`) is declared but **disabled** in the manifest, so installing the app changes nothing about how the watch starts (tested: no HOME handler resolves to this app). **Home screen** in the Gestures screen leads to its settings:
+- **Use as home screen** switches that one component on, then asks the system: the HOME role (`RoleManager.createRequestRoleIntent`) where the watch has it, else the system's home setting (`android.settings.HOME_SETTINGS`), else Settings > default apps, else a plain line saying how to choose.
+- **Back to the stock home** switches the component off. That alone is enough for the system to fall back to the launcher the watch shipped with, because nothing else answers as home; the system screens are offered too. It never depends on a system screen existing.
+- **The home screen** (`HomeActivity`): the agent first (name, what it is doing or how many need him, Talk, Open the agent), then **Recent** and **Apps**. The app list is every app with a launcher entry, found with `PackageManager.queryIntentActivities` (the manifest declares the package-visibility query), alphabetical, the agent first, apps he hid left out. Home pressed again returns to the top; Back does nothing (it is home). Tiles, complications, the agent's rings and the phone's bridged notifications belong to the watch's own systems and keep working whatever the home app is.
+- **Recent apps**: Wear OS gives an app no recents list (the system's needs the signature-level GET_TASKS; usage access needs a special grant a watch often does not offer). Recent here means **apps opened from this home screen** (`LaunchLog`), which needs no permission.
+
+**What Wear OS 6 and One UI Watch 8 really allow: not proven, and the research found no documentation either way.** The HOME role exists since Android 10 ([RoleManager](https://developer.android.com/reference/android/app/role/RoleManager), [Android roles](https://source.android.com/docs/core/permissions/android-roles)): an app qualifies with an activity that declares MAIN, HOME and DEFAULT. Nothing found says whether a watch's system launcher honours another HOME app: on Wear the home button also drives the watch face, which lives in the system launcher. An XDA thread (Wear OS 3 era, about 3.5 years old) says there is no Default apps > Home app setting on Wear and that a third-party launcher does not replace the default; people work around it by binding a button to a launcher app ([XDA](https://xdaforums.com/t/q-is-there-any-phone-launcher-that-works-on-wear-os.4512425/); the launcher [Flattery](https://github.com/agronick/Flattery) tells you to bind it to a physical button in the watch settings). The read-only findings on the SM-R880 in section 4 show a **Choose default apps** screen (`DefaultAppListActivity`) and that **Customize keys** can open any app on a double press of the Home key. So the realistic order on a Galaxy Watch is: try the HOME role or the system screen; if the system will not make the agent the home screen, use **Customize keys > Home key > double press = the agent** (the agent is then one press from anywhere, which is most of what a launcher gives). Whether any of this works on the SM-R880 or the Watch8 is for the first install to find out. The way back is always the switch above; no `adb` command is needed or used. On One UI Watch the firmware may restrict a home app; the settings screen says so when the system opens nothing.
+
+## 12. Future hooks
+
+- **Recording**: a long take saved to the phone's Recordings (the channel and the phone's `Dictations` store already exist).
+- A watch-local notification with the bridge tag so rings survive a phone that is away; an Ongoing Activity chip while the agent works or a call is on; project chats in Recent (v1 shows the main thread only); a watch-held direct link for LTE (needs a revocable watch credential); a Wear OS emulator pairing run in CI.
+- A gesture trace recorder on the watch, to tune the thresholds on real wrists; Compose `oneHandedGesture` hints on the Approve, End and Talk controls once a Wear OS 7 watch is at hand.
+- Switching a live call between the watch's and the phone's sound without ending it (v1 chooses at the start and restarts on a dead mic).
+
+## 13. What was proved, and what was not
+
+See the pull request descriptions: unit tests for the protocol, the router, the card rules, the mic policy, the call, the ring and the gesture detectors; screenshot tests for each screen at the four glass shapes; a debug build of the watch and the phone. **Not proven** (the server has no KVM, so no Wear emulator ran, and nothing was installed on any watch or phone): a real Data Layer round trip on devices, the assistant role on a real watch, voice (the test watch's mic is dead), a call's audio over a real Bluetooth Data Layer channel (bandwidth: 256 kbps up, 384 kbps down, uncompressed), echo between the watch's mic and speaker, the full-screen intent and the repeating vibration on a real watch, the gesture thresholds on a real wrist, and the home screen on any watch.
+
+## 14. Pairing and customisation sync
+
+**Explicit pairing.** Until a phone has paired, the watch shows only its pairing screen: a **QR** and a **short code** (`PairingScreen`, `PairGate`). It talks to nobody. The Data Layer stays the transport.
+- The QR is `agentwatch://pair?n=<watch node id>&s=<one-time secret>`; the code is the first eight characters of that secret ("ABCD-EFGH"; case, dashes and O/0, I/L/1 mix-ups do not matter).
+- The phone (Settings, Watch, a slide-up sheet) scans the QR with the same camera scanner the computer link uses, which asks that one watch; or takes the typed code, which asks every watch near it, and only the one showing that code answers. The phone sends `/agent/pair/request`, the watch checks it (`PairHost`, pure and tested) and answers `/agent/pair/result`; on accepted the phone binds to that watch (`PhoneBinding`) and the watch to that phone.
+- **Refused**: a wrong code; an expired one (10 minutes); too many wrong tries (5, then it is locked until a new code: the code is only 40 bits); no code on show; **a second phone** (the watch serves one phone, even with the right code). The secret works once.
+- After pairing, **each side answers only the other**: the phone's relay ignores any other watch (it answers "pair" so that watch shows its pairing screen), and the watch ignores messages and data items from any other node (the item's host is checked). A phone that no longer knows the watch tells it, and the watch returns to its pairing screen.
+- **Unpair from either side** (the phone's Watch sheet, the watch's Gestures and rings screen): the other is told (`/agent/pair/unpair`, honoured only from the paired device), the phone stops publishing, the watch forgets the phone's picture and customisations and shows a new code.
+
+**Customisation sync.** While paired the phone keeps one data item, `/agent/settings`, in step: the **agent name** (empty when it has none yet), **mascot id** (one of the phone's nine: scout, ghost, clover, bloom, puff, gem, pebble, heart, bun; an unknown id becomes empty), **accent**, **theme** (the phone follows the system, so "system"), **language** (its app language tag) and **voice** (provider and voice). It is published when something changes (never twice for the same content, nothing before a watch is paired), with a revision that only goes up; the watch keeps the newest and ignores an old or a stranger's item, reads the last item when it opens or pairs (`WatchCustomisationState`, a StateFlow the design layer collects), and drops it all on unpairing.
+
+Pairing and sync tests: handshake (right secret, typed code in any spelling, wrong code, expired, locked, second phone refused, one-time secret, unpair rules), sync (publish only on change, revisions, newest wins, stranger ignored, cleared on unpair), the watch's stores, the phone's mapping of its settings.
+
+
+## Look: Material 3 Expressive (v2)
+
+Ayanda picked this direction on 12 Nov 2026 (mocks: `docs/wear/v2/`, `Downloads/agent/wear-design/v2-mascot/`). The code is `wear/.../ui/ex/` (the kit) and `ui/Screens.kt`, `ui/EngineScreens.kt`, `ui/PairingScreens.kt`, `ui/Pairing.kt` (the screens, keeping the v1 signatures).
+
+- **The mascot is the phone's own.** `Kit.kt` draws the phone's `AgentAvatar` and `Mascots` (Material's own shapes, flat fill, two pill eyes, still at rest, breathing into its busy shape while the agent works). `ui/ex/PhoneAvatarRef.kt` (tests) is the phone's code copied verbatim and `XShotsTest` holds the two side by side. The mascot id and the accent id come from the phone's customisation sync (`WatchCustomisationState`); `AgentWatchTheme` turns them into `LocalLook` (the mascot and the palette). Unknown or empty means Scout and iris.
+- **Palette.** `Pal.ofAccent(id)` uses the phone's own dark accent colours (primary, on primary, container, on container) for the 15 accents; the rest (deep, secondary container, surface) are derived from the same hue. Amber still means only "this needs you".
+- **Shapes and type.** Tonal blocks cut from `MaterialShapes` (cookie, flower), wavy rings for listening, thinking, call and the approval hold, bold numerals, edge buttons that rise from the bottom bezel, pills whose corners tighten while pressed. No pop-up dialogs: choices rise as sheets (`ExSheet`).
+- **Moods.** Idle is the mascot at rest. Listening, thinking, speaking and call use the phone's working state (voice level adds a little scale, a ring of bars for speaking, a comet for thinking). Needs you is the amber colour.
+- **Screens** (each takes the state the controller already has, so navigation is unchanged): Talk (the agent, Call and Type either side, the crown scrolls to quick replies, Speak on phone, Recent, Settings), Listening, Answer (thinking, answer with times highlighted, needs you, error), Approval (hold to approve as a wavy fill, Decline), Done, Recent, Exchange, Call (the agent follows who is speaking, timer, mute, end, a sound sheet), Ring (wake, critical, approval), Gestures (rows with a drawn glyph, a sheet to choose, "Not on this watch", ring mode sheet), Home screen (launcher: big clock, the agent, apps as a honeycomb with the agent in the middle and a fish-eye, recent apps sheet), Home setting (Agent home or Standard home, choose and switch-back sheets), Settings, Pairing (QR from the offer and the short code, pulling settings, done with the name and mascot).
+- **Tests.** `XShotsTest` renders every screen on round 192 and 227 dp, square 192 and rectangular 180 x 220, and the motion clips as frames (`wear/build/design/x/`).
+
+## Watch faces
+
+Watch Face Format allows one face per package and no code, so there are three small packages: `watchface/still`, `watchface/orb`, `watchface/data` (applicationIds `com.past9.phoneaos.face.still`, `.orb`, `.data`), all three offered in the system watch face picker. They are XML written by `tools/gen_wear_faces.py watchface` (the XML is checked in) with images drawn by `FaceAssetsTest` from the same shapes and colours as the app, ambient versions (outline only, grey, few lit pixels) and these complication slots, fed by the Agent watch app's data sources: the agent itself (`MascotComplication`, a picture complication, so the face shows the mascot and accent the user picked, amber when something needs them, a line drawing in ambient; tap to talk), approvals waiting (`PendingComplication`), the next task (`NextTaskComplication`), the status (`StatusComplication`). The faces are validated with Google's WFF validator (format version 2) and the memory footprint tool (`google/watchface`). Unproven on a real watch: how the system draws the faces, and complications binding to the data sources by default.

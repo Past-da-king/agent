@@ -142,6 +142,24 @@ class LiveSession(
         external = out
     }
 
+    /**
+     * A call placed from the watch: each direction of the sound is either this phone's or the watch's. [phoneMic] false means the
+     * caller's voice arrives through [sendAudio] (the watch's mic); [out] non-null sends the model's voice there instead of to this
+     * phone's speaker. Both phone's: the same as [openAudio]. Capture here keeps the platform's echo canceller when the phone also plays.
+     */
+    fun openSplit(am: AudioManager?, phoneMic: Boolean, out: ExternalAudio?) {
+        if (micOpen.getAndSet(true)) return
+        if (out != null) external = out
+        else {
+            if (am != null) {
+                requestFocus(am)
+                router = AudioRouter(am) { onEvent(Event.Route(it)) }.also { it.start() }
+            }
+            startPlayback()
+        }
+        if (phoneMic) startCapture()
+    }
+
     /** 16 kHz mono PCM16 from outside the phone, sent as the caller's voice. False when it was not sent (not ready, muted, ended). */
     override fun sendAudio(pcm: ByteArray): Boolean {
         if (!running.get() || !micOpen.get() || muted || !ready.get() || pcm.isEmpty()) return false

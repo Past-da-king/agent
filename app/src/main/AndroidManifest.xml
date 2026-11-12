@@ -628,5 +628,22 @@
                 <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
         </receiver>
+    
+        <!-- The watch app's relay (wear/WatchRelayService.kt): messages and voice takes from a paired Wear OS watch. -->
+        <service android:name=".wear.WatchRelayService" android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data android:scheme="wear" android:host="*" android:pathPrefix="/agent/" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.CHANNEL_EVENT" />
+                <data android:scheme="wear" android:host="*" android:pathPrefix="/agent/audio" />
+            </intent-filter>
+            <!-- The watch's microphone during a call from the watch (wear/WatchCallBridge.kt). -->
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.CHANNEL_EVENT" />
+                <data android:scheme="wear" android:host="*" android:pathPrefix="/agent/call/mic" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>
