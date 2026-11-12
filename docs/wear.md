@@ -213,7 +213,7 @@ Ayanda picked this direction on 12 Nov 2026 (mocks: `docs/wear/v2/`, `Downloads/
 
 Watch Face Format allows one face per package and no code, so there are three small packages: `watchface/still`, `watchface/orb`, `watchface/data` (applicationIds `com.past9.phoneaos.face.still`, `.orb`, `.data`), all three offered in the system watch face picker. They are XML written by `tools/gen_wear_faces.py watchface` (the XML is checked in) with images drawn by `FaceAssetsTest` from the same shapes and colours as the app, ambient versions (outline only, grey, few lit pixels) and these complication slots, fed by the Agent watch app's data sources: the agent itself (`MascotComplication`, a picture complication, so the face shows the mascot and accent the user picked, amber when something needs them, a line drawing in ambient; tap to talk), approvals waiting (`PendingComplication`), the next task (`NextTaskComplication`), the status (`StatusComplication`). The faces are validated with Google's WFF validator (format version 2) and the memory footprint tool (`google/watchface`). Unproven on a real watch: how the system draws the faces, and complications binding to the data sources by default.
 
-## Pairing: robust and observable (0.15.61)
+## Pairing: robust and observable (0.15.62)
 
 Written after a pairing try on a Galaxy Watch4 Classic and a Galaxy A35 (12 Nov 2026) where the Bluetooth Data Layer was healthy, the watch app logged nothing and nobody could tell why. Nothing here is specific to one watch.
 

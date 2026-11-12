@@ -19,8 +19,8 @@ android {
     minSdk = 30
     // The watch in use runs Wear OS 6 (Android 16, API 36); Wear OS 4 and 5 watches (API 33, 34) run it too.
     targetSdk = 36
-    versionCode = 900163
-    versionName = "0.15.60"
+    versionCode = 900165
+    versionName = "0.15.62"
     // Same rule as the phone: a personal build can bake the owner's agent name in (-PagentName=Hina).
     resValue("string", "app_name", (project.findProperty("agentName") as String?) ?: "Agent")
     (project.findProperty("appIdSuffix") as String?)?.let { applicationIdSuffix = it }
