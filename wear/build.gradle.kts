@@ -43,7 +43,8 @@ android {
     targetCompatibility = JavaVersion.VERSION_17
   }
   buildFeatures { compose = true; buildConfig = true; resValues = true }
-  lint { disable += "ExpiredTargetSdkVersion" }
+  // InvalidFragmentVersionForActivityResult: the watch app has no fragments; the check fires on registerForActivityResult in the activity and stops a release build.
+  lint { disable += listOf("ExpiredTargetSdkVersion", "InvalidFragmentVersionForActivityResult") }
   testOptions {
     unitTests {
       isIncludeAndroidResources = true
