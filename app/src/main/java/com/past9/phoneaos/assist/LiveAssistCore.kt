@@ -24,6 +24,12 @@ data class LiveView(
     val problem: String = "",
     /** Whether Live is looking at the screen, so the sheet and the bubble can say so honestly. */
     val seeing: Seeing = Seeing.OFF,
+    /** Two or more waiting questions could take his words: he picks, in a slide-up sheet. */
+    val choice: AskChoice? = null,
+    /** One line on where his words went ("Sent to the payroll helper: 482917"), for a few seconds. */
+    val routed: String = "",
+    /** What is going on right now (asks, agents), for the strip. */
+    val context: AssistContext? = null,
 )
 
 /** One stretch of speech in the session, for the call record: [who] is "in" (the user) or "out" (the agent's voice). */
@@ -156,10 +162,11 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
      * Live called hand_to_agent. [lastIdBefore] is the newest chat row at send time: rows after it belong to this job.
      * Returns the words to send. If a job is already out its tracker is kept: the agent queues the new one behind it.
      */
-    fun handOff(request: String, lastIdBefore: Long, includeScreen: Boolean = false): String {
+    fun handOff(request: String, lastIdBefore: Long, includeScreen: Boolean = false, track: Boolean = true): String {
         touch()
         handoffs += LiveHandoff(clock(), request.trim(), spokenNow(), includeScreen)
-        if (hand == null) {
+        // A job aimed at a helper or a project's chat does not come back through the main chat: its outcome arrives as a context update.
+        if (track && hand == null) {
             hand = AssistCore().also { it.listen(); it.finished(request); it.sent(lastIdBefore) }
         }
         publish { it.copy(label = "") } // the sheet shows its own "Working on it" for a blank label
@@ -203,6 +210,67 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
         return out
     }
 
+    // ---- context ------------------------------------------------------------------------------------
+
+    /** The same short handles for the life of the session: the prompt and answer_ask speak of a question by its ref. */
+    val refs = AskRefs()
+    private var ctx: AssistContext? = null
+    private val toldAsk = HashSet<Long>()
+    private val answeredByUs = HashSet<Long>()
+    private val agentState = HashMap<String, String>()
+
+    /** What is waiting on the user right now, as the voice was told. */
+    val asks: List<CtxAsk> get() = ctx?.asks.orEmpty()
+    val context: AssistContext? get() = ctx
+
+    /** The context the session opened with is in the instructions: it is not told again. */
+    fun primed(c: AssistContext?) {
+        ctx = c
+        c?.asks?.forEach { toldAsk += it.id }
+        c?.agents?.forEach { agentState[it.name] = it.state }
+        publish { it.copy(context = c) }
+    }
+
+    /** The voice answered this question itself (answer_ask): it is not announced as "answered" later. */
+    fun answeredHere(id: Long) { answeredByUs += id }
+
+    /** Two or more waiting questions could take his words: show the choice sheet (null clears it). */
+    fun choose(choice: AskChoice?) = publish { it.copy(choice = choice) }
+
+    /** One line saying where his words went. */
+    fun routed(line: String) { touch(); publish { it.copy(routed = line) } }
+
+    /**
+     * The chat or the agents moved while the session is open: what Live should now be told (a new question, one answered
+     * elsewhere, an agent that finished or now waits), and the strip's context refreshes. A change the user caused through
+     * a hand-off is already told by [rows], so it is not told twice.
+     */
+    fun contextChanged(c: AssistContext): List<String> {
+        val before = ctx
+        ctx = c
+        val out = ArrayList<String>()
+        c.asks.filter { it.id !in toldAsk && it.id !in told }.forEach { k ->
+            toldAsk += k.id; touch()
+            val who = if (k.by.isBlank()) "your main chat" else k.by
+            out += if (k.approval) "[An approval is waiting on the user, from $who [${k.ref}]: ${k.text}. Say it in one short line and tell them the approve button is on the screen. Never approve for them.]"
+            else "[A question is waiting on the user, from $who [${k.ref}]: ${k.text}" + (if (k.options.isNotEmpty()) " Options: ${k.options.joinToString(", ")}." else "") +
+                " If what they say answers it, call answer_ask with ref ${k.ref}. Otherwise ask them out loud in one short line.]"
+        }
+        before?.asks.orEmpty().filter { old -> old.id in toldAsk && c.asks.none { it.id == old.id } && old.id !in answeredByUs && old.id !in told }.forEach { old ->
+            toldAsk -= old.id; touch()
+            out += "[The ${if (old.approval) "approval" else "question"} from ${old.by.ifBlank { "your main chat" }} [${old.ref}] is no longer waiting: it was answered elsewhere. Do not ask about it again.]"
+        }
+        c.agents.forEach { a ->
+            val was = agentState.put(a.name, a.state)
+            if (was != null && was != a.state && out.size < 4) when (a.state) {
+                CtxAgent.DONE -> out += "[${a.name} finished" + (if (a.doing.isNotBlank()) ": ${a.doing}" else "") + ". Mention it only if it matters to what they are doing.]"
+                CtxAgent.WAITING -> out += "[${a.name} is now waiting on the user" + (if (a.waitingOn.isNotBlank()) ": ${a.waitingOn}" else "") + ".]"
+            }
+        }
+        publish { it.copy(context = c) }
+        return out
+    }
+
     companion object {
         /** Quiet for this long and the session ends by itself. */
         const val IDLE_MS = 45_000L
@@ -210,6 +278,8 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
         const val IDLE_MINIMISED_MS = 180_000L
 
         const val TOOL = "hand_to_agent"
+        /** Answers a question an agent is waiting on (see [AssistRouter]). */
+        const val ANSWER_ASK = "answer_ask"
         /** The call record's kind for a live assistant session, and the origin its hand-offs carry (docs/live-voice.md). */
         const val KIND = "live_assistant"
         const val ORIGIN = "live_voice"
@@ -220,7 +290,7 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
         const val MEDIA_CONTROL = "media_control"
 
         /** Live's instructions. The name comes from settings; nothing here is about one person. */
-        fun systemPrompt(agentName: String, userName: String, linked: Boolean): String {
+        fun systemPrompt(agentName: String, userName: String, linked: Boolean, context: AssistContext? = null): String {
             val who = userName.ifBlank { "the user" }
             val where = if (linked) "on their computer, with everything you have there" else "on this phone"
             return """
@@ -234,7 +304,19 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
                 When the agent's reply arrives, say a short version, one or two sentences, as your own news. Never invent a result; if you do not know yet, say it is still in progress.
                 When the agent needs something from them, ask it out loud in one short line. If it needs their OK, say what it wants to do and tell them the approve button is on the screen and they hold it to approve. Never approve for them and never say it is approved. If they answer a question, hand their answer to the agent with hand_to_agent.
                 When they say thanks, that's all, or goodbye, say one short friendly goodbye and stop.
-            """.trimIndent()
+            """.trimIndent() + contextBlock(context, linked)
+        }
+
+        /**
+         * What the voice knows when it starts, and how to use it. The block lists what waits on the user and who is at work, so
+         * the voice never asks for something the user already told another agent, and answers a waiting question straight away.
+         */
+        fun contextBlock(context: AssistContext?, linked: Boolean): String {
+            if (context == null || context.isEmpty) return ""
+            val route = if (context.questions.isEmpty()) "" else """
+                When what they say answers a question in "Waiting on the user" (a code, a choice, a yes to a question with Yes and No), call answer_ask with its ref, the answer, and their own words in user_said, then confirm in ONE short line who it went to ("Sent the code to the pairing helper"). Do not ask which one when it is clear. If two waiting questions could fit and you cannot tell, call answer_ask without a ref and the screen asks them. A code or number must be in what they actually said: never make one up. Do not call hand_to_agent for an answer to a waiting question.""".trimIndent()
+            val aim = if (!linked) "" else "\nTo send a job to a named project or helper from the list, pass its name as target in hand_to_agent; leave target out for your main chat."
+            return "\n\n" + context.prompt() + (if (route.isEmpty()) "" else "\n" + route) + aim
         }
 
         /** The one tool Live has. */
@@ -244,8 +326,16 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
                 .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject()
                     .put("request", JSONObject().put("type", "STRING").put("description", "The job, clearly, with every detail the user gave (who, what, where, wording, when)"))
                     .put("include_screen", JSONObject().put("type", "BOOLEAN").put("description", "True only when the agent must see a picture of the screen to do the job. Default false."))
-                    .put("context", JSONObject().put("type", "STRING").put("description", "Anything else from the conversation the agent needs, or empty")))
+                    .put("context", JSONObject().put("type", "STRING").put("description", "Anything else from the conversation the agent needs, or empty"))
+                    .put("target", JSONObject().put("type", "STRING").put("description", "Only when they aim it at a named project, project chat or helper from the list you were given: its name as they said it. Leave out for the main chat.")))
                     .put("required", JSONArray().put("request"))))
+            .put(JSONObject().put("name", ANSWER_ASK)
+                .put("description", "Answer a question one of the user's agents is waiting on (listed under Waiting on the user): a code they read out, one of its options, or their own words. It goes straight to the agent that asked. Never use it for an approval.")
+                .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject()
+                    .put("ref", JSONObject().put("type", "STRING").put("description", "The ref of the question, like A1. Leave out only if you cannot tell which one it is."))
+                    .put("answer", JSONObject().put("type", "STRING").put("description", "The answer: one of the question's options, or exactly what they said (a code without spaces)"))
+                    .put("user_said", JSONObject().put("type", "STRING").put("description", "Their own words that gave the answer, as they said them")))
+                    .put("required", JSONArray().put("answer"))))
             .put(JSONObject().put("name", PLAY_MEDIA)
                 .put("description", "Play music or a video on the phone right now, in the app they use. Use it at once when they ask to play, put on or listen to something, instead of handing it off. Answers what is playing.")
                 .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject()

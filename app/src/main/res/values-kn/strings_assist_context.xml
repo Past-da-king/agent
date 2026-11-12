@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="assist_ctx_waiting">ನಿಮಗಾಗಿ ಕಾಯುತ್ತಿದೆ: %d</string>
+    <string name="assist_ctx_working">ಕೆಲಸ ನಡೆಯುತ್ತಿದೆ: %d</string>
+    <string name="assist_ctx_which">ಇದು ಯಾವುದಕ್ಕೆ?</string>
+    <string name="assist_ctx_your_words">ನೀವು ಹೇಳಿದ್ದು: %1$s</string>
+    <string name="assist_ctx_sent_to">%1$s ಗೆ ಕಳುಹಿಸಲಾಗಿದೆ: %2$s</string>
+</resources>

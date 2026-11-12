@@ -48,7 +48,7 @@ data class AssistView(
  * agent as it is.
  */
 class AssistCore(private val micAvailable: Boolean = true) {
-    private enum class Mode { LISTENING, TYPING, LOCKED, SENDING, SENT }
+    private enum class Mode { LISTENING, TYPING, LOCKED, SENDING, SENT, ROUTED }
 
     private var mode = if (micAvailable) Mode.LISTENING else Mode.TYPING
     private var heard = ""
@@ -57,6 +57,7 @@ class AssistCore(private val micAvailable: Boolean = true) {
     private var afterId = Long.MAX_VALUE
     private var sawWorking = false
     private var typed = false
+    private var routedNote = ""
 
     /** True while the microphone should be open. */
     val listening get() = mode == Mode.LISTENING
@@ -71,7 +72,7 @@ class AssistCore(private val micAvailable: Boolean = true) {
     }
 
     /** He tapped the keyboard: the microphone closes and a text box takes its place. */
-    fun type() { if (mode == Mode.LISTENING || mode == Mode.SENT || mode == Mode.TYPING) { mode = Mode.TYPING; problem = ""; heard = ""; typed = true } }
+    fun type() { if (mode == Mode.LISTENING || mode == Mode.SENT || mode == Mode.TYPING || mode == Mode.ROUTED) { mode = Mode.TYPING; problem = ""; heard = ""; typed = true } }
 
     /** Live words while he speaks. */
     fun partial(text: String) { if (mode == Mode.LISTENING) heard = text }
@@ -107,6 +108,12 @@ class AssistCore(private val micAvailable: Boolean = true) {
     /** The agent took the message. Rows after [lastIdBefore] are this turn's. */
     fun sent(lastIdBefore: Long) { if (mode == Mode.SENDING) { mode = Mode.SENT; afterId = lastIdBefore; sawWorking = false } }
 
+    /**
+     * What he said answered a question an agent was waiting on, and went straight to it: nothing goes to the main agent. [note]
+     * says where it went ("Sent to the payroll helper: 482917"); the sheet shows it as the answer, and it is not read out.
+     */
+    fun routed(note: String) { if (mode == Mode.SENDING) { mode = Mode.ROUTED; routedNote = note } }
+
     fun sendFailed(reason: String) { if (mode == Mode.SENDING) { mode = Mode.TYPING; typed = true; problem = reason } }
 
     /** What to draw, from the chat rows and whether the agent is at work. */
@@ -116,6 +123,7 @@ class AssistCore(private val micAvailable: Boolean = true) {
         Mode.LOCKED -> AssistView(AssistPhase.LOCKED, heard)
         Mode.SENDING -> AssistView(AssistPhase.SENDING, heard)
         Mode.SENT -> turn(rows.filter { it.id > afterId }, working)
+        Mode.ROUTED -> AssistView(AssistPhase.ANSWERING, heard, answer = routedNote)
     }
 
     private fun turn(mine: List<ChatItem>, working: Boolean): AssistView {

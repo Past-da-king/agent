@@ -51,6 +51,7 @@ import com.past9.phoneaos.voice.SystemDictation
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 /**
@@ -69,6 +70,9 @@ class AssistActivity : ComponentActivity() {
     private var source = AssistEntry.SHORTCUT
     private var view by mutableStateOf(AssistView(AssistPhase.LISTENING))
     private var rows: List<ChatItem> = emptyList()
+    /** What is going on right now (questions waiting, agents at work), for the strip and for routing his words. */
+    private var ctx by mutableStateOf<AssistContext?>(null)
+    private var choice by mutableStateOf<AskChoice?>(null)
     private var working = false
     private var dictation: SystemDictation? = null
     private var askingPermission = false
@@ -109,6 +113,7 @@ class AssistActivity : ComponentActivity() {
             // Test builds: words put in by hand, as if spoken.
             // Live voice: the session is the host's; this sheet only shows it.
             launch { LiveHost.view.collect { liveView = it } }
+            launch { AssistContextSource.updates(this@AssistActivity, g).distinctUntilChanged().collect { ctx = it } }
             launch { LiveHost.ended.collect { why -> liveEnded(why) } }
             launch { AssistHub.said.collect { words -> stopListening(); if (!core.listening) core.listen(); heard(words) } }
         }
@@ -236,7 +241,34 @@ class AssistActivity : ComponentActivity() {
     private fun heard(words: String, byKeyboard: Boolean = false) {
         val now = core.finished(words, locked = locked(), byKeyboard = byKeyboard)
         refresh()
-        if (now != null) send(now) else if (core.waitingForUnlock) unlock()
+        if (now != null) route(now) else if (core.waitingForUnlock) unlock()
+    }
+
+    /**
+     * What he said may answer something an agent is waiting on (a pairing code, a choice): then it goes to that agent by the
+     * same path its card uses, and one line says where. Two that could fit: he picks, in a slide-up sheet. Anything else goes
+     * to the agent as before. Approvals are never answered by words.
+     */
+    private fun route(words: String) {
+        when (val r = AssistRouter.fromWords(words, ctx?.asks.orEmpty())) {
+            is Routed.Answer -> deliverAnswer(r.ask, r.answer)
+            is Routed.Which -> { choice = AskChoice(r.answer, r.candidates); pendingWords = words }
+            else -> send(words)
+        }
+    }
+
+    private var pendingWords = ""
+
+    private fun deliverAnswer(ask: CtxAsk, answer: String) {
+        val final = AssistRouter.finalAnswer(ask, answer)
+        runCatching { g.runtime.answer(ask.id, final) }
+            .onSuccess {
+                val to = ask.by.ifBlank { g.settings.state.value.agentName.takeIf { it.isNotBlank() && it != "Your agent" } ?: getString(R.string.svc_your_agent) }
+                core.routed(getString(R.string.assist_ctx_sent_to, to, final.take(80)))
+            }
+            .onFailure { send(pendingWords.ifBlank { final }) }
+        pendingWords = ""
+        refresh()
     }
 
     private fun unlock() {
@@ -301,6 +333,8 @@ class AssistActivity : ComponentActivity() {
                             onMinimise = { minimise() },
                             onOpenApp = { openApp() },
                             onAnswer = { id, option -> g.runtime.answer(id, option) },
+                            onPickAsk = { k, a -> LiveHost.pickAsk(k, a) },
+                            onDismissChoice = { LiveHost.dismissChoice() },
                         ))
                         else AssistSheetBody(view, agentName, AssistWords.screenLine(screen, AssistPrefs.readScreen(this@AssistActivity), this@AssistActivity), AssistActions(
                             onMic = { g.stopSpeaking(); core.listen(); refresh(); beginListening() },
@@ -311,7 +345,9 @@ class AssistActivity : ComponentActivity() {
                             onOpenApp = { openApp() },
                             onAnswer = { id, option -> g.runtime.answer(id, option) },
                             onUnlock = { unlock() },
-                        ))
+                            onPickAsk = { k, a -> choice = null; deliverAnswer(k, a) },
+                            onDismissChoice = { choice = null; if (pendingWords.isNotBlank()) { val w = pendingWords; pendingWords = ""; send(w) } },
+                        ), context = ctx, choice = choice)
                     }
                 }
             }

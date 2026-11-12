@@ -13,6 +13,9 @@ import com.past9.phoneaos.voice.LiveAuth
 import com.past9.phoneaos.voice.LiveSession
 import com.past9.phoneaos.voice.LiveTiming
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -51,6 +54,7 @@ class LiveAssistant(
     val core = LiveAssistCore(clock)
     @Volatile private var session: LiveSession? = null
     @Volatile private var ended = false
+    @Volatile private var starting = false
     @Volatile private var setupDone = false
     private var watch: Job? = null
     private var rows: List<ChatItem> = emptyList()
@@ -59,19 +63,31 @@ class LiveAssistant(
     private var frames: LiveFrames? = null
     @Volatile private var lastLoud = 0L
 
-    val active: Boolean get() = !ended && session != null
+    val active: Boolean get() = !ended && (session != null || starting)
 
     private fun push() = onChange(core.current)
 
     /** Opens the session. Needs the microphone permission already. */
     fun start() {
-        if (session != null || ended) return
+        if (session != null || ended || starting) return
+        starting = true
         LiveTiming.mark("start")
         startedAt = clock()
+        // What is going on right now goes into the instructions, so the voice starts knowing it. It is read from what the
+        // agent already holds on this phone (or the linked computer, over the link already open): a moment, never a wait.
+        scope.launch {
+            val c = runCatching { withTimeoutOrNull(CONTEXT_WAIT_MS) { withContext(Dispatchers.IO) { AssistContextSource.snapshot(context, g, core.refs, clock()) } } }.getOrNull()
+            starting = false
+            if (!ended && session == null) open(c)
+        }
+    }
+
+    private fun open(c: AssistContext?) {
         val st = g.settings.state.value
         val name = st.agentName.takeIf { it.isNotBlank() && it != "Your agent" } ?: "your agent"
         val linked = RemoteHub.link.value?.on == true || RemoteHub.session.value != null
-        val system = LiveAssistCore.systemPrompt(name, st.userName, linked)
+        core.primed(c)
+        val system = LiveAssistCore.systemPrompt(name, st.userName, linked, c)
         val phoneVoice = st.ttsVoice.takeIf { st.ttsProvider == "gemini" && it.isNotBlank() }
         val live = LiveSession("", DEFAULT_MODEL, phoneVoice ?: "Kore", system, tools = LiveAssistCore.tools(),
             renew = { kotlinx.coroutines.runBlocking { LiveToken.mint(context) as? LiveAuth.Token.Ok }?.url }) { e -> if (!ended) onEvent(e) }
@@ -98,6 +114,64 @@ class LiveAssistant(
         if (ended) return
         core.rows(r, w).forEach { tell(it) }
         push()
+    }
+
+    /** The agents or the chat moved: refresh the strip, and tell the voice of a new question, one answered elsewhere, an agent that finished. */
+    fun onContext(c: AssistContext) {
+        if (ended || session == null) return
+        core.contextChanged(c).forEach { tell(it) }
+        push()
+    }
+
+    /** He picked one in the choice sheet: the answer goes to that question. */
+    fun pickAsk(ask: CtxAsk, answer: String) {
+        scope.launch {
+            core.choose(null)
+            val r = runCatching { sendAnswer(ask, AssistRouter.finalAnswer(ask, answer)) }
+            if (r.isFailure) tell("[The answer did not go to ${ask.by.ifBlank { "your main chat" }}. Tell the user in one short line.]")
+            else tell("[The user picked ${ask.by.ifBlank { "your main chat" }} for their answer and it was sent. Confirm in a few words.]")
+            push()
+        }
+    }
+
+    /** He closed the choice sheet without picking: nothing was sent, and the voice asks out loud. */
+    fun dismissChoice() {
+        if (core.current.choice == null) return
+        core.choose(null); push()
+        tell("[The user closed the choice without picking. Ask out loud which one their answer is for.]")
+    }
+
+    /** Sends an answer to the agent that waits, by the same path the cards use (this phone's agent, or the computer's), and says where it went. */
+    private fun sendAnswer(ask: CtxAsk, answer: String) {
+        g.runtime.answer(ask.id, answer)
+        core.answeredHere(ask.id)
+        val to = ask.by.ifBlank { g.settings.state.value.agentName.takeIf { it.isNotBlank() && it != "Your agent" } ?: context.getString(com.past9.phoneaos.R.string.svc_your_agent) }
+        core.routed(context.getString(com.past9.phoneaos.R.string.assist_ctx_sent_to, to, answer.take(80)))
+        scope.launch { delay(ROUTED_MS); core.routed(""); push() }
+    }
+
+    private fun answerAsk(e: LiveSession.Event.ToolCall) {
+        val answer = e.args.optString("answer").trim()
+        val said = e.args.optString("user_said").trim().ifBlank { core.spokenNow() }
+        scope.launch {
+            // The questions as they are this moment: one may have been answered a second ago somewhere else.
+            val now = runCatching { AssistContextSource.snapshot(context, g, core.refs, clock()) }.getOrNull()
+            val asks = now?.asks ?: core.asks
+            when (val r = AssistRouter.forTool(e.args.optString("ref"), answer, said, asks)) {
+                is Routed.Answer -> {
+                    val sent = runCatching { sendAnswer(r.ask, r.answer) }
+                    result(e, if (sent.isSuccess) JSONObject().put("status", "sent").put("sent_to", r.ask.by.ifBlank { "your main chat" }).put("note", "Confirm in one short line who it went to.")
+                        else JSONObject().put("status", "failed").put("error", "It did not go: ${sent.exceptionOrNull()?.message.orEmpty()}. Tell the user and offer to try again."))
+                }
+                is Routed.Which -> {
+                    core.choose(AskChoice(r.answer, r.candidates)); push()
+                    result(e, JSONObject().put("status", "which_one").put("options", JSONArray(r.candidates.map { it.by.ifBlank { "main chat" } + ": " + it.text.take(80) }))
+                        .put("note", "More than one question could take that. The screen is asking them to pick. Say 'which one is it for?' in a few words and wait; do not call answer_ask again."))
+                }
+                is Routed.Refused -> result(e, JSONObject().put("status", "not_sent").put("error", r.reason))
+                Routed.None -> result(e, JSONObject().put("status", "not_sent").put("error", "Nothing is waiting on the user that this answers."))
+            }
+        }
     }
 
     private fun onEvent(e: LiveSession.Event) {
@@ -144,10 +218,13 @@ class LiveAssistant(
             }
             return
         }
+        if (e.name == LiveAssistCore.ANSWER_ASK) { answerAsk(e); return }
         if (e.name != LiveAssistCore.TOOL) { result(e, JSONObject().put("error", "unknown tool")); return }
         val request = e.args.optString("request").trim()
         if (request.isEmpty()) { result(e, JSONObject().put("error", "Nothing to do: say what the job is.")); return }
         val wantPicture = e.args.optBoolean("include_screen")
+        // Aimed at a named project or helper (linked to a computer only): it goes there, as a voice call's hand-off does.
+        val target = e.args.optString("target").trim().takeIf { it.isNotBlank() && !it.equals("main", true) && RemoteHub.session.value != null }
         scope.launch {
             // Minimised: he is in another app now, so what the sheet saw when it opened is out of date. Read the screen as it is at this moment.
             val screen0 = if (minimised()) AssistScreenNow.capture(context) else AssistHub.screen.value
@@ -156,12 +233,14 @@ class LiveAssistant(
             val jpeg = if (wantPicture && screen0?.blocked != true) frames?.latestJpeg() else null
             val spoken = core.spokenNow()
             val text = LiveAssistCore.message(request, e.args.optString("context"), source(), screen, spoken)
-            core.handOff(request, lastId, wantPicture && jpeg != null)
+            core.handOff(request, lastId, wantPicture && jpeg != null, track = target == null)
             push()
-            val sent = runCatching { deliver(text, request, spoken, jpeg) }
-            sent.onSuccess { result(e, JSONObject().put("status", "sent").put("note", "The agent has it. Say a very short 'on it' (a few words). Its reply comes to you as an update.")) }
+            val sent = runCatching { deliver(text, request, spoken, jpeg, target ?: "main") }
+            sent.onSuccess { where -> result(e, JSONObject().put("status", "sent").put("sent_to", where.ifBlank { "your main chat" })
+                .put("note", if (target == null) "The agent has it. Say a very short 'on it' (a few words). Its reply comes to you as an update." else "Sent to ${where.ifBlank { target }}. Say where in a few words. If it matters, you are told when it finishes.")) }
                 .onFailure { err ->
                     core.handOffFailed(); push()
+                    if (err is WhichOne) { result(e, JSONObject().put("status", "which_one").put("options", JSONArray(err.names)).put("note", "Not sent: ask the user out loud which one they mean (${err.names.joinToString(" or ")}), then call hand_to_agent again with that exact name as target.")); return@onFailure }
                     result(e, JSONObject().put("status", "failed").put("error", "It did not go: ${err.message.orEmpty().ifBlank { "the link to the computer dropped" }}. Tell the user and offer to try again."))
                 }
         }
@@ -172,21 +251,30 @@ class LiveAssistant(
      * computer through voice.callHandoff (carrying origin "live_voice" and the user's own words), on this phone as a call
      * hand-off ("On it: ..." in the chat, no user bubble). The picture, when the job needs one, goes with it.
      */
-    private suspend fun deliver(text: String, request: String, spoken: String, jpeg: ByteArray?) {
+    private suspend fun deliver(text: String, request: String, spoken: String, jpeg: ByteArray?, target: String = "main"): String {
         val r = RemoteHub.session.value
         if (r != null) {
-            val args = LiveAssistCore.handoffMeta(request, spoken, jpeg != null, core.sessionId).put("target", "main").put("message", text).put("newChat", false)
+            val args = LiveAssistCore.handoffMeta(request, spoken, jpeg != null, core.sessionId).put("target", target).put("message", text).put("newChat", false)
             if (jpeg != null) args.put("images", JSONArray().put(JSONObject().put("mime", "image/jpeg").put("data", Base64.encodeToString(jpeg, Base64.NO_WRAP))))
             val res = try { r.call("voice.callHandoff", listOf(args), 30_000) as? JSONObject } catch (ex: Exception) {
                 // A computer older than voice.callHandoff: the message still goes, the old way.
-                if (LiveAuth.isOldComputer(ex.message)) { g.runtime.sendAccepted(text, listOfNotNull(jpeg?.let { tempPicture(it) })); return }
+                if (LiveAuth.isOldComputer(ex.message)) { g.runtime.sendAccepted(if (target == "main") text else "For $target: $text", listOfNotNull(jpeg?.let { tempPicture(it) })); return "" }
                 throw ex
             } ?: throw IllegalStateException("The computer didn't answer.")
-            if (!res.optBoolean("ok")) throw IllegalStateException(res.optString("error").ifBlank { "The computer would not take it." })
-            return
+            if (!res.optBoolean("ok")) {
+                // Two names fit what he said: the voice asks which, as a voice call does.
+                val close = res.optJSONArray("ambiguous")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it)?.optString("name") } }.orEmpty()
+                if (close.size > 1) throw WhichOne(close)
+                throw IllegalStateException(res.optString("error").ifBlank { "The computer would not take it." })
+            }
+            return res.optString("name")
         }
         g.runtime.send(text, images = listOfNotNull(jpeg?.let { tempPicture(it) }), fromCall = request)
+        return ""
     }
+
+    /** More than one project, chat or helper fits the name the user said. */
+    private class WhichOne(val names: List<String>) : Exception("Which one: ${names.joinToString(" or ")}")
 
     private fun tempPicture(jpeg: ByteArray): String {
         val dir = File(context.filesDir, "assist").apply { mkdirs() }
@@ -250,5 +338,9 @@ class LiveAssistant(
         /** The microphone is loud enough to be speech, and this long since the last speech counts as a new turn. */
         private const val LOUD = 0.25f
         private const val QUIET_MS = 1_500L
+        /** The context read at start never holds the microphone up longer than this. */
+        private const val CONTEXT_WAIT_MS = 700L
+        /** How long "Sent to ..." stays on the sheet. */
+        private const val ROUTED_MS = 5_000L
     }
 }

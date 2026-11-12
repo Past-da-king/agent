@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="assist_ctx_waiting">Waiting on you: %d</string>
+    <string name="assist_ctx_working">At work: %d</string>
+    <string name="assist_ctx_which">Which one is it for?</string>
+    <string name="assist_ctx_your_words">You said: %1$s</string>
+    <string name="assist_ctx_sent_to">Sent to %1$s: %2$s</string>
+</resources>

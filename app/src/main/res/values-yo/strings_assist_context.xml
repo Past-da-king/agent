@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="assist_ctx_waiting">Wọ́n ń dúró dè ọ: %d</string>
+    <string name="assist_ctx_working">Wọ́n ń ṣiṣẹ́: %d</string>
+    <string name="assist_ctx_which">Èwo ni èyí fún?</string>
+    <string name="assist_ctx_your_words">O sọ pé: %1$s</string>
+    <string name="assist_ctx_sent_to">A ti fi ránṣẹ́ sí %1$s: %2$s</string>
+</resources>

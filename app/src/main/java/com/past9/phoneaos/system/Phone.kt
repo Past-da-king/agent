@@ -33,6 +33,8 @@ class AndroidPhone(private val context: Context) : PhoneBridge {
     override fun notify(title: String, body: String, questionItemId: Long?, options: List<String>) {
         // A notification can't draw cards: show what they are about instead of their code.
         val shown = com.past9.phoneaos.ui.openui.OpenUiLang.plainText(body)
+        // A note the agent sent (not a question: those are asks): kept a few hours so the assistant can say what it just told him.
+        if (questionItemId == null) com.past9.phoneaos.assist.NotifyLog.record(context, title, shown)
         val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE)
         val st = App.graph(context).settings.state.value
         val agent = Identity.publishAgentShortcut(context, st.agentName, st.mascot, st.accent)

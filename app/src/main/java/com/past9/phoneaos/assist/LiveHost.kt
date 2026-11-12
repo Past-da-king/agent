@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -29,6 +31,7 @@ object LiveHost {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     @Volatile private var assistant: LiveAssistant? = null
     private var follow: Job? = null
+    private var contextJob: Job? = null
 
     private val _view = MutableStateFlow(LiveView())
     /** What the sheet and the bubble draw. */
@@ -65,6 +68,9 @@ object LiveHost {
             val working = RemoteHub.session.flatMapLatest { it?.status ?: g.runtime.status }
             combine(rows, working) { r, w -> r to w.working }.collect { (r, w) -> assistant?.onRows(r, w) }
         }
+        // What is going on (questions waiting, agents at work) follows the session: a card changing reaches the voice and the strip.
+        contextJob?.cancel()
+        contextJob = scope.launch { AssistContextSource.updates(app, g, a.core.refs).distinctUntilChanged().conflate().collect { assistant?.onContext(it) } }
         a.start()
     }
 
@@ -72,6 +78,7 @@ object LiveHost {
         Log.i(TAG, "ended ${why.take(80)}")
         assistant = null
         follow?.cancel(); follow = null
+        contextJob?.cancel(); contextJob = null
         _minimised.value = false
         AssistEntry.setListening(false)
         LiveService.stop(app)
@@ -81,6 +88,10 @@ object LiveHost {
     fun end(reason: String = "") { assistant?.end(reason) }
 
     fun mute(on: Boolean) { assistant?.mute(on) }
+
+    /** He picked which waiting question his answer is for (the choice sheet), or closed the sheet without picking. */
+    fun pickAsk(ask: CtxAsk, answer: String) { assistant?.pickAsk(ask, answer) }
+    fun dismissChoice() { assistant?.dismissChoice() }
 
     /** The sheet becomes a bubble. The caller closes the sheet. */
     fun minimise() { if (active) _minimised.value = true }
