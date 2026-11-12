@@ -190,9 +190,9 @@ class AssistContextTest {
         assertTrue(p.contains("Waiting on the user:"))
         assertTrue(p.contains("answer_ask"))
         assertTrue(p.contains("pass its name as target in hand_to_agent"))
-        // Nothing waiting: no routing instructions at all, and no context heading when there is nothing.
+        // Nothing waiting: no routing instructions, but the voice is still told that none of its agents are working (never silent).
         val quiet = LiveAssistCore.systemPrompt("Nova", "Sam", linked = false, context = AssistContext())
-        assertFalse(quiet.contains("answer_ask")); assertFalse(quiet.contains("What is going on right now"))
+        assertFalse(quiet.contains("answer_ask")); assertTrue(quiet.contains("none are working right now"))
         assertFalse(LiveAssistCore.systemPrompt("Nova", "Sam", linked = false, context = build(listOf(approval(9, "Send the invoice", "Mail helper")))).contains("call answer_ask"))
         val decls = LiveAssistCore.tools().getJSONObject(0).getJSONArray("functionDeclarations")
         val names = (0 until decls.length()).map { decls.getJSONObject(it).getString("name") }
