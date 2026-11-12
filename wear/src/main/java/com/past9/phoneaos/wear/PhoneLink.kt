@@ -13,12 +13,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 /** The watch's one way to the phone: the Wearable Data Layer. Nothing else leaves the watch. */
 class PhoneLink(private val context: Context) {
     /** The paired phone that runs the relay (it declares [WearPaths.CAP_PHONE]); any connected phone when none does. */
-    suspend fun phoneNode(): String? = runCatching {
-        val caps = Wearable.getCapabilityClient(context).getCapability(WearPaths.CAP_PHONE, CapabilityClient.FILTER_REACHABLE).await()
-        (caps.nodes.firstOrNull { it.isNearby } ?: caps.nodes.firstOrNull())?.id
-    }.getOrNull() ?: runCatching {
-        Wearable.getNodeClient(context).connectedNodes.await().let { n -> (n.firstOrNull { it.isNearby } ?: n.firstOrNull())?.id }
-    }.getOrNull()
+    // The phone this watch is paired with, and no other: with none paired nothing is sent to anybody (docs/wear.md, "Pairing").
+    suspend fun phoneNode(): String? = WatchPairingState.phone(context)
 
     suspend fun send(path: String, data: ByteArray = ByteArray(0)): Boolean {
         val node = phoneNode() ?: return false
@@ -42,6 +38,14 @@ class PhoneLink(private val context: Context) {
         runCatching {
             val buf = Wearable.getDataClient(context).getDataItems(Uri.Builder().scheme("wear").path(WearPaths.STATE).build()).await()
             try { if (buf.count > 0) Wire.parseState(buf[0].data) else null } finally { buf.release() }
+        }.getOrNull()
+    }
+
+    /** What the phone last said rings (a watch that was off while a wake-up began still rings when it comes back). Null = unknown. */
+    suspend fun readRing(): List<com.past9.phoneaos.wearproto.RingItem>? = withTimeoutOrNull(5_000) {
+        runCatching {
+            val buf = Wearable.getDataClient(context).getDataItems(Uri.Builder().scheme("wear").path(com.past9.phoneaos.wearproto.RingPaths.RING).build()).await()
+            try { if (buf.count > 0) com.past9.phoneaos.wearproto.RingWire.parseItems(buf[0].data) else null } finally { buf.release() }
         }.getOrNull()
     }
 }

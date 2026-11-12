@@ -10,6 +10,7 @@ import com.past9.phoneaos.assist.AssistEntry
 import com.past9.phoneaos.data.ChatItem
 import com.past9.phoneaos.remote.LinkState
 import com.past9.phoneaos.remote.RemoteHub
+import com.past9.phoneaos.wakeup.WakeHub
 import com.past9.phoneaos.wearproto.RelayResult
 import com.past9.phoneaos.wearproto.RelaySink
 import com.past9.phoneaos.wearproto.WatchRouter
@@ -43,25 +44,49 @@ object WatchRelay {
     private val follow = MutableStateFlow<WatchStateBuilder.Follow?>(null)
     private val kick = MutableStateFlow(0)
     @Volatile private var lastSent: ByteArray? = null
+    private var ringJob: Job? = null
+    /** The watch that last wrote to this phone: where a call's sound and picture go. */
+    @Volatile var lastNode: String? = null
+        private set
 
-    /** Called when the app's graph is built: if a watch has ever said hello, keep it up to date. */
-    fun attach(g: Graph) { if (g.settings.extra(SEEN_KEY) != null) ensureRunning(g) }
+    private var settingsJob: Job? = null
 
-    /** A message came from [node]: remember it, and start publishing. */
+    /** Called when the app's graph is built: if a watch is paired, keep it up to date. */
+    fun attach(g: Graph) { WatchPairing.bound(g)?.let { lastNode = it; appContext = g.app; ensureRunning(g) } }
+
+    /** A message came from the paired watch [node]: remember it, and start publishing. (Callers check the pairing first.) */
     fun seen(g: Graph, node: String) {
-        if (g.settings.extra(SEEN_KEY) != node) g.settings.setExtra(SEEN_KEY, node)
+        lastNode = node; appContext = g.app
         ensureRunning(g)
+    }
+
+    /** A watch just paired: it gets the picture, the rings and the customisations from here on. */
+    fun paired(g: Graph, node: String) { lastNode = node; appContext = g.app; ensureRunning(g); republish() }
+
+    /** Unpaired from either side: nothing more is published, and nothing about the watch is kept. */
+    @Synchronized fun unpaired() {
+        job?.cancel(); job = null; ringJob?.cancel(); ringJob = null; settingsJob?.cancel(); settingsJob = null
+        lastNode = null; lastSent = null
     }
 
     fun router(g: Graph): WatchRouter = router ?: synchronized(this) { router ?: WatchRouter(PhoneSink(g)).also { router = it } }
 
     @Synchronized private fun ensureRunning(g: Graph) {
+        if (ringJob?.isActive != true) ringJob = g.scope.launch {
+            // What rings on the phone rings the watch: the phone's wake-ups are the source, the watch only follows them.
+            runCatching { WakeHub.ringing.collect { WatchRingRelay.push(g.app, it) } }.onFailure { Log.w(TAG, "ring stopped: ${it.message}") }
+        }
+        // The phone's customisations (agent name, mascot, accent, theme, language, voice) stay in step on the watch while it is paired.
+        if (settingsJob?.isActive != true) settingsJob = g.scope.launch {
+            runCatching { g.settings.state.collect { WatchPairing.publish(g, it) } }.onFailure { Log.w(TAG, "settings stopped: ${it.message}") }
+        }
         if (job?.isActive == true) return
         job = g.scope.launch { runCatching { publish(g) }.onFailure { Log.w(TAG, "stopped: ${it.message}") } }
     }
 
     /** Publish again even when nothing changed (a watch just opened and may have missed the last item). */
-    fun republish() { lastSent = null; kick.value++ }
+    fun republish() { lastSent = null; kick.value++; WatchPairing.publisher.forget(); WatchRingRelay.republish(); WatchRingRelay.push(appContext ?: return, WakeHub.ringing.value) }
+    @Volatile private var appContext: Context? = null
 
     @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
     private suspend fun publish(g: Graph) {
@@ -75,8 +100,11 @@ object WatchRelay {
         val who = combine(link, g.settings.state.map { it.agentName }.distinctUntilChanged(), kick) { l, name, _ ->
             l to name.takeIf { it.isNotBlank() && it != "Your agent" }.orEmpty()
         }
-        combine(rows, working, who, follow) { r, w, (l, name), f ->
-            WatchStateBuilder.build(r, w, f, name, l)
+        // The next task (for the watch face) and whether a call is live: two small flows read together.
+        val tasks = RemoteHub.session.flatMapLatest { (it?.db ?: g.db).tasks().tasks() }.map { WatchStateBuilder.nextTask(it) }.distinctUntilChanged()
+        val extras = combine(tasks, g.call.state.map { it.active }.distinctUntilChanged()) { t, c -> t to c }
+        combine(rows, working, who, follow, extras) { r, w, (l, name), f, (task, call) ->
+            WatchStateBuilder.build(r, w, f, name, l, task, call)
         }.debounce(300).collect { state -> push(g.app, state) }
     }
 
@@ -118,7 +146,17 @@ object WatchRelay {
             return RelayResult(true)
         }
 
-        override suspend fun hello() { republish() }
+        override suspend fun hello() { appContext = g.app; republish() }
+
+        // A call with the agent from the watch, and a ring answered on the watch: see WatchCallBridge and WatchRingRelay.
+        override suspend fun callStart(req: com.past9.phoneaos.wearproto.CallStart): RelayResult {
+            val to = lastNode ?: return RelayResult(false, "No watch to call from.")
+            return WatchCallBridge.start(g, to, req)
+        }
+        override suspend fun callEnd(id: String) = WatchCallBridge.end(g, id)
+        override suspend fun callMute(id: String, on: Boolean) = WatchCallBridge.mute(g, id, on)
+        override fun callBeat(id: String) = WatchCallBridge.beat(id)
+        override suspend fun ringAnswer(id: String, what: String) = WatchRingRelay.answer(g.app, id, what)
     }
 
     internal suspend fun currentRows(g: Graph): List<ChatItem> =

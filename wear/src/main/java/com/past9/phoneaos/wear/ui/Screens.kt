@@ -101,6 +101,8 @@ private fun EdgeLabel(icon: ImageVector?, text: String) {
 fun TalkScreen(
     agent: String, link: String, waiting: Int, micUsable: Boolean, quick: List<String>, hasRecent: Boolean, notice: String?,
     onMic: () -> Unit, onPhone: () -> Unit, onType: () -> Unit, onQuick: (String) -> Unit, onWaiting: () -> Unit, onRecent: () -> Unit, onTryMic: () -> Unit,
+    /** Call the agent (a live voice call, docs/wear.md); and the screen for gestures, rings and the home screen. Null hides the row. */
+    onCall: (() -> Unit)? = null, onMore: (() -> Unit)? = null,
 ) {
     val problem = notice ?: when (link) { "offline" -> stringResource(R.string.computer_offline); "none" -> stringResource(R.string.phone_unreachable); else -> null }
     val cs = MaterialTheme.colorScheme
@@ -133,7 +135,9 @@ fun TalkScreen(
             }
         }
         quick.forEach { q -> item { FilledTonalButton(onClick = { onQuick(q) }, modifier = Modifier.fillMaxWidth(), label = { Text(q, maxLines = 2) }) } }
+        if (onCall != null) item { FilledTonalButton(onClick = onCall, modifier = Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.call)) }) }
         if (hasRecent) item { FilledTonalButton(onClick = onRecent, modifier = Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.recent)) }) }
+        if (onMore != null) item { FilledTonalButton(onClick = onMore, modifier = Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.gestures_title)) }) }
     }
 }
 

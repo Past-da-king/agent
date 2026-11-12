@@ -7,6 +7,24 @@
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- A call on the watch sets the communication audio mode (echo cancellation, earbud routing). -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- Rings (a wake-up or an approval on the wrist): a notification with a full-screen intent and a repeating vibration. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+    <!-- A call keeps the mic and the speaker alive with the screen off; always-on gestures keep their sensors (docs/wear.md). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Not needed for the accelerometer or the gyroscope, which need no permission; listed so nobody adds it by mistake. -->
+
+    <!-- The optional home screen lists the apps that can be opened (package visibility), and finds the home app. -->
+    <queries>
+        <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
+        <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.HOME" /></intent>
+    </queries>
 
     <application
         android:allowBackup="false"
@@ -66,10 +84,48 @@
             <meta-data android:name="android.speech" android:resource="@xml/watch_recognition" />
         </service>
 
+        <!-- A wake-up or an approval that rings the watch: full screen over the lock, vibration until answered (WatchRing.kt). -->
+        <activity android:name=".RingActivity" android:exported="false" android:launchMode="singleTop" android:taskAffinity=""
+            android:excludeFromRecents="true" android:showWhenLocked="true" android:turnScreenOn="true" />
+        <receiver android:name=".RingActionReceiver" android:exported="false" />
+
+        <!-- A call from the watch keeps the mic and the speaker alive with the screen off (WatchCall.kt). -->
+        <service android:name=".WatchCallService" android:exported="false" android:foregroundServiceType="microphone|mediaPlayback" />
+        <!-- Gestures that keep working when the app is closed, only when he switches that on (WatchGestures.kt). -->
+        <service android:name=".GestureService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Detects the wrist gestures the user mapped (accelerometer and gyroscope) while the screen is on." />
+        </service>
+
+        <!-- Optional: the agent as the watch's home screen. The HOME handler is DISABLED here, so installing the app changes nothing about how
+             the watch starts. The app switches this one component on only when the user asks (HomeLauncher.kt) and off again to go back. -->
+        <activity android:name=".HomeActivity" android:exported="false" android:launchMode="singleTask" android:taskAffinity=""
+            android:excludeFromRecents="true" android:label="@string/home_label" />
+        <activity-alias android:name=".HomeAlias" android:targetActivity=".HomeActivity" android:enabled="false" android:exported="true" android:label="@string/home_label">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity-alias>
+
         <service android:name=".WearListener" android:exported="true">
             <intent-filter>
                 <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
                 <data android:scheme="wear" android:host="*" android:path="/agent/state" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
+                <data android:scheme="wear" android:host="*" android:path="/agent/ring" />
+            </intent-filter>
+            <!-- The phone's customisations (agent name, mascot, accent, theme, language, voice), kept in step while paired. -->
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
+                <data android:scheme="wear" android:host="*" android:path="/agent/settings" />
+            </intent-filter>
+            <!-- The agent's voice during a call: the phone opens this channel to the watch. -->
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.CHANNEL_EVENT" />
+                <data android:scheme="wear" android:host="*" android:pathPrefix="/agent/call/spk" />
             </intent-filter>
             <intent-filter>
                 <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
@@ -98,6 +154,32 @@
             <intent-filter>
                 <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
             </intent-filter>
+            <meta-data android:name="android.support.wearable.complications.SUPPORTED_TYPES" android:value="SHORT_TEXT,MONOCHROMATIC_IMAGE" />
+            <meta-data android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS" android:value="0" />
+        </service>
+
+        <!-- Data sources for any watch face (FaceServices.kt): approvals waiting, the next task, the agent's status, tap-to-talk. -->
+        <service android:name=".PendingComplication" android:exported="true" android:icon="@drawable/ic_agent" android:label="@string/face_pending_label"
+            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
+            <intent-filter><action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" /></intent-filter>
+            <meta-data android:name="android.support.wearable.complications.SUPPORTED_TYPES" android:value="SHORT_TEXT,LONG_TEXT,MONOCHROMATIC_IMAGE" />
+            <meta-data android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS" android:value="0" />
+        </service>
+        <service android:name=".NextTaskComplication" android:exported="true" android:icon="@drawable/ic_agent" android:label="@string/face_task_label"
+            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
+            <intent-filter><action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" /></intent-filter>
+            <meta-data android:name="android.support.wearable.complications.SUPPORTED_TYPES" android:value="SHORT_TEXT,LONG_TEXT" />
+            <meta-data android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS" android:value="0" />
+        </service>
+        <service android:name=".StatusComplication" android:exported="true" android:icon="@drawable/ic_agent" android:label="@string/face_status_label"
+            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
+            <intent-filter><action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" /></intent-filter>
+            <meta-data android:name="android.support.wearable.complications.SUPPORTED_TYPES" android:value="SHORT_TEXT,LONG_TEXT" />
+            <meta-data android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS" android:value="0" />
+        </service>
+        <service android:name=".TalkComplication" android:exported="true" android:icon="@drawable/ic_mic" android:label="@string/face_talk_label"
+            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
+            <intent-filter><action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" /></intent-filter>
             <meta-data android:name="android.support.wearable.complications.SUPPORTED_TYPES" android:value="SHORT_TEXT,MONOCHROMATIC_IMAGE" />
             <meta-data android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS" android:value="0" />
         </service>

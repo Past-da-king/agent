@@ -33,7 +33,8 @@ class CallService : Service() {
      */
     override fun onCreate() {
         super.onCreate()
-        val type = if (Build.VERSION.SDK_INT >= 30) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK else 0
+        // A call whose mic is the watch's needs no microphone foreground type (and Android refuses it from the background without one held).
+        val type = if (Build.VERSION.SDK_INT >= 30) (if (phoneMic) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0) or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK else 0
         if (!ForegroundGuard.enter(this, ID, type) { notification() }) Log.w("CallService", "not holding the mic: the call was ended before it started")
     }
 
@@ -72,7 +73,13 @@ class CallService : Service() {
         private const val CHANNEL = "calls_live"
         private const val ACTION_END = "end"
         /** The wake word listener lets go of the microphone first ([com.past9.phoneaos.wakeword.MicUse]) and takes it back when the call ends. */
-        fun start(context: Context): Boolean { com.past9.phoneaos.wakeword.MicUse.hold(MIC); return ForegroundGuard.start(context, CallService::class.java).also { if (!it) com.past9.phoneaos.wakeword.MicUse.release(MIC) } }
+        /** Whether the call uses this phone's microphone; read by the service when it reaches the foreground. */
+        @Volatile private var phoneMic = true
+        fun start(context: Context, phoneMic: Boolean = true): Boolean {
+            this.phoneMic = phoneMic
+            if (phoneMic) com.past9.phoneaos.wakeword.MicUse.hold(MIC)
+            return ForegroundGuard.start(context, CallService::class.java).also { if (!it) com.past9.phoneaos.wakeword.MicUse.release(MIC) }
+        }
         fun stop(context: Context) { ForegroundGuard.stop(context, CallService::class.java); com.past9.phoneaos.wakeword.MicUse.release(MIC) }
         private const val MIC = "call"
     }

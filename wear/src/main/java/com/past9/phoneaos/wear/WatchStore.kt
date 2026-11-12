@@ -22,15 +22,25 @@ object WatchStore {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("state", null)?.let { Wire.parseState(it.toByteArray()) }
     }.getOrNull()?.also { _state.value = it }
 
+    /** Unpaired: nothing of the old phone's picture stays on the watch. */
+    fun clear(context: Context) {
+        _state.value = null
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove("state").apply()
+        refreshSurfaces(context)
+    }
+
     fun update(context: Context, s: WatchState) {
         _state.value = s
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("state", String(Wire.state(s))).apply()
         refreshSurfaces(context)
+        // Approvals that wait are half of what rings the watch.
+        runCatching { WatchRing.onState(context, s) }
     }
 
     fun refreshSurfaces(context: Context) {
         runCatching { TileService.getUpdater(context).requestUpdate(AgentTile::class.java) }
-        runCatching { ComplicationDataSourceUpdateRequester.create(context, ComponentName(context, AgentComplication::class.java)).requestUpdateAll() }
+        // The combined complication and the four data sources a watch face can pick (FaceServices.kt).
+        FaceSurfaces.refresh(context)
     }
 
     // The watch mic: when it was last found dead (0 = never), kept so the talk screen puts the fallbacks first.

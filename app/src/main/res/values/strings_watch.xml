@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pairing a Wear OS watch (docs/wear.md). English only for now: marked not translatable so the translation checker skips them until the language pass adds them. -->
+<resources>
+    <string name="watch_pair_title" translatable="false">Watch</string>
+    <string name="watch_pair_row" translatable="false">Pair a Wear OS watch with this phone</string>
+    <string name="watch_pair_intro" translatable="false">Open the pairing screen on the watch, then scan its QR code or type the code under it.</string>
+    <string name="watch_pair_paired_with" translatable="false">Paired with %1$s</string>
+    <string name="watch_pair_pair" translatable="false">Pair</string>
+    <string name="watch_pair_unpair" translatable="false">Unpair</string>
+    <string name="watch_pair_code" translatable="false">Code on the watch</string>
+    <string name="watch_pair_allow_camera" translatable="false">Allow the camera to scan</string>
+    <string name="watch_pair_not_found" translatable="false">No watch answered. Check that it is nearby and showing its pairing screen.</string>
+    <string name="watch_pair_synced" translatable="false">The watch follows the agent name, mascot, accent, language and voice you set on this phone.</string>
+</resources>

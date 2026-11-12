@@ -91,6 +91,8 @@ data class WatchState(
     val agent: String = "", val link: String = "local", val working: Boolean = false,
     val turn: TurnView? = null, val pending: List<Pending> = emptyList(), val recent: List<Exchange> = emptyList(),
     val v: Int = VERSION,
+    /** The next task on his list (for the watch face), and whether a call with the agent is live (for the status face). */
+    val nextTask: TaskView? = null, val callLive: Boolean = false,
 ) {
     companion object { const val VERSION = 1 }
 }
@@ -133,6 +135,8 @@ object Wire {
             }
         })
         o.put("recent", JSONArray().also { a -> s.recent.forEach { e -> a.put(JSONObject().put("id", e.id).put("you", e.you).put("reply", e.reply).put("at", e.at)) } })
+        s.nextTask?.let { t -> o.put("task", JSONObject().put("id", t.id).put("title", t.title).put("due", t.dueAt)) }
+        if (s.callLive) o.put("call", true)
         return bytes(o)
     }
 
@@ -150,7 +154,8 @@ object Wire {
         val recent = o.optJSONArray("recent")?.let { a ->
             (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { e -> Exchange(e.optLong("id"), e.optString("you"), e.optString("reply"), e.optLong("at")) } }
         } ?: emptyList()
-        return WatchState(o.optString("agent"), o.optString("link", "local"), o.optBoolean("working"), turn, pending, recent, o.optInt("v"))
+        val task = o.optJSONObject("task")?.let { t -> TaskView(t.optLong("id"), t.optString("title"), t.optLong("due")) }
+        return WatchState(o.optString("agent"), o.optString("link", "local"), o.optBoolean("working"), turn, pending, recent, o.optInt("v"), task, o.optBoolean("call"))
     }
 }
 
@@ -164,6 +169,13 @@ interface RelaySink {
     suspend fun stop(): RelayResult
     suspend fun speakOnPhone(): RelayResult
     suspend fun hello()
+    /** A call from the watch (CallPaths). The default refuses, so a phone without calls says so instead of failing silently. */
+    suspend fun callStart(req: CallStart): RelayResult = RelayResult(false, "This phone cannot place a call from the watch.")
+    suspend fun callEnd(id: String): RelayResult = RelayResult(true)
+    suspend fun callMute(id: String, on: Boolean): RelayResult = RelayResult(true)
+    fun callBeat(id: String) {}
+    /** An answer to a ring on the watch: ack ("I'm on it") or snooze (RingPaths). */
+    suspend fun ringAnswer(id: String, what: String): RelayResult = RelayResult(false, "That is not ringing any more.")
 }
 
 class Reply(val path: String, val data: ByteArray)
@@ -187,6 +199,17 @@ class WatchRouter(private val sink: RelaySink) {
         WearPaths.STOP -> sink.stop().let { ack("stop", it.ok, it.reason) }
         WearPaths.SPEAK_ON_PHONE -> sink.speakOnPhone().let { ack("speak", it.ok, it.reason) }
         WearPaths.HELLO -> { sink.hello(); null }
+        CallPaths.START -> {
+            val c = CallWire.parseStart(data)
+            if (c == null) ack("call", false, "That call was not readable.") else sink.callStart(c).let { ack(c.id, it.ok, it.reason) }
+        }
+        CallPaths.END -> CallWire.parseId(data)?.let { id -> sink.callEnd(id).let { ack(id, it.ok, it.reason) } }
+        CallPaths.MUTE -> CallWire.parseMute(data)?.let { (id, on) -> sink.callMute(id, on).let { ack(id, it.ok, it.reason) } }
+        CallPaths.BEAT -> { CallWire.parseId(data)?.let(sink::callBeat); null }
+        RingPaths.ANSWER -> {
+            val a = RingWire.parseAnswer(data)
+            if (a == null) ack("ring", false, "That answer was not readable.") else sink.ringAnswer(a.first, a.second).let { ack("ring:${a.first}", it.ok, it.reason) }
+        }
         else -> null
     }
 
