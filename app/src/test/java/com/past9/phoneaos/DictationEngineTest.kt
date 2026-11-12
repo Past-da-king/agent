@@ -384,6 +384,23 @@ class DictationEngineTest {
         assertEquals(said, boxWords(r))
     }
 
+    @Test fun aTakeWhoseWholePassNeverRanIsKeptAndRetryWritesItDown() = runTest {
+        // 12 Nov 2026: the link to the computer was down when he stopped; the caption (one language) was all he got and it
+        // said "done". Now it says kept, the tape stays, and Retry writes the whole take down.
+        val live = HandLive()
+        val pc = FakePc().apply { online = false; answer = { "Sawubona my friend, ngiyaphila, and now back in English." } }
+        val r = engine(live, pc)
+        speak(r, 0, 20, talk = 20, pause = 1)
+        live.ev!!.partial("so what do you want to bow and then it was a hello there my friend in English back and it is fine ok")
+        r.engine.finish(); untilEnded(r)
+        assertEquals(DictationView.Phase.KEPT, r.engine.view().phase)
+        assertTrue("it says how much it could not write down", r.engine.view().lostMs > 0)
+        pc.online = true
+        r.engine.retry(); untilEnded(r)
+        assertEquals(DictationView.Phase.DONE, r.engine.view().phase)
+        assertEquals("Sawubona my friend, ngiyaphila, and now back in English.", r.engine.text())
+    }
+
     @Test fun tapeIsAValidWavWhileRecording() {
         val tape = DictationTape(File(dir, "w.wav"))
         repeat(25) { tape.append(block(it / 10, it % 10, true)) }
