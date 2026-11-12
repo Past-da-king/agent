@@ -93,7 +93,7 @@ class CallController(
                 There is only you. Speak in the first person about everything you do: "I'll do that", "I'm on it", "I've started a helper on it", "I'll check". Never speak of yourself as someone else, and never say you are passing work on to anyone: your main chat, your project chats and your helpers are simply how you work.
                 You can do ANYTHING they ask: send emails and messages, reply to people, talk to or message someone for them, start helpers, use their connected apps (mail, calendar, Slack, WhatsApp and the rest), browse the web, run things, read and write files, remember things, manage tasks, routines and reminders, and look anything up.
                 So NEVER say you can't do something, that you have no access, or that the user should do it themselves. For anything that needs doing, finding, checking, sending or remembering, call start_work with the full request and every detail the user gave (names, who to, what to say), say a quick "I'm on it", and keep talking. If it's unclear, ask one short question first, then start it.
-                When an update on your work arrives, tell the user the part that matters in a sentence or two, as your own news ("I've sent it", "I found three"). Never invent results; if you don't know yet, say you're still on it (work_status tells you).
+                When a short status arrives, say it as your own news ("I've sent it", "I found three"). ${SpokenResult.RULE} Wait until they have clearly finished before you answer: people pause mid-sentence and mix languages in one sentence, and a pause is not the end of their turn. Never invent results; if you don't know yet, say you're still on it (work_status tells you).
                 When your work needs an answer from the user, it waits while the call carries on. Put the question to them out loud at a good moment. Take their answer (or decide if they tell you to) and call answer_question with it plus anything from the call that matters.
                 When you need the user's OK, say plainly what you want to do and ask, for example "I need your OK to send the invoice to Shey. Approve?". If they clearly say yes, call answer_question with answer "Approve" and their exact words in user_said. If they say no, answer "Decline". Never approve on your own. They can also tap the card on the call screen. If they need to DO something (sign in, type a code), tell them exactly what to tap.
             """.trimIndent() + if (!linked) "" else "\n" + """
@@ -270,7 +270,7 @@ class CallController(
         // A computer's token is locked to the Live model its key reaches, so the call uses that model.
         val phoneVoice = s.ttsVoice.takeIf { s.ttsProvider == "gemini" && it.isNotBlank() }
         live = LiveSession(url, model?.ifBlank { null } ?: "gemini-3.1-flash-live-preview", phoneVoice ?: voice?.ifBlank { null } ?: "Kore", system,
-            tools = tools, renew = renew) { e -> if (g == gen) onEvent(e) }.also { it.start() }
+            tools = tools, renew = renew, tuning = com.past9.phoneaos.assist.AssistPrefs.liveTuning(context)) { e -> if (g == gen) onEvent(e) }.also { it.start() }
         // Ended in the instant between the check and the session: let go of it again.
         if (!core.current(g)) { releaseAll(); return }
         // Read the main agent's new messages and questions into the call.
@@ -315,7 +315,7 @@ class CallController(
                     sentTo.remove(key); workingSeen.remove(key)
                     val what = c.result.ifBlank { c.done }.ifBlank { c.line }
                     core.patch { it.copy(reply = "$name: ${what.take(360)}") }
-                    tell("[$name finished. Tell the user the part that matters, briefly, as your own work] ${what.take(1200)}")
+                    tell(SpokenResult.frame(what))
                 }
             }
         } }

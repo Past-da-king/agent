@@ -86,6 +86,7 @@ fun AssistantSheet(agentName: String, onDismiss: () -> Unit, held: Boolean? = nu
         var seesOn by remember(tick) { mutableStateOf(liveSees ?: (screenOn && AssistPrefs.liveSees(context))) }
         SwitchRow(Icons.Rounded.Visibility, "Live sees your screen", "While live voice is on, $agentName looks at your screen about once a second, so \"what is this?\" is answered at once. Needs \"read the screen\" above. Never banking or money apps.",
             seesOn, enabled = screenOn && liveOn) { on -> seesOn = on; AssistPrefs.setLiveSees(context, on) }
+        LiveTurnTaking(enabled = liveOn)
         Spacer(Modifier.height(8.dp))
         Text(stringResource(R.string.assist_never_reads_money),
             style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
@@ -117,4 +118,32 @@ private fun SwitchRow(icon: ImageVector, title: String, line: String, on: Boolea
         Spacer(Modifier.width(12.dp))
         Switch(on, onChange, enabled = enabled)
     }
+}
+
+/**
+ * Live voice: how long it waits for him to finish before it answers, an optional "wait for me" mode where he taps to talk
+ * and taps again when done, and whether it follows his language instead of pinning English. These apply to the next Live
+ * session. Inside the sheet, so no pop-up: chips and switches only.
+ */
+@Composable
+internal fun LiveTurnTaking(enabled: Boolean) {
+    val context = LocalContext.current
+    val cs = MaterialTheme.colorScheme
+    var patience by remember { mutableStateOf(AssistPrefs.livePatience(context)) }
+    var waitOn by remember { mutableStateOf(AssistPrefs.liveWaitForMe(context)) }
+    var autoLang by remember { mutableStateOf(AssistPrefs.liveAutoLanguage(context)) }
+    Spacer(Modifier.height(16.dp))
+    Text("How Live takes turns", style = MaterialTheme.typography.titleSmall)
+    Spacer(Modifier.height(2.dp))
+    Text("How long it waits in silence before it answers. Takes effect on the next Live session.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+    Spacer(Modifier.height(8.dp))
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf(com.past9.phoneaos.voice.LiveTuning.Patience.QUICK to "Quick", com.past9.phoneaos.voice.LiveTuning.Patience.PATIENT to "Patient", com.past9.phoneaos.voice.LiveTuning.Patience.VERY to "Very patient").forEach { (p, label) ->
+            FilterChip(selected = patience == p.key && !waitOn, enabled = enabled && !waitOn, onClick = { patience = p.key; AssistPrefs.setLivePatience(context, p.key) }, label = { Text(label) })
+        }
+    }
+    SwitchRow(Icons.Rounded.GraphicEq, "Wait for me", "Live only listens between Tap to talk and I'm done, so it never answers before you say so.",
+        waitOn, enabled = enabled) { on -> waitOn = on; AssistPrefs.setLiveWaitForMe(context, on) }
+    SwitchRow(Icons.Rounded.GraphicEq, "Follow my language", "Understands several languages in one sentence instead of pinning English. Off keeps English pinned.",
+        autoLang, enabled = enabled) { on -> autoLang = on; AssistPrefs.setLiveAutoLanguage(context, on) }
 }

@@ -92,7 +92,7 @@ class LiveAssistTest {
         val told = c.rows(listOf(row(5, "user", "x"), row(6, "agent", "Done. Sam has it.")), false)
         assertEquals(1, told.size)
         assertTrue(told[0].contains("Done. Sam has it."))
-        assertTrue(told[0].contains("short")); assertFalse(c.handOffOpen)
+        assertTrue(told[0].startsWith(com.past9.phoneaos.voice.SpokenResult.HEAD)); assertFalse(c.handOffOpen)
         assertEquals(LivePhase.LISTENING, c.current.phase)
         // The same row again says nothing more.
         assertTrue(c.rows(listOf(row(6, "agent", "Done. Sam has it.")), false).isEmpty())

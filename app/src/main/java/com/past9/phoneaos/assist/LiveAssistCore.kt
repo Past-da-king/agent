@@ -30,6 +30,10 @@ data class LiveView(
     val routed: String = "",
     /** What is going on right now (asks, agents), for the strip. */
     val context: AssistContext? = null,
+    /** "Wait for me" is on: Live only listens between his taps. */
+    val manual: Boolean = false,
+    /** Wait-for-me: his turn is open (he tapped Tap to talk and has not said I'm done). */
+    val talking: Boolean = false,
 )
 
 /** One stretch of speech in the session, for the call record: [who] is "in" (the user) or "out" (the agent's voice). */
@@ -82,6 +86,8 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
     fun failed(why: String) { failed = true; publish { it.copy(problem = why) } }
 
     fun muted(m: Boolean) = publish { it.copy(muted = m) }
+    fun manual(on: Boolean) = publish { it.copy(manual = on, talking = false) }
+    fun talking(on: Boolean) = publish { it.copy(talking = on) }
 
     /** Whether frames of the screen are going to Live. */
     fun seeing(s: Seeing) = publish { it.copy(seeing = s) }
@@ -194,7 +200,7 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
                 val id = v.answerId ?: -1L - rows.size
                 hand = null
                 touch()
-                if (told.add(id)) out += "[The agent finished. Say the part that matters in one or two short sentences, as your own news; do not read it out word for word.] " + v.answer.take(1500)
+                if (told.add(id)) out += com.past9.phoneaos.voice.SpokenResult.frame(v.answer)
                 publish { it.copy(card = null, label = "") }
                 return out
             }
@@ -301,8 +307,9 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
                 If a note says the screen is private, say you cannot see it right now and do not guess. If no picture has arrived (the setting may be off in the assistant's settings), say you cannot see the screen right now and do not make anything up.
                 For real work, call hand_to_agent with the full request and every detail they gave (names, who to, what to say, when): anything to be done or found beyond answering from what you see, such as sending, changing, opening, searching, remembering, their messages, mail, calendar, files, apps, contacts, the web, or anything on their computer. The same agent they type to does it, $where. Say a very short "on it" and carry on talking if they do. The words on their screen go along with a hand-off; set include_screen to true only when the agent itself must see the picture to do the job.
                 NEVER say you can't do something or that they must do it themselves: hand it to the agent.
-                When the agent's reply arrives, say a short version, one or two sentences, as your own news. Never invent a result; if you do not know yet, say it is still in progress.
+                ${com.past9.phoneaos.voice.SpokenResult.RULE} Never invent a result; if you do not know yet, say it is still in progress.
                 When the agent needs something from them, ask it out loud in one short line. If it needs their OK, say what it wants to do and tell them the approve button is on the screen and they hold it to approve. Never approve for them and never say it is approved. If they answer a question, hand their answer to the agent with hand_to_agent.
+                Wait until they have clearly finished before you answer. People pause mid-sentence, think aloud and mix languages in one sentence: a pause is not the end of their turn. Never fill a silence with a guess; if they trail off, wait, or ask them to go on.
                 When they say thanks, that's all, or goodbye, say one short friendly goodbye and stop.
             """.trimIndent() + contextBlock(context, linked)
         }
@@ -362,7 +369,7 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
          */
         fun liveNote(spoken: String): String =
             "\n[Live voice hand-off: the request above is the live assistant's own wording, not something the user typed." +
-                (if (spoken.isNotBlank()) " What the user actually said, just before: \"${spoken.trim().take(600)}\"." else "") + "]"
+                (if (spoken.isNotBlank()) " What the user actually said, just before: \"${spoken.trim().take(600)}\"." else "") + " " + com.past9.phoneaos.voice.SpokenResult.AGENT_NOTE + "]"
 
         /** The metadata a hand-off carries to the computer (voice.callHandoff): where it came from, and the user's words. */
         fun handoffMeta(request: String, spoken: String, includeScreen: Boolean, session: String = ""): JSONObject =

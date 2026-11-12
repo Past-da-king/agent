@@ -100,10 +100,12 @@ class LiveAssistant(
         val name = st.agentName.takeIf { it.isNotBlank() && it != "Your agent" } ?: "your agent"
         val phoneVoice = st.ttsVoice.takeIf { st.ttsProvider == "gemini" && it.isNotBlank() }
         val live = LiveSession("", DEFAULT_MODEL, phoneVoice ?: "Kore", LiveAssistCore.systemPrompt(name, st.userName, linked(), null), tools = LiveAssistCore.tools(),
+            tuning = AssistPrefs.liveTuning(context, listOf(name, st.userName)),
             renew = { kotlinx.coroutines.runBlocking { LiveToken.mint(context) as? LiveAuth.Token.Ok }?.url }) { e -> if (!ended) onEvent(e) }
         // Every setup (the first, and a fresh reconnect) is built from what is true then.
         live.systemFrom { LiveAssistCore.systemPrompt(name, g.settings.state.value.userName, linked(), core.context) }
         session = live
+        core.manual(live.tune.waitForMe)
         // The microphone and speaker open now, in parallel with the token: nothing he says is lost.
         live.prepare(context.getSystemService(AudioManager::class.java))
         scope.launch {
@@ -126,6 +128,9 @@ class LiveAssistant(
 
     /** The context the setup carries. Logged (trimmed) so a session can be checked against what the voice was told. */
     private fun prime(c: AssistContext?) {
+        // The transcriber is told the names it will hear: the agent, the user, and the agents at work.
+        val st = g.settings.state.value
+        session?.tune = AssistPrefs.liveTuning(context, listOfNotNull(st.agentName.takeIf { it != "Your agent" }, st.userName) + c?.agents?.map { it.name }.orEmpty())
         core.primed(c)
         primed = true
         sentText = c?.prompt().orEmpty()
@@ -346,6 +351,13 @@ class LiveAssistant(
     }
 
     fun mute(on: Boolean) { session?.setMuted(on); core.muted(on); push() }
+
+    /** Wait-for-me: his tap starts his turn, the next one ends it and Live answers. */
+    fun toggleTurn() {
+        val s = session ?: return
+        if (s.talking) s.endTurn() else s.beginTurn()
+        core.talking(s.talking); push()
+    }
 
     private fun fail(why: String) {
         if (ended) return
