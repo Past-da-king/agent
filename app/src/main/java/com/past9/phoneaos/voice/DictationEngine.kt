@@ -349,8 +349,10 @@ class DictationEngine(
             }
         }
         if (transcribe == null) segs.filter { it.state == State.MISSED }.forEach { it.state = State.LOST }
-        if (segs.any { it.state == State.MISSED }) pump() else if (queueJob?.isActive != true) settle()
+        // The whole-take pass starts BEFORE anything can settle: settle() waits for an active pass, and with nothing
+        // pending (the recogniser had already closed its stretch) it ended DONE at once and the pass never ran.
         polishFromTape()
+        if (segs.any { it.state == State.MISSED }) pump() else if (queueJob?.isActive != true) settle()
         show()
     }
 
