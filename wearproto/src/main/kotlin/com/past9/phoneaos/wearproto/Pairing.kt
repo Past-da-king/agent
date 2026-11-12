@@ -18,6 +18,8 @@ object PairPaths {
     const val RESULT = "/agent/pair/result"
     const val UNPAIR = "/agent/pair/unpair"
     const val SETTINGS = "/agent/settings"
+    /** The phone's data item "this watch is paired with me" ([PairedNote]): the watch reads it when it wakes, so the two sides cannot disagree for long. */
+    const val PAIRED = "/agent/paired"
 }
 
 object PairReason {
@@ -97,12 +99,19 @@ sealed interface PairReply {
  */
 class PairHost(
     private val random: () -> ByteArray, private val validMs: Long = 10 * 60_000L, private val maxWrong: Int = 5,
-    boundPhone: String? = null, boundName: String = "",
+    boundPhone: String? = null, boundName: String = "", private val store: PairOfferStore? = null,
 ) {
     var phone: String? = boundPhone; private set
     var phoneName: String = boundName; private set
     private var offer: PairOffer? = null
     private var wrong = 0
+
+    init {
+        // A process that came back (or a service the system started cold) keeps the code on the watch's screen, for as long as it is good.
+        if (boundPhone == null) store?.load()?.let { s -> offer = s.offer; wrong = s.wrong }
+    }
+
+    private fun persist() { val o = offer; if (o == null) store?.clear() else store?.save(o, wrong) }
 
     val paired: Boolean @Synchronized get() = phone != null
 
@@ -110,7 +119,20 @@ class PairHost(
     @Synchronized fun newOffer(node: String, now: Long): PairOffer? {
         if (phone != null) return null
         wrong = 0
-        return PairOffer(node, PairCode.secretOf(random()), now + validMs).also { offer = it }
+        return PairOffer(node, PairCode.secretOf(random()), now + validMs).also { offer = it; persist() }
+    }
+
+    /** The code already on show if it is still good (so backing out and coming back keeps it), else a fresh one. */
+    @Synchronized fun offerOrNew(node: String, now: Long): PairOffer? = current(now) ?: newOffer(node, now)
+
+    /**
+     * The phone says this watch is paired with it and the watch missed the answer (asleep, frozen, backed out). Bind to that phone.
+     * The caller has already checked the note ([PairedRule]).
+     */
+    @Synchronized fun adopt(phoneNode: String, name: String): Boolean {
+        if (phone != null || phoneNode.isBlank()) return false
+        phone = phoneNode; phoneName = name; offer = null; wrong = 0; persist()
+        return true
     }
 
     @Synchronized fun current(now: Long): PairOffer? = offer?.takeIf { now < it.expiresAt }
@@ -119,12 +141,12 @@ class PairHost(
         val bound = phone
         if (bound != null) return if (bound == from) PairReply.Accepted(watchName) else PairReply.Refused(PairReason.PAIRED_OTHER)
         val o = offer ?: return PairReply.Refused(PairReason.NO_OFFER)
-        if (now >= o.expiresAt) { offer = null; return PairReply.Refused(PairReason.EXPIRED) }
+        if (now >= o.expiresAt) { offer = null; persist(); return PairReply.Refused(PairReason.EXPIRED) }
         if (wrong >= maxWrong) return PairReply.Refused(PairReason.LOCKED)
         val ok = (proof.secret.isNotEmpty() && same(proof.secret, o.secret)) ||
             (proof.code.isNotEmpty() && same(PairCode.normalise(proof.code), PairCode.normalise(o.secret.take(PairCode.LENGTH))))
-        if (!ok) { wrong++; return PairReply.Refused(PairReason.WRONG) }
-        offer = null; wrong = 0; phone = from; phoneName = name
+        if (!ok) { wrong++; persist(); return PairReply.Refused(PairReason.WRONG) }
+        offer = null; wrong = 0; phone = from; phoneName = name; persist()
         return PairReply.Accepted(watchName)
     }
 
@@ -132,7 +154,7 @@ class PairHost(
     @Synchronized fun unpair(from: String?): Boolean {
         if (phone == null) return false
         if (from != null && from != phone) return false
-        phone = null; phoneName = ""; offer = null; wrong = 0
+        phone = null; phoneName = ""; offer = null; wrong = 0; persist()
         return true
     }
 

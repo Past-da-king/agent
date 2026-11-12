@@ -33,6 +33,7 @@ class WatchRelayService : WearableListenerService() {
     override fun onMessageReceived(e: MessageEvent) {
         if (!e.path.startsWith("/agent/")) return
         val g = App.graph(this)
+        if (e.path.startsWith("/agent/pair/")) com.past9.phoneaos.wearproto.PairLog.i("phone: relay service got ${e.path} from ${com.past9.phoneaos.wearproto.PairLog.node(e.sourceNodeId)}")
         // Pairing comes first, and is the only thing an unpaired watch may say (docs/wear.md, "Pairing").
         when (e.path) {
             com.past9.phoneaos.wearproto.PairPaths.RESULT -> { com.past9.phoneaos.wearproto.PairWire.parseResult(e.data)?.let { WatchPairing.onResult(g, e.sourceNodeId, it) }; return }
@@ -44,6 +45,7 @@ class WatchRelayService : WearableListenerService() {
             return
         }
         WatchRelay.seen(g, e.sourceNodeId)
+        WatchPairing.ensureNote(g, e.sourceNodeId)
         scope.launch {
             val reply = runCatching { WatchRelay.router(g).route(e.path, e.data) }.onFailure { Log.w(TAG, "route ${e.path}: ${it.message}") }.getOrNull() ?: return@launch
             send(e.sourceNodeId, reply.path, reply.data)

@@ -79,12 +79,14 @@ import com.past9.phoneaos.wearproto.PairCode
 import com.past9.phoneaos.wearproto.PairProblem
 import com.past9.phoneaos.wearproto.PairReason
 import com.past9.phoneaos.wearproto.PairReply
+import com.past9.phoneaos.wearproto.PairStep
 import kotlinx.coroutines.launch
 
 /** Where the pairing sheet is. Every state has its own words; a failure says what is likely wrong, never just "no answer". */
 sealed interface WatchPairState {
     data object Ready : WatchPairState
-    data object Pairing : WatchPairState
+    /** [steps] is what it is doing right now: reaching the watch over Bluetooth, trying Wi-Fi. */
+    data class Pairing(val steps: List<PairStep> = listOf(PairStep.BLUETOOTH)) : WatchPairState
     data class Paired(val name: String) : WatchPairState
     /** [cause] is what the phone worked out; [said] is the watch's own refusal (wrong code, expired, locked), shown as it is. */
     data class Problem(val cause: PairProblem?, val said: String = "") : WatchPairState
@@ -126,7 +128,8 @@ fun WatchPairSheet(onDismiss: () -> Unit) {
     // Reading the bound name once makes sure the binding is loaded before the first frame says "not paired".
     remember { WatchPairing.bound(g) }
 
-    val state: WatchPairState = bound?.let { WatchPairState.Paired(it) } ?: attempt ?: WatchPairState.Ready
+    val steps by WatchPairing.steps.collectAsState()
+    val state: WatchPairState = bound?.let { WatchPairState.Paired(it) } ?: (attempt as? WatchPairState.Pairing)?.copy(steps = steps.ifEmpty { listOf(PairStep.BLUETOOTH) }) ?: attempt ?: WatchPairState.Ready
 
     fun finish(o: WatchPairing.Outcome) {
         attempt = when (val r = o.reply) {
@@ -135,8 +138,8 @@ fun WatchPairSheet(onDismiss: () -> Unit) {
         }
     }
     fun start(run: suspend () -> WatchPairing.Outcome) {
-        if (attempt == WatchPairState.Pairing) return
-        attempt = WatchPairState.Pairing; torch = false
+        if (attempt is WatchPairState.Pairing) return
+        attempt = WatchPairState.Pairing(); torch = false
         scope.launch { finish(run()) }
     }
 
@@ -190,6 +193,10 @@ fun WatchPairSheetView(
                 Column(Modifier.fillMaxWidth().padding(vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     LoadingIndicator(Modifier.size(56.dp))
                     Text(stringResource(R.string.watch_sheet_pairing_body), style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant, textAlign = TextAlign.Center)
+                    // What it is doing right now: each road that is running gets its own line.
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        for (s in state.steps) Text(stringResource(if (s == PairStep.WIFI) R.string.watch_sheet_step_wifi else R.string.watch_sheet_step_bluetooth), style = MaterialTheme.typography.labelLarge, color = cs.primary, textAlign = TextAlign.Center)
+                    }
                 }
             }
             is WatchPairState.Paired -> {

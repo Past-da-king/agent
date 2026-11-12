@@ -5,6 +5,7 @@ import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.util.Log
 import com.past9.phoneaos.wearproto.PairLan
+import com.past9.phoneaos.wearproto.PairLog
 import com.past9.phoneaos.wearproto.PairReply
 import com.past9.phoneaos.wearproto.PairWire
 import kotlinx.coroutines.runBlocking
@@ -31,8 +32,9 @@ object WatchLanPair {
     /** The address to put in the QR ("192.168.1.49:41475"), or "" when this watch is not on a network. Starts listening if it is not already. */
     @Synchronized fun start(c: Context): String {
         if (server == null) {
-            val s = runCatching { ServerSocket(0) }.getOrElse { Log.w(TAG, "listen: ${it.message}"); return "" }
+            val s = runCatching { ServerSocket(0) }.getOrElse { PairLog.i("watch: lan listen failed: ${it.message}"); return "" }
             server = s
+            PairLog.i("watch: lan listener added port=${s.localPort}")
             thread = Thread({ serve(c.applicationContext, s) }, "watch-lan-pair").apply { isDaemon = true; start() }
             advertise(c.applicationContext, s.localPort)
         }
@@ -40,7 +42,11 @@ object WatchLanPair {
         return "$ip:${server!!.localPort}"
     }
 
+    /** The port being listened on, or 0 when not listening (for the log). */
+    @Synchronized fun port(): Int = server?.localPort ?: 0
+
     @Synchronized fun stop() {
+        if (server != null) PairLog.i("watch: lan listener removed port=${server?.localPort}")
         runCatching { listener?.let { nsd?.unregisterService(it) } }
         listener = null; nsd = null
         runCatching { server?.close() }
@@ -50,8 +56,8 @@ object WatchLanPair {
     private fun advertise(c: Context, port: Int) {
         val info = NsdServiceInfo().apply { serviceName = PairLan.SERVICE_NAME; serviceType = PairLan.SERVICE_TYPE; setPort(port) }
         val l = object : NsdManager.RegistrationListener {
-            override fun onServiceRegistered(i: NsdServiceInfo) {}
-            override fun onRegistrationFailed(i: NsdServiceInfo, code: Int) { Log.w(TAG, "advertise failed: $code") }
+            override fun onServiceRegistered(i: NsdServiceInfo) { PairLog.i("watch: lan advertised as ${i.serviceName} port=$port") }
+            override fun onRegistrationFailed(i: NsdServiceInfo, code: Int) { PairLog.i("watch: lan advertise failed code=$code") }
             override fun onServiceUnregistered(i: NsdServiceInfo) {}
             override fun onUnregistrationFailed(i: NsdServiceInfo, code: Int) {}
         }
@@ -70,7 +76,8 @@ object WatchLanPair {
 
     private fun handle(c: Context, sock: Socket) {
         sock.soTimeout = 5_000
-        val line = readLine(sock) ?: return
+        PairLog.i("watch: lan connection from ${sock.inetAddress?.hostAddress}")
+        val line = readLine(sock) ?: run { PairLog.i("watch: lan request empty"); return }
         val reply: PairReply = runBlocking { withTimeoutOrNull(8_000) { WatchPairingState.onLanRequest(c, line) } } ?: PairReply.Refused("wrong_code")
         sock.getOutputStream().apply { write(PairLan.line(PairWire.result(reply))); flush() }
     }

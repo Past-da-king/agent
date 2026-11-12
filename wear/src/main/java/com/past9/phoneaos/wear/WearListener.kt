@@ -7,9 +7,11 @@ import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.WearableListenerService
 import com.past9.phoneaos.wearproto.CallPaths
 import com.past9.phoneaos.wearproto.CallWire
+import com.past9.phoneaos.wearproto.PairLog
 import com.past9.phoneaos.wearproto.PairPaths
 import com.past9.phoneaos.wearproto.PairReason
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import com.past9.phoneaos.wearproto.RingPaths
 import com.past9.phoneaos.wearproto.RingWire
 import com.past9.phoneaos.wearproto.WearPaths
@@ -20,9 +22,20 @@ import com.past9.phoneaos.wearproto.Wire
  * the call's plan, state and flush (messages), and the agent's voice during a call (a channel the phone opens).
  */
 class WearListener : WearableListenerService() {
+    // Whether the system starts this service at all is the first thing to read in the log when pairing does nothing.
+    override fun onCreate() { super.onCreate(); PairLog.i("watch: WearListener started") }
+
     override fun onDataChanged(events: DataEventBuffer) {
         for (e in events) {
             val path = e.dataItem.uri.path
+            // The phone's "this watch is paired with me" note: read even when the watch is not paired yet (that is the point of it).
+            if (path == PairPaths.PAIRED) {
+                if (e.type == DataEvent.TYPE_CHANGED) {
+                    val host = e.dataItem.uri.host; val data = e.dataItem.data
+                    runBlocking { withTimeoutOrNull(8_000) { WatchPairingState.onPairedNote(applicationContext, host, data) } }
+                }
+                continue
+            }
             // Only what the paired phone put there is believed (the item's host is the node that wrote it).
             if (e.dataItem.uri.host != WatchPairingState.phone(applicationContext)) continue
             when {
@@ -36,12 +49,15 @@ class WearListener : WearableListenerService() {
 
     override fun onMessageReceived(e: MessageEvent) {
         val app = applicationContext as WatchApp
-        val c = app.controller
+        if (e.path.startsWith("/agent/pair/")) PairLog.i("watch: WearListener message ${e.path} from ${PairLog.node(e.sourceNodeId)}")
         // Pairing first: a phone asks to pair, or the paired phone unpairs. Everything else counts only from the paired phone.
+        // The request is answered here, from the offer kept on disk, whether or not the app is in front. This callback runs on a worker
+        // thread, so it waits for the answer to go out (the system may stop the process as soon as the service returns).
         when (e.path) {
-            PairPaths.REQUEST -> { app.controller.scope.launch { WatchPairingState.onRequest(applicationContext, e.sourceNodeId, e.data) }; return }
+            PairPaths.REQUEST -> { runBlocking { withTimeoutOrNull(10_000) { WatchPairingState.onRequest(applicationContext, e.sourceNodeId, e.data) } ?: PairLog.i("watch: onRequest timed out") }; return }
             PairPaths.UNPAIR -> { WatchPairingState.onUnpair(applicationContext, e.sourceNodeId); return }
         }
+        val c = app.controller
         if (e.sourceNodeId != WatchPairingState.phone(applicationContext)) return
         when (e.path) {
             // The phone says it does not know this watch (it was unpaired there): the watch goes back to its pairing screen.

@@ -55,7 +55,7 @@ enum class PairStage { SCAN, PULLING, DONE }
  * engine's; this draws it.
  */
 @Composable
-fun PairFlowScreen(stage: PairStage, qr: String, code: String, step: Int, name: String, kind: MascotKind, onStart: () -> Unit) {
+fun PairFlowScreen(stage: PairStage, qr: String, code: String, step: Int, name: String, kind: MascotKind, notice: String = "", onStart: () -> Unit) {
     val look = LocalLook.current; val pal = look.pal
     val rows = remember(qr) { if (qr.isBlank()) emptyList() else QrMatrix.encode(qr) }
     ExStage(if (stage == PairStage.PULLING) pal.deep else Color.Black) { g ->
@@ -70,7 +70,11 @@ fun PairFlowScreen(stage: PairStage, qr: String, code: String, step: Int, name: 
                     if (rows.isNotEmpty()) qrTile(rows, tl, s, 20.dp.toPx())
                 }
                 Box(Modifier.offset(cx - g.dp(80f), H * 0.19f + side + g.dp(10f)).width(g.dp(160f)), contentAlignment = Alignment.Center) { Txt(code, 24f, Color.White, FontWeight.Black, 2.5f, maxLines = 1) }
-                Box(Modifier.offset(cx - g.dp(92f), H * 0.19f + side + g.dp(38f)).width(g.dp(184f)), contentAlignment = Alignment.Center) { Txt(stringResource(R.string.pair_hint), 10.5f, Color.White.copy(alpha = 0.6f), lh = 12.5f, maxLines = 2) }
+                // One line under the code: the usual hint, or, when something may slow pairing (low battery, power saving), that instead, in amber.
+                Box(Modifier.offset(cx - g.dp(92f), H * 0.19f + side + g.dp(38f)).width(g.dp(184f)), contentAlignment = Alignment.Center) {
+                    if (notice.isBlank()) Txt(stringResource(R.string.pair_hint), 10.5f, Color.White.copy(alpha = 0.6f), lh = 12.5f, maxLines = 2)
+                    else Txt(notice, 10f, com.past9.phoneaos.wear.ui.ex.V2.amber, FontWeight.Bold, lh = 12f, maxLines = 4)
+                }
             }
             PairStage.PULLING -> {
                 val cy = H * 0.30f

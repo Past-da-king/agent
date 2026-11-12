@@ -35,7 +35,7 @@
         android:icon="@drawable/ic_agent"
         android:label="@string/app_name"
         android:name=".WatchApp"
-        android:theme="@android:style/Theme.DeviceDefault">
+        android:theme="@style/Theme.Agent.Launch">
 
         <uses-library android:name="com.google.android.wearable" android:required="false" />
         <!-- The watch app needs the phone: it holds no account, key or model of its own. -->
@@ -120,6 +120,11 @@
             <intent-filter>
                 <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
                 <data android:scheme="wear" android:host="*" android:path="/agent/ring" />
+            </intent-filter>
+            <!-- The phone's "this watch is paired with me" note: a watch that missed the answer learns it here, in the background. -->
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
+                <data android:scheme="wear" android:host="*" android:path="/agent/paired" />
             </intent-filter>
             <!-- The phone's customisations (agent name, mascot, accent, theme, language, voice), kept in step while paired. -->
             <intent-filter>
