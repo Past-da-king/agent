@@ -14,6 +14,7 @@ import com.past9.phoneaos.voice.LiveSession
 import com.past9.phoneaos.voice.LiveTiming
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.Job
@@ -56,6 +57,15 @@ class LiveAssistant(
     @Volatile private var ended = false
     @Volatile private var starting = false
     @Volatile private var setupDone = false
+    /** The context read at start, awaited just before the setup goes out. */
+    private var ctxJob: kotlinx.coroutines.Deferred<AssistContext?>? = null
+    /** The newest context the updates gave; the voice is primed with it when the snapshot could not be read. */
+    @Volatile private var latest: AssistContext? = null
+    @Volatile private var primed = false
+    /** The context text the voice last has: the setup's, or the last quiet update's. */
+    @Volatile private var sentText = ""
+    @Volatile private var lastNote = 0L
+    private var noteJob: Job? = null
     private var watch: Job? = null
     private var rows: List<ChatItem> = emptyList()
     private val lastId: Long get() = rows.lastOrNull()?.id ?: 0L
@@ -73,24 +83,26 @@ class LiveAssistant(
         starting = true
         LiveTiming.mark("start")
         startedAt = clock()
-        // What is going on right now goes into the instructions, so the voice starts knowing it. It is read from what the
-        // agent already holds on this phone (or the linked computer, over the link already open): a moment, never a wait.
-        scope.launch {
-            val c = runCatching { withTimeoutOrNull(CONTEXT_WAIT_MS) { withContext(Dispatchers.IO) { AssistContextSource.snapshot(context, g, core.refs, clock()) } } }.getOrNull()
-            starting = false
-            if (!ended && session == null) open(c)
+        // What is going on right now goes into the instructions, so the voice starts knowing it. It is read in PARALLEL with
+        // the token (never on the microphone's time) and waited for, bounded, just before the setup goes out: it used to be
+        // dropped after 700 ms, which left the voice blind to its agents whenever the link or the database was slow.
+        ctxJob = scope.async(Dispatchers.IO) {
+            runCatching { AssistContextSource.snapshot(context, g, core.refs, clock()) }.onFailure { Log.w(TAG, "context read failed: ${it.message}") }.getOrNull()
         }
+        starting = false
+        open()
     }
 
-    private fun open(c: AssistContext?) {
+    private fun linked(): Boolean = RemoteHub.link.value?.on == true || RemoteHub.session.value != null
+
+    private fun open() {
         val st = g.settings.state.value
         val name = st.agentName.takeIf { it.isNotBlank() && it != "Your agent" } ?: "your agent"
-        val linked = RemoteHub.link.value?.on == true || RemoteHub.session.value != null
-        core.primed(c)
-        val system = LiveAssistCore.systemPrompt(name, st.userName, linked, c)
         val phoneVoice = st.ttsVoice.takeIf { st.ttsProvider == "gemini" && it.isNotBlank() }
-        val live = LiveSession("", DEFAULT_MODEL, phoneVoice ?: "Kore", system, tools = LiveAssistCore.tools(),
+        val live = LiveSession("", DEFAULT_MODEL, phoneVoice ?: "Kore", LiveAssistCore.systemPrompt(name, st.userName, linked(), null), tools = LiveAssistCore.tools(),
             renew = { kotlinx.coroutines.runBlocking { LiveToken.mint(context) as? LiveAuth.Token.Ok }?.url }) { e -> if (!ended) onEvent(e) }
+        // Every setup (the first, and a fresh reconnect) is built from what is true then.
+        live.systemFrom { LiveAssistCore.systemPrompt(name, g.settings.state.value.userName, linked(), core.context) }
         session = live
         // The microphone and speaker open now, in parallel with the token: nothing he says is lost.
         live.prepare(context.getSystemService(AudioManager::class.java))
@@ -100,12 +112,25 @@ class LiveAssistant(
             LiveTiming.mark("token_ok")
             if (ended) return@launch
             if (auth !is LiveAuth.Token.Ok) { fail((auth as LiveAuth.Token.No).why); return@launch }
+            // The token is here and the context has had that long. Wait for it, bounded, then prime the voice with it.
+            val c = withTimeoutOrNull(CONTEXT_WAIT_MS) { ctxJob?.await() } ?: latest
+            if (ended) return@launch
+            prime(c)
             live.connectTo(auth.url, auth.model.ifBlank { DEFAULT_MODEL }, if (phoneVoice == null) auth.voice else "")
         }
         // Nothing heard, nothing said and nothing out for a while: let go.
         watch = scope.launch { while (!ended) { delay(2_000); if (core.idle(minimised())) { Log.i(TAG, "idle, ending"); end("") } } }
         // Never stuck connecting: the microphone being up does not mean the connection is.
         scope.launch { delay(CallCore.CONNECT_TIMEOUT_MS); if (!ended && !setupDone) fail(CallCore.TIMED_OUT) }
+    }
+
+    /** The context the setup carries. Logged (trimmed) so a session can be checked against what the voice was told. */
+    private fun prime(c: AssistContext?) {
+        core.primed(c)
+        primed = true
+        sentText = c?.prompt().orEmpty()
+        Log.i(TAG, "context primed: " + (if (c == null) "NONE (could not be read)" else "agents=${c.agents.size} known=${c.agentsKnown} asks=${c.asks.size} turns=${c.turns.size} chars=${sentText.length}"))
+        if (c != null) Log.i(TAG, "context: " + sentText.replace('\n', '|').take(700))
     }
 
     /** The chat rows or the agent's working flag changed: pass on what Live should say. */
@@ -116,11 +141,40 @@ class LiveAssistant(
         push()
     }
 
-    /** The agents or the chat moved: refresh the strip, and tell the voice of a new question, one answered elsewhere, an agent that finished. */
+    /**
+     * The agents or the chat moved: refresh the strip, tell the voice of a new question, one answered elsewhere, an agent
+     * that finished, and keep its picture of everything current with a quiet context update (no answer asked for).
+     */
     fun onContext(c: AssistContext) {
         if (ended || session == null) return
+        latest = c
+        // Before the setup is out the voice is primed with the snapshot: nothing is told twice and nothing is lost.
+        if (!primed) return
         core.contextChanged(c).forEach { tell(it) }
         push()
+        refreshVoice(c)
+    }
+
+    /** Sends the whole current context as a note the model keeps, when it differs from what it was last given. */
+    private fun refreshVoice(c: AssistContext) {
+        if (c.prompt() == sentText) return
+        noteJob?.cancel()
+        noteJob = scope.launch {
+            delay(NOTE_DEBOUNCE_MS)
+            val gap = NOTE_GAP_MS - (clock() - lastNote)
+            if (gap > 0) delay(gap)
+            val now = (latest ?: c).prompt()
+            if (now == sentText) return@launch
+            repeat(12) {
+                if (ended) return@launch
+                if (session?.note(NOTE_HEAD + now) == true) {
+                    sentText = now; lastNote = clock()
+                    Log.i(TAG, "context update sent: " + now.replace('\n', '|').take(400))
+                    return@launch
+                }
+                delay(1_500)
+            }
+        }
     }
 
     /** He picked one in the choice sheet: the answer goes to that question. */
@@ -303,7 +357,7 @@ class LiveAssistant(
     fun end(reason: String = "") {
         if (ended) return
         ended = true
-        watch?.cancel()
+        watch?.cancel(); noteJob?.cancel(); ctxJob?.cancel()
         frames?.stop(); frames = null
         runCatching { session?.stop() }
         session = null
@@ -338,8 +392,13 @@ class LiveAssistant(
         /** The microphone is loud enough to be speech, and this long since the last speech counts as a new turn. */
         private const val LOUD = 0.25f
         private const val QUIET_MS = 1_500L
-        /** The context read at start never holds the microphone up longer than this. */
-        private const val CONTEXT_WAIT_MS = 700L
+        /** The context is read while the token is fetched; the setup waits for it no longer than this (the mic never waits). */
+        private const val CONTEXT_WAIT_MS = 3_500L
+        /** Quiet context updates: let a burst of changes settle, and never send more often than the gap. */
+        private const val NOTE_DEBOUNCE_MS = 1_200L
+        private const val NOTE_GAP_MS = 4_000L
+        /** Heads a quiet update: the model keeps it and does not speak it. */
+        const val NOTE_HEAD = "[Context update, the newest. It replaces every earlier list. Do not say it aloud unless they ask.]\n"
         /** How long "Sent to ..." stays on the sheet. */
         private const val ROUTED_MS = 5_000L
     }

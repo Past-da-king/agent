@@ -8,6 +8,8 @@ import com.past9.phoneaos.remote.RemoteSession
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -24,12 +26,29 @@ import org.json.JSONObject
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 object AssistContextSource {
-    /** The context right now, read once (the sheet or the call is opening). */
+    /** A cold start: the link to the computer may still be opening. Wait for it this long rather than read this phone's empty chat. */
+    const val LINK_WAIT_MS = 3_000L
+    /** The computer's helper cards may still be on their way once the link is up. */
+    const val CARDS_WAIT_MS = 1_200L
+
+    /**
+     * The context right now, read once (the sheet or the call is opening). Linked: it waits for the link, then for the
+     * computer's cards, then falls back to the computer's own list of who is at work (voice.callTargets), and only if
+     * none of that answers does it say the agents are unknown. It is never silently empty.
+     */
     suspend fun snapshot(context: Context, g: Graph, refs: AskRefs = AskRefs(), now: Long = System.currentTimeMillis()): AssistContext {
-        val r: RemoteSession? = RemoteHub.session.value
+        var r: RemoteSession? = RemoteHub.session.value
+        val linkOn = RemoteHub.link.value?.on == true
+        if (r == null && linkOn) r = withTimeoutOrNull(LINK_WAIT_MS) { RemoteHub.session.filterNotNull().first() }
         val rows = (r?.db ?: g.db).chat().all().first()
         val st = (r?.status ?: g.runtime.status).value
-        return AssistContextBuilder.build(rows, r?.cards?.value, NotifyLog.recent(context, now), st.working, st.label, now, refs, name(g))
+        var cards = r?.cards?.value
+        if (r != null && cards == null) cards = withTimeoutOrNull(CARDS_WAIT_MS) { r.cards.filterNotNull().first() }
+        var extra: List<CtxAgent>? = null
+        if (r != null && cards == null) extra = runCatching { AssistContextBuilder.fromTargets(r.call("voice.callTargets", emptyList(), 4_000) as? JSONArray) }.getOrNull()
+        // On its own brain the helper rows are the list; linked, the list is known only if the computer answered one way or the other.
+        val known = (r == null && !linkOn) || cards != null || extra != null
+        return AssistContextBuilder.build(rows, cards, NotifyLog.recent(context, now), st.working, st.label, now, refs, name(g), extra, known)
     }
 
     /** The context as it changes: the chat, the cards or the status moving rebuilds it. Same inputs as [snapshot]. */
@@ -38,7 +57,8 @@ object AssistContextSource {
         val status = RemoteHub.session.flatMapLatest { it?.status ?: g.runtime.status }
         val cards: Flow<List<LiveCard>?> = RemoteHub.session.flatMapLatest { it?.cards ?: flowOf(null) }
         return combine(rows, status, cards) { r, s, c ->
-            AssistContextBuilder.build(r, c, NotifyLog.recent(context, System.currentTimeMillis()), s.working, s.label, System.currentTimeMillis(), refs, name(g))
+            val linkedNoCards = c == null && RemoteHub.link.value?.on == true
+            AssistContextBuilder.build(r, c, NotifyLog.recent(context, System.currentTimeMillis()), s.working, s.label, System.currentTimeMillis(), refs, name(g), null, !linkedNoCards)
         }
     }
 

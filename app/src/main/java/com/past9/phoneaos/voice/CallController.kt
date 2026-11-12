@@ -254,9 +254,13 @@ class CallController(
         val waiting = pendingQuestion()
         // Linked: who is on the computer (main agent, projects and their chats, helpers), so a hand-off goes to the one he names.
         val who = remote?.let { roster(fetchTargets(it)) }.orEmpty()
+        // The same picture the assistant's Live voice gets (assist/AssistContextSource): agents with what each is doing and
+        // waiting on, what waits on the user, the last of the main chat. One builder for both voices.
+        val ctx = runCatching { kotlinx.coroutines.withTimeoutOrNull(3_500) { com.past9.phoneaos.assist.AssistContextSource.snapshot(context, com.past9.phoneaos.App.graph(context), com.past9.phoneaos.assist.AskRefs(), System.currentTimeMillis()) } }.getOrNull()
         val system = base + (if (pinned.isNotBlank()) "\n\nWhat you know about them:\n$pinned" else "") +
             (if (who.isNotBlank()) "\n\n$who" else "") +
-            (if (recent.isNotBlank()) "\n\nThe chat so far (this call continues it):\n$recent" else "") +
+            (if (ctx != null) "\n\n" + ctx.prompt() else "") +
+            (if (ctx == null && recent.isNotBlank()) "\n\nThe chat so far (this call continues it):\n$recent" else "") +
             (if (waiting != null) "\n\nWaiting on the user right now (bring it up early): ${cardPrompt(waiting)}" else "")
         // Ended (or timed out, or replaced by a newer call) while the token was on its way: nothing to start.
         if (!core.current(g)) return
