@@ -143,7 +143,7 @@ private fun ringModeName(m: String) = stringResource(when (m) { ApprovalRingMode
 @Composable
 fun GesturesScreen(
     map: GestureMap, profile: DeviceProfile, approvalMode: String,
-    onMap: (GestureMap) -> Unit, onApprovalMode: (String) -> Unit, onNotificationAccess: () -> Unit, onHomeScreen: () -> Unit,
+    onMap: (GestureMap) -> Unit, onApprovalMode: (String) -> Unit, onNotificationAccess: () -> Unit, onHomeScreen: () -> Unit, onUnpair: (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     WatchList {
@@ -175,6 +175,7 @@ fun GesturesScreen(
         }
         item { FilledTonalButton(onClick = onNotificationAccess, modifier = wide, label = { Text(stringResource(R.string.rings_dnd)) }) }
         item { FilledTonalButton(onClick = onHomeScreen, modifier = wide, label = { Text(stringResource(R.string.home_settings)) }) }
+        if (onUnpair != null) item { FilledTonalButton(onClick = onUnpair, modifier = wide, label = { Text(stringResource(R.string.pair_unpair)) }) }
     }
 }
 

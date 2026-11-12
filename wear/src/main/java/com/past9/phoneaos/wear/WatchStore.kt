@@ -22,6 +22,13 @@ object WatchStore {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("state", null)?.let { Wire.parseState(it.toByteArray()) }
     }.getOrNull()?.also { _state.value = it }
 
+    /** Unpaired: nothing of the old phone's picture stays on the watch. */
+    fun clear(context: Context) {
+        _state.value = null
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove("state").apply()
+        refreshSurfaces(context)
+    }
+
     fun update(context: Context, s: WatchState) {
         _state.value = s
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("state", String(Wire.state(s))).apply()

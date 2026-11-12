@@ -49,14 +49,24 @@ object WatchRelay {
     @Volatile var lastNode: String? = null
         private set
 
-    /** Called when the app's graph is built: if a watch has ever said hello, keep it up to date. */
-    fun attach(g: Graph) { if (g.settings.extra(SEEN_KEY) != null) ensureRunning(g) }
+    private var settingsJob: Job? = null
 
-    /** A message came from [node]: remember it, and start publishing. */
+    /** Called when the app's graph is built: if a watch is paired, keep it up to date. */
+    fun attach(g: Graph) { WatchPairing.bound(g)?.let { lastNode = it; appContext = g.app; ensureRunning(g) } }
+
+    /** A message came from the paired watch [node]: remember it, and start publishing. (Callers check the pairing first.) */
     fun seen(g: Graph, node: String) {
         lastNode = node; appContext = g.app
-        if (g.settings.extra(SEEN_KEY) != node) g.settings.setExtra(SEEN_KEY, node)
         ensureRunning(g)
+    }
+
+    /** A watch just paired: it gets the picture, the rings and the customisations from here on. */
+    fun paired(g: Graph, node: String) { lastNode = node; appContext = g.app; ensureRunning(g); republish() }
+
+    /** Unpaired from either side: nothing more is published, and nothing about the watch is kept. */
+    @Synchronized fun unpaired() {
+        job?.cancel(); job = null; ringJob?.cancel(); ringJob = null; settingsJob?.cancel(); settingsJob = null
+        lastNode = null; lastSent = null
     }
 
     fun router(g: Graph): WatchRouter = router ?: synchronized(this) { router ?: WatchRouter(PhoneSink(g)).also { router = it } }
@@ -66,12 +76,16 @@ object WatchRelay {
             // What rings on the phone rings the watch: the phone's wake-ups are the source, the watch only follows them.
             runCatching { WakeHub.ringing.collect { WatchRingRelay.push(g.app, it) } }.onFailure { Log.w(TAG, "ring stopped: ${it.message}") }
         }
+        // The phone's customisations (agent name, mascot, accent, theme, language, voice) stay in step on the watch while it is paired.
+        if (settingsJob?.isActive != true) settingsJob = g.scope.launch {
+            runCatching { g.settings.state.collect { WatchPairing.publish(g, it) } }.onFailure { Log.w(TAG, "settings stopped: ${it.message}") }
+        }
         if (job?.isActive == true) return
         job = g.scope.launch { runCatching { publish(g) }.onFailure { Log.w(TAG, "stopped: ${it.message}") } }
     }
 
     /** Publish again even when nothing changed (a watch just opened and may have missed the last item). */
-    fun republish() { lastSent = null; kick.value++; WatchRingRelay.republish(); WatchRingRelay.push(appContext ?: return, WakeHub.ringing.value) }
+    fun republish() { lastSent = null; kick.value++; WatchPairing.publisher.forget(); WatchRingRelay.republish(); WatchRingRelay.push(appContext ?: return, WakeHub.ringing.value) }
     @Volatile private var appContext: Context? = null
 
     @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)

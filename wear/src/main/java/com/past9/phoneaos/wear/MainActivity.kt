@@ -52,7 +52,7 @@ class MainActivity : ComponentActivity() {
         val controller = (application as WatchApp).controller
         controller.opened()
         askNotificationsOnce()
-        setContent { AgentWatchTheme { AppScaffold { WatchNav(controller, (application as WatchApp).call, go) } } }
+        setContent { AgentWatchTheme { AppScaffold { PairGate { WatchNav(controller, (application as WatchApp).call, go) } } } }
     }
 
     // Sensors for the gestures he mapped run while this screen is up (and during a call or a ring), and not otherwise.
@@ -200,7 +200,7 @@ private fun WatchNav(c: WatchController, call: WatchCall, go: String) {
                 map = map, profile = WatchGestures.profile(context), approvalMode = mode,
                 onMap = { map = it; WatchGestures.save(context, it) },
                 onApprovalMode = { mode = it; WatchRing.setApprovalMode(context, it) },
-                onHomeScreen = { nav.navigate(Routes.HOME_SETTINGS) },
+                onHomeScreen = { nav.navigate(Routes.HOME_SETTINGS) }, onUnpair = { scope.launch { WatchPairingState.unpair(context) } },
                 onNotificationAccess = { runCatching { context.startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
             )
             // Home screen settings live one step further on, so the talk screen stays small.

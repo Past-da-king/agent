@@ -60,8 +60,8 @@
     <string name="rings_approvals">Approvals ring the watch</string>
     <string name="rings_dnd">Allow rings in Do Not Disturb</string>
     <string name="mode_off">Off</string>
-    <string name="mode_buzz">Buzz</string>
-    <string name="mode_full">Full screen</string>
+    <string name="mode_buzz">Just buzz</string>
+    <string name="mode_full">Full screen ring</string>
 
     <!-- Watch face data sources -->
     <string name="face_title_approvals">Needs you</string>
@@ -103,4 +103,14 @@
     <string name="home_state_mine">The agent is your home screen.</string>
     <string name="home_state_other">Another app is the home screen. Choose the agent in the system\'s home setting.</string>
     <string name="home_no_picker">This watch has no home screen setting. Turning this off always goes back to the stock home.</string>
+    <!-- Pairing (docs/wear.md) -->
+    <string name="pair_title">Pair with your phone</string>
+    <string name="pair_how">In the Agent app on your phone: Settings, Watch. Scan this, or type the code.</string>
+    <string name="pair_qr_description">QR code to scan with the phone</string>
+    <string name="pair_making">Making a code</string>
+    <string name="pair_expired">The code expired.</string>
+    <string name="pair_new_code">New code</string>
+    <string name="pair_paired_with">Paired with %1$s</string>
+    <string name="pair_a_phone">your phone</string>
+    <string name="pair_unpair">Unpair</string>
 </resources>

@@ -126,6 +126,13 @@ class WatchRingTest {
         assertEquals("ring2_silent", n.channelId)
     }
 
+    @Test fun theDefaultForApprovalsIsJustBuzzAndNotAFullScreenRing() {
+        assertEquals(ApprovalRingMode.BUZZ, WatchRing.approvalMode(ctx))
+        WatchRing.onState(ctx, WatchState(pending = listOf(card(21))))
+        assertNull("one buzz and a card, no full screen", posted("card:21")!!.fullScreenIntent)
+        WatchRing.onState(ctx, WatchState())
+    }
+
     @Test fun anApprovalRingsOnceInTheModeHeChoseAndStopsWhenItIsNoLongerWaiting() {
         WatchRing.setApprovalMode(ctx, ApprovalRingMode.FULL)
         WatchRing.onState(ctx, WatchState(pending = listOf(card(7))))
