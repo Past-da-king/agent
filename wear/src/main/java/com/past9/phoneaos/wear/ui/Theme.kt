@@ -1,6 +1,8 @@
 package com.past9.phoneaos.wear.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -43,8 +45,21 @@ private val WatchColors = ColorScheme(
     error = WatchTokens.error, onError = WatchTokens.onError, errorContainer = WatchTokens.errorContainer, onErrorContainer = WatchTokens.onErrorContainer,
 )
 
+/** The agent's look, synced from the phone: the mascot the user picked and the accent the colours are seeded from. */
+object WatchLook {
+    private val _look = kotlinx.coroutines.flow.MutableStateFlow(com.past9.phoneaos.wear.ui.ex.AgentLook(com.past9.phoneaos.wear.ui.ex.MascotKind.Scout, com.past9.phoneaos.wear.ui.ex.Pal.Iris))
+    val look: kotlinx.coroutines.flow.StateFlow<com.past9.phoneaos.wear.ui.ex.AgentLook> = _look
+    /** [accent] is an ARGB colour or null for the default iris. */
+    fun set(mascotId: String?, accent: Int?) {
+        _look.value = com.past9.phoneaos.wear.ui.ex.AgentLook(com.past9.phoneaos.wear.ui.ex.MascotKind.of(mascotId), accent?.let { com.past9.phoneaos.wear.ui.ex.Pal.of(Color(it)) } ?: com.past9.phoneaos.wear.ui.ex.Pal.Iris)
+    }
+}
+
 @Composable
-fun AgentWatchTheme(content: @Composable () -> Unit) = MaterialTheme(colorScheme = WatchColors, content = content)
+fun AgentWatchTheme(content: @Composable () -> Unit) {
+    val look by WatchLook.look.collectAsState()
+    androidx.compose.runtime.CompositionLocalProvider(com.past9.phoneaos.wear.ui.ex.LocalLook provides look) { MaterialTheme(colorScheme = WatchColors, content = content) }
+}
 
 private fun vec(name: String, path: String): ImageVector =
     ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f).addPath(PathParser().parsePathString(path).toNodes(), fill = SolidColor(Color.Black)).build()

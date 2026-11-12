@@ -1,4 +1,4 @@
-package com.past9.phoneaos.wear.v2
+package com.past9.phoneaos.wear.ui.ex
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border

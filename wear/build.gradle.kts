@@ -46,6 +46,7 @@ dependencies {
   implementation(project(":wearproto"))
   implementation(platform(libs.androidx.compose.bom))
   implementation(libs.androidx.core.ktx)
+  implementation("com.google.zxing:core:3.5.3")
   implementation(libs.androidx.compose.material3)
   implementation(libs.androidx.graphics.shapes)
   implementation(libs.androidx.activity.compose)

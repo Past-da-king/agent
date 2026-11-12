@@ -1,4 +1,4 @@
-package com.past9.phoneaos.wear.v2
+package com.past9.phoneaos.wear.ui.ex
 
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
