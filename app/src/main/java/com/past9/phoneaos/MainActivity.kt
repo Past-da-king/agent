@@ -408,14 +408,14 @@ class MainActivity : ComponentActivity() {
             val box = dictBox ?: mainBox
             // Only ever adds: a shorter result is ignored, and what he typed or sent since is left alone (voice/Words.kt).
             val writer = com.past9.phoneaos.voice.BoxWriter(box.draft) { android.util.Log.i("AosDictation", it) }
-            fun write(t: String) { writer.next(box.draft, t)?.let { box.draft = it } }
+            fun write(t: String, final: Boolean = false) { writer.next(box.draft, t, final)?.let { box.draft = it } }
             val done: (String?) -> Unit = { err -> runOnUiThread { dictating = false; dictation = null; if (err != null) say(err) } }
             // Since 0.15.17 the app records the mic itself, saves it as it goes, and only his tap ends it: the phone's
             // recogniser is fed from that audio, and whatever it drops (mobile data, silence) is written down from the
             // saved audio (voice/DictationEngine.kt). The older paths below are for phones that can do neither.
             if (com.past9.phoneaos.voice.DictationHub.supported(this@MainActivity)) {
                 val owner: Any = if (box === mainBox) "main" else box
-                if (com.past9.phoneaos.voice.DictationHub.start(this@MainActivity, owner, box.key) { t -> write(t) }) return
+                if (com.past9.phoneaos.voice.DictationHub.start(this@MainActivity, owner, box.key) { t, final -> write(t, final) }) return
             }
             if (com.past9.phoneaos.voice.SystemDictation.available(this@MainActivity)) {
                 val d = com.past9.phoneaos.voice.SystemDictation(this@MainActivity, onText = { t -> runOnUiThread { write(t) } }, onEnd = done)

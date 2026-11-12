@@ -259,7 +259,7 @@ object DictationHub {
     private var netCallback: ConnectivityManager.NetworkCallback? = null
     private var appContext: Context? = null
     private var owner: Any? = null
-    private var onText: ((String) -> Unit)? = null
+    private var onText: ((String, Boolean) -> Unit)? = null
     private val main = Handler(Looper.getMainLooper())
     private var currentId: String? = null
     private var currentStarted = 0L
@@ -287,8 +287,8 @@ object DictationHub {
     fun supported(context: Context): Boolean =
         (Build.VERSION.SDK_INT >= 33 && SystemDictation.available(context)) || PieceTranscriber.available(context)
 
-    /** Start listening into [owner]'s box. [onText] gets the whole dictated text every time it changes. Main thread. */
-    fun start(context: Context, owner: Any?, chat: String = "", onText: (String) -> Unit): Boolean {
+    /** Start listening into [owner]'s box. [onText] gets the whole dictated text every time it changes, and whether it is the whole take written down from the audio (which replaces the caption whatever its length). Main thread. */
+    fun start(context: Context, owner: Any?, chat: String = "", onText: (String, Boolean) -> Unit): Boolean {
         if (active) return false
         release()
         val ctx = context.applicationContext
@@ -311,8 +311,8 @@ object DictationHub {
             ({ pcm: ByteArray -> PieceTranscriber.transcribe(ctx, pcm) }) else null
         val e = DictationEngine(s, { android.os.SystemClock.elapsedRealtime() }, tape, live, transcribe,
             onView = { v ->
-                _ui.value = Ui(this.owner, v); this.onText?.invoke(v.text)
-                saved.note(id, startedAt, v.elapsedMs, v.text, noteState(v), chat, flush = v.ended)
+                _ui.value = Ui(this.owner, v); this.onText?.invoke(v.text, v.final)
+                saved.note(id, startedAt, v.elapsedMs, v.text, noteState(v), chat, flush = v.ended, final = v.final)
                 if (v.ended) ended(v)
             },
             log = { Log.i(TAG, it) })

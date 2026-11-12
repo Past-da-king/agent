@@ -54,6 +54,8 @@ data class DictationView(
     val elapsedMs: Long = 0,
     /** Live words from the recogniser, or pieces written down as he goes (no recogniser that takes our audio). */
     val live: Boolean = true,
+    /** The whole take written down from the saved audio: this is the text, and it replaces the caption whatever its length. */
+    val final: Boolean = false,
 ) {
     enum class Phase { LISTENING, RECONNECTING, PAUSED, FINISHING, DONE, KEPT, CANCELLED }
     val ended: Boolean get() = phase == Phase.DONE || phase == Phase.KEPT || phase == Phase.CANCELLED
@@ -419,12 +421,23 @@ class DictationEngine(
             val live = text()
             when {
                 whole.isBlank() -> log("polish answered nothing: the live words stay")
-                Words.less(live, whole) -> log("polish ignored: ${whole.length} of ${live.length} chars")
+                tooLittle(live, whole) -> log("polish ignored: ${whole.length} of ${live.length} chars")
                 else -> { polished = whole; log("polished the whole take: ${live.length} to ${whole.length} chars") }
             }
             settle()
             show()
         }
+    }
+
+    /**
+     * The whole-take pass is the truth (12 Nov 2026): the caption is a guess in one language and can hold MORE words
+     * than the truth (junk for what it could not follow), so it is replaced whatever its length. The one exception is a
+     * pass that kept under a third of a long caption, which is a failed call and not a transcript.
+     */
+    private fun tooLittle(caption: String, whole: String): Boolean {
+        val a = caption.trim().split(Regex("\\s+")).count { it.isNotEmpty() }
+        val b = whole.trim().split(Regex("\\s+")).count { it.isNotEmpty() }
+        return a >= 12 && b * 3 < a
     }
 
     // ---- what he sees ----
@@ -442,7 +455,7 @@ class DictationEngine(
             else -> DictationView.Phase.LISTENING
         }
         val elapsed = (if (stoppedAt > 0) stoppedAt else clock()) - startedAt
-        return DictationView(text(), p, pending, lost, elapsed, live != null)
+        return DictationView(text(), p, pending, lost, elapsed, live != null, polished != null)
     }
 
     private fun show() { if (phase != DictationView.Phase.CANCELLED) onView(view()) }

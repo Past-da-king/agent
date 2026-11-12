@@ -360,6 +360,19 @@ class DictationEngineTest {
         assertTrue("the whole take went to the speech model", pc.calls > 0)
     }
 
+    @Test fun theWholeTakeReplacesACaptionThatHasMoreWordsButWrongOnes() = runTest {
+        // The caption has junk for what it could not follow (more words); the whole-take pass is the truth.
+        val live = HandLive()
+        val pc = FakePc().apply { answer = { "Sawubona my friend ngiyaphila and now back in English." } }
+        val r = engine(live, pc)
+        speak(r, 0, 20, talk = 20, pause = 1)
+        live.ev!!.partial("so what do you want to bow and then it was a hello there my friend in English back and it is fine ok")
+        r.engine.finish()
+        untilEnded(r)
+        assertEquals("Sawubona my friend ngiyaphila and now back in English.", r.engine.text())
+        assertTrue("it is the final text", r.engine.view().final)
+    }
+
     @Test fun aPolishThatFailsLeavesTheCaptionHeCanSee() = runTest {
         val live = HandLive()
         val pc = FakePc().apply { online = false }

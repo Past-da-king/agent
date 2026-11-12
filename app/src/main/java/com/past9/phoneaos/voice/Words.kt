@@ -51,14 +51,14 @@ class BoxWriter(start: String, private val log: (String) -> Unit = {}) {
     private var written = start
 
     /** The box's new text for [dictated], the whole dictation so far; null: leave the box as it is. */
-    fun next(box: String, dictated: String): String? {
+    fun next(box: String, dictated: String, final: Boolean = false): String? {
         if (box != written) { base = box; consumed = lastDictated; written = box }
         val tail = after(dictated, consumed)
         val text = Words.join(base, tail)
         if (text == written) { lastDictated = dictated; return null }
         // Nothing dictated any more, after there was: never back to how the box started.
         if (tail.isBlank()) { log("ignored an empty result"); return null }
-        if (Words.less(written, text)) { log("ignored a shorter result: ${written.length} to ${text.length} chars"); return null }
+        if (!final && Words.less(written, text)) { log("ignored a shorter result: ${written.length} to ${text.length} chars"); return null }
         lastDictated = dictated
         written = text
         return text
