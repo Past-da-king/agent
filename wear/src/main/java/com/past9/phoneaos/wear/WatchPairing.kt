@@ -14,6 +14,7 @@ import com.past9.phoneaos.wearproto.PairPaths
 import com.past9.phoneaos.wearproto.PairReply
 import com.past9.phoneaos.wearproto.PairWire
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeoutOrNull
@@ -79,11 +80,34 @@ object WatchPairingState {
 
     /** A phone asked to pair. The answer goes back to it; if it was right the watch is bound and pulls the phone's customisations. */
     suspend fun onRequest(c: Context, from: String, data: ByteArray?) {
+        sendMessage(c, from, PairPaths.RESULT, PairWire.result(answer(c, from, data)))
+    }
+
+    /** A phone asked over the local network (no sender to read: the phone says its own node id in the request). The answer carries this watch's node id. */
+    suspend fun onLanRequest(c: Context, data: ByteArray?): PairReply {
+        val phoneNode = PairWire.parseRequestNode(data)
+        if (phoneNode.isBlank()) return PairReply.Refused(com.past9.phoneaos.wearproto.PairReason.NO_NODE)
+        return answer(c, phoneNode, data)
+    }
+
+    /** The checking and the binding, the same on both roads. */
+    private suspend fun answer(c: Context, from: String, data: ByteArray?): PairReply {
         val req = PairWire.parseRequest(data)
-        val reply: PairReply = if (req == null) PairReply.Refused("wrong_code")
+        var reply: PairReply = if (req == null) PairReply.Refused("wrong_code")
         else host(c).request(from, req.first, req.second, Build.MODEL.orEmpty().ifBlank { "Watch" }, System.currentTimeMillis())
-        if (reply is PairReply.Accepted) { save(c); WatchCustomisationState.clear(c); (c.applicationContext as? WatchApp)?.controller?.opened() }
-        sendMessage(c, from, PairPaths.RESULT, PairWire.result(reply))
+        if (reply is PairReply.Accepted) {
+            save(c); WatchCustomisationState.clear(c); (c.applicationContext as? WatchApp)?.controller?.opened()
+            reply = reply.copy(node = localNode(c).orEmpty())
+        }
+        return reply
+    }
+
+    /** What the pairing screen listens to while it is up: a request that came straight to it, whatever the system did with the service. */
+    fun listener(c: Context, scope: kotlinx.coroutines.CoroutineScope) = com.google.android.gms.wearable.MessageClient.OnMessageReceivedListener { e ->
+        when (e.path) {
+            PairPaths.REQUEST -> scope.launch { onRequest(c, e.sourceNodeId, e.data) }
+            PairPaths.UNPAIR -> onUnpair(c, e.sourceNodeId)
+        }
     }
 
     /** The phone unpaired (or told this watch it does not know it). Only the paired phone counts. */

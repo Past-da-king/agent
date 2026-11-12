@@ -6,6 +6,10 @@
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Pairing over the local network when the Data Layer does not carry the request (WatchLanPair.kt). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- A call on the watch sets the communication audio mode (echo cancellation, earbud routing). -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />

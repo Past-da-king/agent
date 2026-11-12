@@ -12,6 +12,8 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -59,7 +61,7 @@ object QrDecode {
         }
         return try {
             QRCodeReader().decode(BinaryBitmap(HybridBinarizer(PlanarYUVLuminanceSource(data, width, height, 0, 0, width, height, false))),
-                mapOf(DecodeHintType.TRY_HARDER to true)).text
+                mapOf(DecodeHintType.TRY_HARDER to true, DecodeHintType.POSSIBLE_FORMATS to listOf(com.google.zxing.BarcodeFormat.QR_CODE))).text
         } catch (_: Exception) { null }
     }
 
@@ -220,18 +222,29 @@ fun LinkScreen(onBack: () -> Unit, onLinked: () -> Unit, offerText: String? = nu
     }
 }
 
-/** The back camera, reading QR codes until one is found. */
+/**
+ * The back camera, reading QR codes until one is found. One scanner for the computer link and for pairing a watch.
+ *
+ * Built to read a small, dense code on another screen held 10 to 20 cm away: a high-resolution analysis stream (the default 640x480 is too
+ * coarse for a code on a watch face), continuous autofocus plus a refocus on the centre every couple of seconds (phones that hunt at close
+ * range settle), tap to focus anywhere, an optional torch, and a TextureView preview so it draws inside a bottom sheet.
+ */
 @Composable
-fun QrScanner(modifier: Modifier, onText: (String) -> Unit) {
+fun QrScanner(modifier: Modifier, torch: Boolean = false, onText: (String) -> Unit) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
-    val view = remember { PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER } }
+    val view = remember { PreviewView(context).apply { implementationMode = PreviewView.ImplementationMode.COMPATIBLE; scaleType = PreviewView.ScaleType.FILL_CENTER } }
     val latest by rememberUpdatedState(onText)
+    var camera by remember { mutableStateOf<androidx.camera.core.Camera?>(null) }
     DisposableEffect(owner) {
         val future = ProcessCameraProvider.getInstance(context)
         val exec = Executors.newSingleThreadExecutor()
-        val preview = Preview.Builder().build()
-        val analysis = ImageAnalysis.Builder().setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build()
+        val selector = androidx.camera.core.resolutionselector.ResolutionSelector.Builder()
+            .setAspectRatioStrategy(androidx.camera.core.resolutionselector.AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+            .setResolutionStrategy(androidx.camera.core.resolutionselector.ResolutionStrategy(android.util.Size(QrScan.ANALYSIS_W, QrScan.ANALYSIS_H),
+                androidx.camera.core.resolutionselector.ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER)).build()
+        val preview = Preview.Builder().setResolutionSelector(selector).build()
+        val analysis = ImageAnalysis.Builder().setResolutionSelector(selector).setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build()
         analysis.setAnalyzer(exec) { img ->
             val text = try { QrDecode.decode(img) } catch (_: Exception) { null } finally { img.close() }
             if (text != null) view.post { latest(text) }
@@ -241,17 +254,42 @@ fun QrScanner(modifier: Modifier, onText: (String) -> Unit) {
         future.addListener({
             if (!gone) runCatching {
                 preview.setSurfaceProvider(view.surfaceProvider)
-                future.get().bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+                camera = future.get().bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
             }
         }, main)
         onDispose {
-            gone = true
+            gone = true; camera = null
             // Never wait for the camera here: it may still be starting (seconds on some phones). Unbind once it is ready.
             future.addListener({ runCatching { future.get().unbind(preview, analysis) } }, main)
             exec.shutdown()
         }
     }
-    AndroidView({ view }, modifier)
+    val cam = camera
+    LaunchedEffect(cam, torch) { if (cam != null && cam.cameraInfo.hasFlashUnit()) runCatching { cam.cameraControl.enableTorch(torch) } }
+    // Refocus on the centre every couple of seconds, then hand back to continuous autofocus.
+    LaunchedEffect(cam) {
+        while (cam != null) {
+            kotlinx.coroutines.delay(QrScan.REFOCUS_MS)
+            runCatching { focusAt(cam, view, view.width / 2f, view.height / 2f) }
+        }
+    }
+    AndroidView({ view }, modifier.pointerInput(cam) { detectTapGestures { p -> if (cam != null) runCatching { focusAt(cam, view, p.x, p.y) } } })
+}
+
+private fun focusAt(cam: androidx.camera.core.Camera, view: PreviewView, x: Float, y: Float) {
+    if (view.width == 0 || view.height == 0) return
+    val point = view.meteringPointFactory.createPoint(x, y)
+    cam.cameraControl.startFocusAndMetering(androidx.camera.core.FocusMeteringAction.Builder(point,
+        androidx.camera.core.FocusMeteringAction.FLAG_AF or androidx.camera.core.FocusMeteringAction.FLAG_AE)
+        .setAutoCancelDuration(QrScan.FOCUS_HOLD_S, java.util.concurrent.TimeUnit.SECONDS).build())
+}
+
+/** What the scanner asks of the camera, kept in one place so a test can pin it. */
+object QrScan {
+    const val ANALYSIS_W = 1600
+    const val ANALYSIS_H = 1200
+    const val REFOCUS_MS = 2_500L
+    const val FOCUS_HOLD_S = 2L
 }
 
 /**

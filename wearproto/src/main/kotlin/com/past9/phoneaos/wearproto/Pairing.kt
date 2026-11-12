@@ -28,6 +28,8 @@ object PairReason {
     const val PAIRED_OTHER = "paired_other"
     /** The reason the phone gives a watch it is not paired with, so the watch shows its pairing screen. */
     const val NOT_PAIRED = "pair"
+    /** A request over the local network that did not say which phone it is from. */
+    const val NO_NODE = "no_node"
 
     fun text(reason: String): String = when (reason) {
         NO_OFFER -> "The watch is not showing a code. Open the pairing screen on the watch."
@@ -36,6 +38,7 @@ object PairReason {
         LOCKED -> "Too many wrong codes. Get a new code on the watch."
         PAIRED_OTHER -> "This watch is already paired with another phone."
         NOT_PAIRED -> "Pair this watch with the phone first."
+        NO_NODE -> "The phone could not tell the watch who it is. Turn Bluetooth on, check the watch shows as connected in the Galaxy Wearable app, then try again."
         else -> "Pairing did not work."
     }
 }
@@ -46,10 +49,11 @@ data class PairProof(val secret: String = "", val code: String = "")
 data class PairOffer(val node: String, val secret: String, val expiresAt: Long) {
     /** The short code, as shown: "ABCD-EFGH". */
     val code: String get() = PairCode.show(secret)
-    fun qr(): String = "agentwatch://pair?n=" + node + "&s=" + secret
+    /** [host] is the watch's own address on the local network ("192.168.1.49:41475"), so a phone that cannot reach it over the Data Layer can still find it. */
+    fun qr(host: String = ""): String = "agentwatch://pair?n=" + node + "&s=" + secret + (if (host.isNotBlank()) "&h=$host" else "")
 }
 
-data class ScannedOffer(val node: String, val secret: String)
+data class ScannedOffer(val node: String, val secret: String, val host: String = "")
 
 object PairCode {
     private const val ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
@@ -66,17 +70,23 @@ object PairCode {
     /** What was typed, made comparable: case, spaces and dashes do not matter, and the letters people mix up (O, I, L) read as the digits. */
     fun normalise(typed: String): String = typed.uppercase().filter { it.isLetterOrDigit() }.map { when (it) { 'O' -> '0'; 'I', 'L' -> '1'; else -> it } }.joinToString("")
 
+    /** What the code field holds while he types or pastes: only code characters, upper case, at most eight, with the dash after the fourth ("9H4T-5PBS"). */
+    fun clean(typed: String): String = normalise(typed).filter { it in ALPHABET }.take(LENGTH)
+    fun format(typed: String): String = clean(typed).chunked(4).joinToString("-")
+    fun complete(typed: String): Boolean = clean(typed).length == LENGTH
+
     fun parseQr(text: String): ScannedOffer? {
         val t = text.trim()
         if (!t.startsWith("agentwatch://pair?")) return null
         val q = t.substringAfter('?').split('&').mapNotNull { p -> p.split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }.toMap()
         val n = q["n"].orEmpty(); val s = q["s"].orEmpty()
-        return if (n.isBlank() || s.length < 16) null else ScannedOffer(n, s)
+        return if (n.isBlank() || s.length < 16) null else ScannedOffer(n, s, q["h"].orEmpty())
     }
 }
 
 sealed interface PairReply {
-    data class Accepted(val watchName: String) : PairReply
+    /** [node] is the Data Layer node id of the watch, when the answer came by another road than the Data Layer. */
+    data class Accepted(val watchName: String, val node: String = "") : PairReply
     data class Refused(val reason: String) : PairReply
 }
 
@@ -154,7 +164,9 @@ object PairWire {
     private fun bytes(o: JSONObject) = o.toString().toByteArray(Charsets.UTF_8)
     private fun obj(b: ByteArray?): JSONObject? = if (b == null) null else runCatching { JSONObject(String(b, Charsets.UTF_8)) }.getOrNull()
 
-    fun request(p: PairProof, phoneName: String): ByteArray = bytes(JSONObject().put("secret", p.secret).put("code", p.code).put("name", phoneName.take(40)))
+    fun request(p: PairProof, phoneName: String, phoneNode: String = ""): ByteArray = bytes(JSONObject().put("secret", p.secret).put("code", p.code).put("name", phoneName.take(40)).put("node", phoneNode))
+    /** The phone's own node id, when it said it (the local-network road has no sender to read it from). */
+    fun parseRequestNode(b: ByteArray?): String = obj(b)?.optString("node").orEmpty()
     fun parseRequest(b: ByteArray?): Pair<PairProof, String>? {
         val o = obj(b) ?: return null
         val s = o.optString("secret"); val c = o.optString("code")
@@ -163,12 +175,12 @@ object PairWire {
     }
 
     fun result(r: PairReply): ByteArray = bytes(when (r) {
-        is PairReply.Accepted -> JSONObject().put("ok", true).put("name", r.watchName)
+        is PairReply.Accepted -> JSONObject().put("ok", true).put("name", r.watchName).put("node", r.node)
         is PairReply.Refused -> JSONObject().put("ok", false).put("reason", r.reason)
     })
     fun parseResult(b: ByteArray?): PairReply? {
         val o = obj(b) ?: return null
-        return if (o.optBoolean("ok")) PairReply.Accepted(o.optString("name")) else PairReply.Refused(o.optString("reason", PairReason.WRONG))
+        return if (o.optBoolean("ok")) PairReply.Accepted(o.optString("name"), o.optString("node")) else PairReply.Refused(o.optString("reason", PairReason.WRONG))
     }
 }
 
@@ -230,4 +242,58 @@ class CustomisationStore(private var held: Customisation = Customisation()) {
 object Mascots {
     val IDS = listOf("scout", "ghost", "clover", "bloom", "puff", "gem", "pebble", "heart", "bun")
     fun known(id: String): String = if (id in IDS) id else ""
+}
+
+/**
+ * The second road for pairing, used when the Data Layer does not carry the request (the phone app is in a work or Secure Folder profile, the
+ * watch app is frozen by the maker's battery manager, Play Services is slow): both are on the same Wi-Fi. The watch listens on a TCP port while
+ * its pairing screen is up and advertises it as a service; the phone finds it (the QR carries the address, the typed code uses discovery) and sends
+ * the same request line. The code or the QR secret is the proof, exactly as on the Data Layer; one line out, one line back.
+ */
+object PairLan {
+    const val SERVICE_TYPE = "_agentwatch._tcp."
+    const val SERVICE_NAME = "agent-watch"
+    const val MAX_LINE = 2_048
+
+    /** "192.168.1.49:41475" to its two parts, or null when it is not an address this road should ever dial (no names, no public hosts). */
+    fun parseHost(text: String): Pair<String, Int>? {
+        val i = text.lastIndexOf(':')
+        if (i <= 0) return null
+        val host = text.substring(0, i); val port = text.substring(i + 1).toIntOrNull() ?: return null
+        val parts = host.split('.')
+        if (parts.size != 4 || parts.any { (it.toIntOrNull() ?: -1) !in 0..255 }) return null
+        if (port !in 1024..65535) return null
+        return if (isPrivate(parts.map { it.toInt() })) host to port else null
+    }
+
+    /** Only addresses on a home or office network: a scanned QR must never make the phone dial somebody else's server. */
+    fun isPrivate(o: List<Int>): Boolean = o[0] == 10 || (o[0] == 172 && o[1] in 16..31) || (o[0] == 192 && o[1] == 168) || (o[0] == 169 && o[1] == 254)
+
+    fun line(b: ByteArray): ByteArray = b + 10.toByte()
+}
+
+/** What went wrong, decided from facts the phone has, so the sheet can say it instead of "no watch answered". */
+enum class PairProblem { NOT_MAIN_PROFILE, NO_PLAY_SERVICES, WATCH_NOT_CONNECTED, WATCH_DID_NOT_ANSWER, WIFI_UNREACHABLE, TOLD_NO }
+
+data class PairFacts(
+    /** The Android user this app runs in (0 is the owner; a work profile or Secure Folder is another). */
+    val userId: Int,
+    val playServices: Boolean,
+    /** Watches the Data Layer lists as connected to this phone. */
+    val connectedWatches: Int,
+    /** Requests that the Data Layer accepted for sending. */
+    val sentOverDataLayer: Int,
+    /** Watches found on the local network. */
+    val foundOnWifi: Int,
+    val wifiConnected: Boolean,
+)
+
+object PairDiagnosis {
+    fun of(f: PairFacts): PairProblem = when {
+        f.userId != 0 -> PairProblem.NOT_MAIN_PROFILE
+        !f.playServices -> PairProblem.NO_PLAY_SERVICES
+        f.connectedWatches == 0 && f.foundOnWifi == 0 -> PairProblem.WATCH_NOT_CONNECTED
+        f.foundOnWifi == 0 && !f.wifiConnected -> PairProblem.WIFI_UNREACHABLE
+        else -> PairProblem.WATCH_DID_NOT_ANSWER
+    }
 }

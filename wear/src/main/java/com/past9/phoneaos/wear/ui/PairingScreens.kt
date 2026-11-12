@@ -52,9 +52,9 @@ object QrImage {
  * draw their own; the screen draws the code from the offer itself, as the rounded tile of the expressive look.
  */
 @Composable
-fun PairingScreen(offer: PairOffer?, qr: ImageBitmap?, expired: Boolean, onNewCode: () -> Unit) {
+fun PairingScreen(offer: PairOffer?, qr: ImageBitmap?, expired: Boolean, lanHost: String = "", onNewCode: () -> Unit) {
     if (offer != null && !expired) {
-        PairFlowScreen(PairStage.SCAN, offer.qr(), offer.code, 0, "", com.past9.phoneaos.wear.ui.ex.MascotKind.Scout) {}
+        PairFlowScreen(PairStage.SCAN, offer.qr(lanHost), offer.code, 0, "", com.past9.phoneaos.wear.ui.ex.MascotKind.Scout) {}
     } else {
         val pal = LocalLook.current.pal
         ExStage { g ->

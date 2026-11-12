@@ -3,7 +3,7 @@
 <resources>
     <string name="watch_pair_title" translatable="false">Watch</string>
     <string name="watch_pair_row" translatable="false">Pair a Wear OS watch with this phone</string>
-    <string name="watch_pair_intro" translatable="false">Open the pairing screen on the watch, then scan its QR code or type the code under it.</string>
+    <string name="watch_pair_intro" translatable="false">Open the Agent app on the watch. It shows a code: scan it, or type it below.</string>
     <string name="watch_pair_paired_with" translatable="false">Paired with %1$s</string>
     <string name="watch_pair_pair" translatable="false">Pair</string>
     <string name="watch_pair_unpair" translatable="false">Unpair</string>
@@ -11,4 +11,27 @@
     <string name="watch_pair_allow_camera" translatable="false">Allow the camera to scan</string>
     <string name="watch_pair_not_found" translatable="false">No watch answered. Check that it is nearby and showing its pairing screen.</string>
     <string name="watch_pair_synced" translatable="false">The watch follows the agent name, mascot, accent, language and voice you set on this phone.</string>
+    <string name="watch_sheet_title" translatable="false">Pair your watch</string>
+    <string name="watch_sheet_pairing" translatable="false">Pairing</string>
+    <string name="watch_sheet_pairing_body" translatable="false">Talking to the watch. Keep its pairing screen open.</string>
+    <string name="watch_sheet_paired_body" translatable="false">Your watch is paired and ready.</string>
+    <string name="watch_sheet_or_type" translatable="false">Or type the code on the watch</string>
+    <string name="watch_sheet_paste" translatable="false">Paste</string>
+    <string name="watch_sheet_retry" translatable="false">Try again</string>
+    <string name="watch_sheet_torch" translatable="false">Torch</string>
+    <string name="watch_sheet_hint" translatable="false">Hold 10 to 20 cm away. Tap to focus.</string>
+    <string name="watch_sheet_camera_why" translatable="false">The camera reads the code on the watch. You can also type it below.</string>
+    <string name="watch_problem_profile_title" translatable="false">This copy of the app can\'t reach a watch</string>
+    <string name="watch_problem_profile" translatable="false">You are using the Agent app inside a work profile or Secure Folder. Watches only talk to the main profile. Close this one, open the Agent app from your normal home screen, and pair there.</string>
+    <string name="watch_problem_play_title" translatable="false">Google Play services is missing</string>
+    <string name="watch_problem_play" translatable="false">Watches pair through Google Play services, which this phone does not have or has switched off. Update or enable it, then try again.</string>
+    <string name="watch_problem_link_title" translatable="false">No watch is connected to this phone</string>
+    <string name="watch_problem_link" translatable="false">Turn Bluetooth on and check that your watch shows as connected in the Galaxy Wearable or Wear OS app. If you have just set it up, give it a minute. Being on the same Wi-Fi also works.</string>
+    <string name="watch_problem_wifi_title" translatable="false">The watch did not answer</string>
+    <string name="watch_problem_wifi" translatable="false">It did not answer over Bluetooth and this phone is not on Wi-Fi. Connect to the same Wi-Fi as the watch, keep the pairing screen open on the watch, then try again.</string>
+    <string name="watch_problem_silent_title" translatable="false">The watch did not answer</string>
+    <string name="watch_problem_silent" translatable="false">The watch is connected but did not reply. Keep its pairing screen open with the screen on, make sure the phone and watch are on the same Wi-Fi, then try again.</string>
+    <string name="watch_problem_said_title" translatable="false">That did not work</string>
+    <string name="watch_problem_said" translatable="false">The watch refused. Check the code on its screen.</string>
+    <string name="watch_sheet_failed" translatable="false">Could not pair</string>
 </resources>
