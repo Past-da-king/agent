@@ -186,14 +186,14 @@ class PlayMediaTool(private val deps: MediaDeps, private val waitMs: Long = 8_00
             when (val f = deps.screenReplay(req, ctx)) {
                 Fallback.Off -> { log += offNote(label); return null }
                 is Fallback.InFront -> { log += f.text.take(200); return null }
-                is Fallback.Ran -> when (val o = MediaVerify.await(deps::sessions, req.app.pkg, req.query, retryMs, sleep = { deps.sleep(it) })) {
+                is Fallback.Ran -> when (val o = resumeIfPaused(req, MediaVerify.await(deps::sessions, req.app.pkg, req.query, retryMs, sleep = { deps.sleep(it) }))) {
                     is MediaVerify.Outcome.Playing -> return playingLine(o, " (replayed the saved play job on the background screen, not worked out again: ${f.text.substringBefore(". Steps").take(80)})")
                     is MediaVerify.Outcome.NoAccess -> return "Ran the saved play job for $label. I cannot confirm it is playing: ${o.why} $NO_ACCESS_HELP"
                     else -> { deps.markStale(req.app); log += "the saved play job for $label ran but nothing is playing, so it is marked stale and was learned again from a clean start" }
                 }
                 is Fallback.Failed -> {
                     // A step that is only sometimes there (a Play button when the row already started it) stops a replay at its end. If the app is playing what was asked, that is the job done.
-                    val o = MediaVerify.await(deps::sessions, req.app.pkg, req.query, SETTLE_MS, sleep = { deps.sleep(it) })
+                    val o = resumeIfPaused(req, MediaVerify.await(deps::sessions, req.app.pkg, req.query, SETTLE_MS, sleep = { deps.sleep(it) }))
                     if (o is MediaVerify.Outcome.Playing && o.matches) return playingLine(o, " (replayed the saved play job on the background screen; its last step was not needed because $label was already playing it)")
                     deps.markStale(req.app)
                     log += "the saved play job for $label stopped (${f.text.take(120)}), so it is marked stale and was learned again from a clean start"
@@ -212,6 +212,13 @@ class PlayMediaTool(private val deps: MediaDeps, private val waitMs: Long = 8_00
                 playingLine(l.o, " (done on the background screen$earlier" + (if (saved != null) "; saved as $label's play job, so the next play takes a few seconds" else "; not saved, because " + (if (!l.o.matches) "it may not be what was asked for" else "it took a wrong turn first, so it will be worked out again next time")) + ")")
             }
         }
+    }
+
+    /** The replay left the app on the right track but not playing (a page that opened paused): transport Play is the cheapest way on. */
+    private suspend fun resumeIfPaused(req: ScreenRequest, o: MediaVerify.Outcome): MediaVerify.Outcome {
+        if (o !is MediaVerify.Outcome.NotPlaying || !MediaVerify.retryable(o.s) || !MediaVerify.matches(req.query, o.s)) return o
+        runCatching { o.s.play() }
+        return MediaVerify.await(deps::sessions, req.app.pkg, req.query, retryMs, sleep = { deps.sleep(it) })
     }
 
     private fun failed(query: String, label: String, log: List<String>) =
