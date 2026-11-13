@@ -35,27 +35,27 @@ class PlayMediaScreenTest {
 
     @Test fun aLaunchOntoTheHiddenDisplayLeavesTheUsersFrontAppAsItWas() {
         val chrome = Task(1, 0, "com.android.chrome", true)
-        val rvx = "app.rvx.android.youtube"
+        val player = "com.example.player"
         val before = listOf(chrome)
-        val after = listOf(chrome, Task(9, 7, rvx, true))
-        assertTrue(ScreenLanding.after(before, after, rvx) is ScreenLanding.Decision.Leave)
+        val after = listOf(chrome, Task(9, 7, player, true))
+        assertTrue(ScreenLanding.after(before, after, player) is ScreenLanding.Decision.Leave)
         assertEquals(chrome, ScreenLanding.front(after))
     }
 
     @Test fun aLaunchThatCameUpOnTheUsersScreenIsMovedAndTheirAppPutBackSoTheFrontIsTheSame() {
         val chrome = Task(1, 0, "com.android.chrome", true)
-        val rvx = "app.rvx.android.youtube"
+        val player = "com.example.player"
         val before = listOf(chrome)
-        var now = listOf(Task(2, 0, rvx, true), chrome.copy(visible = false))
-        val fix = ScreenLanding.after(before, now, rvx) as ScreenLanding.Decision.Fix
+        var now = listOf(Task(2, 0, player, true), chrome.copy(visible = false))
+        val fix = ScreenLanding.after(before, now, player) as ScreenLanding.Decision.Fix
         // what the helper does: move ours off display 0, bring theirs back to the front
         now = now.map { if (it.id in fix.move) it.copy(display = 7) else it }.map { if (it.id == fix.restore) it.copy(visible = true) else it }
         assertEquals(ScreenLanding.front(before)?.pkg, ScreenLanding.front(now)?.pkg)
-        assertFalse(now.any { it.display == 0 && it.pkg == rvx })
+        assertFalse(now.any { it.display == 0 && it.pkg == player })
     }
 
     @Test fun anAppTheUserHasInFrontIsNeverOpenedOnTheBackgroundScreen() {
-        val rvx = "app.rvx.android.youtube"
-        assertTrue(ScreenLanding.before(listOf(Task(3, 0, rvx, true)), rvx) is ScreenLanding.Decision.Refuse)
+        val player = "com.example.player"
+        assertTrue(ScreenLanding.before(listOf(Task(3, 0, player, true)), player) is ScreenLanding.Decision.Refuse)
     }
 }

@@ -115,7 +115,7 @@ object MediaResolve {
 
     private fun norm(s: String) = s.lowercase().filter { it.isLetterOrDigit() }
 
-    /** By name or package: exact first, then a start, then a part, so "metrolist" finds "Metrolist Nightly". */
+    /** By name or package: exact first, then a start, then a part, so "example" finds "Example Player". */
     fun match(apps: List<MediaApp>, ref: String): MediaApp? {
         val r = norm(ref)
         if (r.isEmpty()) return null
@@ -168,6 +168,8 @@ sealed interface Sessions {
 
 object MediaVerify {
     fun playing(s: MediaSessionView) = s.state == PlaybackState.STATE_PLAYING
+    /** A session that is not playing but could be started by transport Play: error, stopped, paused or idle. */
+    fun retryable(s: MediaSessionView) = s.state == PlaybackState.STATE_ERROR || s.state == PlaybackState.STATE_STOPPED || s.state == PlaybackState.STATE_PAUSED || s.state == PlaybackState.STATE_NONE
     fun starting(s: MediaSessionView) = s.state == PlaybackState.STATE_BUFFERING || s.state == PlaybackState.STATE_CONNECTING
 
     private val NOISE = setOf("by", "the", "a", "an", "of", "feat", "ft", "and", "play", "song", "music")
@@ -252,7 +254,9 @@ object MediaVerify {
         if (s.artist.isNotBlank()) append(" by ").append(s.artist)
         if (s.album.isNotBlank()) append(" (").append(s.album).append(")")
         append(" in ").append(s.label).append(" [").append(s.pkg).append("]")
-        if (s.duration > 0) append(", ").append(clock(s.position)).append(" of ").append(clock(s.duration))
+        // The length is read from the metadata and shown only when it makes sense: some apps publish a short [vault:vercel-recovery-past952.token] (an ad, a clip) while the real track plays.
+        if (s.duration > 0 && s.position <= s.duration) append(", ").append(clock(s.position)).append(" of ").append(clock(s.duration))
+        else if (s.position >= 0 && s.state == PlaybackState.STATE_PLAYING) append(", at ").append(clock(s.position))
     }
 }
 

@@ -51,9 +51,9 @@ open class MediaAppsSheetTest(private val dark: Boolean) {
     protected open val width = "390"
 
     private val rows = listOf(
-        MediaAppRow("test.music.one", "Metrolist Nightly", playFromSearch = true, audioFiles = true, sessionNow = true),
-        MediaAppRow("test.music.two", "RVX Music", playFromSearch = true),
-        MediaAppRow("test.video.one", "RVX YouTube", videoLinks = true),
+        MediaAppRow("test.music.one", "Example Music", playFromSearch = true, audioFiles = true, sessionNow = true),
+        MediaAppRow("test.music.two", "Example Player", playFromSearch = true),
+        MediaAppRow("test.video.one", "Example Video", videoLinks = true),
         MediaAppRow("test.files.one", "Plain Player", audioFiles = true),
     )
 
@@ -133,8 +133,8 @@ open class MediaAppsSheetTest(private val dark: Boolean) {
         assertEquals(listOf("Plays from search", "Local files", "Playing now"), rows[0].abilities())
         assertEquals(listOf("Video links"), rows[2].abilities())
         assertEquals("Which app plays your music and video · automatic", MediaAppsUi.line(rows, "", ""))
-        assertEquals("Music: Metrolist Nightly · Video: RVX YouTube", MediaAppsUi.line(rows, "test.music.one", "test.video.one"))
-        assertEquals("Video: RVX YouTube", MediaAppsUi.line(rows, "uninstalled.app", "test.video.one"))
+        assertEquals("Music: Example Music · Video: Example Video", MediaAppsUi.line(rows, "test.music.one", "test.video.one"))
+        assertEquals("Video: Example Video", MediaAppsUi.line(rows, "uninstalled.app", "test.video.one"))
     }
 }
 

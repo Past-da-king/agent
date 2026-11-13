@@ -510,7 +510,7 @@ class ScreenSession(
     } }
 
     /** Open [app] on the hidden display: its front door, or [link] inside it. */
-    suspend fun open(ctx: ToolContext, app: String, link: String = "", owner: String = ""): String = mutex.withLock { safely {
+    suspend fun open(ctx: ToolContext, app: String, link: String = "", owner: String = "", fresh: Boolean = false): String = mutex.withLock { safely {
         blocked(ctx, needOpen = false)?.let { return it }
         // One job at a time. Every caller from a linked computer looks alike, so a helper says its own name when it opens an app.
         val who = owner.trim().take(40).ifBlank { ctx.agentLabel }
@@ -520,7 +520,7 @@ class ScreenSession(
         if (!cur.open || cur.owner != who) jobStart = now()
         jobOwner = who; ownerLabel = ctx.agentLabel
         val ref = apps.find(app) ?: return "No app called \"$app\" is installed.${apps.near(app).takeIf { it.isNotEmpty() }?.let { " Close matches: ${it.joinToString(", ")}." } ?: " Use android_apps to see what is installed."}"
-        val out = doOpen(ctx, ref, link, fresh = false)
+        val out = doOpen(ctx, ref, link, fresh = fresh)
         if (out != null && !out.startsWith("!")) return out
         runCatching { ctx.activity("Background screen: opened ${ref.label}", JSONObject().put("tool", "screen").put("app", ref.pkg)) }
         "${ref.label} is open on the background screen. The user's own screen was not touched.\n" + (out?.removePrefix("!")?.plus("\n") ?: "") + read()
