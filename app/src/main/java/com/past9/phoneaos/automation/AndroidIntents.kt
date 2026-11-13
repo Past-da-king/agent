@@ -317,9 +317,11 @@ interface IntentSettings {
 /** android_intent: talk to any app on this phone. */
 class AndroidIntentTool(
     private val settings: IntentSettings,
+    /** What the phone says about where an intent would land (see [com.past9.phoneaos.media.MediaIntentGuard]). */
+    private val mediaTargets: () -> com.past9.phoneaos.media.MediaIntentGuard.Targets = { com.past9.phoneaos.media.MediaIntentGuard.NONE },
     private val send: suspend (IntentSpec) -> String,
 ) : Tool {
-    constructor(context: Context, settings: IntentSettings) : this(settings, { IntentSender(context).send(it) })
+    constructor(context: Context, settings: IntentSettings) : this(settings, { com.past9.phoneaos.media.AndroidMediaTargets(context) }, { IntentSender(context).send(it) })
 
     override val spec = ToolSpec("android_intent",
         "Talk to ANY app on this phone with an Android intent: open a deep link or a place, start a navigation, share text or a file into an app, open a settings page, " +
@@ -345,7 +347,7 @@ class AndroidIntentTool(
         val parsed = IntentRules.parse(input)
         val s = parsed.spec ?: return "failed: ${parsed.error}"
         // Playing something is play_media's job: an intent would put the app on the user's own screen.
-        com.past9.phoneaos.media.MediaIntentGuard.refusal(s)?.let { return "failed: $it" }
+        com.past9.phoneaos.media.MediaIntentGuard.refusal(s, mediaTargets())?.let { return "failed: $it" }
         when (val g = IntentRules.gate(s, settings.intentAllowlist()) { q -> ctx.ask(q, listOf("Approve", "Decline")) }) {
             is IntentRules.Gate.Stop -> return g.reason
             IntentRules.Gate.Go -> Unit

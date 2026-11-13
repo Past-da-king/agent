@@ -769,7 +769,7 @@ class ScreenSession(
                     "key" -> doKey(ctx, extra.optString("key"), quick = true)
                     "wait" -> doWait(ScreenSkills.fill(s.optString("text"), args), extra.optBoolean("gone"), extra.optInt("seconds", 20), extra.optInt("stable")).let { (ok, said) ->
                         // A wait for the screen to stop changing is a pause, not a check: a screen that never stops (a player, a timer, a live feed) is where the steps go on.
-                        if (ok || (s.optString("text").isBlank() && extra.optInt("stable") > 0 && said.contains("still changing"))) null else said }
+                        if (ReplayRules.waitHolds(ok, s.optString("text"), extra.optInt("stable"), said)) null else said }
                     else -> null
                 }
                 if (why != null) return fail(i, "Step ${i + 1} of ${steps.length()} (${ScreenSkills.say(s)}) stopped: $why\n" + runCatching { read() }.getOrDefault(""))

@@ -264,7 +264,7 @@ class DeviceCommands(private val context: Context, private val session: RemoteSe
                 // The computer's miniapp_open: bring the app up with that mini-app open.
                 com.past9.phoneaos.miniapps.MiniAppsHub.pendingOpen.value = app
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage(context.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)); true to "opened"
-            } else if (com.past9.phoneaos.media.MediaIntentGuard.refusalForLink(url) != null) false to com.past9.phoneaos.media.MediaIntentGuard.REASON
+            } else if (com.past9.phoneaos.media.MediaIntentGuard.refusalForLink(url, com.past9.phoneaos.media.AndroidMediaTargets(context)) != null) false to com.past9.phoneaos.media.MediaIntentGuard.REASON
             else if (url.startsWith("/v1/")) receive(c.put("path", url), open = true)
             else if (url.startsWith("https://") || url.startsWith("http://")) {
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true to "opened"

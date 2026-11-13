@@ -38,7 +38,7 @@ data class MediaAppRow(
     val video: Boolean get() = videoLinks
 
     companion object {
-        fun of(a: MediaApp, sessionNow: Boolean) = MediaAppRow(a.pkg, a.label, a.playFromSearch, a.videoLinks, a.audioFiles, sessionNow)
+        fun of(a: MediaApp, sessionNow: Boolean) = MediaAppRow(a.pkg, a.label, a.playFromSearch, a.videoFiles, a.audioFiles, sessionNow)
     }
 }
 
