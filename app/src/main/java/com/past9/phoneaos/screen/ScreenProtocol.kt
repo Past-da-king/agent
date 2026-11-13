@@ -14,7 +14,7 @@ import java.io.DataOutputStream
  */
 object ScreenProtocol {
     /** Bump when a message changes shape, so the app restarts a helper left over from an older build. */
-    const val VERSION = 5
+    const val VERSION = 6
     const val MAX_JSON = 4 * 1024 * 1024
     const val MAX_BIN = 32 * 1024 * 1024
 
