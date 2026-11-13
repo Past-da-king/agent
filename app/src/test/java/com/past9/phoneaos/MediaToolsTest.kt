@@ -338,7 +338,7 @@ class MediaToolsTest {
         d.learn = { req -> Learned.Failed("no result") }
         val out = play(d, "query" to "Underway")
         assertTrue(out, out.startsWith("failed:") && out.contains("ran but nothing is playing, so it is marked stale and was learned again") && out.contains("no result"))
-        assertEquals(listOf("replay", "learn"), d.order.take(2))
+        assertEquals(listOf("replay", "stale", "learn"), d.order.take(3))
         assertEquals(1, d.order.count { it == "learn" })
     }
 
