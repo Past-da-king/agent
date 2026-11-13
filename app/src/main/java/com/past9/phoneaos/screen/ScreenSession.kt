@@ -767,7 +767,9 @@ class ScreenSession(
                     "type" -> doType(ctx, ScreenSkills.fill(s.optString("text"), args), target, extra.optBoolean("append"), extra.optBoolean("submit"), secret = s.optString("text").startsWith("{secret"), quick = true).first
                     "swipe" -> doSwipe(ctx, extra.optString("dir"), target, extra.optInt("x1"), extra.optInt("y1"), extra.optInt("x2"), extra.optInt("y2"), quick = true)
                     "key" -> doKey(ctx, extra.optString("key"), quick = true)
-                    "wait" -> doWait(ScreenSkills.fill(s.optString("text"), args), extra.optBoolean("gone"), extra.optInt("seconds", 20), extra.optInt("stable")).let { (ok, said) -> if (ok) null else said }
+                    "wait" -> doWait(ScreenSkills.fill(s.optString("text"), args), extra.optBoolean("gone"), extra.optInt("seconds", 20), extra.optInt("stable")).let { (ok, said) ->
+                        // A wait for the screen to stop changing is a pause, not a check: a screen that never stops (a player, a timer, a live feed) is where the steps go on.
+                        if (ok || (s.optString("text").isBlank() && extra.optInt("stable") > 0 && said.contains("still changing"))) null else said }
                     else -> null
                 }
                 if (why != null) return fail(i, "Step ${i + 1} of ${steps.length()} (${ScreenSkills.say(s)}) stopped: $why\n" + runCatching { read() }.getOrDefault(""))
