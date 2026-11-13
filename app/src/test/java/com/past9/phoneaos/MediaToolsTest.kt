@@ -327,7 +327,7 @@ class MediaToolsTest {
         d.learn = { req -> Learned.Playing(MediaVerify.Outcome.Playing(FakeSession(req.app.pkg, req.app.label, PlaybackState.STATE_PLAYING, "Underway"), true)) }
         val out = play(d, "query" to "Underway")
         assertTrue(out, out.startsWith("Playing"))
-        assertEquals(listOf("replay", "learn", "save", "done"), d.order)
+        assertEquals(listOf("replay", "stale", "learn", "save", "done"), d.order)
         assertTrue(d.launched.isEmpty())
     }
 
@@ -337,7 +337,7 @@ class MediaToolsTest {
         d.replay = { Fallback.Ran("Done") }
         d.learn = { req -> Learned.Failed("no result") }
         val out = play(d, "query" to "Underway")
-        assertTrue(out, out.startsWith("failed:") && out.contains("ran but nothing is playing, so it was learned again") && out.contains("no result"))
+        assertTrue(out, out.startsWith("failed:") && out.contains("ran but nothing is playing, so it is marked stale and was learned again") && out.contains("no result"))
         assertEquals(listOf("replay", "learn"), d.order.take(2))
         assertEquals(1, d.order.count { it == "learn" })
     }
@@ -563,8 +563,8 @@ class MediaToolsTest {
         install("test.music.one", "Example Music"); install("test.browser", "A Browser")
         pm.addResolveInfoForIntent(Intent(MediaIntents.PLAY_FROM_SEARCH), resolve("test.music.one"))
         pm.addResolveInfoForIntent(link(MediaIntents.PLAIN_WEB), resolve("test.browser"))
-        pm.addResolveInfoForIntent(link("https://media.example.org/watch/1"), resolve("test.music.one"))
-        pm.addResolveInfoForIntent(link("https://media.example.org/watch/1"), resolve("test.browser"))
+        pm.addResolveInfoForIntent(Intent(Intent.ACTION_VIEW, Uri.parse("https://media.example.org/watch/1")), resolve("test.music.one"))
+        pm.addResolveInfoForIntent(Intent(Intent.ACTION_VIEW, Uri.parse("https://media.example.org/watch/1")), resolve("test.browser"))
         val facts = AndroidMediaTargets(app)
         assertTrue("test.music.one" in facts.mediaApps())
         assertEquals(setOf("test.browser"), facts.browsers())
