@@ -142,7 +142,7 @@ class CallController(
                 .put("description", "What you are working on right now, the last thing you said in the chat, and anything you are waiting on the user for.")
                 .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject())))
             .put(JSONObject().put("name", "play_media")
-                .put("description", "Play music or a video on the user's phone right now, in the app they use. Use it at once when they ask to play something. Answers what is playing.")
+                .put("description", "Play music or a video on the user's phone right now, in the app they use, without touching their screen. This is the ONLY way to play: use it at once when they ask to play something, and never hand playing to hand_to_agent or have an app opened. Answers what is playing, or that it failed: then say so.")
                 .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject()
                     .put("query", JSONObject().put("type", "STRING").put("description", "What to play, in their words"))
                     .put("kind", JSONObject().put("type", "STRING").put("description", "song, artist, album, playlist, podcast or video. Song when unsure."))
