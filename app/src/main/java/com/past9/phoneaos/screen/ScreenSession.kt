@@ -651,7 +651,7 @@ class ScreenSession(
         val back = LinkedHashSet<String>()
         if (keepApp) _state.value.pkg.takeIf { it.isNotBlank() }?.let { back += it }
         note("close", "Closed the background screen")
-        val r = runCatching { backend.call(op("release").put("move_back", JSONArray(back.toList()))) }.getOrNull()
+        val r = runCatching { backend.call(op("release").put("move_back", JSONArray(back.toList())).put("why", if (back.isEmpty()) "close" else "keep_app")) }.getOrNull()
         val wasStopped = _state.value.stopped
         forget()
         _state.value = ScreenState(stopped = wasStopped)
@@ -806,10 +806,10 @@ class ScreenSession(
         if (displayId == 0) return "Nothing is open on the background screen."
         val f = runCatching { front() }.getOrNull() ?: return "No app is in front on the background screen."
         var how = "moved"
-        val moved = runCatching { ask(op("move").put("task", f.taskId).put("to", "main")).optBoolean("ok") }.getOrDefault(false)
+        val moved = runCatching { ask(op("move").put("task", f.taskId).put("to", "main").put("why", "take_over")).optBoolean("ok") }.getOrDefault(false)
         if (!moved) {
             how = "opened again"
-            if (runCatching { ask(op("launch").put("pkg", f.pkg).put("where", "main")).optBoolean("ok") }.getOrDefault(false) != true) return "It could not be brought to your screen."
+            if (runCatching { ask(op("launch").put("pkg", f.pkg).put("where", "main").put("why", "take_over")).optBoolean("ok") }.getOrDefault(false) != true) return "It could not be brought to your screen."
         }
         handed = f; borrowed -= f.pkg
         lastUsed = now()
@@ -905,7 +905,7 @@ class ScreenSession(
     suspend fun userBringToMyScreen(): Boolean = mutex.withLock {
         if (displayId == 0) return false
         val f = runCatching { front() }.getOrNull() ?: return false
-        val ok = runCatching { ask(op("move").put("task", f.taskId).put("to", "main")).optBoolean("ok") }.getOrDefault(false)
+        val ok = runCatching { ask(op("move").put("task", f.taskId).put("to", "main").put("why", "bring_to_screen")).optBoolean("ok") }.getOrDefault(false)
         if (ok) {
             runCatching { backend.call(op("release").put("move_back", JSONArray())) }
             val stopped = _state.value.stopped
