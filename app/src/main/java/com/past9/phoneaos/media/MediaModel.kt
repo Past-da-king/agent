@@ -168,8 +168,8 @@ sealed interface Sessions {
 
 object MediaVerify {
     fun playing(s: MediaSessionView) = s.state == PlaybackState.STATE_PLAYING
-    /** A session that is not playing but could be started by transport Play: error, stopped, paused or idle. */
-    fun retryable(s: MediaSessionView) = s.state == PlaybackState.STATE_ERROR || s.state == PlaybackState.STATE_STOPPED || s.state == PlaybackState.STATE_PAUSED || s.state == PlaybackState.STATE_NONE
+    /** A session that is not playing but could be started by transport Play: stopped, paused or idle. One in error is left alone: an app asked to recover from an error may open its own window on the user's screen. */
+    fun retryable(s: MediaSessionView) = s.state == PlaybackState.STATE_STOPPED || s.state == PlaybackState.STATE_PAUSED || s.state == PlaybackState.STATE_NONE
     fun starting(s: MediaSessionView) = s.state == PlaybackState.STATE_BUFFERING || s.state == PlaybackState.STATE_CONNECTING
 
     private val NOISE = setOf("by", "the", "a", "an", "of", "feat", "ft", "and", "play", "song", "music")
