@@ -148,23 +148,10 @@ Before it looks for a search box it calls `MediaScreenLearner.reachSearch()`, ge
 
 The first open of a learning run is also a fresh start. Display 0 is never touched.
 
-A media session that is in error, stopped or paused ON THE RIGHT TRACK (title, artist or album carry the words asked for) is sent transport Play once before any screen route.
+A media session that is stopped or paused ON THE RIGHT TRACK (title, artist or album carry the words asked for) is sent transport Play once before any screen route.
 If that starts something that is not what was asked for, it is paused again. A saved play job that was replayed says so in the answer, with the time it took.
 The length shown by `media_control now_playing` is read from the metadata and left out when it is shorter than the position (some apps publish a [vault:vercel-recovery-past952.token] length while the real track plays); the right track is judged by title, artist and album, never by length.
 
-### An app that opens in a state that hides its search (0.15.66)
+A session in error is never asked (0.15.68): an app asked to recover from an error can open its own window on the user's screen, so the background screen is used instead.
 
-An app often comes back to where it was left: a full-screen or mini player, a dialog, a stale page. The learner never assumes the front door.
-Before it looks for a search box it calls `MediaScreenLearner.reachSearch()`, generic steps only, all on the background screen:
-
-1. If a search box or a search button shows, nothing is touched.
-2. Back, up to 3 times, looking after each press (an empty screen means Back left the app, so it stops pressing).
-3. One swipe down (folds an expanded player).
-4. The app is started fresh with a clean task (`ScreenSession.open(fresh = true)`), which forgets where it was left.
-5. Still no search: it fails and says what was tried.
-
-The first open of a learning run is also a fresh start. Display 0 is never touched.
-
-A media session that is in error, stopped or paused ON THE RIGHT TRACK (title, artist or album carry the words asked for) is sent transport Play once before any screen route.
-If that starts something that is not what was asked for, it is paused again. A saved play job that was replayed says so in the answer, with the time it took.
-The length shown by `media_control now_playing` is read from the metadata and left out when it is shorter than the position (some apps publish a [vault:vercel-recovery-past952.token] length while the real track plays); the right track is judged by title, artist and album, never by length.
+A session in error is never asked (0.15.68): an app asked to recover from an error can open its own window on the user's screen, so the background screen is used instead.

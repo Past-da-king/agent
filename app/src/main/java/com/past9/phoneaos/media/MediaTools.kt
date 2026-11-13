@@ -228,7 +228,10 @@ class PlayMediaTool(private val deps: MediaDeps, private val waitMs: Long = 8_00
             val hadJob = deps.hasJob(chosen)
             // A saved job is the quickest way back in, so it goes first when there is one (and the app is not in the user's hands).
             if (!inFront && hadJob) onBackgroundScreen(req, ctx, log)?.let { return it.also { done(ctx) } }
-            viaSession(chosen, query, kind, stale, log)?.let { return it }
+            // A session in error is not asked: an app recovering from an error may open its own window on the user's screen. The background screen is the way.
+            val broken = !inFront && before?.state == android.media.session.PlaybackState.STATE_ERROR
+            if (broken) log += "${chosen.label} has a media session in error, so it was not asked (it could open its own window on the user's screen)"
+            else viaSession(chosen, query, kind, stale, log)?.let { return it }
             if (inFront) inPlace(chosen, query, kind, stale, log)?.let { return it }
             // With a saved job the screen was already tried (and learned again if it broke) above.
             else if (!hadJob) onBackgroundScreen(req, ctx, log)?.let { return it.also { done(ctx) } }

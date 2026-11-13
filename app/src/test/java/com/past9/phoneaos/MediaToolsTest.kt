@@ -669,14 +669,25 @@ class MediaToolsTest {
 
     // ---- a session in error or stopped, on the right track ----------------------------------------------------------
 
-    @Test fun aSessionInErrorOnTheRightTrackIsSentPlayBeforeAnyScreenRoute() {
+    @Test fun aStoppedSessionOnTheRightTrackIsSentPlayBeforeAnyScreenRoute() {
         val d = deps(player)
-        val s = FakeSession(player.pkg, "Example Player", PlaybackState.STATE_ERROR, "Underway", "Some Band")
+        val s = FakeSession(player.pkg, "Example Player", PlaybackState.STATE_STOPPED, "Underway", "Some Band")
         d.list += s // playFromSearch does nothing; transport Play brings it back
         val out = play(d, "query" to "Underway by Some Band")
-        assertTrue(out, out.startsWith("Playing \"Underway\" by Some Band in Example Player.") && out.contains("was error, so it was sent Play"))
+        assertTrue(out, out.startsWith("Playing \"Underway\" by Some Band in Example Player.") && out.contains("was stopped, so it was sent Play"))
         assertEquals(listOf("search Underway by Some Band", "play"), s.calls)
         assertEquals("no screen route was needed", 0, d.screenCalls)
+    }
+
+    @Test fun aSessionInErrorIsNotAskedAtAllItGoesStraightToTheBackgroundScreen() {
+        val d = deps(player)
+        val s = FakeSession(player.pkg, "Example Player", PlaybackState.STATE_ERROR, "Underway", "Some Band")
+        d.list += s
+        d.learn = { Learned.Failed("no search") }
+        val out = play(d, "query" to "Underway by Some Band")
+        assertTrue(out, out.startsWith("failed:") && out.contains("in error, so it was not asked"))
+        assertTrue("the session was never touched", s.calls.isEmpty() && d.browserAsked == 0)
+        assertEquals(1, d.order.count { it == "learn" })
     }
 
     @Test fun aStoppedSessionOnTheWrongTrackIsNotSentPlayItGoesToTheScreenRoute() {
@@ -692,7 +703,7 @@ class MediaToolsTest {
 
     @Test fun ifPlayDoesNotStartTheSessionTheFailureSaysSoAndTheScreenRouteIsTried() {
         val d = deps(player)
-        val s = object : MediaSessionView by FakeSession(player.pkg, "Example Player", PlaybackState.STATE_ERROR, "Underway", "Some Band") { override fun play() {} }
+        val s = object : MediaSessionView by FakeSession(player.pkg, "Example Player", PlaybackState.STATE_STOPPED, "Underway", "Some Band") { override fun play() {} }
         d.list += s
         d.learn = { Learned.Failed("no search") }
         val out = play(d, "query" to "Underway by Some Band")
