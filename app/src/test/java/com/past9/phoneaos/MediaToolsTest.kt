@@ -517,6 +517,19 @@ class MediaToolsTest {
         assertTrue(d.stale.isEmpty())
     }
 
+    @Test fun aReplayThatLeftTheRightTrackPausedIsSentPlayNotLearnedAgain() {
+        val d = deps(player)
+        d.jobs += player.pkg
+        val s = FakeSession(player.pkg, "Example Player", PlaybackState.STATE_PAUSED, "Underway")
+        d.list += s
+        d.replay = { Fallback.Failed("The learned way stopped part of the way. Step 6 of 6 could not be done.") }
+        playingLearn(d)
+        val out = play(d, "query" to "Underway")
+        assertTrue(out, out.startsWith("Playing \"Underway\""))
+        assertEquals(listOf("play"), s.calls)
+        assertEquals(listOf("replay", "done"), d.order)
+    }
+
     @Test fun aStaleJobThatLeftSomethingElsePlayingIsStillLearnedAgain() {
         val d = deps(player)
         d.jobs += player.pkg
