@@ -491,7 +491,7 @@ class MediaToolsTest {
         var sent = 0
         val tool = com.past9.phoneaos.automation.AndroidIntentTool(object : com.past9.phoneaos.automation.IntentSettings { override fun intentAllowlist() = emptyList<IntentRules.Pair>() }) { sent++; "sent" }
         val out = runBlocking {
-            tool.run(JSONObject().put("kind", "activity").put("action", Intent.ACTION_VIEW).put("package", "com.example.player").put("data", "https://www.youtube.com/watch?v=dQw4w9WgXcQ"), Ctx())
+            tool.run(JSONObject().put("kind", "activity").put("action", Intent.ACTION_VIEW).put("package", "com.example.player").put("data", "https://open.spotify.com/track/abc"), Ctx())
         }
         assertTrue(out, out.startsWith("failed:") && out.contains("play_media"))
         val out2 = runBlocking {
