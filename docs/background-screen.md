@@ -84,6 +84,40 @@ The loop: try, record, save, replay.
 - The person can teach one too: Settings > Background screen > Recordings and learned apps > Show it a job. They do
   it once by hand on the live picture, and it is saved in the same format.
 
+## play_media: music and video play here, never on the user's screen (0.15.65)
+
+`play_media` is the only way the agent plays something. It never opens an app on the user's own screen (display 0)
+unless the app is already in front there. Order, in `media/MediaTools.kt`:
+
+1. A saved play job for the app (learned app of the app, tool `play`, `app_<app>_play(query)`), when there is one:
+   replayed on the background screen, then checked with the media session (notification listener). Seconds.
+2. The app's own media session (`playFromSearch`), or its media browser service when the app is closed. Opens nothing.
+3. No saved job, or the replay broke: `MediaScreenLearner` works it out on the background screen once. It opens the
+   app there (a cold start, through the helper, so `ScreenLanding` moves anything that lands on display 0 and puts
+   the user's front app back), finds the search box (or presses a search button / tab), types the words, presses
+   the row that carries most of them (`MediaScreenPlan`, which reads words, hints and ids, never an app name), and
+   a Play button when the row only opened a page. It then watches the media session until it plays what was asked.
+   Audio from the virtual display plays. A broken replay is learned again once, never looped.
+4. Video: the YouTube watch link is opened in the video app on the background screen (`screenLink`), never by an
+   intent; when YouTube cannot be read the app's own search is used as in 3.
+5. An app already in front on the user's own screen is asked in place (a play-from-search intent to the app that is
+   already showing: it stays in front, so the user's screen is the same before and after). The background screen
+   cannot take it from under them: `ScreenSession.open` refuses, and so does the helper.
+
+If the background screen is off and the app has no session, `play_media` fails with that reason; it does not fall back
+to opening the app.
+
+**Saving the job.** Saving a learned tool normally shows an approval card. The play job is saved without one
+(`ScreenLearned.save(autoApprove = true)`) only when it is read-only (playback: it never sends, pays or deletes; a
+press on such a button still asks through the usual gate), the run just proved it by playing what was asked, and the
+run took one clean path (no wrong rows pressed first). The job is visible and removable in Connections > Learned apps.
+A result row is saved as "the row at this place" (id, kind, position) and not by the words it had that day
+(`generic` taps in `ScreenSkills.fromRun`), so the same steps play any query.
+
+**Nothing else plays.** `android_intent` refuses a play request (`MEDIA_PLAY_FROM_SEARCH`, a VIEW of a YouTube, Spotify
+or other media link, audio or video type) and the phone's `open_url` refuses media links, both with the reason and
+the way to `play_media` (`MediaIntentGuard`). The Live voice and call prompts say `play_media` is the only way and that a
+failure is reported, not worked around.
 ## Recordings
 
 Kept on the phone only, in `files/screen-runs/<id>/` (`run.json` and one JPEG per step). Password fields and

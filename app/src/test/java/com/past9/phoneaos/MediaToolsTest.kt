@@ -532,7 +532,7 @@ class MediaToolsTest {
         assertEquals(best, MediaScreenPlan.pickResult(listOf(box, chip, other, best, title), "BAD BISHHH by Tony Dayimane Lowfeye and Usimamane", box))
         assertEquals("a row already tried is skipped", other, MediaScreenPlan.pickResult(listOf(box, chip, other, title), "BAD BISHHH", box, setOf(best.label)))
         // nothing carries the words: the first wide row after the box
-        assertEquals(title, MediaScreenPlan.pickResult(listOf(box, chip.copy(right = 100), title), "zzzz qqqq", box, 720))
+        assertEquals(title, MediaScreenPlan.pickResult(listOf(box, chip.copy(right = 100), title), "zzzz qqqq", box, screenWidth = 720))
         assertNull(MediaScreenPlan.pickResult(listOf(box), "anything", box))
     }
 
