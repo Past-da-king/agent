@@ -506,6 +506,27 @@ class MediaToolsTest {
         assertEquals("replay", d.order.first())
     }
 
+    @Test fun aSavedJobThatStopsAtAStepThatWasNotNeededButLeftTheTrackPlayingIsNotLearnedAgain() {
+        val d = deps(player)
+        d.jobs += player.pkg
+        d.replay = { d.list += FakeSession(player.pkg, "Example Player", PlaybackState.STATE_PLAYING, "Underway"); Fallback.Failed("The learned way stopped part of the way. Step 6 of 6 could not be done.") }
+        playingLearn(d)
+        val out = play(d, "query" to "Underway")
+        assertTrue(out, out.startsWith("Playing \"Underway\"") && out.contains("last step was not needed"))
+        assertEquals(listOf("replay", "done"), d.order)
+        assertTrue(d.stale.isEmpty())
+    }
+
+    @Test fun aStaleJobThatLeftSomethingElsePlayingIsStillLearnedAgain() {
+        val d = deps(player)
+        d.jobs += player.pkg
+        d.replay = { d.list += FakeSession(player.pkg, "Example Player", PlaybackState.STATE_PLAYING, "Something else entirely"); Fallback.Failed("stopped at step 2") }
+        playingLearn(d)
+        val out = play(d, "query" to "Underway")
+        assertTrue(out, out.startsWith("Playing \"Underway\"") && out.contains("earlier: the saved play job"))
+        assertEquals(listOf("replay", "stale", "learn", "save", "done"), d.order)
+    }
+
     @Test fun aStaleJobIsNotReplayedAgainWhenTheRelearnWasNotClean() {
         val d = deps(player)
         d.jobs += player.pkg

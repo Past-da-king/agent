@@ -84,6 +84,9 @@ sealed interface Fallback {
 /** Said when the phone's screen is off: the background screen draws nothing then, and the screen is never woken for it. */
 const val ASLEEP = "the phone is asleep, the background screen can't draw, so only the app's own media session was used (the screen was not woken)"
 
+/** How long to look at the media session for after a replay that stopped, before it is called stale. */
+const val SETTLE_MS = 2_500L
+
 const val NO_ACCESS_HELP = "Turn on notification access for Agent: Settings > Notifications > Device & app notifications > Notification access (the notifications_allow tool opens it)."
 
 /**
@@ -188,7 +191,13 @@ class PlayMediaTool(private val deps: MediaDeps, private val waitMs: Long = 8_00
                     is MediaVerify.Outcome.NoAccess -> return "Ran the saved play job for $label. I cannot confirm it is playing: ${o.why} $NO_ACCESS_HELP"
                     else -> { deps.markStale(req.app); log += "the saved play job for $label ran but nothing is playing, so it is marked stale and was learned again from a clean start" }
                 }
-                is Fallback.Failed -> { deps.markStale(req.app); log += "the saved play job for $label stopped (${f.text.take(120)}), so it is marked stale and was learned again from a clean start" }
+                is Fallback.Failed -> {
+                    // A step that is only sometimes there (a Play button when the row already started it) stops a replay at its end. If the app is playing what was asked, that is the job done.
+                    val o = MediaVerify.await(deps::sessions, req.app.pkg, req.query, SETTLE_MS, sleep = { deps.sleep(it) })
+                    if (o is MediaVerify.Outcome.Playing && o.matches) return playingLine(o, " (replayed the saved play job on the background screen; its last step was not needed because $label was already playing it)")
+                    deps.markStale(req.app)
+                    log += "the saved play job for $label stopped (${f.text.take(120)}), so it is marked stale and was learned again from a clean start"
+                }
                 Fallback.NoJob -> {}
             }
         }
@@ -199,7 +208,8 @@ class PlayMediaTool(private val deps: MediaDeps, private val waitMs: Long = 8_00
             is Learned.NoAccess -> "Pressed play in $label on the background screen. I cannot confirm it is playing: ${l.why} $NO_ACCESS_HELP"
             is Learned.Playing -> {
                 val saved = if (l.o.matches && l.clean) deps.screenSave(req, ctx) else null
-                playingLine(l.o, " (done on the background screen" + (if (saved != null) "; saved as $label's play job, so the next play takes a few seconds" else "; not saved, because " + (if (!l.o.matches) "it may not be what was asked for" else "it took a wrong turn first, so it will be worked out again next time")) + ")")
+                val earlier = log.filter { it.startsWith("the saved play job") }.joinToString("; ").let { if (it.isEmpty()) "" else "; earlier: $it" }
+                playingLine(l.o, " (done on the background screen$earlier" + (if (saved != null) "; saved as $label's play job, so the next play takes a few seconds" else "; not saved, because " + (if (!l.o.matches) "it may not be what was asked for" else "it took a wrong turn first, so it will be worked out again next time")) + ")")
             }
         }
     }
