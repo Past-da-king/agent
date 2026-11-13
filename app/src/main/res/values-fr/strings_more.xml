@@ -409,7 +409,7 @@
     <string name="media_line_video">Vidéo : %1$s</string>
     <string name="media_title">Applis multimédia</string>
     <string name="media_play">Lire musique et vidéo</string>
-    <string name="media_intro">Quand vous demandez à votre agent de lire quelque chose, il utilise l\'appli choisie ici. En automatique, il utilise celle par défaut de votre téléphone, puis toute appli capable de lire depuis une recherche. Rien ne quitte le téléphone, hormis la recherche YouTube pour une vidéo.</string>
+    <string name="media_intro">Quand vous demandez à votre agent de lire quelque chose, il utilise l\'appli choisie ici. En automatique, il utilise celle par défaut de votre téléphone, puis toute appli capable de lire depuis une recherche.</string>
     <string name="media_access_off">L\'accès aux notifications est désactivé</string>
     <string name="media_access_body">Android n\'affiche ce qui est en lecture, et ne laisse votre agent mettre en pause ou passer, que si Agent a l\'accès aux notifications.</string>
     <string name="media_none">Aucune appli de ce téléphone ne dit pouvoir lire de la musique ou des vidéos pour votre agent. Installez une appli de musique et elle apparaîtra ici.</string>

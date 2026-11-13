@@ -404,7 +404,7 @@
     <string name="media_line_video">Video: %1$s</string>
     <string name="media_title">Programu za media</string>
     <string name="media_play">Cheza muziki na video</string>
-    <string name="media_intro">Unapomwomba wakala wako acheze kitu, hutumia programu unayochagua hapa. Ikiachwa otomatiki, hutumia chaguomsingi ya simu yako, kisha programu yoyote inayoweza kucheza kutoka utafutaji. Hakuna kinachoondoka kwenye simu isipokuwa utafutaji wa YouTube wa video.</string>
+    <string name="media_intro">Unapomwomba wakala wako acheze kitu, hutumia programu unayochagua hapa. Ikiachwa otomatiki, hutumia chaguomsingi ya simu yako, kisha programu yoyote inayoweza kucheza kutoka utafutaji.</string>
     <string name="media_access_off">Ufikiaji wa arifa umezimwa</string>
     <string name="media_access_body">Android huonyesha kinachochezwa tu, na humruhusu wakala wako kusitisha au kuruka, Agent ikishapata ufikiaji wa arifa.</string>
     <string name="media_none">Hakuna programu kwenye simu hii inayosema inaweza kucheza muziki au video kwa wakala wako. Sakinisha programu ya muziki nayo itaonekana hapa.</string>

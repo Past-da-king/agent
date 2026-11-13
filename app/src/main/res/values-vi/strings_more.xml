@@ -401,7 +401,7 @@
     <string name="media_line_video">Video: %1$s</string>
     <string name="media_title">Ứng dụng đa phương tiện</string>
     <string name="media_play">Phát nhạc và video</string>
-    <string name="media_intro">Khi bạn nhờ trợ lý phát thứ gì đó, nó dùng ứng dụng bạn chọn ở đây. Để tự động thì nó dùng ứng dụng mặc định của điện thoại, rồi đến bất kỳ ứng dụng nào phát được từ tìm kiếm. Không có gì rời khỏi điện thoại ngoài việc tìm video trên YouTube.</string>
+    <string name="media_intro">Khi bạn nhờ trợ lý phát thứ gì đó, nó dùng ứng dụng bạn chọn ở đây. Để tự động thì nó dùng ứng dụng mặc định của điện thoại, rồi đến bất kỳ ứng dụng nào phát được từ tìm kiếm.</string>
     <string name="media_access_off">Quyền truy cập thông báo đang tắt</string>
     <string name="media_access_body">Android chỉ hiện nội dung đang phát, và cho trợ lý tạm dừng hoặc bỏ qua, khi Agent có quyền truy cập thông báo.</string>
     <string name="media_none">Không có ứng dụng nào trên điện thoại này cho biết phát được nhạc hoặc video cho trợ lý của bạn. Hãy cài một ứng dụng nhạc và nó sẽ hiện ở đây.</string>

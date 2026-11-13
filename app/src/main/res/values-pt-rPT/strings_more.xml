@@ -409,7 +409,7 @@
     <string name="media_line_video">Vídeo: %1$s</string>
     <string name="media_title">Apps de multimédia</string>
     <string name="media_play">Tocar música e vídeo</string>
-    <string name="media_intro">Quando pede ao seu agente para reproduzir algo, ele usa a app que escolher aqui. No automático, usa a predefinida do telemóvel e depois qualquer app que reproduza a partir de uma pesquisa. Nada sai do telemóvel, exceto a pesquisa no YouTube por um vídeo.</string>
+    <string name="media_intro">Quando pede ao seu agente para reproduzir algo, ele usa a app que escolher aqui. No automático, usa a predefinida do telemóvel e depois qualquer app que reproduza a partir de uma pesquisa.</string>
     <string name="media_access_off">O acesso às notificações está desativado</string>
     <string name="media_access_body">O Android só mostra o que está a ser reproduzido, e deixa o seu agente pausar ou saltar, quando o Agent tem acesso às notificações.</string>
     <string name="media_none">Nenhuma app neste telemóvel diz poder tocar música ou vídeo para o seu agente. Instale uma app de música e ele aparece aqui.</string>

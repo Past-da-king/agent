@@ -404,7 +404,7 @@
     <string name="media_line_video">Video: %1$s</string>
     <string name="media_title">Mediasovellukset</string>
     <string name="media_play">Toista musiikkia ja videota</string>
-    <string name="media_intro">Kun pyydät agenttiasi toistamaan jotain, se käyttää tässä valitsemaasi sovellusta. Automaattisena se käyttää puhelimesi oletusta ja sitten mitä tahansa sovellusta, joka osaa toistaa haulla. Mikään ei poistu puhelimesta paitsi videon YouTube-haku.</string>
+    <string name="media_intro">Kun pyydät agenttiasi toistamaan jotain, se käyttää tässä valitsemaasi sovellusta. Automaattisena se käyttää puhelimesi oletusta ja sitten mitä tahansa sovellusta, joka osaa toistaa haulla.</string>
     <string name="media_access_off">Ilmoitusten käyttöoikeus on pois päältä</string>
     <string name="media_access_body">Android näyttää, mitä on toistumassa, ja antaa agenttisi keskeyttää tai ohittaa vasta, kun Agentilla on ilmoitusten käyttöoikeus.</string>
     <string name="media_none">Mikään tämän puhelimen sovellus ei kerro osaavansa toistaa musiikkia tai videota agentillesi. Asenna musiikkisovellus, niin se ilmestyy tähän.</string>

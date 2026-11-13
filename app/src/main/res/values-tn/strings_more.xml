@@ -405,7 +405,7 @@
     <string name="media_line_video">Video: %1$s</string>
     <string name="media_title">Diapp tsa media</string>
     <string name="media_play">Tshameka mmino le video</string>
-    <string name="media_intro">Fa o kopa moemedi wa gago gore a tshameke sengwe, o dirisa app e o e kgethang fano. E tlogetswe ka automatic, e dirisa ya mogala wa gago e e tlwaelegileng, mme e bo e le app epe e e ka tshamekang ka go batla. Ga go sepe se se tswang mo mogaleng kwantle ga go batla ga YouTube ga video.</string>
+    <string name="media_intro">Fa o kopa moemedi wa gago gore a tshameke sengwe, o dirisa app e o e kgethang fano. E tlogetswe ka automatic, e dirisa ya mogala wa gago e e tlwaelegileng, mme e bo e le app epe e e ka tshamekang ka go batla.</string>
     <string name="media_access_off">Phitlhelelo ya dikitsiso e tima</string>
     <string name="media_access_body">Android e bontsha fela se se tshamekang, mme e letla moemedi wa gago gore a eme kgotsa a tlole, fa Agent e na le phitlhelelo ya dikitsiso.</string>
     <string name="media_none">Ga go app mo mogaleng ono e e reng e ka tshamekela moemedi wa gago mmino kgotsa video. Tsenya app ya mmino mme e tlhaga fano.</string>

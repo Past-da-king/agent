@@ -401,7 +401,7 @@
     <string name="media_line_video">동영상: %1$s</string>
     <string name="media_title">미디어 앱</string>
     <string name="media_play">음악과 동영상 재생</string>
-    <string name="media_intro">에이전트에게 무언가를 재생하라고 하면 여기서 고른 앱을 사용합니다. 자동으로 두면 휴대폰의 기본 앱을, 그다음에는 검색으로 재생할 수 있는 아무 앱을 사용합니다. 동영상의 YouTube 검색 외에는 휴대폰 밖으로 나가는 것이 없습니다.</string>
+    <string name="media_intro">에이전트에게 무언가를 재생하라고 하면 여기서 고른 앱을 사용합니다. 자동으로 두면 휴대폰의 기본 앱을, 그다음에는 검색으로 재생할 수 있는 아무 앱을 사용합니다.</string>
     <string name="media_access_off">알림 접근이 꺼져 있습니다</string>
     <string name="media_access_body">Agent에 알림 접근 권한이 있어야 Android가 재생 중인 내용을 보여 주고 에이전트가 일시정지하거나 건너뛸 수 있습니다.</string>
     <string name="media_none">이 휴대폰에는 에이전트를 위해 음악이나 동영상을 재생할 수 있다고 표시된 앱이 없습니다. 음악 앱을 설치하면 여기에 나타납니다.</string>

@@ -405,7 +405,7 @@
     <string name="media_line_video">Video: %1$s</string>
     <string name="media_title">Mga media app</string>
     <string name="media_play">Magpatugtog ng musika at video</string>
-    <string name="media_intro">Kapag hiniling mong magpatugtog ng kung ano ang iyong agent, gagamitin nito ang app na pipiliin mo rito. Kapag awtomatiko, gagamitin nito ang default ng telepono mo, saka anumang app na makapagpapatugtog mula sa paghahanap. Walang umaalis sa telepono maliban sa paghahanap sa YouTube para sa video.</string>
+    <string name="media_intro">Kapag hiniling mong magpatugtog ng kung ano ang iyong agent, gagamitin nito ang app na pipiliin mo rito. Kapag awtomatiko, gagamitin nito ang default ng telepono mo, saka anumang app na makapagpapatugtog mula sa paghahanap.</string>
     <string name="media_access_off">Naka-off ang notification access</string>
     <string name="media_access_body">Ipinapakita lang ng Android kung ano ang pinapatugtog, at hinahayaan ang iyong agent na mag-pause o mag-skip, kapag may notification access na ang Agent.</string>
     <string name="media_none">Walang app sa telepono na ito na nagsasabing makapagpapatugtog ito ng musika o video para sa iyong agent. Mag-install ng music app at lalabas ito rito.</string>

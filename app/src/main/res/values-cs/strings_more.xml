@@ -413,7 +413,7 @@
     <string name="media_line_video">Video: %1$s</string>
     <string name="media_title">Mediální aplikace</string>
     <string name="media_play">Přehrávat hudbu a video</string>
-    <string name="media_intro">Když agenta požádáte, aby něco pustil, použije aplikaci, kterou zde vyberete. Na automatiku použije výchozí aplikaci telefonu, pak jakoukoli, která umí přehrávat z vyhledávání. Nic telefon neopouští, kromě vyhledávání videa na YouTube.</string>
+    <string name="media_intro">Když agenta požádáte, aby něco pustil, použije aplikaci, kterou zde vyberete. Na automatiku použije výchozí aplikaci telefonu, pak jakoukoli, která umí přehrávat z vyhledávání.</string>
     <string name="media_access_off">Přístup k oznámením je vypnutý</string>
     <string name="media_access_body">Android ukazuje, co hraje, a nechá agenta pozastavit nebo přeskočit, až když má Agent přístup k oznámením.</string>
     <string name="media_none">Žádná aplikace v tomto telefonu nehlásí, že umí pro vašeho agenta přehrávat hudbu nebo video. Nainstalujte hudební aplikaci a objeví se zde.</string>

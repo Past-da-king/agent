@@ -401,7 +401,7 @@
     <string name="media_line_video">Video: %1$s</string>
     <string name="media_title">Aplikasi media</string>
     <string name="media_play">Mainkan muzik dan video</string>
-    <string name="media_intro">Apabila anda meminta ejen memainkan sesuatu, ia menggunakan aplikasi yang anda pilih di sini. Jika automatik, ia menggunakan lalai telefon anda, kemudian mana-mana aplikasi yang boleh memainkan daripada carian. Tiada apa-apa keluar daripada telefon kecuali carian YouTube untuk video.</string>
+    <string name="media_intro">Apabila anda meminta ejen memainkan sesuatu, ia menggunakan aplikasi yang anda pilih di sini. Jika automatik, ia menggunakan lalai telefon anda, kemudian mana-mana aplikasi yang boleh memainkan daripada carian.</string>
     <string name="media_access_off">Akses pemberitahuan dimatikan</string>
     <string name="media_access_body">Android hanya menunjukkan apa yang sedang dimainkan, dan membenarkan ejen anda menjeda atau melangkau, setelah Agent mempunyai akses pemberitahuan.</string>
     <string name="media_none">Tiada aplikasi pada telefon ini yang menyatakan ia boleh memainkan muzik atau video untuk ejen anda. Pasang aplikasi muzik dan ia akan muncul di sini.</string>

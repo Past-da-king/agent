@@ -409,7 +409,7 @@
     <string name="media_line_video">Video: %1$s</string>
     <string name="media_title">Aplicații media</string>
     <string name="media_play">Redă muzică și video</string>
-    <string name="media_intro">Când îi ceri agentului să redea ceva, folosește aplicația aleasă aici. Pe automat, folosește aplicația implicită a telefonului, apoi orice aplicație care poate reda dintr-o căutare. Nimic nu părăsește telefonul în afară de căutarea YouTube pentru un video.</string>
+    <string name="media_intro">Când îi ceri agentului să redea ceva, folosește aplicația aleasă aici. Pe automat, folosește aplicația implicită a telefonului, apoi orice aplicație care poate reda dintr-o căutare.</string>
     <string name="media_access_off">Accesul la notificări este dezactivat</string>
     <string name="media_access_body">Android arată ce se redă și lasă agentul să pună pauză sau să sară peste doar după ce Agent are acces la notificări.</string>
     <string name="media_none">Nicio aplicație de pe acest telefon nu spune că poate reda muzică sau video pentru agentul tău. Instalează o aplicație de muzică și apare aici.</string>

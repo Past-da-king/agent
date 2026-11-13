@@ -405,7 +405,7 @@
     <string name="media_line_video">Ividiyo: %1$s</string>
     <string name="media_title">Ama-app emidiya</string>
     <string name="media_play">Dlala umculo nevidiyo</string>
-    <string name="media_intro">Uma ucela i-agent yakho idlale okuthile, isebenzisa i-app oyikhethayo lapha. Uma kushiywe ku-automatic, isebenzisa evamile yefoni yakho, bese noma iyiphi i-app engadlala ngokusesha. Akukho okushiya ifoni ngaphandle kokusesha kwe-YouTube kwevidiyo.</string>
+    <string name="media_intro">Uma ucela i-agent yakho idlale okuthile, isebenzisa i-app oyikhethayo lapha. Uma kushiywe ku-automatic, isebenzisa evamile yefoni yakho, bese noma iyiphi i-app engadlala ngokusesha.</string>
     <string name="media_access_off">Ukufinyelela izaziso kuvaliwe</string>
     <string name="media_access_body">I-Android ibonisa kuphela okudlalayo, futhi ivumela i-agent yakho imise noma yeqe, uma i-Agent inokufinyelela izaziso.</string>
     <string name="media_none">Alikho i-app kule foni ethi ingadlalela i-agent yakho umculo noma ividiyo. Faka i-app yomculo bese ivela lapha.</string>

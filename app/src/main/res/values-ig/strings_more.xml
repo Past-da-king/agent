@@ -401,7 +401,7 @@
     <string name="media_line_video">Vidiyo: %1$s</string>
     <string name="media_title">App mgbasa ozi</string>
     <string name="media_play">Kpọọ egwu na vidiyo</string>
-    <string name="media_intro">Mgbe ị rịọrọ agent gị ka ọ kpọọ ihe, ọ na-eji app ị họọrọ ebe a. Ma ọ bụrụ na ahapụrụ ya na nke n\'onwe ya, ọ na-eji nke ndabara ekwentị gị, wee jiri app ọ bụla nwere ike ikpọ site na nchọcha. Ọ dịghị ihe na-ahapụ ekwentị belụsọ nchọcha YouTube maka vidiyo.</string>
+    <string name="media_intro">Mgbe ị rịọrọ agent gị ka ọ kpọọ ihe, ọ na-eji app ị họọrọ ebe a. Ma ọ bụrụ na ahapụrụ ya na nke n\'onwe ya, ọ na-eji nke ndabara ekwentị gị, wee jiri app ọ bụla nwere ike ikpọ site na nchọcha.</string>
     <string name="media_access_off">Ohere ọkwa emechiri</string>
     <string name="media_access_body">Android na-egosi naanị ihe na-akpọ, ma na-ekwe ka agent gị kwụsị ma ọ bụ gafee, mgbe Agent nwere ohere ọkwa.</string>
     <string name="media_none">Enweghị app n\'ekwentị a na-asị na ọ nwere ike ikpọ egwu ma ọ bụ vidiyo maka agent gị. Tinye app egwu ma ọ ga-apụta ebe a.</string>

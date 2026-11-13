@@ -404,7 +404,7 @@
     <string name="media_line_video">Video: %1$s</string>
     <string name="media_title">Media-programme</string>
     <string name="media_play">Speel musiek en video</string>
-    <string name="media_intro">Wanneer jy jou agent vra om iets te speel, gebruik dit die program wat jy hier kies. Op outomaties gelaat, gebruik dit jou foon se verstek, dan enige program wat vanaf \'n soektog kan speel. Niks verlaat die foon nie behalwe die YouTube-soektog na \'n video.</string>
+    <string name="media_intro">Wanneer jy jou agent vra om iets te speel, gebruik dit die program wat jy hier kies. Op outomaties gelaat, gebruik dit jou foon se verstek, dan enige program wat vanaf \'n soektog kan speel.</string>
     <string name="media_access_off">Kennisgewingtoegang is af</string>
     <string name="media_access_body">Android wys net wat speel, en laat jou agent net onderbreek of oorslaan, sodra Agent kennisgewingtoegang het.</string>
     <string name="media_none">Geen program op hierdie foon sê dit kan musiek of video vir jou agent speel nie. Installeer \'n musiekprogram en dit verskyn hier.</string>

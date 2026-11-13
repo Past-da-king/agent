@@ -409,7 +409,7 @@
     <string name="media_line_video">Video: %1$s</string>
     <string name="media_title">App multimediali</string>
     <string name="media_play">Riproduci musica e video</string>
-    <string name="media_intro">Quando chiedi al tuo agente di riprodurre qualcosa, usa l\'app che scegli qui. Se lasci su automatico, usa quella predefinita del telefono, poi qualsiasi app in grado di riprodurre da una ricerca. Nulla lascia il telefono tranne la ricerca su YouTube per un video.</string>
+    <string name="media_intro">Quando chiedi al tuo agente di riprodurre qualcosa, usa l\'app che scegli qui. Se lasci su automatico, usa quella predefinita del telefono, poi qualsiasi app in grado di riprodurre da una ricerca.</string>
     <string name="media_access_off">L\'accesso alle notifiche è disattivato</string>
     <string name="media_access_body">Android mostra cosa è in riproduzione, e permette al tuo agente di mettere in pausa o saltare, solo se Agent ha l\'accesso alle notifiche.</string>
     <string name="media_none">Nessuna app su questo telefono dichiara di poter riprodurre musica o video per il tuo agente. Installa un\'app musicale e comparirà qui.</string>

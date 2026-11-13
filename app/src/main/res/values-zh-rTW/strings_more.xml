@@ -401,7 +401,7 @@
     <string name="media_line_video">影片：%1$s</string>
     <string name="media_title">媒體應用程式</string>
     <string name="media_play">播放音樂和影片</string>
-    <string name="media_intro">當你讓代理播放內容時，它會使用你在這裡選的應用程式。保持自動時，它先用手機的預設應用程式，再用任何能透過搜尋播放的應用程式。除影片的 YouTube 搜尋外，沒有任何內容離開手機。</string>
+    <string name="media_intro">當你讓代理播放內容時，它會使用你在這裡選的應用程式。保持自動時，它先用手機的預設應用程式，再用任何能透過搜尋播放的應用程式。</string>
     <string name="media_access_off">通知訪問許可權已關閉</string>
     <string name="media_access_body">只有在 Agent 獲得通知訪問許可權後，Android 才會顯示正在播放的內容，並讓你的代理暫停或跳過。</string>
     <string name="media_none">這部手機上沒有應用程式宣告能為你的代理播放音樂或影片。安裝一個音樂應用程式後，它會顯示在這裡。</string>

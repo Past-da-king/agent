@@ -409,7 +409,7 @@
     <string name="media_line_video">Vídeo: %1$s</string>
     <string name="media_title">Apps multimedia</string>
     <string name="media_play">Reproducir música y vídeo</string>
-    <string name="media_intro">Cuando le pides a tu agente que ponga algo, usa la app que elijas aquí. En automático, usa la predeterminada del móvil y, si no, cualquier app que pueda reproducir desde una búsqueda. Nada sale del móvil salvo la búsqueda de YouTube para un vídeo.</string>
+    <string name="media_intro">Cuando le pides a tu agente que ponga algo, usa la app que elijas aquí. En automático, usa la predeterminada del móvil y, si no, cualquier app que pueda reproducir desde una búsqueda.</string>
     <string name="media_access_off">El acceso a notificaciones está desactivado</string>
     <string name="media_access_body">Android solo muestra lo que está sonando, y deja que tu agente pause o salte, cuando Agent tiene acceso a las notificaciones.</string>
     <string name="media_none">Ninguna app de este móvil dice poder reproducir música o vídeo para tu agente. Instala una app de música y aparecerá aquí.</string>
