@@ -13,6 +13,12 @@ interface ScreenOps {
     suspend fun tap(e: ScreenElement, generic: Boolean): String?
     suspend fun type(e: ScreenElement, text: String): String?
     suspend fun settle()
+    /** Presses Back on the background screen. Null when pressed, else why not. */
+    suspend fun back(): String? = "Back is not available"
+    /** Swipes down on the background screen (folds an expanded player). Null when done, else why not. */
+    suspend fun swipeDown(): String? = "Swipe is not available"
+    /** Starts the app again from its front door with a clean task (where it was left is forgotten). Null when open there. */
+    suspend fun openFresh(): String? = open()
 }
 
 sealed interface Learned {
@@ -39,9 +45,35 @@ class MediaScreenLearner(
     private val sleep: suspend (Long) -> Unit = { delay(it) },
     private val waitMs: Long = 6_000,
 ) {
+    private fun hasSearch(els: List<ScreenElement>) = MediaScreenPlan.searchField(els) != null || MediaScreenPlan.searchEntry(els) != null
+
+    /**
+     * Gets the app to a state where search can be found. An app often comes back to where it was left: an expanded
+     * player or a video page, covering the search. Generic steps only: Back (up to 3 times, looking after each), fold
+     * the player with a swipe down, then start the app fresh with a clean task. Null when no search shows after all that.
+     * Everything happens on the background screen.
+     */
+    suspend fun reachSearch(): List<ScreenElement>? {
+        var els = ops.elements()
+        if (hasSearch(els)) return els
+        for (i in 1..3) {
+            if (ops.back() != null) break
+            els = ops.elements()
+            if (hasSearch(els)) return els
+            if (els.isEmpty()) break // Back left the app
+        }
+        if (els.isNotEmpty() && ops.swipeDown() == null) {
+            els = ops.elements()
+            if (hasSearch(els)) return els
+        }
+        if (ops.openFresh() != null) return null
+        els = ops.elements()
+        return els.takeIf { hasSearch(it) }
+    }
+
     suspend fun run(app: MediaApp, query: String): Learned {
         ops.open()?.let { return if (it.contains("user's own screen")) Learned.InFront(it) else Learned.Failed(it) }
-        var els = ops.elements()
+        var els = reachSearch() ?: return Learned.Failed("${app.label} shows no search box or search button on the background screen, even after Back, folding the player and starting it fresh")
         var field = MediaScreenPlan.searchField(els)
         if (field == null) {
             val entry = MediaScreenPlan.searchEntry(els) ?: return Learned.Failed("${app.label} shows no search box or search button on the background screen")
@@ -56,6 +88,7 @@ class MediaScreenLearner(
             els = ops.elements()
             val box = MediaScreenPlan.searchField(els) ?: field
             val pick = MediaScreenPlan.pickResult(els, query, box, tried, ops.width())
+                ?: run { ops.settle(); els = ops.elements(); MediaScreenPlan.pickResult(els, query, MediaScreenPlan.searchField(els) ?: field, tried, ops.width()) }
                 ?: return Learned.Failed("${app.label} showed no result for \"$query\" on the background screen")
             tried += pick.label
             ops.tap(pick, true)?.let { return Learned.Failed(it) }
