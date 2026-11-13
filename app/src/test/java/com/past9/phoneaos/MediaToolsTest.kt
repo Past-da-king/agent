@@ -73,9 +73,16 @@ class MediaToolsTest {
         var onLaunch: (IntentSpec) -> String = { "sent" }
         var localResult: LocalResult = LocalResult.Found(emptyList())
         var hits: List<YouTubeResults.Hit>? = null
-        var screen: Fallback = Fallback.Off
+        var front: String? = null
+        val jobs = mutableSetOf<String>()
+        val order = mutableListOf<String>()
+        val requests = mutableListOf<ScreenRequest>()
+        val linked = mutableListOf<Pair<MediaApp, String>>()
+        var replay: (ScreenRequest) -> Fallback = { Fallback.NoJob }
+        var learn: (ScreenRequest) -> Learned = { Learned.Off }
+        var link: (MediaApp, String) -> Fallback = { _, _ -> Fallback.Off }
         var slept = 0L
-        var screenCalls = 0
+        val screenCalls: Int get() = order.count { it == "replay" || it == "learn" } + linked.size
         val list: MutableList<MediaSessionView> get() = ((sessions as Sessions.Ok).list as MutableList)
         override fun installed() = apps
         override fun systemDefault(video: Boolean) = sys
@@ -84,7 +91,13 @@ class MediaToolsTest {
         override fun launch(spec: IntentSpec): String { launched += spec; return onLaunch(spec) }
         override fun local(query: String, kind: MediaKind) = localResult
         override suspend fun youtube(query: String) = hits
-        override suspend fun screen(req: ScreenRequest, ctx: ToolContext): Fallback { screenCalls++; return screen }
+        override suspend fun userFront() = front
+        override fun hasJob(app: MediaApp) = app.pkg in jobs
+        override suspend fun screenReplay(req: ScreenRequest, ctx: ToolContext): Fallback { order += "replay"; requests += req; return replay(req) }
+        override suspend fun screenLearn(req: ScreenRequest, ctx: ToolContext): Learned { order += "learn"; requests += req; return learn(req) }
+        override suspend fun screenSave(req: ScreenRequest, ctx: ToolContext): String? { order += "save"; jobs += req.app.pkg; return req.query }
+        override suspend fun screenLink(app: MediaApp, link: String, ctx: ToolContext): Fallback { linked += app to link; return this.link(app, link) }
+        override suspend fun screenDone(ctx: ToolContext) { order += "done" }
         var browserOk = false
         var browserAsked = 0
         override suspend fun askViaBrowser(pkg: String, query: String, kind: MediaKind): Boolean {
@@ -224,26 +237,6 @@ class MediaToolsTest {
 
     // ---- 4. the tool: music -----------------------------------------------------------------------------------------
 
-    @Test fun theRequestIsSentToTheChosenAppAndAnswersWhatIsPlaying() {
-        val d = deps(metro, rvx)
-        d.stored = metro.pkg
-        d.onLaunch = { s -> d.list += FakeSession(s.pkg, "Metrolist Nightly", PlaybackState.STATE_PLAYING, "Underway", "Some Band"); "sent" }
-        val out = play(d, "query" to "Underway by Some Band")
-        assertEquals("Playing \"Underway\" by Some Band in Metrolist Nightly.", out)
-        assertEquals(1, d.launched.size)
-        assertEquals("test.music.one", d.launched[0].pkg)
-        assertEquals("android.media.action.MEDIA_PLAY_FROM_SEARCH", d.launched[0].action)
-    }
-
-    @Test fun anAppNamedInTheCallBeatsTheDefault() {
-        val d = deps(metro, rvx)
-        d.stored = metro.pkg
-        d.onLaunch = { s -> d.list += FakeSession(s.pkg, "RVX Music", PlaybackState.STATE_PLAYING, "Underway"); "sent" }
-        val out = play(d, "query" to "Underway", "app" to "rvx")
-        assertTrue(out, out.startsWith("Playing \"Underway\" in RVX Music"))
-        assertEquals("test.music.two", d.launched[0].pkg)
-    }
-
     @Test fun whenTheRequestIsIgnoredTheSessionIsAskedToPlayTheSearch() {
         val d = deps(rvx)
         val s = FakeSession("test.music.two", "RVX Music", PlaybackState.STATE_PAUSED, "Old")
@@ -252,6 +245,17 @@ class MediaToolsTest {
         val out = play(d, "query" to "Underway")
         assertEquals("Playing \"Underway\" in RVX Music. (asked the app's media session directly)", out)
         assertEquals(listOf("search Underway"), s.calls)
+        assertTrue("nothing was opened anywhere", d.launched.isEmpty() && d.screenCalls == 0)
+    }
+
+    @Test fun anAppNamedInTheCallBeatsTheDefault() {
+        val d = deps(metro, rvx)
+        d.stored = metro.pkg
+        val s = FakeSession("test.music.two", "RVX Music", PlaybackState.STATE_PAUSED, "Old")
+        s.onPlayFromSearch = { me, q -> me.state = PlaybackState.STATE_PLAYING; me.title = q }
+        d.list += s
+        val out = play(d, "query" to "Underway", "app" to "rvx")
+        assertTrue(out, out.startsWith("Playing \"Underway\" in RVX Music"))
     }
 
     @Test fun anAppThatIsClosedIsReachedThroughItsMediaBrowserService() {
@@ -260,28 +264,7 @@ class MediaToolsTest {
         val out = play(d, "query" to "Underway")
         assertEquals("Playing \"Underway\" by Some Band in RVX Music. (asked the app's media session directly)", out)
         assertEquals(1, d.browserAsked)
-    }
-
-    @Test fun aRequestAndroidTurnedIntoANotificationStillTriesTheSession() {
-        val d = deps(rvx)
-        d.onLaunch = { "sent: as a notification the user taps, because Android does not let an app open a screen from the background." }
-        val s = FakeSession("test.music.two", "RVX Music", PlaybackState.STATE_PAUSED, "Old")
-        s.onPlayFromSearch = { me, q -> me.state = PlaybackState.STATE_PLAYING; me.title = q }
-        d.list += s
-        val out = play(d, "query" to "Underway")
-        assertTrue(out, out.startsWith("Playing"))
-        assertEquals("no wait was spent on an intent that never started", 0L, d.slept)
-    }
-
-    @Test fun anAppThatOpensButNeverPlaysIsSaidSoWithEveryStepTried() {
-        val d = deps(rvx)
-        val out = play(d, "query" to "Underway")
-        assertTrue(out, out.startsWith("failed: could not get \"Underway\" playing in RVX Music."))
-        assertTrue(out, out.contains("no media session from it appeared in 8 s"))
-        assertTrue(out, out.contains("no media browser service that let the Agent app in"))
-        assertTrue(out, out.contains("no file on the phone matches"))
-        assertTrue(out, out.contains("background screen is off") && out.contains("Settings > Background screen"))
-        assertEquals(1, d.screenCalls)
+        assertTrue(d.launched.isEmpty())
     }
 
     @Test fun anAppThatKeepsItsOldSongIsNotReportedAsSuccess() {
@@ -296,23 +279,120 @@ class MediaToolsTest {
     @Test fun withoutNotificationAccessTheAnswerSaysItCannotConfirm() {
         val d = deps(metro)
         d.sessions = Sessions.NoAccess("Agent does not have notification access.")
+        d.learn = { Learned.NoAccess("Agent does not have notification access.") }
         val out = play(d, "query" to "Underway")
-        assertTrue(out, out.startsWith("Sent the play request to Metrolist Nightly") && out.contains("cannot confirm") && out.contains("Notification access"))
+        assertTrue(out, out.startsWith("Pressed play in Metrolist Nightly on the background screen") && out.contains("cannot confirm") && out.contains("Notification access"))
     }
 
-    @Test fun aFileOnThePhonePlaysThroughAMusicApp() {
+    // the new rule: nothing opens on the user's screen
+
+    @Test fun anAppNotInFrontIsNeverLaunchedByIntentItIsWorkedOutOnTheBackgroundScreenAndSaved() {
+        val d = deps(rvx)
+        d.front = "test.other.app"
+        d.learn = { req -> Learned.Playing(MediaVerify.Outcome.Playing(FakeSession(req.app.pkg, req.app.label, PlaybackState.STATE_PLAYING, "Underway", "Some Band"), true)) }
+        val out = play(d, "query" to "Underway by Some Band")
+        assertTrue(out, out.startsWith("Playing \"Underway\" by Some Band in RVX Music."))
+        assertTrue(out, out.contains("done on the background screen") && out.contains("saved as RVX Music's play job"))
+        assertTrue("no intent: that would open it on his screen", d.launched.isEmpty())
+        assertEquals(listOf("learn", "save", "done"), d.order)
+        assertEquals("the user's front app is the same after as before", "test.other.app", d.front)
+    }
+
+    @Test fun aJobThatTookAWrongTurnIsNotSavedAndOneThatPlayedTheWrongThingIsNotEither() {
+        val d = deps(rvx)
+        d.learn = { req -> Learned.Playing(MediaVerify.Outcome.Playing(FakeSession(req.app.pkg, req.app.label, PlaybackState.STATE_PLAYING, "Underway"), true), clean = false) }
+        val out = play(d, "query" to "Underway")
+        assertTrue(out, out.startsWith("Playing") && out.contains("not saved") && out.contains("wrong turn"))
+        assertFalse("save" in d.order)
+        val d2 = deps(rvx)
+        d2.learn = { req -> Learned.Playing(MediaVerify.Outcome.Playing(FakeSession(req.app.pkg, req.app.label, PlaybackState.STATE_PLAYING, "Something else"), false)) }
+        val out2 = play(d2, "query" to "Underway")
+        assertTrue(out2, out2.contains("may not be what was asked for") && out2.contains("not saved"))
+        assertFalse("save" in d2.order)
+    }
+
+    @Test fun aSavedJobIsReplayedFirstAndTheSessionIsNotEvenAsked() {
+        val d = deps(rvx)
+        d.jobs += rvx.pkg
+        val s = FakeSession(rvx.pkg, "RVX Music", PlaybackState.STATE_NONE)
+        d.list += s
+        d.replay = { s.state = PlaybackState.STATE_PLAYING; s.title = "Underway"; Fallback.Ran("Done the learned way in 4.1 s") }
+        val out = play(d, "query" to "Underway")
+        assertTrue(out, out.startsWith("Playing \"Underway\" in RVX Music.") && out.contains("the saved way"))
+        assertTrue(s.calls.isEmpty() && d.browserAsked == 0 && d.launched.isEmpty())
+        assertEquals(listOf("replay", "done"), d.order)
+    }
+
+    @Test fun aBrokenReplayIsLearnedAgainOnceNotLoopedAndNotSentToTheUsersScreen() {
+        val d = deps(rvx)
+        d.jobs += rvx.pkg
+        d.replay = { Fallback.Failed("The learned way stopped part of the way.") }
+        d.learn = { req -> Learned.Playing(MediaVerify.Outcome.Playing(FakeSession(req.app.pkg, req.app.label, PlaybackState.STATE_PLAYING, "Underway"), true)) }
+        val out = play(d, "query" to "Underway")
+        assertTrue(out, out.startsWith("Playing"))
+        assertEquals(listOf("replay", "learn", "save", "done"), d.order)
+        assertTrue(d.launched.isEmpty())
+    }
+
+    @Test fun aReplayThatRanButPlayedNothingIsLearnedAgain() {
+        val d = deps(rvx)
+        d.jobs += rvx.pkg
+        d.replay = { Fallback.Ran("Done") }
+        d.learn = { req -> Learned.Failed("no result") }
+        val out = play(d, "query" to "Underway")
+        assertTrue(out, out.startsWith("failed:") && out.contains("ran but nothing is playing, so it was learned again") && out.contains("no result"))
+        assertEquals(listOf("replay", "learn"), d.order.take(2))
+        assertEquals(1, d.order.count { it == "learn" })
+    }
+
+    @Test fun anAppInFrontIsAskedInPlaceAndStaysInFront() {
+        val d = deps(rvx)
+        d.front = rvx.pkg
+        d.onLaunch = { s -> d.list += FakeSession(s.pkg, "RVX Music", PlaybackState.STATE_PLAYING, "Underway"); "sent" }
+        val out = play(d, "query" to "Underway")
+        assertTrue(out, out.startsWith("Playing \"Underway\" in RVX Music.") && out.contains("in front on the user's screen"))
+        assertEquals("the same app was already in front, so nothing moved", rvx.pkg, d.front)
+        assertEquals(0, d.screenCalls)
+        assertEquals(1, d.launched.size)
+    }
+
+    @Test fun anAppInFrontThatDoesNotStartIsNotTakenToTheBackgroundScreenAndNothingElseIsLaunched() {
+        val d = deps(rvx)
+        d.front = rvx.pkg
+        val out = play(d, "query" to "Underway")
+        assertTrue(out, out.startsWith("failed:") && out.contains("in front on the user's own screen"))
+        assertTrue("learn" !in d.order && "replay" !in d.order)
+        assertEquals(1, d.launched.size)
+        assertEquals(rvx.pkg, d.launched[0].pkg)
+    }
+
+    @Test fun whenTheBackgroundScreenIsOffTheFailureSaysSoAndNothingIsOpened() {
+        val d = deps(rvx)
+        val out = play(d, "query" to "Underway")
+        assertTrue(out, out.startsWith("failed: could not get \"Underway\" playing in RVX Music."))
+        assertTrue(out, out.contains("gave no media session") || out.contains("no media session"))
+        assertTrue(out, out.contains("background screen is off") && out.contains("Settings > Background screen"))
+        assertTrue(out, out.contains("Do not open the app on their screen"))
+        assertTrue(d.launched.isEmpty())
+    }
+
+    @Test fun anAppOpenOnTheUsersScreenThatTheScreenRefusesIsReportedNotMoved() {
+        val d = deps(rvx)
+        d.learn = { Learned.InFront("RVX Music is open on the user's own screen right now, so it was left alone and nothing was opened.") }
+        val out = play(d, "query" to "Underway")
+        assertTrue(out, out.startsWith("failed:") && out.contains("left alone"))
+        assertTrue(d.launched.isEmpty())
+    }
+
+    @Test fun aFileOnThePhoneOpensOnTheBackgroundScreenNotTheUsers() {
         val d = deps(rvx, files)
         d.localResult = LocalResult.Found(listOf(LocalTrack("content://media/external/audio/media/9", "Underway", "Some Band", "Album")))
-        d.onLaunch = { s ->
-            if (s.action == Intent.ACTION_VIEW) d.list += FakeSession(s.pkg, "Plain Player", PlaybackState.STATE_PLAYING, "Underway", "Some Band")
-            "sent"
-        }
+        d.link = { app, _ -> d.list += FakeSession(app.pkg, "Plain Player", PlaybackState.STATE_PLAYING, "Underway", "Some Band"); Fallback.Ran("open") }
         val out = play(d, "query" to "Underway by Some Band", "app" to "RVX Music")
         assertEquals("Playing \"Underway\" by Some Band in Plain Player. (a file on the phone)", out)
-        val view = d.launched.last()
-        assertEquals("test.files.one", view.pkg)
-        assertEquals("audio/*", view.mimeType)
-        assertEquals("content://media/external/audio/media/9", view.data)
+        assertEquals("test.files.one", d.linked.single().first.pkg)
+        assertEquals("content://media/external/audio/media/9", d.linked.single().second)
+        assertTrue("never an intent", d.launched.isEmpty())
     }
 
     @Test fun localOnlySkipsTheAppsSearchAndDeniedStoragePermissionIsSaidPlainly() {
@@ -322,29 +402,6 @@ class MediaToolsTest {
         assertTrue(out, out.startsWith("failed:") && out.contains("storage access"))
         assertTrue("no search request was sent", d.launched.isEmpty())
         assertEquals("the background screen is not tried for files", 0, d.screenCalls)
-    }
-
-    @Test fun aSavedPlayJobOnTheBackgroundScreenIsRunAndVerified() {
-        val d = deps(rvx)
-        d.screen = Fallback.Ran("ok")
-        // The screen job is what starts it: the session appears only after the screen was used.
-        val s = FakeSession("test.music.two", "RVX Music", PlaybackState.STATE_NONE, "")
-        d.list += s
-        var asked = false
-        s.onPlayFromSearch = { _, _ -> asked = true }
-        val screenDeps = object : MediaDeps by d {
-            override suspend fun screen(req: ScreenRequest, ctx: ToolContext): Fallback { s.state = PlaybackState.STATE_PLAYING; s.title = "Underway"; return Fallback.Ran("done") }
-        }
-        val out = runBlocking { PlayMediaTool(screenDeps).run(JSONObject().put("query", "Underway"), Ctx()) }
-        assertTrue(asked)
-        assertTrue(out, out.startsWith("Playing") && out.endsWith("(done on the background screen)"))
-    }
-
-    @Test fun withoutALearnedJobTheFailureCarriesTheStepsToDoItByHand() {
-        val d = deps(rvx)
-        d.screen = Fallback.Hint("the background screen is on but there is no saved play job for RVX Music yet. Do it once with the screen tools")
-        val out = play(d, "query" to "Underway")
-        assertTrue(out, out.contains("no saved play job for RVX Music"))
     }
 
     @Test fun noAppAtAllAndAnUnknownAppAreClearErrors() {
@@ -358,39 +415,174 @@ class MediaToolsTest {
 
     // ---- 4. the tool: video -----------------------------------------------------------------------------------------
 
-    @Test fun aVideoIsFoundAndOpenedInTheVideoApp() {
+    @Test fun aVideoIsFoundAndOpenedInTheVideoAppOnTheBackgroundScreen() {
         val d = deps(metro, yt)
-        d.stored = null
         d.hits = listOf(YouTubeResults.Hit("AAAAAAAAAAA", "Promoted", "Ad", ""), YouTubeResults.Hit("dQw4w9WgXcQ", "How to tie a tie", "Ties Inc", "3:21"))
+        d.front = "test.other.app"
+        d.link = { app, _ -> d.list += FakeSession(app.pkg, "RVX YouTube", PlaybackState.STATE_PLAYING, "How to tie a tie", "Ties Inc"); Fallback.Ran("open") }
+        val out = play(d, "query" to "how to tie a tie", "kind" to "video")
+        assertTrue(out, out.startsWith("Playing \"How to tie a tie\" by Ties Inc in RVX YouTube.") && out.contains("user's screen was not touched"))
+        assertEquals("https://www.youtube.com/watch?v=dQw4w9WgXcQ", d.linked.single().second)
+        assertEquals("test.video.one", d.linked.single().first.pkg)
+        assertTrue("a video is never an intent to his screen", d.launched.isEmpty())
+        assertEquals("test.other.app", d.front)
+    }
+
+    @Test fun aVideoAppAlreadyInFrontGetsTheLinkInPlace() {
+        val d = deps(yt)
+        d.front = yt.pkg
+        d.hits = listOf(YouTubeResults.Hit("dQw4w9WgXcQ", "How to tie a tie", "Ties Inc", "3:21"))
         d.onLaunch = { s -> d.list += FakeSession(s.pkg, "RVX YouTube", PlaybackState.STATE_PLAYING, "How to tie a tie", "Ties Inc"); "sent" }
         val out = play(d, "query" to "how to tie a tie", "kind" to "video")
-        assertEquals("Playing \"How to tie a tie\" by Ties Inc in RVX YouTube.", out)
-        assertEquals("https://www.youtube.com/watch?v=dQw4w9WgXcQ", d.launched.single().data)
-        assertEquals("test.video.one", d.launched.single().pkg)
+        assertTrue(out, out.contains("in front on the user's screen, so it was not moved"))
+        assertTrue(d.linked.isEmpty())
+        assertEquals(yt.pkg, d.front)
     }
 
     @Test fun aVideoThatOpensWithoutASessionIsOpenedButNotClaimedAsPlaying() {
         val d = deps(yt)
         d.hits = listOf(YouTubeResults.Hit("dQw4w9WgXcQ", "How to tie a tie", "Ties Inc", "3:21"))
+        d.link = { _, _ -> Fallback.Ran("open") }
         val out = play(d, "query" to "how to tie a tie", "kind" to "video")
         assertTrue(out, out.startsWith("Opened \"How to tie a tie\"") && out.contains("cannot confirm"))
     }
 
-    @Test fun whenYouTubeCannotBeReadTheResultsPageOpensAndItSaysNothingIsPlaying() {
+    @Test fun whenYouTubeCannotBeReadTheAppsOwnSearchIsUsedOnTheBackgroundScreen() {
         val d = deps(yt)
         d.hits = null
+        d.learn = { req -> Learned.Playing(MediaVerify.Outcome.Playing(FakeSession(req.app.pkg, req.app.label, PlaybackState.STATE_PLAYING, "lofi beats"), true)) }
         val out = play(d, "query" to "lofi beats", "kind" to "video")
-        assertTrue(out, out.startsWith("Could not pick a video") && out.contains("nothing is playing yet"))
-        assertEquals("https://www.youtube.com/results?search_query=lofi+beats", d.launched.single().data)
+        assertTrue(out, out.startsWith("Playing \"lofi beats\""))
+        assertEquals(MediaKind.VIDEO, d.requests.single().kind)
+        assertTrue(d.launched.isEmpty() && d.linked.isEmpty())
     }
 
-    @Test fun aVideoFromTheBackgroundIsAFailureNotASilentNotification() {
+    @Test fun aVideoFromTheBackgroundIsAFailureNeverANotificationOrAChooser() {
         val d = deps(yt)
         d.hits = listOf(YouTubeResults.Hit("dQw4w9WgXcQ", "x", "y", "1:00"))
-        d.onLaunch = { "sent: as a notification the user taps" }
-        assertTrue(play(d, "query" to "x", "kind" to "video").startsWith("failed: Android would not open RVX YouTube from the background"))
+        val out = play(d, "query" to "x", "kind" to "video")
+        assertTrue(out, out.startsWith("failed:") && out.contains("background screen is off"))
+        assertTrue(d.launched.isEmpty())
+        val none = play(Deps(emptyList()), "query" to "x", "kind" to "video")
+        assertTrue(none, none.startsWith("failed: no installed app opens YouTube video links"))
     }
 
+    // ---- the guard: nothing else plays ------------------------------------------------------------------------------
+
+    @Test fun anIntentOrLinkThatPlaysMediaIsRefusedWithThePathToPlayMedia() {
+        val search = MediaIntents.playFromSearch("x", MediaKind.SONG, "app.rvx.android.youtube")
+        assertTrue(MediaIntentGuard.refusal(search)!!.contains("play_media"))
+        assertNotNull(MediaIntentGuard.refusal(MediaIntents.watch("dQw4w9WgXcQ", "app.rvx.android.youtube")))
+        assertNotNull(MediaIntentGuard.refusal(MediaIntents.results("lofi", "com.google.android.youtube")))
+        assertNotNull(MediaIntentGuard.refusal(MediaIntents.viewAudio("content://media/external/audio/media/9", "p")))
+        assertNotNull(MediaIntentGuard.refusal(IntentSpec("activity", Intent.ACTION_VIEW, data = "https://music.youtube.com/watch?v=abc")))
+        assertNotNull(MediaIntentGuard.refusal(IntentSpec("activity", Intent.ACTION_VIEW, data = "https://open.spotify.com/track/1")))
+        // what is not playback still goes
+        assertNull(MediaIntentGuard.refusal(IntentSpec("activity", Intent.ACTION_VIEW, data = "google.navigation:q=Sandton")))
+        assertNull(MediaIntentGuard.refusal(IntentSpec("activity", Intent.ACTION_VIEW, data = "https://example.org/")))
+        assertNull(MediaIntentGuard.refusal(IntentSpec("activity", Intent.ACTION_SEND, mimeType = "text/plain")))
+        assertNull(MediaIntentGuard.refusal(IntentSpec("broadcast", "com.example.DO_THING")))
+        assertNull(MediaIntentGuard.refusalForLink("https://news.example.org/story"))
+        assertNotNull(MediaIntentGuard.refusalForLink("https://www.youtube.com/watch?v=abc"))
+        assertNotNull(MediaIntentGuard.refusalForLink("https://youtu.be/abc"))
+    }
+
+    @Test fun androidIntentRefusesAPlayRequestWithoutSendingIt() {
+        var sent = 0
+        val tool = com.past9.phoneaos.automation.AndroidIntentTool(object : com.past9.phoneaos.automation.IntentSettings { override fun intentAllowlist() = emptyList<IntentRules.Pair>() }) { sent++; "sent" }
+        val out = runBlocking {
+            tool.run(JSONObject().put("kind", "activity").put("action", Intent.ACTION_VIEW).put("package", "app.rvx.android.youtube").put("data", "https://www.youtube.com/watch?v=dQw4w9WgXcQ"), Ctx())
+        }
+        assertTrue(out, out.startsWith("failed:") && out.contains("play_media"))
+        val out2 = runBlocking {
+            tool.run(JSONObject().put("kind", "activity").put("action", MediaIntents.PLAY_FROM_SEARCH).put("package", "app.rvx.android.youtube").put("extras", JSONObject().put("query", "BAD BISHHH")), Ctx())
+        }
+        assertTrue(out2, out2.startsWith("failed:"))
+        assertEquals(0, sent)
+    }
+
+    // ---- reading an unknown app -------------------------------------------------------------------------------------
+
+    private fun el(id: Int, text: String = "", desc: String = "", hint: String = "", res: String = "", top: Int = 0, flags: String = "", cls: String = "android.widget.TextView", w: Int = 720) =
+        com.past9.phoneaos.screen.ScreenElement(id, cls, text, desc, hint, res, 0, top, w, top + 100, flags, 0)
+
+    @Test fun theSearchBoxIsTheFieldThatSaysSearchElseTheOnlyField() {
+        val a = el(1, hint = "Search YouTube Music", flags = "e", cls = "android.widget.EditText")
+        val b = el(2, hint = "Name", flags = "e", cls = "android.widget.EditText", top = 300)
+        assertEquals(a, MediaScreenPlan.searchField(listOf(b, a)))
+        assertEquals(b, MediaScreenPlan.searchField(listOf(b)))
+        assertNull("two fields and none says search", MediaScreenPlan.searchField(listOf(b, el(3, hint = "Email", flags = "e"))))
+    }
+
+    @Test fun aSearchButtonIsFoundWhenThereIsNoBoxAndVoiceSearchIsLeftAlone() {
+        val voice = el(1, desc = "Voice search", flags = "c", top = 10)
+        val btn = el(2, desc = "Search", flags = "c", top = 20, cls = "android.widget.ImageButton")
+        val tab = el(3, text = "Explore", flags = "c", top = 2000)
+        assertEquals(btn, MediaScreenPlan.searchEntry(listOf(voice, btn, tab)))
+        assertEquals(tab, MediaScreenPlan.searchEntry(listOf(voice, tab)))
+        assertNull(MediaScreenPlan.searchEntry(listOf(voice)))
+    }
+
+    @Test fun theResultIsTheRowWithMostOfTheWordsBelowTheBoxTopmostFirst() {
+        val box = el(1, hint = "Search", flags = "e", top = 0)
+        val chip = el(2, text = "Songs", flags = "c", top = 130)
+        val other = el(3, text = "BAD BISHHH Remix - Someone Else", flags = "c", top = 300)
+        val best = el(4, desc = "BAD BISHHH - Tony Dayimane, Lowfeye, Usimamane - 3 minutes", flags = "c", top = 450)
+        val title = el(5, text = "Intro", flags = "c", top = 600)
+        assertEquals(best, MediaScreenPlan.pickResult(listOf(box, chip, other, best, title), "BAD BISHHH by Tony Dayimane Lowfeye and Usimamane", box))
+        assertEquals("a row already tried is skipped", other, MediaScreenPlan.pickResult(listOf(box, chip, other, title), "BAD BISHHH", box, setOf(best.label)))
+        // nothing carries the words: the first wide row after the box
+        assertEquals(title, MediaScreenPlan.pickResult(listOf(box, chip.copy(right = 100), title), "zzzz qqqq", box, 720))
+        assertNull(MediaScreenPlan.pickResult(listOf(box), "anything", box))
+    }
+
+    private class FakeOps(val screens: List<List<com.past9.phoneaos.screen.ScreenElement>>, var openResult: String? = null) : ScreenOps {
+        var screen = 0
+        val actions = mutableListOf<String>()
+        override suspend fun open(): String? { actions += "open"; return openResult }
+        override fun elements() = screens[screen]
+        override fun width() = 720
+        override suspend fun tap(e: com.past9.phoneaos.screen.ScreenElement, generic: Boolean): String? { actions += "tap ${e.label}${if (generic) " (generic)" else ""}"; if (screen < screens.size - 1) screen++; return null }
+        override suspend fun type(e: com.past9.phoneaos.screen.ScreenElement, text: String): String? { actions += "type $text"; if (screen < screens.size - 1) screen++; return null }
+        override suspend fun settle() { actions += "settle" }
+    }
+
+    @Test fun theLearnerOpensSearchesTypesPressesTheMatchAndWatchesTheSession() = runBlocking {
+        val home = listOf(el(1, hint = "Search songs", flags = "e", cls = "android.widget.EditText"))
+        val results = listOf(el(1, hint = "Search songs", flags = "e", cls = "android.widget.EditText"), el(2, text = "Underway - Some Band", flags = "c", top = 300))
+        val ops = FakeOps(listOf(home, results, results))
+        val s = FakeSession(rvx.pkg, "RVX Music", PlaybackState.STATE_NONE)
+        val list = mutableListOf<MediaSessionView>(s)
+        val l = MediaScreenLearner(ops, { Sessions.Ok(list) }, sleep = { s.state = PlaybackState.STATE_PLAYING; s.title = "Underway"; s.artist = "Some Band" }, waitMs = 1000)
+        val r = l.run(rvx, "Underway by Some Band")
+        assertTrue(r.toString(), r is Learned.Playing && r.clean && r.o.matches)
+        assertEquals(listOf("open", "type Underway by Some Band", "settle", "tap Underway - Some Band (generic)"), ops.actions)
+    }
+
+    @Test fun theLearnerPressesASearchButtonFirstWhenThereIsNoBoxAndPlayWhenTheRowOnlyOpenedAPage() = runBlocking {
+        val home = listOf(el(1, desc = "Search", flags = "c", top = 20, cls = "android.widget.ImageButton"))
+        val box = listOf(el(1, hint = "Search", flags = "e", cls = "android.widget.EditText"))
+        val results = box + el(2, text = "Underway (album)", flags = "c", top = 300)
+        val page = listOf(el(3, text = "Play", flags = "c", top = 300))
+        val ops = FakeOps(listOf(home, box, results, page, page))
+        val s = FakeSession(rvx.pkg, "RVX Music", PlaybackState.STATE_NONE)
+        val l = MediaScreenLearner(ops, { Sessions.Ok(listOf(s)) }, sleep = { if (ops.actions.any { it == "tap Play" }) { s.state = PlaybackState.STATE_PLAYING; s.title = "Underway" } }, waitMs = 1000)
+        val r = l.run(rvx, "Underway")
+        assertTrue(r.toString(), r is Learned.Playing)
+        assertEquals(listOf("open", "tap Search", "type Underway", "settle", "tap Underway (album) (generic)", "tap Play"), ops.actions)
+    }
+
+    @Test fun theLearnerSaysWhyItStoppedAndNeverRunsOnTheUsersScreen() = runBlocking {
+        val none = MediaScreenLearner(FakeOps(listOf(listOf(el(1, text = "Welcome")))), { Sessions.Ok(emptyList()) }, sleep = {}, waitMs = 10).run(rvx, "x")
+        assertTrue(none.toString(), none is Learned.Failed && none.text.contains("no search box or search button"))
+        val front = MediaScreenLearner(FakeOps(listOf(emptyList()), "RVX Music is open on the user's own screen right now, so it was left alone and nothing was opened."), { Sessions.Ok(emptyList()) }, sleep = {}, waitMs = 10).run(rvx, "x")
+        assertTrue(front is Learned.InFront)
+        val box = listOf(el(1, hint = "Search", flags = "e"), el(2, text = "x - y", flags = "c", top = 300))
+        val silent = MediaScreenLearner(FakeOps(listOf(box)), { Sessions.Ok(emptyList()) }, sleep = {}, waitMs = 10).run(rvx, "x y")
+        assertTrue(silent.toString(), silent is Learned.Failed && (silent.text.contains("no result") || silent.text.contains("nothing started playing")))
+        val noAccess = MediaScreenLearner(FakeOps(listOf(box)), { Sessions.NoAccess("no") }, sleep = {}, waitMs = 10).run(rvx, "x y")
+        assertTrue(noAccess is Learned.NoAccess)
+    }
     // ---- media_control ----------------------------------------------------------------------------------------------
 
     @Test fun nowPlayingNamesTheTitleArtistAppStateAndPlace() {
@@ -526,8 +718,8 @@ class MediaToolsTest {
         assertTrue(com.past9.phoneaos.assist.LiveAssistCore.systemPrompt("A", "B", true).contains("play_media"))
         val tools = MediaTools.tools(Deps(emptyList()))
         assertEquals(listOf("play_media", "media_control"), tools.map { it.spec.name })
-        assertTrue(tools[0].spec.description.contains("never open a search page"))
+        assertTrue(tools[0].spec.description.contains("ONLY way to play"))
         val intent = com.past9.phoneaos.automation.AndroidIntentTool(object : com.past9.phoneaos.automation.IntentSettings { override fun intentAllowlist() = emptyList<IntentRules.Pair>() }) { "sent" }
-        assertTrue(intent.spec.description.contains("use play_media"))
+        assertTrue(intent.spec.description.contains("play_media is the only way to play"))
     }
 }

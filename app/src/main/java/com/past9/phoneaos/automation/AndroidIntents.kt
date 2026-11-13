@@ -324,7 +324,7 @@ class AndroidIntentTool(
     override val spec = ToolSpec("android_intent",
         "Talk to ANY app on this phone with an Android intent: open a deep link or a place, start a navigation, share text or a file into an app, open a settings page, " +
             "fire a broadcast an app listens for, start a service. Use android_apps first to see which apps are installed and what they accept. " +
-            "To play music or a video do NOT use this: use play_media (and media_control to pause, skip or see what is playing). " +
+            "To play music or a video NEVER use this (a play request or a YouTube/Spotify link is refused): play_media is the only way to play, and media_control pauses, skips or says what is playing. " +
             "Intents that only open a screen (VIEW, MAIN, DIAL, SEARCH, settings pages) go at once; anything else asks the user first unless its action and app are on their allowlist. " +
             "Examples: {kind:'activity', action:'android.intent.action.VIEW', data:'google.navigation:q=Sandton+City', package:'com.google.android.apps.maps'}; " +
             "{kind:'activity', action:'android.intent.action.SEND', mimeType:'text/plain', package:'com.whatsapp', extras:{'android.intent.extra.TEXT':'hello'}}; " +
@@ -344,6 +344,8 @@ class AndroidIntentTool(
     override suspend fun run(input: JSONObject, ctx: ToolContext): String {
         val parsed = IntentRules.parse(input)
         val s = parsed.spec ?: return "failed: ${parsed.error}"
+        // Playing something is play_media's job: an intent would put the app on the user's own screen.
+        com.past9.phoneaos.media.MediaIntentGuard.refusal(s)?.let { return "failed: $it" }
         when (val g = IntentRules.gate(s, settings.intentAllowlist()) { q -> ctx.ask(q, listOf("Approve", "Decline")) }) {
             is IntentRules.Gate.Stop -> return g.reason
             IntentRules.Gate.Go -> Unit

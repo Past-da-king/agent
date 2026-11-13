@@ -97,7 +97,9 @@ object ScreenLearned {
      */
     suspend fun save(session: ScreenSession, store: LearnedStore, apps: ScreenApps, blocklist: ScreenBlocklist, ctx: ToolContext,
                      name: String, description: String, inputs: Map<String, String>, readOnly: Boolean, by: String = "agent", expect: String = "",
-                     returns: Map<String, String> = emptyMap(), types: Map<String, String> = emptyMap()): String {
+                     returns: Map<String, String> = emptyMap(), types: Map<String, String> = emptyMap(),
+                     /** A read-only job the agent's own tool just proved works (play_media's play job): saved without the approval card. A job that is not read-only is never saved this way. */
+                     autoApprove: Boolean = false): String {
         val run = session.runSteps; val pkg = session.runPackage
         if (pkg.isBlank() || run.none { it.kind in ScreenSkills.DOING && it.kind != "open" }) return "Not saved: nothing has been done on the background screen in this run yet. Do the job first, then save it."
         val label = apps.label(pkg)
@@ -135,7 +137,8 @@ object ScreenLearned {
             notes.distinct().forEach { appendLine(it) }
             append("A step that sends, pays or deletes will still ask you every time.")
         }
-        when (kotlinx.coroutines.withTimeoutOrNull(100_000) { ctx.ask("APPROVAL|${if (old != null) "Update" else "Save"} a learned way to use $label: ${name.replace('_', ' ')}|$details", listOf("Approve", "Decline")) }) {
+        if (autoApprove && readOnly) Unit
+        else when (kotlinx.coroutines.withTimeoutOrNull(100_000) { ctx.ask("APPROVAL|${if (old != null) "Update" else "Save"} a learned way to use $label: ${name.replace('_', ' ')}|$details", listOf("Approve", "Decline")) }) {
             "Approve" -> {}
             null -> return "No answer on the phone in time (the card is in the chat and in a notification). Not saved yet: call screen_skill_save again when the user is at the phone."
             else -> return "DECLINED. Not saved. Ask what the user wants changed."

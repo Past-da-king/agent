@@ -337,7 +337,7 @@ class ScreenSession(
     }
 
     /** Press [target], or the point. Null when done; otherwise why not. [quick]: a replay, which does not wait for the screen to settle. */
-    private suspend fun doPress(ctx: ToolContext, target: ScreenElement?, x: Int, y: Int, long: Boolean, by: String = "agent", quick: Boolean = false): String? {
+    private suspend fun doPress(ctx: ToolContext, target: ScreenElement?, x: Int, y: Int, long: Boolean, by: String = "agent", quick: Boolean = false, generic: Boolean = false): String? {
         val s = _state.value
         val px = target?.centerX ?: x; val py = target?.centerY ?: y
         if (px !in 0 until s.width.coerceAtLeast(1) || py !in 0 until s.height.coerceAtLeast(1)) return "That point is off the screen (${s.width}x${s.height})."
@@ -361,7 +361,7 @@ class ScreenSession(
         if (!quick) settle() else settle(150, 1_200)
         runCatching { readTree() }.onFailure { if (it is ScreenBlocked) throw it }
         log(if (long) "long" else "tap", "Pressed \"$name\"", sel, by = by, took = now() - t0,
-            extra = JSONObject().put("fx", px.toDouble() / s.width.coerceAtLeast(1)).put("fy", py.toDouble() / s.height.coerceAtLeast(1)))
+            extra = JSONObject().put("fx", px.toDouble() / s.width.coerceAtLeast(1)).put("fy", py.toDouble() / s.height.coerceAtLeast(1)).apply { if (generic) put("generic", true) })
         return null
     }
 
@@ -534,7 +534,15 @@ class ScreenSession(
         read(mode.ifBlank { "tree" }, filter).also { log("look", "Looked at the screen") }
     } }
 
-    suspend fun tap(ctx: ToolContext, element: Int?, words: String, x: Int?, y: Int?, long: Boolean): String = mutex.withLock { safely {
+    /** The package the user has in front on their own screen (display 0), or null when nothing is or the helper cannot be reached. Reads only. */
+    suspend fun userFront(): String? = mutex.withLock { runCatching {
+        if (helper() != null) return@runCatching null
+        val list = tasks().map { ScreenLanding.Task(it.optInt("id"), it.optInt("display"), it.optString("pkg"), it.optBoolean("visible")) }
+        ScreenLanding.front(list)?.pkg?.takeIf { it.isNotBlank() }
+    }.getOrNull() }
+
+    /** [generic]: the press is on "the row that matched this time" (a search result), so a learned step finds it by place and kind, not by the words it had. */
+    suspend fun tap(ctx: ToolContext, element: Int?, words: String, x: Int?, y: Int?, long: Boolean, generic: Boolean = false): String = mutex.withLock { safely {
         blocked(ctx, needOpen = true)?.let { return it }
         helper()?.let { return it }
         if (displayId == 0) return CLOSED
@@ -544,7 +552,7 @@ class ScreenSession(
             x != null && y != null -> null
             else -> return "Say what to press: element (its number), text (its words) or x and y."
         }
-        doPress(ctx, target, x ?: 0, y ?: 0, long)?.let { return it }
+        doPress(ctx, target, x ?: 0, y ?: 0, long, generic = generic)?.let { return it }
         val last = runSteps.lastOrNull { it.kind == "tap" || it.kind == "long" }?.say ?: "Pressed"
         runCatching { ctx.activity("Background screen: ${last.replaceFirstChar { it.lowercase() }} in ${_state.value.app}", JSONObject().put("tool", "screen").put("app", _state.value.pkg)) }
         "$last.\n" + read()

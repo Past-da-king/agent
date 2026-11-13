@@ -94,6 +94,8 @@ object ScreenSkills {
             s.sel?.let { sel ->
                 val c = JSONObject(sel.toString())
                 c.put("text", templatize(c.optString("text"), params)); c.put("desc", templatize(c.optString("desc"), params)); c.put("inside", templatize(c.optString("inside"), params))
+                // A press on "whichever row matched this time" is found again by its id, kind and place among its like, never by the words that row had.
+                if (s.extra?.optBoolean("generic") == true) { c.put("text", ""); c.put("desc", ""); c.put("inside", ""); c.put("hint", "") }
                 o.put("sel", c)
             }
             if (s.secret) { secrets++; o.put("text", "{secret$secrets}"); notes += "A hidden text was typed: it is the input secret$secrets and is never stored." }

@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.provider.MediaStore
 import com.past9.phoneaos.automation.IntentRules
 import com.past9.phoneaos.automation.IntentSpec
+import com.past9.phoneaos.screen.ScreenElement
 import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
@@ -324,4 +325,85 @@ object LocalRank {
             t to q.count { it in hay }
         }.filter { it.second * 10 >= q.size * 6 }.maxByOrNull { it.second }?.first
     }
+}
+
+/**
+ * What is allowed to play media. Nothing opens an app on the user's own screen to play something: the app is asked
+ * through its media session, or run on the background screen. This is the rule android_intent and open_url answer to
+ * when they are handed a play request. Plain logic, no Android.
+ */
+object MediaIntentGuard {
+    const val REASON = "Playing media is done only with play_media: it plays in the app on the background screen and leaves the user's own screen as it is. " +
+        "This would have opened the app on their screen. Call play_media with what to play (and app when they named one) and report what it answers. " +
+        "If play_media fails, say so; do not open the app to try another way."
+
+    private val MEDIA_HOSTS = listOf("youtube.com", "youtu.be", "music.youtube.com", "open.spotify.com", "spotify.link", "deezer.com", "music.apple.com", "soundcloud.com", "tidal.com", "music.amazon")
+
+    /** True when this link is a video or a track the user would watch or hear (not a settings page, a map, a mail). */
+    fun mediaLink(url: String?): Boolean {
+        val u = url?.trim()?.lowercase().orEmpty()
+        if (!u.startsWith("http://") && !u.startsWith("https://") && !u.startsWith("vnd.youtube") && !u.startsWith("spotify:")) return false
+        if (u.startsWith("vnd.youtube") || u.startsWith("spotify:")) return true
+        val host = u.substringAfter("://").substringBefore('/').substringBefore('?').removePrefix("www.").removePrefix("m.")
+        return MEDIA_HOSTS.any { host == it || host.endsWith(".$it") }
+    }
+
+    /** The reason to refuse an intent, or null when it is not a play request. */
+    fun refusal(spec: IntentSpec): String? {
+        val a = spec.action
+        val playish = a == MediaIntents.PLAY_FROM_SEARCH ||
+            (a == android.content.Intent.ACTION_VIEW && (mediaLink(spec.data) || spec.mimeType.startsWith("audio/") || spec.mimeType.startsWith("video/")))
+        return if (playish && spec.kind == IntentRules.ACTIVITY) REASON else null
+    }
+
+    fun refusalForLink(url: String?): String? = if (mediaLink(url)) REASON else null
+}
+
+/**
+ * Finding your way round an unknown music or video app, from what it shows: where its search is, which row is the
+ * thing that was asked for. Nothing here knows an app; it reads the words, hints and ids the app gives its elements.
+ */
+object MediaScreenPlan {
+    private val SEARCH = listOf("search", "find", "look up", "explore")
+    private val NOT_SEARCH = listOf("voice", "mic", "lens", "history", "clear", "recent", "suggest", "cancel", "close")
+
+    private fun hay(e: ScreenElement) = "${e.text} ${e.desc} ${e.hint} ${e.res.substringAfterLast('/')}".lowercase()
+    private fun searchy(e: ScreenElement): Boolean {
+        val h = hay(e)
+        val words = h.split(Regex("[^a-z0-9]+")).toSet()
+        return SEARCH.any { h.contains(it) } && NOT_SEARCH.none { it in words }
+    }
+
+    /** A text box that is the app's search: one that says so, else the only text box on the screen. */
+    fun searchField(els: List<ScreenElement>): ScreenElement? {
+        val fields = els.filter { it.editable && !it.disabled && 'p' !in it.flags }
+        return fields.firstOrNull { searchy(it) || SEARCH.any { w -> hay(it).contains(w) } } ?: fields.singleOrNull()
+    }
+
+    /** What to press to get a search box when there is none showing: a search button, icon or tab. */
+    fun searchEntry(els: List<ScreenElement>): ScreenElement? =
+        els.filter { !it.editable && !it.disabled && searchy(it) }
+            .sortedWith(compareByDescending<ScreenElement> { it.clickable }.thenBy { it.top }.thenBy { it.label.length }).firstOrNull()
+
+    /** The row to press for [query], below the search box: the one that carries most of its words, topmost first. Null when nothing is there. */
+    fun pickResult(els: List<ScreenElement>, query: String, field: ScreenElement?, skip: Set<String> = emptySet(), screenWidth: Int = 0): ScreenElement? {
+        val q = MediaVerify.words(query)
+        val below = els.filter { e ->
+            !e.editable && !e.disabled && e.label.isNotBlank() && e.kind != "switch" && e.label !in skip &&
+                (field == null || e.top >= field.bottom - 4) && e.bottom > e.top && e.right > e.left
+        }
+        if (q.isNotEmpty()) {
+            val scored = below.map { e -> e to MediaVerify.words(e.label).toSet().let { w -> q.count { it in w } } }.filter { it.second * 10 >= q.size * 6 }
+            scored.sortedWith(compareByDescending<Pair<ScreenElement, Int>> { it.second }.thenBy { it.first.top }.thenByDescending { it.first.area }).firstOrNull()?.let { return it.first }
+        }
+        // Nothing carries the words (the app shows them another way): the first wide row after the search box.
+        val wide = below.filter { it.clickable && (screenWidth <= 0 || (it.right - it.left) * 10 >= screenWidth * 5) && it.label.length >= 3 }
+        return wide.minByOrNull { it.top }
+    }
+}
+
+/** A Play button on a page the app opened (an album, an artist, a video that waits). */
+fun MediaScreenPlan.playButton(els: List<ScreenElement>): ScreenElement? {
+    val names = setOf("play", "play all", "play album", "play playlist", "play video", "play song", "shuffle", "shuffle play", "play now")
+    return els.firstOrNull { !it.editable && !it.disabled && it.clickable && it.label.trim().lowercase() in names }
 }
