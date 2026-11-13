@@ -405,7 +405,7 @@
     <string name="media_line_video">ቪዲዮ፦ %1$s</string>
     <string name="media_title">የሚዲያ መተግበሪያዎች</string>
     <string name="media_play">ሙዚቃና ቪዲዮ አጫውት</string>
-    <string name="media_intro">ወኪልዎ አንድ ነገር እንዲያጫውት ሲጠይቁ እዚህ የመረጡትን መተግበሪያ ይጠቀማል። በአውቶማቲክ ሲተው የስልክዎን ነባሪ፣ ከዚያም ከፍለጋ ማጫወት የሚችል ማንኛውንም መተግበሪያ ይጠቀማል። ለቪዲዮ ከYouTube ፍለጋ በስተቀር ምንም ከስልኩ አይወጣም።</string>
+    <string name="media_intro">ወኪልዎ አንድ ነገር እንዲያጫውት ሲጠይቁ እዚህ የመረጡትን መተግበሪያ ይጠቀማል። በአውቶማቲክ ሲተው የስልክዎን ነባሪ፣ ከዚያም ከፍለጋ ማጫወት የሚችል ማንኛውንም መተግበሪያ ይጠቀማል።</string>
     <string name="media_access_off">የማሳወቂያ መዳረሻ ጠፍቷል</string>
     <string name="media_access_body">Android የሚጫወተውን የሚያሳየው፣ ወኪልዎም ባለበት እንዲያቆም ወይም እንዲዘል የሚፈቅደው Agent የማሳወቂያ መዳረሻ ሲኖረው ብቻ ነው።</string>
     <string name="media_none">በዚህ ስልክ ላይ ለወኪልዎ ሙዚቃ ወይም ቪዲዮ ማጫወት እችላለሁ የሚል መተግበሪያ የለም። የሙዚቃ መተግበሪያ ይጫኑና እዚህ ይታያል።</string>

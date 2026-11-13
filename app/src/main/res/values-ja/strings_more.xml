@@ -401,7 +401,7 @@
     <string name="media_line_video">動画：%1$s</string>
     <string name="media_title">メディアアプリ</string>
     <string name="media_play">音楽と動画を再生</string>
-    <string name="media_intro">何かを再生するよう頼むと、ここで選んだアプリを使います。自動のままなら、スマホの既定のアプリ、次に検索から再生できる任意のアプリを使います。動画の YouTube 検索以外、スマホの外には何も出ません。</string>
+    <string name="media_intro">何かを再生するよう頼むと、ここで選んだアプリを使います。自動のままなら、スマホの既定のアプリ、次に検索から再生できる任意のアプリを使います。</string>
     <string name="media_access_off">通知へのアクセスがオフです</string>
     <string name="media_access_body">Agent に通知へのアクセスを許可すると、Android が再生中の内容を表示し、エージェントが一時停止やスキップをできるようになります。</string>
     <string name="media_none">このスマホには、エージェント向けに音楽や動画を再生できるアプリが見つかりません。音楽アプリをインストールするとここに表示されます。</string>

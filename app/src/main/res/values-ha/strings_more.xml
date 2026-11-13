@@ -404,7 +404,7 @@
     <string name="media_line_video">Bidiyo: %1$s</string>
     <string name="media_title">Manhajojin watsa labarai</string>
     <string name="media_play">Kunna kiɗa da bidiyo</string>
-    <string name="media_intro">Idan ka roƙi wakilinka ya kunna wani abu, yana amfani da manhajar da ka zaɓa a nan. Idan aka bar shi a atomatik, yana amfani da ta asali ta wayarka, sannan kowace manhaja da za ta iya kunnawa daga bincike. Babu abin da ke fita daga wayar sai binciken YouTube na bidiyo.</string>
+    <string name="media_intro">Idan ka roƙi wakilinka ya kunna wani abu, yana amfani da manhajar da ka zaɓa a nan. Idan aka bar shi a atomatik, yana amfani da ta asali ta wayarka, sannan kowace manhaja da za ta iya kunnawa daga bincike.</string>
     <string name="media_access_off">Damar shiga sanarwa a kashe take</string>
     <string name="media_access_body">Android tana nuna abin da ake kunnawa ne kawai, kuma tana bari wakilinka ya dakata ko ya tsallaka, bayan Agent ya samu damar shiga sanarwa.</string>
     <string name="media_none">Babu manhajar da ke wannan wayar da ta ce za ta iya kunna kiɗa ko bidiyo ga wakilinka. Shigar da manhajar kiɗa kuma za ta bayyana a nan.</string>

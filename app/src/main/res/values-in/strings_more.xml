@@ -401,7 +401,7 @@
     <string name="media_line_video">Video: %1$s</string>
     <string name="media_title">Aplikasi media</string>
     <string name="media_play">Putar musik dan video</string>
-    <string name="media_intro">Saat Anda meminta agen memutar sesuatu, agen memakai aplikasi yang Anda pilih di sini. Jika otomatis, agen memakai default ponsel Anda, lalu aplikasi apa pun yang bisa memutar dari pencarian. Tidak ada yang keluar dari ponsel kecuali pencarian YouTube untuk video.</string>
+    <string name="media_intro">Saat Anda meminta agen memutar sesuatu, agen memakai aplikasi yang Anda pilih di sini. Jika otomatis, agen memakai default ponsel Anda, lalu aplikasi apa pun yang bisa memutar dari pencarian.</string>
     <string name="media_access_off">Akses notifikasi mati</string>
     <string name="media_access_body">Android hanya menampilkan yang sedang diputar, dan membiarkan agen Anda menjeda atau melewati, setelah Agent memiliki akses notifikasi.</string>
     <string name="media_none">Tidak ada aplikasi di ponsel ini yang menyatakan bisa memutar musik atau video untuk agen Anda. Pasang aplikasi musik dan akan muncul di sini.</string>

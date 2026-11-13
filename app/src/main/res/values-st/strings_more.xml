@@ -405,7 +405,7 @@
     <string name="media_line_video">Video: %1$s</string>
     <string name="media_title">Liapp tsa media</string>
     <string name="media_play">Bapala mmino le video</string>
-    <string name="media_intro">Ha u kopa moemeli oa hao hore a bapale ntho, o sebelisa app eo u e khethang mona. Ha e siuoe e ikemetse, e sebelisa ea mohala oa hao e tloaelehileng, ebe app leha e le efe e ka bapalang ka ho batla. Ha ho letho le tsoang mohaleng ntle le ho batla ha YouTube bakeng sa video.</string>
+    <string name="media_intro">Ha u kopa moemeli oa hao hore a bapale ntho, o sebelisa app eo u e khethang mona. Ha e siuoe e ikemetse, e sebelisa ea mohala oa hao e tloaelehileng, ebe app leha e le efe e ka bapalang ka ho batla.</string>
     <string name="media_access_off">Phihlello ea litsebiso e tima</string>
     <string name="media_access_body">Android e bontša feela seo se bapalang, \'me e lumella moemeli oa hao hore a eme kapa a tlolele, ha Agent e na le phihlello ea litsebiso.</string>
     <string name="media_none">Ha ho app mohaleng ona e reng e ka bapalela moemeli oa hao mmino kapa video. Kenya app ea mmino \'me e hlaha mona.</string>

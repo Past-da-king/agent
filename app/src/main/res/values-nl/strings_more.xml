@@ -405,7 +405,7 @@
     <string name="media_line_video">Video: %1$s</string>
     <string name="media_title">Media-apps</string>
     <string name="media_play">Muziek en video afspelen</string>
-    <string name="media_intro">Als je je agent vraagt iets af te spelen, gebruikt hij de app die je hier kiest. Op automatisch gebruikt hij de standaard van je telefoon, daarna elke app die vanuit een zoekopdracht kan afspelen. Er verlaat niets de telefoon, behalve de YouTube-zoekopdracht voor een video.</string>
+    <string name="media_intro">Als je je agent vraagt iets af te spelen, gebruikt hij de app die je hier kiest. Op automatisch gebruikt hij de standaard van je telefoon, daarna elke app die vanuit een zoekopdracht kan afspelen.</string>
     <string name="media_access_off">Toegang tot meldingen staat uit</string>
     <string name="media_access_body">Android toont alleen wat er speelt, en laat je agent alleen pauzeren of overslaan, als Agent toegang tot meldingen heeft.</string>
     <string name="media_none">Geen enkele app op deze telefoon meldt dat hij muziek of video voor je agent kan afspelen. Installeer een muziek-app en hij verschijnt hier.</string>

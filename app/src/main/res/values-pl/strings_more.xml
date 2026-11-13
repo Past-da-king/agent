@@ -413,7 +413,7 @@
     <string name="media_line_video">Wideo: %1$s</string>
     <string name="media_title">Aplikacje multimedialne</string>
     <string name="media_play">Odtwarzaj muzykę i wideo</string>
-    <string name="media_intro">Gdy prosisz agenta o odtworzenie czegoś, używa aplikacji wybranej tutaj. Na automatycznym używa domyślnej aplikacji telefonu, a potem dowolnej, która potrafi odtwarzać z wyszukiwania. Nic nie opuszcza telefonu poza wyszukiwaniem wideo w YouTube.</string>
+    <string name="media_intro">Gdy prosisz agenta o odtworzenie czegoś, używa aplikacji wybranej tutaj. Na automatycznym używa domyślnej aplikacji telefonu, a potem dowolnej, która potrafi odtwarzać z wyszukiwania.</string>
     <string name="media_access_off">Dostęp do powiadomień jest wyłączony</string>
     <string name="media_access_body">Android pokazuje, co gra, i pozwala agentowi pauzować lub przewijać dopiero wtedy, gdy Agent ma dostęp do powiadomień.</string>
     <string name="media_none">Żadna aplikacja na tym telefonie nie zgłasza, że potrafi odtwarzać muzykę lub wideo dla twojego agenta. Zainstaluj aplikację muzyczną, a pojawi się tutaj.</string>

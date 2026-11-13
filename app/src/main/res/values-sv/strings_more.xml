@@ -404,7 +404,7 @@
     <string name="media_line_video">Video: %1$s</string>
     <string name="media_title">Medieappar</string>
     <string name="media_play">Spela musik och video</string>
-    <string name="media_intro">När du ber din agent spela något använder den appen du väljer här. Lämnad på automatiskt använder den telefonens standard, sedan vilken app som helst som kan spela från en sökning. Inget lämnar telefonen förutom YouTube-sökningen efter en video.</string>
+    <string name="media_intro">När du ber din agent spela något använder den appen du väljer här. Lämnad på automatiskt använder den telefonens standard, sedan vilken app som helst som kan spela från en sökning.</string>
     <string name="media_access_off">Aviseringsåtkomst är av</string>
     <string name="media_access_body">Android visar bara vad som spelas, och låter din agent pausa eller hoppa, när Agent har aviseringsåtkomst.</string>
     <string name="media_none">Ingen app på den här telefonen säger sig kunna spela musik eller video åt din agent. Installera en musikapp så visas den här.</string>

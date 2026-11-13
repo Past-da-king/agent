@@ -405,7 +405,7 @@
     <string name="media_line_video">Video: %1$s</string>
     <string name="media_title">Medya uygulamaları</string>
     <string name="media_play">Müzik ve video oynat</string>
-    <string name="media_intro">Ajanından bir şey oynatmasını istediğinde burada seçtiğin uygulamayı kullanır. Otomatikte telefonunun varsayılanını, sonra aramadan oynatabilen herhangi bir uygulamayı kullanır. Bir video için YouTube araması dışında hiçbir şey telefondan çıkmaz.</string>
+    <string name="media_intro">Ajanından bir şey oynatmasını istediğinde burada seçtiğin uygulamayı kullanır. Otomatikte telefonunun varsayılanını, sonra aramadan oynatabilen herhangi bir uygulamayı kullanır.</string>
     <string name="media_access_off">Bildirim erişimi kapalı</string>
     <string name="media_access_body">Android, Agent\'ın bildirim erişimi olduktan sonra neyin çaldığını gösterir ve ajanının duraklatmasına veya atlamasına izin verir.</string>
     <string name="media_none">Bu telefondaki hiçbir uygulama ajanın için müzik veya video oynatabildiğini söylemiyor. Bir müzik uygulaması kur, burada görünür.</string>

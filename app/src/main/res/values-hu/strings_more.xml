@@ -405,7 +405,7 @@
     <string name="media_line_video">Videó: %1$s</string>
     <string name="media_title">Médiaalkalmazások</string>
     <string name="media_play">Zene és videó lejátszása</string>
-    <string name="media_intro">Amikor megkéred az ügynököd, hogy játsszon le valamit, az itt kiválasztott alkalmazást használja. Automatikus módban a telefon alapértelmezettjét, majd bármely, keresésből lejátszani tudó alkalmazást. Semmi sem hagyja el a telefont, kivéve a videó YouTube-keresését.</string>
+    <string name="media_intro">Amikor megkéred az ügynököd, hogy játsszon le valamit, az itt kiválasztott alkalmazást használja. Automatikus módban a telefon alapértelmezettjét, majd bármely, keresésből lejátszani tudó alkalmazást.</string>
     <string name="media_access_off">Az értesítések elérése ki van kapcsolva</string>
     <string name="media_access_body">Az Android csak akkor mutatja, mi szól, és csak akkor engedi az ügynöknek a szüneteltetést vagy ugrást, ha az Agent hozzáfér az értesítésekhez.</string>
     <string name="media_none">Ezen a telefonon egyik alkalmazás sem jelzi, hogy zenét vagy videót tudna lejátszani az ügynöködnek. Telepíts egy zenealkalmazást, és megjelenik itt.</string>

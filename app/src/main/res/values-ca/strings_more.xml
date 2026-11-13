@@ -409,7 +409,7 @@
     <string name="media_line_video">Vídeo: %1$s</string>
     <string name="media_title">Apps multimèdia</string>
     <string name="media_play">Reprodueix música i vídeo</string>
-    <string name="media_intro">Quan demanes al teu agent que reprodueixi alguna cosa, fa servir l\'app que triïs aquí. En automàtic, fa servir la predeterminada del telèfon i després qualsevol app que pugui reproduir des d\'una cerca. No surt res del telèfon, excepte la cerca a YouTube d\'un vídeo.</string>
+    <string name="media_intro">Quan demanes al teu agent que reprodueixi alguna cosa, fa servir l\'app que triïs aquí. En automàtic, fa servir la predeterminada del telèfon i després qualsevol app que pugui reproduir des d\'una cerca.</string>
     <string name="media_access_off">L\'accés a les notificacions està desactivat</string>
     <string name="media_access_body">Android només mostra què s\'està reproduint, i deixa que el teu agent posi en pausa o salti, quan Agent té accés a les notificacions.</string>
     <string name="media_none">Cap app d\'aquest telèfon diu que pugui reproduir música o vídeo per al teu agent. Instal·la una app de música i apareixerà aquí.</string>

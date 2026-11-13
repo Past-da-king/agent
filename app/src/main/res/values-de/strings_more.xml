@@ -405,7 +405,7 @@
     <string name="media_line_video">Video: %1$s</string>
     <string name="media_title">Medien-Apps</string>
     <string name="media_play">Musik und Video abspielen</string>
-    <string name="media_intro">Wenn du deinen Agent bittest, etwas abzuspielen, nutzt er die App, die du hier wählst. Auf automatisch nutzt er die Standard-App deines Handys, dann jede App, die aus einer Suche abspielen kann. Nichts verlässt das Handy außer der YouTube-Suche nach einem Video.</string>
+    <string name="media_intro">Wenn du deinen Agent bittest, etwas abzuspielen, nutzt er die App, die du hier wählst. Auf automatisch nutzt er die Standard-App deines Handys, dann jede App, die aus einer Suche abspielen kann.</string>
     <string name="media_access_off">Benachrichtigungszugriff ist aus</string>
     <string name="media_access_body">Android zeigt nur, was gerade läuft, und lässt deinen Agent pausieren oder überspringen, wenn Agent Benachrichtigungszugriff hat.</string>
     <string name="media_none">Keine App auf diesem Handy gibt an, Musik oder Video für deinen Agent abspielen zu können. Installiere eine Musik-App, dann erscheint sie hier.</string>

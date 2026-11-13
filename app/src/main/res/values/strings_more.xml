@@ -405,7 +405,7 @@
     <string name="media_line_video">Video: %1$s</string>
     <string name="media_title">Media apps</string>
     <string name="media_play">Play music and video</string>
-    <string name="media_intro">When you ask your agent to play something, it uses the app you pick here. Left on automatic, it uses your phone\'s default, then any app that can play from a search. Nothing leaves the phone except the YouTube search for a video.</string>
+    <string name="media_intro">When you ask your agent to play something, it uses the app you pick here. Left on automatic, it uses your phone\'s default, then any app that can play from a search.</string>
     <string name="media_access_off">Notification access is off</string>
     <string name="media_access_body">Android only shows what is playing, and lets your agent pause or skip, once Agent has notification access.</string>
     <string name="media_none">No app on this phone says it can play music or video for your agent. Install a music app and it shows up here.</string>

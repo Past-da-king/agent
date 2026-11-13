@@ -401,7 +401,7 @@
     <string name="media_line_video">视频：%1$s</string>
     <string name="media_title">媒体应用</string>
     <string name="media_play">播放音乐和视频</string>
-    <string name="media_intro">当你让智能体播放内容时，它会使用你在这里选的应用。保持自动时，它先用手机的默认应用，再用任何能通过搜索播放的应用。除视频的 YouTube 搜索外，没有任何内容离开手机。</string>
+    <string name="media_intro">当你让智能体播放内容时，它会使用你在这里选的应用。保持自动时，它先用手机的默认应用，再用任何能通过搜索播放的应用。</string>
     <string name="media_access_off">通知访问权限已关闭</string>
     <string name="media_access_body">只有在 Agent 获得通知访问权限后，Android 才会显示正在播放的内容，并让你的智能体暂停或跳过。</string>
     <string name="media_none">这部手机上没有应用声明能为你的智能体播放音乐或视频。安装一个音乐应用后，它会显示在这里。</string>
