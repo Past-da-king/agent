@@ -31,8 +31,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 
 /** What the media tools need from the phone. Tests hand in a fake; [AndroidMediaDeps] is the real one. */
 interface MediaDeps {
@@ -46,19 +44,21 @@ interface MediaDeps {
     /** Sends an intent: "sent", "sent: with a note" or "failed: why". Only for an app already in front on the user's own screen: nothing else may use it to play. */
     fun launch(spec: IntentSpec): String
     fun local(query: String, kind: MediaKind): LocalResult
-    /** The YouTube results for these words, or null when they could not be read. */
-    suspend fun youtube(query: String): List<YouTubeResults.Hit>?
     /** The package in front on the user's own screen, or null (nothing, or not known). Reads only. */
     suspend fun userFront(): String?
-    /** A saved play job for this app exists. */
+    /** True when the phone's screen is on (interactive). When it is asleep the background screen draws nothing, so only media sessions can be used. Reads only; never wakes it. */
+    fun awake(): Boolean = true
+    /** A saved play job for this app exists and is not marked stale. */
     fun hasJob(app: MediaApp): Boolean
+    /** The saved play job stopped part of the way (or ran and played nothing): do not replay it again until it is learned afresh and saved over. */
+    fun markStale(app: MediaApp) {}
     /** Does the saved play job on the background screen. */
     suspend fun screenReplay(req: ScreenRequest, ctx: ToolContext): Fallback
     /** Works out how to play it on the background screen, by reading the app (see [MediaScreenLearner]). */
     suspend fun screenLearn(req: ScreenRequest, ctx: ToolContext): Learned
     /** Saves the run that just played as the app's play job (read-only playback, saved without a card). The words saved, or null when not saved. */
     suspend fun screenSave(req: ScreenRequest, ctx: ToolContext): String?
-    /** Opens [link] in the app on the background screen. */
+    /** Opens [link] (a file on the phone) in the app on the background screen. */
     suspend fun screenLink(app: MediaApp, link: String, ctx: ToolContext): Fallback
     /** The job is over: free the background screen (the app stays warm for a few minutes). */
     suspend fun screenDone(ctx: ToolContext)
@@ -81,6 +81,9 @@ sealed interface Fallback {
     class InFront(val text: String) : Fallback
 }
 
+/** Said when the phone's screen is off: the background screen draws nothing then, and the screen is never woken for it. */
+const val ASLEEP = "the phone is asleep, the background screen can't draw, so only the app's own media session was used (the screen was not woken)"
+
 const val NO_ACCESS_HELP = "Turn on notification access for Agent: Settings > Notifications > Device & app notifications > Notification access (the notifications_allow tool opens it)."
 
 /**
@@ -99,7 +102,7 @@ class PlayMediaTool(private val deps: MediaDeps, private val waitMs: Long = 8_00
             "Never use android_intent, open_url or any link for it (they would put the app on the user's own screen, and are refused); never open the app yourself after it fails. " +
             "It plays WITHOUT touching what the user is looking at: through the app's media session, or by using the app on the background screen (the first time it works the app out and saves the steps, so later plays take seconds). " +
             "query: what to play, as the user said it ('Underway by Name', 'Daft Punk', 'lofi beats', 'how to tie a tie'). " +
-            "kind: song (default), artist, album, playlist, podcast, or video (it finds the video and plays it in the user's video app). " +
+            "kind: song (default), artist, album, playlist, podcast, or video (it plays it in the user's video app, the same way as music)." +
             "app: only when the user names one (its name or package); otherwise the default they chose in Settings > Media apps, else the phone's default, else an app that handles play requests. " +
             "local: true to play a file stored on the phone only. " +
             "It then checks the app's media session and answers what is playing (title, artist, app), or which step failed and why. Do not tell the user it is playing unless this says so; if it failed, say that. " +
@@ -116,7 +119,7 @@ class PlayMediaTool(private val deps: MediaDeps, private val waitMs: Long = 8_00
         val kind = if (input.optString("kind").isBlank()) MediaKind.SONG else MediaKind.parse(input.optString("kind"))
             ?: return "failed: kind must be one of song, artist, album, playlist, video, podcast."
         val app = input.optString("app").trim().ifBlank { null }
-        val out = runCatching { if (kind.isVideo) video(query, app, ctx) else music(query, kind, app, input.optBoolean("local", false), ctx) }
+        val out = runCatching { music(query, kind, app, input.optBoolean("local", false), ctx) }
             .getOrElse { "failed: ${it.message ?: it::class.java.simpleName}" }
         runCatching { ctx.activity("Play: ${query.take(60)} (${out.substringBefore(':').take(20)})", JSONObject().put("tool", "play_media").put("query", query).put("result", out.take(300))) }
         return out
@@ -183,9 +186,9 @@ class PlayMediaTool(private val deps: MediaDeps, private val waitMs: Long = 8_00
                 is Fallback.Ran -> when (val o = MediaVerify.await(deps::sessions, req.app.pkg, req.query, retryMs, sleep = { deps.sleep(it) })) {
                     is MediaVerify.Outcome.Playing -> return playingLine(o, " (replayed the saved play job on the background screen, not worked out again: ${f.text.substringBefore(". Steps").take(80)})")
                     is MediaVerify.Outcome.NoAccess -> return "Ran the saved play job for $label. I cannot confirm it is playing: ${o.why} $NO_ACCESS_HELP"
-                    else -> log += "the saved play job for $label ran but nothing is playing, so it was learned again"
+                    else -> { deps.markStale(req.app); log += "the saved play job for $label ran but nothing is playing, so it is marked stale and was learned again from a clean start" }
                 }
-                is Fallback.Failed -> log += "the saved play job for $label stopped (${f.text.take(120)}), so it was learned again"
+                is Fallback.Failed -> { deps.markStale(req.app); log += "the saved play job for $label stopped (${f.text.take(120)}), so it is marked stale and was learned again from a clean start" }
                 Fallback.NoJob -> {}
             }
         }
@@ -210,35 +213,41 @@ class PlayMediaTool(private val deps: MediaDeps, private val waitMs: Long = 8_00
 
     private suspend fun music(query: String, kind: MediaKind, appArg: String?, localOnly: Boolean, ctx: ToolContext): String {
         val log = mutableListOf<String>()
+        val video = kind.isVideo
         val installed = deps.installed()
-        val pool = installed.filter { it.playFromSearch }
+        val pool = installed.filter { it.playFromSearch || (video && it.videoFiles) }
         val first = deps.sessions()
         val active = (first as? Sessions.Ok)?.list.orEmpty().sortedByDescending { MediaVerify.playing(it) }.map { it.pkg }
-        val pick = MediaResolve.pick(pool, installed, appArg, deps.stored(false), deps.systemDefault(false), active)
+        val pick = MediaResolve.pick(pool, installed, appArg, deps.stored(video), deps.systemDefault(video), active)
         pick.error?.let { return "failed: $it" }
         val chosen = pick.app
         val label = chosen?.label.orEmpty()
         val inFront = chosen != null && deps.userFront() == chosen.pkg
+        // A sleeping phone draws nothing on the background screen: say so and use only the app's session. The screen is never woken for it.
+        val asleep = !deps.awake()
+        val screenOk = !asleep
 
-        if (chosen == null && !localOnly) log += "no app on this phone says it can play from a search (install a music app, or name one with app)"
+        if (chosen == null && !localOnly) log += if (video) "no app on this phone says it can play video from a search (install a video app, or name one with app)"
+            else "no app on this phone says it can play from a search (install a music app, or name one with app)"
         if (chosen != null && !localOnly) {
             val req = ScreenRequest(chosen, query, kind)
             val before = (first as? Sessions.Ok)?.list?.firstOrNull { it.pkg == chosen.pkg }
             val stale = before?.takeIf { MediaVerify.playing(it) }?.title
             val hadJob = deps.hasJob(chosen)
+            if (asleep) log += ASLEEP
             // A saved job is the quickest way back in, so it goes first when there is one (and the app is not in the user's hands).
-            if (!inFront && hadJob) onBackgroundScreen(req, ctx, log)?.let { return it.also { done(ctx) } }
+            if (screenOk && !inFront && hadJob) onBackgroundScreen(req, ctx, log)?.let { return it.also { done(ctx) } }
             // A session in error is not asked: an app recovering from an error may open its own window on the user's screen. The background screen is the way.
             val broken = !inFront && before?.state == android.media.session.PlaybackState.STATE_ERROR
             if (broken) log += "${chosen.label} has a media session in error, so it was not asked (it could open its own window on the user's screen)"
             else viaSession(chosen, query, kind, stale, log)?.let { return it }
             if (inFront) inPlace(chosen, query, kind, stale, log)?.let { return it }
             // With a saved job the screen was already tried (and learned again if it broke) above.
-            else if (!hadJob) onBackgroundScreen(req, ctx, log)?.let { return it.also { done(ctx) } }
+            else if (screenOk && !hadJob) onBackgroundScreen(req, ctx, log)?.let { return it.also { done(ctx) } }
         }
 
-        // A file on the phone.
-        if (!(chosen != null && !localOnly && inFront)) when (val r = deps.local(query, kind)) {
+        // A file on the phone (music only: a video is not looked for in the music files).
+        if (!video && !(chosen != null && !localOnly && inFront)) when (val r = deps.local(query, kind)) {
             LocalResult.Denied -> log += "the phone's music files could not be read (Agent needs storage access: allow it in the phone's app settings for Agent)"
             is LocalResult.Found -> {
                 val t = LocalRank.best(r.tracks, query)
@@ -247,7 +256,7 @@ class PlayMediaTool(private val deps: MediaDeps, private val waitMs: Long = 8_00
                     val viewer = chosen?.takeIf { it.audioFiles } ?: MediaResolve.pick(installed.filter { it.audioFiles }, installed, null, deps.stored(false), deps.systemDefault(false), active).app
                     if (viewer == null) log += "found \"${t.title}\" on the phone but no app can open music files"
                     else {
-                        val f = if (deps.userFront() == viewer.pkg) Fallback.Ran(deps.launch(MediaIntents.viewAudio(t.uri, viewer.pkg))) else deps.screenLink(viewer, t.uri, ctx)
+                        val f = if (deps.userFront() == viewer.pkg) Fallback.Ran(deps.launch(MediaIntents.viewAudio(t.uri, viewer.pkg))) else if (screenOk) deps.screenLink(viewer, t.uri, ctx) else Fallback.Failed("the phone is asleep")
                         when {
                             f is Fallback.Ran && f.text.startsWith("failed") -> log += "found \"${t.title}\" on the phone but could not open it in ${viewer.label} (${f.text.removePrefix("failed: ").take(120)})"
                             f is Fallback.Ran -> when (val o = MediaVerify.await(deps::sessions, viewer.pkg, "${t.title} ${t.artist}", retryMs, sleep = { deps.sleep(it) })) {
@@ -264,46 +273,6 @@ class PlayMediaTool(private val deps: MediaDeps, private val waitMs: Long = 8_00
                 }
             }
         }
-        return failed(query, label, log)
-    }
-
-    private suspend fun video(query: String, appArg: String?, ctx: ToolContext): String {
-        val installed = deps.installed()
-        val pool = installed.filter { it.videoLinks }
-        val first = deps.sessions()
-        val active = (first as? Sessions.Ok)?.list.orEmpty().sortedByDescending { MediaVerify.playing(it) }.map { it.pkg }
-        val pick = MediaResolve.pick(pool, installed, appArg, deps.stored(true), deps.systemDefault(true), active)
-        pick.error?.let { return "failed: $it" }
-        val chosen = pick.app ?: return "failed: no installed app opens video links. A video is never opened with the phone's chooser or browser, because that would take over the user's screen. Install a video app, or name one with app."
-        val label = chosen.label
-        val pkg = chosen.pkg
-        val log = mutableListOf<String>()
-        val inFront = deps.userFront() == pkg
-        val hit = deps.youtube(query)?.let { YouTubeResults.best(it) }
-        if (hit != null) {
-            val title = hit.title.ifBlank { query }
-            val f = if (inFront) Fallback.Ran(deps.launch(MediaIntents.watch(hit.id, pkg))) else deps.screenLink(chosen, MediaIntents.watchUrl(hit.id), ctx)
-            when {
-                f is Fallback.Ran && f.text.startsWith("failed") -> log += "could not open the video in $label (${f.text.removePrefix("failed: ").take(120)})"
-                f is Fallback.Ran -> {
-                    val out = when (val o = MediaVerify.await(deps::sessions, pkg, title, waitMs, sleep = { deps.sleep(it) })) {
-                        is MediaVerify.Outcome.Playing -> "Playing ${MediaVerify.what(o.s)}." + (if (o.buffering) " It is still loading." else "") +
-                            (if (inFront) " ($label is in front on the user's screen, so it was not moved.)" else " (on the background screen: the user's screen was not touched.)")
-                        is MediaVerify.Outcome.NotPlaying -> "Opened \"$title\" in $label, but its media session says ${MediaVerify.state(o.s)}. Try media_control play."
-                        MediaVerify.Outcome.NoSession -> "Opened \"$title\" (${hit.channel}) in $label. No media session appeared in ${waitMs / 1000} s, so I cannot confirm it is playing: video apps often publish one only once the video has started."
-                        is MediaVerify.Outcome.NoAccess -> "Opened \"$title\" (${hit.channel}) in $label. I cannot confirm it is playing: ${o.why} $NO_ACCESS_HELP"
-                    }
-                    if (!inFront) done(ctx)
-                    return out
-                }
-                f is Fallback.Off -> log += offNote(label)
-                f is Fallback.InFront -> log += f.text.take(160)
-                f is Fallback.Failed -> log += "could not open the video on the background screen (${f.text.take(120)})"
-                else -> {}
-            }
-        } else log += "could not look the video up online from here (no connection, or the results page changed)"
-        // No link to open: use the app's own search on the background screen, the same way as for music.
-        if (!inFront) onBackgroundScreen(ScreenRequest(chosen, query, MediaKind.VIDEO), ctx, log)?.let { return it.also { done(ctx) } }
         return failed(query, label, log)
     }
 }
@@ -382,8 +351,7 @@ class AndroidMediaDeps(private val context: Context) : MediaDeps {
 
     override fun installed(): List<MediaApp> {
         val search = packages(Intent(MediaIntents.PLAY_FROM_SEARCH))
-        // An app that opens any web page as well as a watch link is a browser, not a video app.
-        val video = packages(link(MediaIntents.WATCH + "dQw4w9WgXcQ")) - packages(link(MediaIntents.PLAIN_WEB))
+        val video = packages(Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse("content://media/external/video/media/1"), "video/*"))
         val audio = packages(Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse("content://media/external/audio/media/1"), "audio/*"))
         val launcher = runCatching { pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0).map { it.activityInfo.packageName } }.getOrDefault(emptyList())
         return (launcher + search + video + audio).toSet().filter { it != context.packageName }
@@ -391,7 +359,7 @@ class AndroidMediaDeps(private val context: Context) : MediaDeps {
     }
 
     override fun systemDefault(video: Boolean): String? {
-        val i = if (video) link(MediaIntents.WATCH + "dQw4w9WgXcQ") else Intent(MediaIntents.PLAY_FROM_SEARCH)
+        val i = if (video) Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse("content://media/external/video/media/1"), "video/*") else Intent(MediaIntents.PLAY_FROM_SEARCH)
         val ri = runCatching { pm.resolveActivity(i, PackageManager.MATCH_DEFAULT_ONLY) }.getOrNull()?.activityInfo ?: return null
         return ri.packageName.takeIf { it != "android" && !ri.name.contains("ResolverActivity") }
     }
@@ -428,17 +396,6 @@ class AndroidMediaDeps(private val context: Context) : MediaDeps {
         } catch (e: SecurityException) { LocalResult.Denied }
     }
 
-    override suspend fun youtube(query: String): List<YouTubeResults.Hit>? = withContext(Dispatchers.IO) {
-        runCatching {
-            val c = URL(YouTubeResults.url(query)).openConnection() as HttpURLConnection
-            c.connectTimeout = 8_000; c.readTimeout = 10_000
-            c.setRequestProperty("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36")
-            c.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
-            c.setRequestProperty("Cookie", "SOCS=CAI; CONSENT=YES+1")
-            try { YouTubeResults.parse(c.inputStream.bufferedReader().use { it.readText() }).takeIf { it.isNotEmpty() } } finally { c.disconnect() }
-        }.getOrNull()
-    }
-
     private val learnedStore get() = App.graph(context).runtime.learned
 
     private fun playJob(pkg: String): Pair<com.past9.phoneaos.connections.LearnedApp, com.past9.phoneaos.connections.LearnedTool>? {
@@ -447,7 +404,11 @@ class AndroidMediaDeps(private val context: Context) : MediaDeps {
         return app to tool
     }
 
-    override fun hasJob(app: MediaApp) = playJob(app.pkg) != null
+    override fun hasJob(app: MediaApp) = app.pkg !in STALE && playJob(app.pkg) != null
+
+    override fun markStale(app: MediaApp) { STALE += app.pkg }
+
+    override fun awake(): Boolean = runCatching { context.getSystemService(android.os.PowerManager::class.java)?.isInteractive ?: true }.getOrDefault(true)
 
     override suspend fun userFront(): String? = if (!com.past9.phoneaos.screen.Screens.on(context)) null else com.past9.phoneaos.screen.Screens.session(context).userFront()
 
@@ -499,6 +460,7 @@ class AndroidMediaDeps(private val context: Context) : MediaDeps {
             com.past9.phoneaos.screen.Screens.config(context).blocklist, ctx, JOB,
             "Plays something in ${req.app.label}: searches for the query and presses the best matching result. Playback only: it never sends, pays or deletes. Found out by the agent on the background screen.",
             mapOf("query" to req.query), readOnly = true, by = "auto", autoApprove = true)
+        if (r.startsWith("Saved")) STALE -= req.app.pkg
         return if (r.startsWith("Saved")) req.query else null
     }
 
@@ -534,6 +496,8 @@ class AndroidMediaDeps(private val context: Context) : MediaDeps {
     override suspend fun sleep(ms: Long) = delay(ms)
 
     companion object {
+        /** Apps whose saved play job stopped on its last replay: not replayed again until it is learned afresh and saved over (this run of the app). */
+        private val STALE: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
         /** The name of the play job saved for each app (tool app_<app>_play). */
         const val JOB = "play"
         /** What the first version told the agent to save it as; still run when it is there. */
@@ -556,4 +520,23 @@ class ControllerView(private val c: MediaController, override val label: String)
     override fun previous() = c.transportControls.skipToPrevious()
     override fun seekTo(ms: Long) = c.transportControls.seekTo(ms)
     override fun playFromSearch(query: String, extras: Bundle) = c.transportControls.playFromSearch(query, extras)
+}
+
+/** What the phone says about where an intent would land and which apps offer media playback: the real facts for [MediaIntentGuard]. */
+class AndroidMediaTargets(private val context: Context) : MediaIntentGuard.Targets {
+    private val pm get() = context.packageManager
+
+    private fun packages(i: Intent): Set<String> =
+        runCatching { pm.queryIntentActivities(i, PackageManager.MATCH_DEFAULT_ONLY).map { it.activityInfo.packageName }.toSet() }.getOrDefault(emptySet())
+
+    override fun resolve(spec: IntentSpec): Set<String> = runCatching { packages(com.past9.phoneaos.automation.IntentRules.build(spec)) }.getOrDefault(emptySet())
+
+    override fun mediaApps(): Set<String> {
+        val search = packages(Intent(MediaIntents.PLAY_FROM_SEARCH))
+        val browse = runCatching { pm.queryIntentServices(Intent("android.media.browse.MediaBrowserService"), 0).map { it.serviceInfo.packageName }.toSet() }.getOrDefault(emptySet())
+        val live = (AndroidMediaDeps(context).sessions() as? Sessions.Ok)?.list.orEmpty().map { it.pkg }.toSet()
+        return (search + browse + live) - context.packageName
+    }
+
+    override fun browsers(): Set<String> = packages(Intent(Intent.ACTION_VIEW, Uri.parse(MediaIntents.PLAIN_WEB)).addCategory(Intent.CATEGORY_BROWSABLE))
 }

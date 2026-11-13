@@ -97,9 +97,14 @@ unless the app is already in front there. Order, in `media/MediaTools.kt`:
    the user's front app back), finds the search box (or presses a search button / tab), types the words, presses
    the row that carries most of them (`MediaScreenPlan`, which reads words, hints and ids, never an app name), and
    a Play button when the row only opened a page. It then watches the media session until it plays what was asked.
-   Audio from the virtual display plays. A broken replay is learned again once, never looped.
-4. Video: the YouTube watch link is opened in the video app on the background screen (`screenLink`), never by an
-   intent; when YouTube cannot be read the app's own search is used as in 3.
+   Audio from the virtual display plays. A saved job that stops at a step (or runs and plays nothing) is marked stale,
+   learned again once from a clean start (fresh task on the background screen), and saved over when that run is clean;
+   a stale job is not replayed again. After pressing search the learner waits up to about 3 s for a text box and presses
+   search once more before giving up; a toolbar or full-screen search box is accepted.
+4. Video goes the same way as music (a video kind only changes which apps are candidates: those that take play
+   requests or open video files, the user's video default, or the one named). There is no lookup of a video online and
+   no link: the chosen app's session if it has one, else the learner on the background screen. Music files are not
+   searched for a video.
 5. An app already in front on the user's own screen is asked in place (a play-from-search intent to the app that is
    already showing: it stays in front, so the user's screen is the same before and after). The background screen
    cannot take it from under them: `ScreenSession.open` refuses, and so does the helper.
@@ -114,10 +119,15 @@ run took one clean path (no wrong rows pressed first). The job is visible and re
 A result row is saved as "the row at this place" (id, kind, position) and not by the words it had that day
 (`generic` taps in `ScreenSkills.fromRun`), so the same steps play any query.
 
-**Nothing else plays.** `android_intent` refuses a play request (`MEDIA_PLAY_FROM_SEARCH`, a VIEW of a YouTube, Spotify
-or other media link, audio or video type) and the phone's `open_url` refuses media links, both with the reason and
-the way to `play_media` (`MediaIntentGuard`). The Live voice and call prompts say `play_media` is the only way and that a
-failure is reported, not worked around.
+**Phone asleep.** When the screen is off (not interactive) the background screen draws nothing. `play_media` then says
+"the phone is asleep, the background screen can't draw" and uses only the app's media session. It never wakes the screen.
+
+**Nothing else plays.** `android_intent` and the phone's `open_url` refuse a play request, with the reason and the way
+to `play_media` (`MediaIntentGuard`). The rule names no app: an explicit play-from-search, an audio or video file, or
+an intent whose target resolves (package manager) to an app that offers media playback (declares play-from-search,
+exports a media browser service, or owns a media session now) is refused. Browsers are never counted as media apps.
+The rule is a pure function over `MediaIntentGuard.Targets`; the phone's facts are `AndroidMediaTargets`. The Live
+voice and call prompts say `play_media` is the only way and that a failure is reported, not worked around.
 ## Recordings
 
 Kept on the phone only, in `files/screen-runs/<id>/` (`run.json` and one JPEG per step). Password fields and

@@ -8,14 +8,12 @@ import com.past9.phoneaos.automation.IntentRules
 import com.past9.phoneaos.automation.IntentSpec
 import com.past9.phoneaos.screen.ScreenElement
 import kotlinx.coroutines.delay
-import org.json.JSONArray
-import org.json.JSONObject
-import java.net.URLEncoder
 
 /*
  * Playing music and video through the apps already on the phone, whichever they are. Nothing here names an app:
- * the apps are found at run time from what they say they handle (a play-from-search action, YouTube watch links,
- * audio files), and the user can pick a default for music and for video in Settings > Media apps.
+ * the apps are found at run time from what they say they handle (a play-from-search action, audio and video files,
+ * a media browser service, a live media session), and the user can pick a default for music and for video in
+ * Settings > Media apps.
  *
  * This file is the rules: what to send, which app to pick, how to tell it worked. MediaTools.kt holds the tools and
  * the one class that touches Android.
@@ -36,10 +34,11 @@ data class MediaApp(
     val pkg: String,
     val label: String,
     val playFromSearch: Boolean = false,
-    val videoLinks: Boolean = false,
+    /** Opens video files (a video player). Streaming video apps have no such door: they are found by play-from-search, a default, or by name. */
+    val videoFiles: Boolean = false,
     val audioFiles: Boolean = false,
 ) {
-    val any: Boolean get() = playFromSearch || videoLinks || audioFiles
+    val any: Boolean get() = playFromSearch || videoFiles || audioFiles
 }
 
 /** The intents that start playback. Each is an [IntentSpec] so the same sender and the same tests cover them. */
@@ -48,8 +47,7 @@ object MediaIntents {
     /** The focus value for "no structure": the app decides what the words mean. */
     const val UNSTRUCTURED = "vnd.android.cursor.item/*"
     const val EXTRA_PLAYLIST = "android.intent.extra.playlist"
-    const val WATCH = "https://www.youtube.com/watch?v="
-    /** Any web page that is not YouTube: an app that opens this as well as a watch link is a browser, not a video app. */
+    /** Any ordinary web page: an app that opens this is a browser, which is never counted as a media app. */
     const val PLAIN_WEB = "https://example.org/"
 
     class Parts(val title: String?, val artist: String?, val album: String?)
@@ -95,14 +93,6 @@ object MediaIntents {
     fun bundle(query: String, kind: MediaKind): Bundle = Bundle().also { b ->
         extras(query, kind).forEach { (k, v) -> if (k != SearchManager.QUERY) b.putString(k, v.toString()) }
     }
-
-    fun watchUrl(id: String) = WATCH + id
-
-    fun watch(videoId: String, pkg: String): IntentSpec =
-        IntentSpec(IntentRules.ACTIVITY, android.content.Intent.ACTION_VIEW, pkg = pkg, data = watchUrl(videoId), flags = listOf("new_task"))
-
-    fun results(query: String, pkg: String): IntentSpec =
-        IntentSpec(IntentRules.ACTIVITY, android.content.Intent.ACTION_VIEW, pkg = pkg, data = YouTubeResults.url(query), flags = listOf("new_task"))
 
     /** A file on the phone, opened in a music app. The read grant is what lets that app open a content address. */
     fun viewAudio(uri: String, pkg: String): IntentSpec =
@@ -260,57 +250,6 @@ object MediaVerify {
     }
 }
 
-/** YouTube's own result page, read without any key: the first video that is really a video. */
-object YouTubeResults {
-    class Hit(val id: String, val title: String, val channel: String, val length: String)
-
-    fun url(query: String) = "https://www.youtube.com/results?search_query=" + URLEncoder.encode(query.trim(), "UTF-8")
-
-    private val ID = Regex("^[A-Za-z0-9_-]{11}$")
-
-    /** The JSON object after "ytInitialData =", found by counting braces so a brace inside a title cannot end it early. */
-    fun initialData(html: String): String? {
-        val key = html.indexOf("ytInitialData")
-        if (key < 0) return null
-        val start = html.indexOf('{', key)
-        if (start < 0) return null
-        var depth = 0; var inStr = false; var esc = false
-        for (i in start until html.length) {
-            val c = html[i]
-            if (inStr) { if (esc) esc = false else if (c == '\\') esc = true else if (c == '"') inStr = false; continue }
-            when (c) { '"' -> inStr = true; '{' -> depth++; '}' -> { depth--; if (depth == 0) return html.substring(start, i + 1) } }
-        }
-        return null
-    }
-
-    private fun text(o: JSONObject?): String = o?.optString("simpleText")?.takeIf { it.isNotBlank() }
-        ?: o?.optJSONArray("runs")?.let { a -> (0 until a.length()).joinToString("") { a.optJSONObject(it)?.optString("text").orEmpty() } }.orEmpty()
-
-    private fun walk(n: Any?, out: MutableList<Hit>) {
-        when (n) {
-            is JSONObject -> {
-                n.optJSONObject("videoRenderer")?.let { v ->
-                    val id = v.optString("videoId")
-                    if (ID.matches(id)) out += Hit(id, text(v.optJSONObject("title")), text(v.optJSONObject("ownerText") ?: v.optJSONObject("longBylineText")), text(v.optJSONObject("lengthText")))
-                }
-                n.keys().forEach { k -> if (k != "videoRenderer") walk(n.opt(k), out) }
-            }
-            is JSONArray -> for (i in 0 until n.length()) walk(n.opt(i), out)
-        }
-    }
-
-    fun parse(html: String): List<Hit> {
-        val hits = mutableListOf<Hit>()
-        runCatching { initialData(html)?.let { walk(JSONObject(it), hits) } }
-        if (hits.isNotEmpty()) return hits.distinctBy { it.id }
-        // The page's shape changed: take the first video ids in the order they appear.
-        return Regex("\"videoId\":\"([A-Za-z0-9_-]{11})\"").findAll(html).map { it.groupValues[1] }.distinct().map { Hit(it, "", "", "") }.toList()
-    }
-
-    /** The first result that has a running time (a live stream or a promoted card has none), else the first. */
-    fun best(hits: List<Hit>): Hit? = hits.firstOrNull { it.length.isNotBlank() } ?: hits.firstOrNull()
-}
-
 /** A music file on the phone. */
 class LocalTrack(val uri: String, val title: String, val artist: String, val album: String)
 
@@ -341,26 +280,36 @@ object MediaIntentGuard {
         "This would have opened the app on their screen. Call play_media with what to play (and app when they named one) and report what it answers. " +
         "If play_media fails, say so; do not open the app to try another way."
 
-    private val MEDIA_HOSTS = listOf("youtube.com", "youtu.be", "music.youtube.com", "open.spotify.com", "spotify.link", "deezer.com", "music.apple.com", "soundcloud.com", "tidal.com", "music.amazon")
-
-    /** True when this link is a video or a track the user would watch or hear (not a settings page, a map, a mail). */
-    fun mediaLink(url: String?): Boolean {
-        val u = url?.trim()?.lowercase().orEmpty()
-        if (!u.startsWith("http://") && !u.startsWith("https://") && !u.startsWith("vnd.youtube") && !u.startsWith("spotify:")) return false
-        if (u.startsWith("vnd.youtube") || u.startsWith("spotify:")) return true
-        val host = u.substringAfter("://").substringBefore('/').substringBefore('?').removePrefix("www.").removePrefix("m.")
-        return MEDIA_HOSTS.any { host == it || host.endsWith(".$it") }
+    /** The facts about this phone the rule needs. The real one asks the package manager and the media sessions; tests hand in fakes. */
+    interface Targets {
+        /** The packages an intent would open: the one it names, else every app that handles it. */
+        fun resolve(spec: IntentSpec): Set<String>
+        /** The packages that offer media playback: they declare play-from-search, export a media browser service, or own a media session now. */
+        fun mediaApps(): Set<String>
+        /** The packages that open any ordinary web page. A browser is not a media app, even when a tab is playing. */
+        fun browsers(): Set<String>
     }
 
-    /** The reason to refuse an intent, or null when it is not a play request. */
-    fun refusal(spec: IntentSpec): String? {
-        val a = spec.action
-        val playish = a == MediaIntents.PLAY_FROM_SEARCH ||
-            (a == android.content.Intent.ACTION_VIEW && (mediaLink(spec.data) || spec.mimeType.startsWith("audio/") || spec.mimeType.startsWith("video/")))
-        return if (playish && spec.kind == IntentRules.ACTIVITY) REASON else null
+    /** No facts known: only an explicit play request and an audio or video file are refused. */
+    val NONE = object : Targets {
+        override fun resolve(spec: IntentSpec) = emptySet<String>()
+        override fun mediaApps() = emptySet<String>()
+        override fun browsers() = emptySet<String>()
     }
 
-    fun refusalForLink(url: String?): String? = if (mediaLink(url)) REASON else null
+    /** The reason to refuse an intent, or null when it is not a play request. Nothing here knows an app: it is a question of what the target offers. */
+    fun refusal(spec: IntentSpec, targets: Targets): String? {
+        if (spec.kind != IntentRules.ACTIVITY) return null
+        if (spec.action == MediaIntents.PLAY_FROM_SEARCH) return REASON
+        if (spec.action == android.content.Intent.ACTION_VIEW && (spec.mimeType.startsWith("audio/") || spec.mimeType.startsWith("video/"))) return REASON
+        val media = targets.mediaApps() - targets.browsers()
+        if (media.isEmpty()) return null
+        val lands = spec.targetPackage.takeIf { it.isNotBlank() }?.let { setOf(it) } ?: targets.resolve(spec)
+        return if (lands.any { it in media }) REASON else null
+    }
+
+    fun refusalForLink(url: String?, targets: Targets): String? =
+        if (url.isNullOrBlank()) null else refusal(IntentSpec(IntentRules.ACTIVITY, android.content.Intent.ACTION_VIEW, data = url.trim()), targets)
 }
 
 /**
@@ -381,7 +330,9 @@ object MediaScreenPlan {
     /** A text box that is the app's search: one that says so, else the only text box on the screen. */
     fun searchField(els: List<ScreenElement>): ScreenElement? {
         val fields = els.filter { it.editable && !it.disabled && 'p' !in it.flags }
-        return fields.firstOrNull { searchy(it) || SEARCH.any { w -> hay(it).contains(w) } } ?: fields.singleOrNull()
+        // One that says it is search; else the one that has the keyboard focus; else the only one; else the topmost (a toolbar or full-screen search page puts its box first).
+        return fields.firstOrNull { searchy(it) || SEARCH.any { w -> hay(it).contains(w) } }
+            ?: fields.firstOrNull { it.focused } ?: fields.singleOrNull() ?: fields.minByOrNull { it.top }
     }
 
     /** What to press to get a search box when there is none showing: a search button, icon or tab. */

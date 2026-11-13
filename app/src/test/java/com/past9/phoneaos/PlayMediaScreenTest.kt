@@ -34,19 +34,19 @@ class PlayMediaScreenTest {
     }
 
     @Test fun aLaunchOntoTheHiddenDisplayLeavesTheUsersFrontAppAsItWas() {
-        val chrome = Task(1, 0, "com.android.chrome", true)
+        val userApp = Task(1, 0, "com.example.front", true)
         val player = "com.example.player"
-        val before = listOf(chrome)
-        val after = listOf(chrome, Task(9, 7, player, true))
+        val before = listOf(userApp)
+        val after = listOf(userApp, Task(9, 7, player, true))
         assertTrue(ScreenLanding.after(before, after, player) is ScreenLanding.Decision.Leave)
-        assertEquals(chrome, ScreenLanding.front(after))
+        assertEquals(userApp, ScreenLanding.front(after))
     }
 
     @Test fun aLaunchThatCameUpOnTheUsersScreenIsMovedAndTheirAppPutBackSoTheFrontIsTheSame() {
-        val chrome = Task(1, 0, "com.android.chrome", true)
+        val userApp = Task(1, 0, "com.example.front", true)
         val player = "com.example.player"
-        val before = listOf(chrome)
-        var now = listOf(Task(2, 0, player, true), chrome.copy(visible = false))
+        val before = listOf(userApp)
+        var now = listOf(Task(2, 0, player, true), userApp.copy(visible = false))
         val fix = ScreenLanding.after(before, now, player) as ScreenLanding.Decision.Fix
         // what the helper does: move ours off display 0, bring theirs back to the front
         now = now.map { if (it.id in fix.move) it.copy(display = 7) else it }.map { if (it.id == fix.restore) it.copy(visible = true) else it }

@@ -29,11 +29,11 @@ import org.robolectric.annotation.Config
 /**
  * play_media and media_control. Pinned here, with fake apps and fake media sessions (no real app is named in the code,
  * the names below are only test data):
- * 1. what is sent per kind: the focus and the extras, the package, the watch link, a file;
+ * 1. what is sent per kind: the focus and the extras, the package, a file;
  * 2. which app is picked: asked for, the user's default, the phone's default, one that is playing, the first;
  * 3. how success is judged from the media session, including an app that keeps playing what it had;
  * 4. the whole tool: the request, the session fallback, the file fallback, the background screen, and every failure in words;
- * 5. YouTube's result page parsed from a fixture;
+ * 5. the guard (a question of what the target offers), asleep phones, stale jobs, the search box wait;
  * 6. the real package scan, and that both tools are lent to linked computers and offered to the voice.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -41,7 +41,7 @@ import org.robolectric.annotation.Config
 class MediaToolsTest {
     private val metro = MediaApp("test.music.one", "Example Music", playFromSearch = true, audioFiles = true)
     private val player = MediaApp("test.music.two", "Example Player", playFromSearch = true)
-    private val yt = MediaApp("test.video.one", "Example Video", videoLinks = true)
+    private val yt = MediaApp("test.video.one", "Example Video", videoFiles = true)
     private val files = MediaApp("test.files.one", "Plain Player", audioFiles = true)
 
     private class Ctx : ToolContext {
@@ -72,7 +72,8 @@ class MediaToolsTest {
         val launched = mutableListOf<IntentSpec>()
         var onLaunch: (IntentSpec) -> String = { "sent" }
         var localResult: LocalResult = LocalResult.Found(emptyList())
-        var hits: List<YouTubeResults.Hit>? = null
+        var isAwake = true
+        val stale = mutableSetOf<String>()
         var front: String? = null
         val jobs = mutableSetOf<String>()
         val order = mutableListOf<String>()
@@ -90,12 +91,13 @@ class MediaToolsTest {
         override fun sessions() = sessions
         override fun launch(spec: IntentSpec): String { launched += spec; return onLaunch(spec) }
         override fun local(query: String, kind: MediaKind) = localResult
-        override suspend fun youtube(query: String) = hits
+        override fun awake() = isAwake
+        override fun markStale(app: MediaApp) { stale += app.pkg; order += "stale" }
         override suspend fun userFront() = front
-        override fun hasJob(app: MediaApp) = app.pkg in jobs
+        override fun hasJob(app: MediaApp) = app.pkg in jobs && app.pkg !in stale
         override suspend fun screenReplay(req: ScreenRequest, ctx: ToolContext): Fallback { order += "replay"; requests += req; return replay(req) }
         override suspend fun screenLearn(req: ScreenRequest, ctx: ToolContext): Learned { order += "learn"; requests += req; return learn(req) }
-        override suspend fun screenSave(req: ScreenRequest, ctx: ToolContext): String? { order += "save"; jobs += req.app.pkg; return req.query }
+        override suspend fun screenSave(req: ScreenRequest, ctx: ToolContext): String? { order += "save"; jobs += req.app.pkg; stale -= req.app.pkg; return req.query }
         override suspend fun screenLink(app: MediaApp, link: String, ctx: ToolContext): Fallback { linked += app to link; return this.link(app, link) }
         override suspend fun screenDone(ctx: ToolContext) { order += "done" }
         var browserOk = false
@@ -155,16 +157,11 @@ class MediaToolsTest {
         assertEquals("Stand by me", q.title); assertEquals("Ben E. King", q.artist)
     }
 
-    @Test fun aWatchLinkAndAFileCarryWhatTheAppNeeds() {
-        val w = IntentRules.build(MediaIntents.watch("dQw4w9WgXcQ", "test.video.one"))
-        assertEquals(Intent.ACTION_VIEW, w.action)
-        assertEquals(Uri.parse("https://www.youtube.com/watch?v=dQw4w9WgXcQ"), w.data)
-        assertEquals("test.video.one", w.`package`)
+    @Test fun aFileCarriesWhatTheAppNeeds() {
         val f = IntentRules.build(MediaIntents.viewAudio("content://media/external/audio/media/7", "test.files.one"))
         assertEquals("audio/*", f.type)
         assertEquals(Uri.parse("content://media/external/audio/media/7"), f.data)
         assertTrue(f.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
-        assertEquals("https://www.youtube.com/results?search_query=lofi+beats", MediaIntents.results("lofi beats", "").data)
     }
 
     // ---- 2. which app -----------------------------------------------------------------------------------------------
@@ -413,85 +410,176 @@ class MediaToolsTest {
         assertEquals("failed: kind must be one of song, artist, album, playlist, video, podcast.", play(deps(metro), "query" to "x", "kind" to "film"))
     }
 
-    // ---- 4. the tool: video -----------------------------------------------------------------------------------------
+    // ---- 4. the tool: video (the same route as music) ----------------------------------------------------------------
 
-    @Test fun aVideoIsFoundAndOpenedInTheVideoAppOnTheBackgroundScreen() {
+    private fun playingLearn(d: Deps) { d.learn = { req -> Learned.Playing(MediaVerify.Outcome.Playing(FakeSession(req.app.pkg, req.app.label, PlaybackState.STATE_PLAYING, req.query), true)) } }
+
+    @Test fun aVideoGoesThroughTheSameRouteAsMusicAndNeverThroughALinkOrAnIntent() {
         val d = deps(metro, yt)
-        d.hits = listOf(YouTubeResults.Hit("AAAAAAAAAAA", "Promoted", "Ad", ""), YouTubeResults.Hit("dQw4w9WgXcQ", "How to tie a tie", "Ties Inc", "3:21"))
+        d.stored = yt.pkg // the user's own video default
         d.front = "test.other.app"
-        d.link = { app, _ -> d.list += FakeSession(app.pkg, "Example Video", PlaybackState.STATE_PLAYING, "How to tie a tie", "Ties Inc"); Fallback.Ran("open") }
-        val out = play(d, "query" to "how to tie a tie", "kind" to "video")
-        assertTrue(out, out.startsWith("Playing \"How to tie a tie\" by Ties Inc in Example Video.") && out.contains("user's screen was not touched"))
-        assertEquals("https://www.youtube.com/watch?v=dQw4w9WgXcQ", d.linked.single().second)
-        assertEquals("test.video.one", d.linked.single().first.pkg)
-        assertTrue("a video is never an intent to his screen", d.launched.isEmpty())
+        playingLearn(d)
+        val out = play(d, "query" to "lofi beats", "kind" to "video")
+        assertTrue(out, out.startsWith("Playing \"lofi beats\" in Example Video."))
+        assertEquals(MediaKind.VIDEO, d.requests.single().kind)
+        assertEquals(yt.pkg, d.requests.single().app.pkg)
+        assertTrue("never an intent or a link on his screen", d.launched.isEmpty() && d.linked.isEmpty())
         assertEquals("test.other.app", d.front)
     }
 
-    @Test fun aVideoAppAlreadyInFrontGetsTheLinkInPlace() {
+    @Test fun aVideoAppThatTakesPlayRequestsIsAskedThroughItsSessionBeforeAnyScreen() {
+        val vid = MediaApp("test.video.two", "Example Clips", playFromSearch = true)
+        val d = deps(vid)
+        val s = FakeSession(vid.pkg, vid.label, PlaybackState.STATE_PAUSED, "Old clip")
+        s.onPlayFromSearch = { x, q -> x.state = PlaybackState.STATE_PLAYING; x.title = q }
+        d.list += s
+        val out = play(d, "query" to "how to tie a tie", "kind" to "video")
+        assertTrue(out, out.startsWith("Playing \"how to tie a tie\" in Example Clips.") && out.contains("media session"))
+        assertEquals(0, d.screenCalls)
+        assertTrue(d.launched.isEmpty())
+    }
+
+    @Test fun aVideoAppAlreadyInFrontIsAskedInPlaceAndNotMoved() {
         val d = deps(yt)
+        d.stored = yt.pkg
         d.front = yt.pkg
-        d.hits = listOf(YouTubeResults.Hit("dQw4w9WgXcQ", "How to tie a tie", "Ties Inc", "3:21"))
-        d.onLaunch = { s -> d.list += FakeSession(s.pkg, "Example Video", PlaybackState.STATE_PLAYING, "How to tie a tie", "Ties Inc"); "sent" }
+        d.onLaunch = { sp -> d.list += FakeSession(sp.pkg, "Example Video", PlaybackState.STATE_PLAYING, "how to tie a tie"); "sent" }
         val out = play(d, "query" to "how to tie a tie", "kind" to "video")
         assertTrue(out, out.contains("in front on the user's screen, so it was not moved"))
-        assertTrue(d.linked.isEmpty())
+        assertTrue(d.linked.isEmpty() && d.screenCalls == 0)
         assertEquals(yt.pkg, d.front)
     }
 
-    @Test fun aVideoThatOpensWithoutASessionIsOpenedButNotClaimedAsPlaying() {
-        val d = deps(yt)
-        d.hits = listOf(YouTubeResults.Hit("dQw4w9WgXcQ", "How to tie a tie", "Ties Inc", "3:21"))
-        d.link = { _, _ -> Fallback.Ran("open") }
+    @Test fun aVideoIsNeverLookedForInTheMusicFiles() {
+        val d = deps(yt, files)
+        d.stored = yt.pkg
+        d.localResult = LocalResult.Found(listOf(LocalTrack("content://media/external/audio/media/3", "how to tie a tie", "x", "y")))
         val out = play(d, "query" to "how to tie a tie", "kind" to "video")
-        assertTrue(out, out.startsWith("Opened \"How to tie a tie\"") && out.contains("cannot confirm"))
-    }
-
-    @Test fun whenTheVideoCannotBeLookedUpTheAppsOwnSearchIsUsedOnTheBackgroundScreen() {
-        val d = deps(yt)
-        d.hits = null
-        d.learn = { req -> Learned.Playing(MediaVerify.Outcome.Playing(FakeSession(req.app.pkg, req.app.label, PlaybackState.STATE_PLAYING, "lofi beats"), true)) }
-        val out = play(d, "query" to "lofi beats", "kind" to "video")
-        assertTrue(out, out.startsWith("Playing \"lofi beats\""))
-        assertEquals(MediaKind.VIDEO, d.requests.single().kind)
+        assertTrue(out, out.startsWith("failed:") && out.contains("background screen is off"))
         assertTrue(d.launched.isEmpty() && d.linked.isEmpty())
     }
 
     @Test fun aVideoFromTheBackgroundIsAFailureNeverANotificationOrAChooser() {
         val d = deps(yt)
-        d.hits = listOf(YouTubeResults.Hit("dQw4w9WgXcQ", "x", "y", "1:00"))
+        d.stored = yt.pkg
         val out = play(d, "query" to "x", "kind" to "video")
         assertTrue(out, out.startsWith("failed:") && out.contains("background screen is off"))
         assertTrue(d.launched.isEmpty())
         val none = play(Deps(emptyList()), "query" to "x", "kind" to "video")
-        assertTrue(none, none.startsWith("failed: no installed app opens video links"))
+        assertTrue(none, none.startsWith("failed:") && none.contains("can play video"))
+    }
+
+    // ---- a sleeping phone and a stale job -----------------------------------------------------------------------------
+
+    @Test fun aSleepingPhoneSaysSoAndUsesOnlyTheSessionNeverTheBackgroundScreen() {
+        val d = deps(player)
+        d.isAwake = false
+        d.jobs += player.pkg
+        d.replay = { Fallback.Ran("Done the learned way") }
+        playingLearn(d)
+        val out = play(d, "query" to "Underway")
+        assertTrue(out, out.startsWith("failed:") && out.contains("the phone is asleep, the background screen can't draw"))
+        assertEquals("the screen was not touched at all", 0, d.screenCalls)
+        assertTrue(d.launched.isEmpty())
+        // the session route still works while it sleeps
+        val s = FakeSession(player.pkg, "Example Player", PlaybackState.STATE_PAUSED, "Old")
+        s.onPlayFromSearch = { x, q -> x.state = PlaybackState.STATE_PLAYING; x.title = q }
+        d.list += s
+        assertTrue(play(d, "query" to "Underway").startsWith("Playing \"Underway\""))
+        assertEquals(0, d.screenCalls)
+    }
+
+    @Test fun aSavedJobThatStopsIsMarkedStaleLearnedAgainAndSavedOver() {
+        val d = deps(player)
+        d.jobs += player.pkg
+        d.replay = { Fallback.Failed("The learned way stopped at step 6.") }
+        playingLearn(d)
+        val out = play(d, "query" to "Underway")
+        assertTrue(out, out.startsWith("Playing \"Underway\""))
+        assertEquals(listOf("replay", "stale", "learn", "save", "done"), d.order)
+        assertTrue("saved over, so no longer stale", player.pkg !in d.stale)
+        // the next play replays the new job, not the stale one
+        d.order.clear()
+        d.replay = { Fallback.Ran("Done the learned way in 3 s") }
+        d.list += FakeSession(player.pkg, "Example Player", PlaybackState.STATE_PLAYING, "Underway")
+        assertTrue(play(d, "query" to "Underway").contains("replayed the saved play job"))
+        assertEquals("replay", d.order.first())
+    }
+
+    @Test fun aStaleJobIsNotReplayedAgainWhenTheRelearnWasNotClean() {
+        val d = deps(player)
+        d.jobs += player.pkg
+        d.replay = { Fallback.Failed("stopped") }
+        d.learn = { req -> Learned.Playing(MediaVerify.Outcome.Playing(FakeSession(req.app.pkg, req.app.label, PlaybackState.STATE_PLAYING, req.query), true), clean = false) }
+        play(d, "query" to "Underway")
+        assertEquals(listOf("replay", "stale", "learn", "done"), d.order)
+        d.order.clear()
+        play(d, "query" to "Underway")
+        assertTrue("a stale job is not replayed", "replay" !in d.order)
     }
 
     // ---- the guard: nothing else plays ------------------------------------------------------------------------------
 
+    private class Targets(val media: Set<String>, val browsers: Set<String> = emptySet(), val lands: Map<String, Set<String>> = emptyMap()) : MediaIntentGuard.Targets {
+        override fun resolve(spec: IntentSpec) = lands[spec.data] ?: emptySet()
+        override fun mediaApps() = media
+        override fun browsers() = browsers
+    }
+
     @Test fun anIntentOrLinkThatPlaysMediaIsRefusedWithThePathToPlayMedia() {
+        val t = Targets(media = setOf("com.example.player", "com.example.video"), browsers = setOf("com.example.browser"),
+            lands = mapOf("https://media.example.org/watch/1" to setOf("com.example.video", "com.example.browser"),
+                          "https://news.example.org/story" to setOf("com.example.browser"),
+                          "https://example.org/" to setOf("com.example.browser")))
         val search = MediaIntents.playFromSearch("x", MediaKind.SONG, "com.example.player")
-        assertTrue(MediaIntentGuard.refusal(search)!!.contains("play_media"))
-        assertNotNull(MediaIntentGuard.refusal(MediaIntents.watch("dQw4w9WgXcQ", "com.example.player")))
-        assertNotNull(MediaIntentGuard.refusal(MediaIntents.results("lofi", "com.example.video")))
-        assertNotNull(MediaIntentGuard.refusal(MediaIntents.viewAudio("content://media/external/audio/media/9", "p")))
-        assertNotNull(MediaIntentGuard.refusal(IntentSpec("activity", Intent.ACTION_VIEW, data = "https://music.youtube.com/watch?v=abc")))
-        assertNotNull(MediaIntentGuard.refusal(IntentSpec("activity", Intent.ACTION_VIEW, data = "https://open.spotify.com/track/1")))
+        assertTrue(MediaIntentGuard.refusal(search, t)!!.contains("play_media"))
+        assertNotNull("an audio file", MediaIntentGuard.refusal(MediaIntents.viewAudio("content://media/external/audio/media/9", "p"), t))
+        assertNotNull("a video file", MediaIntentGuard.refusal(IntentSpec("activity", Intent.ACTION_VIEW, data = "content://media/external/video/media/9", mimeType = "video/*"), t))
+        assertNotNull("a link a media app opens", MediaIntentGuard.refusal(IntentSpec("activity", Intent.ACTION_VIEW, data = "https://media.example.org/watch/1"), t))
+        assertNotNull("an intent aimed at a media app by name", MediaIntentGuard.refusal(IntentSpec("activity", Intent.ACTION_MAIN, pkg = "com.example.video"), t))
+        assertNotNull(MediaIntentGuard.refusalForLink("https://media.example.org/watch/1", t))
         // what is not playback still goes
-        assertNull(MediaIntentGuard.refusal(IntentSpec("activity", Intent.ACTION_VIEW, data = "google.navigation:q=Sandton")))
-        assertNull(MediaIntentGuard.refusal(IntentSpec("activity", Intent.ACTION_VIEW, data = "https://example.org/")))
-        assertNull(MediaIntentGuard.refusal(IntentSpec("activity", Intent.ACTION_SEND, mimeType = "text/plain")))
-        assertNull(MediaIntentGuard.refusal(IntentSpec("broadcast", "com.example.DO_THING")))
-        assertNull(MediaIntentGuard.refusalForLink("https://news.example.org/story"))
-        assertNotNull(MediaIntentGuard.refusalForLink("https://www.youtube.com/watch?v=abc"))
-        assertNotNull(MediaIntentGuard.refusalForLink("https://youtu.be/abc"))
+        assertNull(MediaIntentGuard.refusal(IntentSpec("activity", Intent.ACTION_VIEW, data = "google.navigation:q=Sandton"), t))
+        assertNull("a plain page goes to the browser", MediaIntentGuard.refusal(IntentSpec("activity", Intent.ACTION_VIEW, data = "https://example.org/"), t))
+        assertNull(MediaIntentGuard.refusalForLink("https://news.example.org/story", t))
+        assertNull(MediaIntentGuard.refusalForLink("", t))
+        assertNull(MediaIntentGuard.refusal(IntentSpec("activity", Intent.ACTION_SEND, mimeType = "text/plain"), t))
+        assertNull(MediaIntentGuard.refusal(IntentSpec("broadcast", "com.example.DO_THING", pkg = "com.example.player"), t))
+    }
+
+    @Test fun aBrowserThatIsPlayingATabIsNotAMediaApp() {
+        val t = Targets(media = setOf("com.example.browser"), browsers = setOf("com.example.browser"), lands = mapOf("https://news.example.org/story" to setOf("com.example.browser")))
+        assertNull(MediaIntentGuard.refusalForLink("https://news.example.org/story", t))
+        assertNull(MediaIntentGuard.refusal(IntentSpec("activity", Intent.ACTION_VIEW, pkg = "com.example.browser", data = "https://news.example.org/story"), t))
+    }
+
+    @Test fun withNoFactsOnlyAnExplicitPlayRequestOrAMediaFileIsRefused() {
+        assertNotNull(MediaIntentGuard.refusal(MediaIntents.playFromSearch("x", MediaKind.SONG, "p"), MediaIntentGuard.NONE))
+        assertNull(MediaIntentGuard.refusalForLink("https://media.example.org/watch/1", MediaIntentGuard.NONE))
+    }
+
+    @Test fun theRealFactsCoverWhatDeclaresPlayFromSearchABrowseServiceOrALiveSessionAndLeaveBrowsersOut() {
+        val pm = shadowOf(app.packageManager)
+        install("test.music.one", "Example Music"); install("test.browser", "A Browser")
+        pm.addResolveInfoForIntent(Intent(MediaIntents.PLAY_FROM_SEARCH), resolve("test.music.one"))
+        pm.addResolveInfoForIntent(link(MediaIntents.PLAIN_WEB), resolve("test.browser"))
+        pm.addResolveInfoForIntent(link("https://media.example.org/watch/1"), resolve("test.music.one"))
+        pm.addResolveInfoForIntent(link("https://media.example.org/watch/1"), resolve("test.browser"))
+        val facts = AndroidMediaTargets(app)
+        assertTrue("test.music.one" in facts.mediaApps())
+        assertEquals(setOf("test.browser"), facts.browsers())
+        val spec = IntentSpec("activity", Intent.ACTION_VIEW, data = "https://media.example.org/watch/1")
+        assertEquals(setOf("test.music.one", "test.browser"), facts.resolve(spec))
+        assertNotNull(MediaIntentGuard.refusal(spec, facts))
+        assertNull(MediaIntentGuard.refusalForLink("https://news.example.org/story", facts))
     }
 
     @Test fun androidIntentRefusesAPlayRequestWithoutSendingIt() {
         var sent = 0
-        val tool = com.past9.phoneaos.automation.AndroidIntentTool(object : com.past9.phoneaos.automation.IntentSettings { override fun intentAllowlist() = emptyList<IntentRules.Pair>() }) { sent++; "sent" }
+        val facts = Targets(media = setOf("com.example.player"), lands = mapOf("https://media.example.org/track/abc" to setOf("com.example.player")))
+        val tool = com.past9.phoneaos.automation.AndroidIntentTool(object : com.past9.phoneaos.automation.IntentSettings { override fun intentAllowlist() = emptyList<IntentRules.Pair>() }, { facts }) { sent++; "sent" }
         val out = runBlocking {
-            tool.run(JSONObject().put("kind", "activity").put("action", Intent.ACTION_VIEW).put("package", "com.example.player").put("data", "https://open.spotify.com/track/abc"), Ctx())
+            tool.run(JSONObject().put("kind", "activity").put("action", Intent.ACTION_VIEW).put("package", "com.example.player").put("data", "https://media.example.org/track/abc"), Ctx())
         }
         assertTrue(out, out.startsWith("failed:") && out.contains("play_media"))
         val out2 = runBlocking {
@@ -507,11 +595,13 @@ class MediaToolsTest {
         com.past9.phoneaos.screen.ScreenElement(id, cls, text, desc, hint, res, 0, top, w, top + 100, flags, 0)
 
     @Test fun theSearchBoxIsTheFieldThatSaysSearchElseTheOnlyField() {
-        val a = el(1, hint = "Search YouTube Music", flags = "e", cls = "android.widget.EditText")
+        val a = el(1, hint = "Search music", flags = "e", cls = "android.widget.EditText")
         val b = el(2, hint = "Name", flags = "e", cls = "android.widget.EditText", top = 300)
         assertEquals(a, MediaScreenPlan.searchField(listOf(b, a)))
         assertEquals(b, MediaScreenPlan.searchField(listOf(b)))
-        assertNull("two fields and none says search", MediaScreenPlan.searchField(listOf(b, el(3, hint = "Email", flags = "e"))))
+        val top = el(3, hint = "Email", flags = "e")
+        assertEquals("two fields and none says search: the one with the keyboard focus", b.copy(flags = "ef"), MediaScreenPlan.searchField(listOf(b.copy(flags = "ef"), top)))
+        assertEquals("else the topmost, where a toolbar or a full-screen search page puts its box", top, MediaScreenPlan.searchField(listOf(b, top)))
     }
 
     @Test fun aSearchButtonIsFoundWhenThereIsNoBoxAndVoiceSearchIsLeftAlone() {
@@ -583,6 +673,64 @@ class MediaToolsTest {
         val noAccess = MediaScreenLearner(FakeOps(listOf(box)), { Sessions.NoAccess("no") }, sleep = {}, waitMs = 10).run(player, "x y")
         assertTrue(noAccess is Learned.NoAccess)
     }
+    // ---- waiting for the search box ------------------------------------------------------------------------------------
+
+    /** Search is pressed but the text box comes up late (after [lateReads] reads) and only from press number [boxFromPress]. */
+    private class LateBoxOps(val home: List<com.past9.phoneaos.screen.ScreenElement>, val box: List<com.past9.phoneaos.screen.ScreenElement>,
+                             val results: List<com.past9.phoneaos.screen.ScreenElement>, val boxFromPress: Int, val lateReads: Int) : ScreenOps {
+        var presses = 0; var reads = 0; var cur = home
+        val actions = mutableListOf<String>()
+        override suspend fun open(): String? { actions += "open"; return null }
+        override fun elements(): List<com.past9.phoneaos.screen.ScreenElement> { if (presses >= boxFromPress && cur === home && ++reads >= lateReads) cur = box; return cur }
+        override fun width() = 720
+        override suspend fun tap(e: com.past9.phoneaos.screen.ScreenElement, generic: Boolean): String? { actions += "tap ${e.label}"; if (e.label == "Search") presses++; return null }
+        override suspend fun type(e: com.past9.phoneaos.screen.ScreenElement, text: String): String? { actions += "type $text"; cur = results; return null }
+        override suspend fun settle() {}
+    }
+
+    private val searchButton get() = listOf(el(1, desc = "Search", flags = "c", top = 20, cls = "android.widget.ImageButton"))
+    private val searchBox get() = listOf(el(1, hint = "Type here", flags = "e", cls = "android.widget.EditText"))
+    private val searchResults get() = searchBox + el(2, text = "Underway - Some Band", flags = "c", top = 300)
+
+    private fun learnWith(ops: LateBoxOps): Learned = runBlocking {
+        val s = FakeSession(player.pkg, "Example Player", PlaybackState.STATE_NONE)
+        MediaScreenLearner(ops, { Sessions.Ok(listOf(s)) }, sleep = { if (ops.actions.any { it.startsWith("type") }) { s.state = PlaybackState.STATE_PLAYING; s.title = "Underway" } }, waitMs = 1000).run(player, "Underway")
+    }
+
+    @Test fun aTextBoxThatComesUpLateIsWaitedForAndSearchIsPressedOnlyOnce() {
+        val ops = LateBoxOps(searchButton, searchBox, searchResults, boxFromPress = 1, lateReads = 4)
+        val r = learnWith(ops)
+        assertTrue(r.toString(), r is Learned.Playing)
+        assertEquals(1, ops.actions.count { it == "tap Search" })
+    }
+
+    @Test fun aSearchPressThatDidNothingIsPressedOnceMoreThenTheBoxIsWaitedFor() {
+        val ops = LateBoxOps(searchButton, searchBox, searchResults, boxFromPress = 2, lateReads = 2)
+        val r = learnWith(ops)
+        assertTrue(r.toString(), r is Learned.Playing)
+        assertEquals(2, ops.actions.count { it == "tap Search" })
+    }
+
+    @Test fun noBoxAfterTwoPressesIsAClearFailureNotALoop() {
+        val ops = LateBoxOps(searchButton, searchBox, searchResults, boxFromPress = 99, lateReads = 1)
+        val r = learnWith(ops)
+        assertTrue(r.toString(), r is Learned.Failed && r.text.contains("no text box came up") && r.text.contains("twice"))
+        assertEquals(2, ops.actions.count { it == "tap Search" })
+    }
+
+    // ---- a replayed wait for the screen to settle ---------------------------------------------------------------------
+
+    @Test fun aSettleStepOnAScreenThatNeverStopsChangingIsAPauseNotACheck() {
+        val said = "Waited 20 s and the screen was still changing."
+        val rules = com.past9.phoneaos.screen.ReplayRules
+        assertTrue("a pause on a player that never settles", rules.waitHolds(false, "", 1, said))
+        assertTrue("it did settle", rules.waitHolds(true, "", 1, "settled"))
+        assertFalse("a wait for text is a real check", rules.waitHolds(false, "Play all", 0, "Text not found"))
+        assertFalse("a wait for text that never showed is a failure even with a stable count", rules.waitHolds(false, "Play all", 1, said))
+        assertFalse("a stable wait that failed for another reason is a failure", rules.waitHolds(false, "", 1, "The app closed."))
+        assertFalse("no stable count means it is not a settle step", rules.waitHolds(false, "", 0, said))
+    }
+
     // ---- the clean state: an app that comes back to where it was left ----------------------------------------------
 
     /** A screen that changes with Back, a swipe down and a fresh start, like an app that opens in its expanded player. */
@@ -769,35 +917,6 @@ class MediaToolsTest {
         assertTrue(control(d, "action" to "rewind").startsWith("failed: action must be one of"))
     }
 
-    // ---- 5. YouTube's page ------------------------------------------------------------------------------------------
-
-    private val page = """<html><head></head><body><script>var ytInitialData = {"contents":{"twoColumnSearchResultsRenderer":{"primaryContents":{"sectionListRenderer":{"contents":[
-        {"itemSectionRenderer":{"contents":[
-          {"adSlotRenderer":{"x":"} {"}},
-          {"videoRenderer":{"videoId":"LIVEVIDEO01","title":{"runs":[{"text":"Live now"}]},"ownerText":{"runs":[{"text":"Radio"}]}}},
-          {"videoRenderer":{"videoId":"dQw4w9WgXcQ","title":{"runs":[{"text":"Never } Gonna \"Give\" You Up"}]},"ownerText":{"runs":[{"text":"Rick Astley"}]},"lengthText":{"simpleText":"3:33"}}},
-          {"reelShelfRenderer":{"items":[{"reelItemRenderer":{"videoId":"SHORTSSSS01"}}]}},
-          {"videoRenderer":{"videoId":"abcdefghijk","title":{"simpleText":"Second"},"longBylineText":{"runs":[{"text":"Someone"}]},"lengthText":{"simpleText":"1:00"}}}
-        ]}}]}}}}};</script><script>var other = 1;</script></body></html>"""
-
-    @Test fun theResultPageIsReadWithoutAKeyAndTheFirstRealVideoIsPicked() {
-        val hits = YouTubeResults.parse(page)
-        assertEquals(listOf("LIVEVIDEO01", "dQw4w9WgXcQ", "abcdefghijk"), hits.map { it.id })
-        assertEquals("Never } Gonna \"Give\" You Up", hits[1].title)
-        assertEquals("Rick Astley", hits[1].channel)
-        assertEquals("3:33", hits[1].length)
-        assertEquals("Someone", hits[2].channel)
-        assertEquals("a live stream has no running time, so the first real video wins", "dQw4w9WgXcQ", YouTubeResults.best(hits)!!.id)
-    }
-
-    @Test fun aChangedPageStillYieldsTheFirstVideoIdsAndAnEmptyOneYieldsNothing() {
-        val odd = "<html>ytInitialData = not json at all \"videoId\":\"zzzzzzzzzzz\" \"videoId\":\"yyyyyyyyyyy\" \"videoId\":\"zzzzzzzzzzz\"</html>"
-        assertEquals(listOf("zzzzzzzzzzz", "yyyyyyyyyyy"), YouTubeResults.parse(odd).map { it.id })
-        assertTrue(YouTubeResults.parse("<html>nothing here</html>").isEmpty())
-        assertNull(YouTubeResults.best(emptyList()))
-        assertNull(YouTubeResults.initialData("<html></html>"))
-    }
-
     // ---- 6. the phone's own scan, the lending and the voice ---------------------------------------------------------
 
     private val app = ApplicationProvider.getApplicationContext<android.app.Application>()
@@ -821,14 +940,13 @@ class MediaToolsTest {
         val pm = shadowOf(app.packageManager)
         install("test.music.one", "Example Music"); install("test.video.one", "Example Video"); install("test.browser", "A Browser"); install("test.plain", "Calculator")
         pm.addResolveInfoForIntent(Intent(MediaIntents.PLAY_FROM_SEARCH), resolve("test.music.one"))
-        pm.addResolveInfoForIntent(link(MediaIntents.WATCH + "dQw4w9WgXcQ"), resolve("test.video.one"))
-        pm.addResolveInfoForIntent(link(MediaIntents.WATCH + "dQw4w9WgXcQ"), resolve("test.browser"))
+        pm.addResolveInfoForIntent(Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse("content://media/external/video/media/1"), "video/*"), resolve("test.video.one"))
         pm.addResolveInfoForIntent(link(MediaIntents.PLAIN_WEB), resolve("test.browser"))
         pm.addResolveInfoForIntent(Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse("content://media/external/audio/media/1"), "audio/*"), resolve("test.music.one"))
         val apps = AndroidMediaDeps(app).installed().associateBy { it.pkg }
-        assertTrue(apps["test.music.one"]!!.playFromSearch && apps["test.music.one"]!!.audioFiles && !apps["test.music.one"]!!.videoLinks)
-        assertTrue(apps["test.video.one"]!!.videoLinks && !apps["test.video.one"]!!.playFromSearch)
-        assertFalse("a browser opens any web page, so it is not a video app", apps["test.browser"]!!.videoLinks)
+        assertTrue(apps["test.music.one"]!!.playFromSearch && apps["test.music.one"]!!.audioFiles && !apps["test.music.one"]!!.videoFiles)
+        assertTrue(apps["test.video.one"]!!.videoFiles && !apps["test.video.one"]!!.playFromSearch)
+        assertFalse("a browser opens no video file here", apps["test.browser"]!!.videoFiles)
         assertFalse(apps["test.plain"]!!.any)
         assertEquals("Example Music", apps["test.music.one"]!!.label)
     }
@@ -839,7 +957,7 @@ class MediaToolsTest {
         assertNull(deps.systemDefault(false))
         pm.addResolveInfoForIntent(Intent(MediaIntents.PLAY_FROM_SEARCH), resolve("android", "com.android.internal.app.ResolverActivity"))
         assertNull("the chooser is not a default", deps.systemDefault(false))
-        pm.addResolveInfoForIntent(link(MediaIntents.WATCH + "dQw4w9WgXcQ"), resolve("test.video.one"))
+        pm.addResolveInfoForIntent(Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse("content://media/external/video/media/1"), "video/*"), resolve("test.video.one"))
         assertEquals("test.video.one", deps.systemDefault(true))
     }
 

@@ -45,6 +45,11 @@ class MediaScreenLearner(
     private val sleep: suspend (Long) -> Unit = { delay(it) },
     private val waitMs: Long = 6_000,
 ) {
+    companion object {
+        const val FIELD_POLLS = 6
+        const val FIELD_POLL_MS = 500L
+    }
+
     private fun hasSearch(els: List<ScreenElement>) = MediaScreenPlan.searchField(els) != null || MediaScreenPlan.searchEntry(els) != null
 
     /**
@@ -71,6 +76,18 @@ class MediaScreenLearner(
         return els.takeIf { hasSearch(it) }
     }
 
+    /** Waits up to about 3 s for a text box to appear after search was pressed (a search page animates in). */
+    private suspend fun awaitField(first: List<ScreenElement>): Pair<List<ScreenElement>, ScreenElement?> {
+        var els = first
+        for (i in 0..FIELD_POLLS) {
+            MediaScreenPlan.searchField(els)?.let { return els to it }
+            if (i == FIELD_POLLS) break
+            sleep(FIELD_POLL_MS)
+            els = ops.elements()
+        }
+        return els to null
+    }
+
     suspend fun run(app: MediaApp, query: String): Learned {
         ops.open()?.let { return if (it.contains("user's own screen")) Learned.InFront(it) else Learned.Failed(it) }
         var els = reachSearch() ?: return Learned.Failed("${app.label} shows no search box or search button on the background screen, even after Back, folding the player and starting it fresh")
@@ -78,8 +95,15 @@ class MediaScreenLearner(
         if (field == null) {
             val entry = MediaScreenPlan.searchEntry(els) ?: return Learned.Failed("${app.label} shows no search box or search button on the background screen")
             ops.tap(entry, false)?.let { return Learned.Failed(it) }
-            els = ops.elements()
-            field = MediaScreenPlan.searchField(els) ?: return Learned.Failed("pressed search in ${app.label} but no text box came up")
+            var waited = awaitField(ops.elements())
+            if (waited.second == null) {
+                // Pressed, and still no text box: the press may have missed (or closed it again). Press search once more and wait again.
+                val again = MediaScreenPlan.searchEntry(waited.first) ?: entry
+                ops.tap(again, false)?.let { return Learned.Failed(it) }
+                waited = awaitField(ops.elements())
+            }
+            els = waited.first
+            field = waited.second ?: return Learned.Failed("pressed search in ${app.label} (twice, waiting about 3 s each time) but no text box came up")
         }
         ops.type(field, query)?.let { return Learned.Failed(it) }
         ops.settle()

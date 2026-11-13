@@ -10,6 +10,17 @@ import org.json.JSONObject
  *
  * A learned step: {"do": tap|long|type|swipe|key|wait|open, "sel": {...}, "text": "...{input}...", "extra": {...}, "ms": how long to wait for its element}
  */
+/** What a replayed step is allowed to count as a failure. Plain logic, no Android. */
+object ReplayRules {
+    /**
+     * Whether a saved "wait" step lets the replay go on. A wait for text is a real check. A wait for the screen to
+     * stop changing (no text, a stable count) is only a pause: a screen that never stops (a player, a timer, a live
+     * feed) must not end the replay, so "still changing" is not a failure.
+     */
+    fun waitHolds(ok: Boolean, text: String, stable: Int, said: String): Boolean =
+        ok || (text.isBlank() && stable > 0 && said.contains("still changing"))
+}
+
 object ScreenSkills {
     /** Kinds of step in a run that are part of doing the job. Looking, asking and notes are not. */
     val DOING = setOf("open", "share", "tap", "long", "type", "swipe", "key", "wait")
