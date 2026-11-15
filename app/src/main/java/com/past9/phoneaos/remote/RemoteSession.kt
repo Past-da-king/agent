@@ -636,15 +636,22 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         val rid = ids.remote(itemId) ?: return
         scope.launch {
             val item = db.chat().get(itemId)
-            item?.let { db.chat().update(it.copy(meta = JSONObject(it.meta).put("answer", option).apply { remove("decideFailed") }.toString())) }
+            item?.let { db.chat().update(it.copy(meta = JSONObject(it.meta).put("answer", option).apply { remove("decideFailed"); remove("decideNote") }.toString())) }
             runCatching {
                 val approval = item?.kind == "approval" || item?.let { runCatching { JSONObject(it.meta).optString("remoteKind") }.getOrNull() } == "approval"
                 if (approval) call("chat.decide", listOf(rid, if (isYes(option)) "approve" else "decline"))
                 else call("chat.answer", listOf(rid, option))
             }.onFailure { e ->
                 // It did not reach the computer: the card waits again with its buttons, and says so (ui/screens/ApprovalCard.kt).
-                db.chat().get(itemId)?.let { cur -> db.chat().update(cur.copy(meta = JSONObject(cur.meta).apply { remove("answer"); put("decideFailed", true) }.toString())) }
-                notice("Couldn't answer on ${brainName()}: ${e.message}")
+                // Someone else decided this card first: not a failure. The card shows the winning answer and the computer's sentence.
+                var conflict = false
+                db.chat().get(itemId)?.let { cur ->
+                    val m = JSONObject(cur.meta)
+                    conflict = com.past9.phoneaos.ui.screens.CardConflict.applyTo(m, e)
+                    if (!conflict) m.apply { remove("answer"); put("decideFailed", true) }
+                    db.chat().update(cur.copy(meta = m.toString()))
+                }
+                if (!conflict) notice("Couldn't answer on ${brainName()}: ${e.message}")
             }
         }
     }

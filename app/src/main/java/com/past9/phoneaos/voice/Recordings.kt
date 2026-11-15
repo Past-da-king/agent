@@ -37,9 +37,9 @@ class DictationFolder(val dir: File, private val saver: QuietSaver = QuietSaver(
         .put("text", d.text).put("state", d.state).put("chat", d.chat).put("syncedChars", d.syncedChars).put("syncedState", d.syncedState)
 
     /** The words so far. Soon on disk, and at once when [now] is set. A later call never leaves less than an earlier one. */
-    fun note(id: String, startedAt: Long, durationMs: Long, text: String, state: String, chat: String, flush: Boolean = false) {
+    fun note(id: String, startedAt: Long, durationMs: Long, text: String, state: String, chat: String, flush: Boolean = false, final: Boolean = false) {
         val old = get(id)
-        val keep = if (old != null && Words.less(old.text, text)) old.text else text
+        val keep = if (!final && old != null && Words.less(old.text, text)) old.text else text
         val d = SavedDictation(id, startedAt, maxOf(durationMs, old?.durationMs ?: 0), keep, state, chat, null, old?.syncedChars ?: -1, old?.syncedState.orEmpty())
         pendingNotes[id] = d
         saver.save(noteOf(id), toJson(d).toString())

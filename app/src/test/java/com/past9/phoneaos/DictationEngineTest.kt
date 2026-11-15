@@ -360,6 +360,19 @@ class DictationEngineTest {
         assertTrue("the whole take went to the speech model", pc.calls > 0)
     }
 
+    @Test fun theWholeTakeReplacesACaptionThatHasMoreWordsButWrongOnes() = runTest {
+        // The caption has junk for what it could not follow (more words); the whole-take pass is the truth.
+        val live = HandLive()
+        val pc = FakePc().apply { answer = { "Sawubona my friend ngiyaphila and now back in English." } }
+        val r = engine(live, pc)
+        speak(r, 0, 20, talk = 20, pause = 1)
+        live.ev!!.partial("so what do you want to bow and then it was a hello there my friend in English back and it is fine ok")
+        r.engine.finish()
+        untilEnded(r)
+        assertEquals("Sawubona my friend ngiyaphila and now back in English.", r.engine.text())
+        assertTrue("it is the final text", r.engine.view().final)
+    }
+
     @Test fun aPolishThatFailsLeavesTheCaptionHeCanSee() = runTest {
         val live = HandLive()
         val pc = FakePc().apply { online = false }
@@ -369,6 +382,39 @@ class DictationEngineTest {
         r.engine.finish()
         untilEnded(r)
         assertEquals(said, boxWords(r))
+    }
+
+    @Test fun theWholeTakePassRunsEvenWhenTheCaptionHadNothingPendingAtStop() = runTest {
+        // 12 Nov 2026 (his isiZulu): the recogniser had closed its stretch (no match for what he said next), so nothing was
+        // pending when he tapped stop; finish() settled to DONE before the whole-take pass was started and it never ran.
+        val live = HandLive()
+        val pc = FakePc().apply { answer = { "Sawubona my friend, ngiyaphila, and now back in English." } }
+        val r = engine(live, pc)
+        speak(r, 0, 20, talk = 20, pause = 1)
+        live.ev!!.partial("so what do you want to bow and then it was a hello there my friend in English back")
+        live.ev!!.result("so what do you want to bow and then it was a hello there my friend in English back")
+        advanceTimeBy(3_000); runCurrent()
+        live.ev?.error(LiveError.NO_SPEECH)
+        r.engine.finish(); untilEnded(r)
+        assertTrue("the whole take went to the computer", pc.calls > 0)
+        assertEquals("Sawubona my friend, ngiyaphila, and now back in English.", r.engine.text())
+    }
+
+    @Test fun aTakeWhoseWholePassNeverRanIsKeptAndRetryWritesItDown() = runTest {
+        // 12 Nov 2026: the link to the computer was down when he stopped; the caption (one language) was all he got and it
+        // said "done". Now it says kept, the tape stays, and Retry writes the whole take down.
+        val live = HandLive()
+        val pc = FakePc().apply { online = false; answer = { "Sawubona my friend, ngiyaphila, and now back in English." } }
+        val r = engine(live, pc)
+        speak(r, 0, 20, talk = 20, pause = 1)
+        live.ev!!.partial("so what do you want to bow and then it was a hello there my friend in English back and it is fine ok")
+        r.engine.finish(); untilEnded(r)
+        assertEquals(DictationView.Phase.KEPT, r.engine.view().phase)
+        assertTrue("it says how much it could not write down", r.engine.view().lostMs > 0)
+        pc.online = true
+        r.engine.retry(); untilEnded(r)
+        assertEquals(DictationView.Phase.DONE, r.engine.view().phase)
+        assertEquals("Sawubona my friend, ngiyaphila, and now back in English.", r.engine.text())
     }
 
     @Test fun tapeIsAValidWavWhileRecording() {

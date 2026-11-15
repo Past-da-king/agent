@@ -76,7 +76,7 @@ object OpenUiIcons {
     fun forTextOr(text: String?, fallback: ImageVector = Icons.Rounded.Insights): ImageVector = forText(text) ?: fallback
 
     /** A button that only opens or shows something ("Details", "Open listing"), as opposed to one that decides or sends. */
-    fun navigates(label: String?): Boolean = forAction(label) == Icons.Rounded.OpenInNew
+    fun navigates(label: String?): Boolean = forAction(label) == com.past9.phoneaos.ui.OpenInNewIcon
 
     /** The leading icon for an action button, from its label. */
     fun forAction(label: String?): ImageVector? {
@@ -85,7 +85,7 @@ object OpenUiIcons {
             Regex("approve|confirm|accept|yes|done|ok\\b|allow").containsMatchIn(t) -> Icons.Rounded.Check
             Regex("decline|reject|cancel|no\\b|deny|dismiss|skip").containsMatchIn(t) -> Icons.Rounded.Close
             Regex("book|schedule|viewing|reserve|appointment").containsMatchIn(t) -> Icons.Rounded.Event
-            Regex("open|view|see|visit|read|details|listing|link").containsMatchIn(t) -> Icons.Rounded.OpenInNew
+            Regex("open|view|see|visit|read|details|listing|link").containsMatchIn(t) -> com.past9.phoneaos.ui.OpenInNewIcon
             Regex("call|phone|ring").containsMatchIn(t) -> Icons.Rounded.Call
             Regex("boarding|ticket|pass\\b").containsMatchIn(t) -> Icons.Rounded.ConfirmationNumber
             Regex("cart|basket|bag").containsMatchIn(t) -> Icons.Rounded.AddShoppingCart

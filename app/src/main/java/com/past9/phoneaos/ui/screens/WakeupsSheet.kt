@@ -9,6 +9,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.past9.phoneaos.R
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.past9.phoneaos.remote.RemoteHub
@@ -33,27 +35,27 @@ fun WakeupsSheet(onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
     var said by remember { mutableStateOf("") }
     val firstBad = checks.firstOrNull { !it.ok }
-    AppSheet(Icons.Rounded.Alarm, "Wake-ups", if (firstBad == null) "Ready to ring" else "One thing to switch on",
-        onDismiss = onDismiss, primary = if (firstBad == null) "Done" else "Fix it", primaryEnabled = true,
+    AppSheet(Icons.Rounded.Alarm, stringResource(R.string.wake_up_title), if (firstBad == null) stringResource(R.string.wake_up_ready) else stringResource(R.string.wake_up_one_thing),
+        onDismiss = onDismiss, primary = if (firstBad == null) stringResource(R.string.rt_done) else stringResource(R.string.rel_fix_it), primaryEnabled = true,
         onPrimary = { if (firstBad == null) onDismiss() else WakePermissions.fix(context, firstBad) },
-        secondary = { TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Close") } }) {
-        Text("When something needs you now, your agent rings this phone through Do Not Disturb, full screen, until you answer. I'm on it here stops your computer too.",
+        secondary = { TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ui_close)) } }) {
+        Text(stringResource(R.string.wake_up_intro),
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(12.dp))
         val open = WakeChannel.isOpen
         val lacks = open && WakeChannel.lacksWakeups
-        val pc = WakeChannel.connectedTo.ifBlank { "your computer" }
-        CheckRow(Icons.Rounded.Devices, "Reaches this phone", open && !lacks,
-            when { linked == null -> "Link this phone to your computer first (Settings > Linked devices)"; lacks -> "$pc can't ring this phone yet: update the Agent app there"; open -> "Connected to $pc"; else -> "Not connected right now. It keeps trying." }) { WakeChannel.ensure(context) }
-        checks.forEach { c -> CheckRow(Icons.Rounded.Shield, c.label, c.ok, if (c.ok) "On" else c.help) { WakePermissions.fix(context, c); tick++ } }
+        val pc = WakeChannel.connectedTo.ifBlank { stringResource(R.string.wake_up_your_computer) }
+        CheckRow(Icons.Rounded.Devices, stringResource(R.string.wake_up_reaches), open && !lacks,
+            when { linked == null -> stringResource(R.string.wake_up_link_first); lacks -> stringResource(R.string.wake_up_lacks, pc); open -> stringResource(R.string.wake_up_connected, pc); else -> stringResource(R.string.wake_up_not_connected) }) { WakeChannel.ensure(context) }
+        checks.forEach { c -> CheckRow(Icons.Rounded.Shield, c.label, c.ok, if (c.ok) stringResource(R.string.rel_on) else c.help) { WakePermissions.fix(context, c); tick++ } }
         Spacer(Modifier.height(12.dp))
-        Text("Test a wake-up", style = MaterialTheme.typography.titleSmall)
-        Text("Rings this phone for real. Answer it to stop it.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.wake_up_test), style = MaterialTheme.typography.titleSmall)
+        Text(stringResource(R.string.wake_up_test_body), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(6.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("critical", "urgent", "heads_up").forEach { sev ->
                 OutlinedButton(onClick = {
-                    scope.launch { said = runCatching { WakeChannel.test(sev); "${WakeRules.label(sev)} test sent." }.getOrElse { it.message ?: "It did not go." } }
+                    scope.launch { said = runCatching { WakeChannel.test(sev); context.getString(R.string.wake_up_test_sent, WakeRules.label(sev)) }.getOrElse { it.message ?: context.getString(R.string.wake_up_not_sent) } }
                 }) {
                     Box(Modifier.size(10.dp).padding(0.dp)) { Surface(color = Color(WakeRules.colour(sev)), shape = MaterialTheme.shapes.extraLarge, modifier = Modifier.fillMaxSize()) {} }
                     Spacer(Modifier.width(8.dp)); Text(WakeRules.label(sev))
@@ -62,7 +64,7 @@ fun WakeupsSheet(onDismiss: () -> Unit) {
         }
         if (said.isNotBlank()) Text(said, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
         Spacer(Modifier.height(10.dp))
-        Text("Install Agent normally (not inside Secure Folder): a locked Secure Folder cannot ring.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.wake_up_secure_folder), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

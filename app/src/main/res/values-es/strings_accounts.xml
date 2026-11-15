@@ -33,15 +33,15 @@
     <string name="machines_username">Usuario</string>
     <string name="machines_username_hint">usuario</string>
     <string name="machines_sign_in_with">INICIAR SESIÓN CON</string>
-    <string name="machines_password">Contraseña</string>
-    <string name="machines_password_sub">La que usas para entrar</string>
+    <string name="machines_field_login">Contraseña</string>
+    <string name="machines_field_login_sub">La que usas para entrar</string>
     <string name="machines_your_key">Tu clave</string>
     <string name="machines_your_key_sub">Pega una que ya uses</string>
     <string name="machines_new_key">Clave nueva</string>
     <string name="machines_new_key_sub">Creada en este móvil</string>
     <string name="machines_saved_keep">Guardada. Déjalo vacío para mantenerla</string>
     <string name="machines_private_key">Clave privada</string>
-    <string name="machines_passphrase">Contraseña de la clave (si tiene)</string>
+    <string name="machines_field_key_phrase">Contraseña de la clave (si tiene)</string>
     <string name="machines_new_key_explain">Una clave solo para este equipo. Añades su parte pública al equipo una vez y nunca se guarda ninguna contraseña.</string>
     <string name="machines_show_public_key">Mostrar la clave pública de este móvil</string>
     <string name="machines_direct">Directo</string>
@@ -275,7 +275,7 @@
     <string name="handoff_sign_out">Cerrar sesión</string>
     <string name="handoff_url_label">Dirección de tu servicio de sincronización (https://…)</string>
     <string name="handoff_email">Correo</string>
-    <string name="handoff_password">Contraseña</string>
+    <string name="handoff_field_login">Contraseña</string>
     <string name="handoff_signing_in">Iniciando sesión…</string>
     <string name="handoff_sign_in">Iniciar sesión</string>
     <string name="handoff_create_account">Crear la cuenta en mi servicio</string>

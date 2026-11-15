@@ -32,6 +32,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.past9.phoneaos.R
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -96,9 +98,10 @@ fun PinnedAppsRow(apps: List<MiniAppInfo>, onOpen: (String) -> Unit, onAll: () -
     val cs = MaterialTheme.colorScheme
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
         items(pinned, key = { it.id }) { app ->
+            val openCd = stringResource(R.string.mini_open_app, app.name)
             Surface(shape = RoundedCornerShape(50), color = cs.surfaceContainerHigh, contentColor = cs.onSurface,
                 modifier = Modifier.heightIn(min = 40.dp).clip(RoundedCornerShape(50)).combinedClickable(onClick = { onOpen(app.id) }, onLongClick = { pinShortcut(context, app) })
-                    .semantics { contentDescription = "Open ${app.name}" }) {
+                    .semantics { contentDescription = openCd }) {
                 Row(Modifier.padding(start = 6.dp, end = 14.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(28.dp).clip(CircleShape).background(cs.secondaryContainer), contentAlignment = Alignment.Center) {
                         Icon(miniAppIcon(app.icon), null, Modifier.size(16.dp), tint = cs.onSecondaryContainer)
@@ -112,7 +115,7 @@ fun PinnedAppsRow(apps: List<MiniAppInfo>, onOpen: (String) -> Unit, onAll: () -
             Surface(onClick = onAll, shape = RoundedCornerShape(50), color = androidx.compose.ui.graphics.Color.Transparent, contentColor = cs.primary, modifier = Modifier.heightIn(min = 40.dp)) {
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.Dashboard, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp))
-                    Text(if (apps.size > pinned.size) "All ${apps.size}" else "All apps", style = MaterialTheme.typography.labelLarge)
+                    Text(if (apps.size > pinned.size) stringResource(R.string.mini_all_n, apps.size) else stringResource(R.string.mini_all_apps), style = MaterialTheme.typography.labelLarge)
                 }
             }
         }
@@ -125,17 +128,18 @@ fun MiniAppCard(id: String) {
     val apps by MiniAppsHub.apps.collectAsState()
     val app = apps.firstOrNull { it.id == id }
     val cs = MaterialTheme.colorScheme
+    val openCd = stringResource(R.string.mini_open_app, app?.name ?: stringResource(R.string.mini_the_app))
     Surface(onClick = { MiniAppsHub.pendingOpen.value = id }, shape = MaterialTheme.shapes.large, color = cs.surfaceContainerHigh, contentColor = cs.onSurface,
-        modifier = Modifier.fillMaxWidth().widthIn(max = 420.dp).semantics { contentDescription = "Open ${app?.name ?: "the app"}" }) {
+        modifier = Modifier.fillMaxWidth().widthIn(max = 420.dp).semantics { contentDescription = openCd }) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             if (app != null) AppTile(app, 44) else Box(Modifier.size(44.dp).clip(MaterialTheme.shapes.small).background(cs.secondaryContainer))
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(app?.name ?: "Your app", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(app?.description?.ifBlank { null } ?: "Made for you on your computer", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(app?.name ?: stringResource(R.string.mini_your_app), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(app?.description?.ifBlank { null } ?: stringResource(R.string.mini_made_for_you), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             Spacer(Modifier.width(8.dp))
-            FilledTonalButton(onClick = { MiniAppsHub.pendingOpen.value = id }, shapes = ButtonDefaults.shapes()) { Text("Open") }
+            FilledTonalButton(onClick = { MiniAppsHub.pendingOpen.value = id }, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.ui_open)) }
         }
     }
 }
@@ -144,9 +148,9 @@ fun MiniAppCard(id: String) {
 @Composable
 fun MiniAppsScreen(apps: List<MiniAppInfo>, onBack: () -> Unit, onOpen: (String) -> Unit, onPin: (String, Boolean) -> Unit) {
     val context = LocalContext.current
-    SubScreen("Apps", if (apps.isEmpty()) "Ask your agent for one" else "${apps.size} made for you", onBack) { pad ->
+    SubScreen(stringResource(R.string.home_tab_apps), if (apps.isEmpty()) stringResource(R.string.mini_ask_for_one) else stringResource(R.string.mini_n_made, apps.size), onBack) { pad ->
         if (apps.isEmpty()) {
-            Box(Modifier.padding(pad)) { EmptyState("No apps yet", "Ask your agent for a dashboard, a tracker or a view of your calendars. It makes it on your computer and it shows here.") }
+            Box(Modifier.padding(pad)) { EmptyState(stringResource(R.string.mini_none_yet), stringResource(R.string.mini_none_yet_sub)) }
             return@SubScreen
         }
         val ordered = MiniAppRules.pinned(apps) + apps.filter { it.pinned == 0 }
@@ -160,8 +164,8 @@ fun MiniAppsScreen(apps: List<MiniAppInfo>, onBack: () -> Unit, onOpen: (String)
                             Text(app.name, style = MaterialTheme.typography.titleMedium)
                             Text(app.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
-                        IconButton(onClick = { pinShortcut(context, app) }) { Icon(Icons.AutoMirrored.Rounded.AddToHomeScreen, "Add to the home screen") }
-                        FilterChip(selected = app.pinned > 0, onClick = { onPin(app.id, app.pinned == 0) }, label = { Text(if (app.pinned > 0) "Pinned" else "Pin") }, leadingIcon = { Icon(Icons.Rounded.PushPin, null, Modifier.size(18.dp)) })
+                        IconButton(onClick = { pinShortcut(context, app) }) { Icon(Icons.AutoMirrored.Rounded.AddToHomeScreen, stringResource(R.string.mini_add_home)) }
+                        FilterChip(selected = app.pinned > 0, onClick = { onPin(app.id, app.pinned == 0) }, label = { Text(if (app.pinned > 0) stringResource(R.string.memory_pinned) else stringResource(R.string.memory_pin)) }, leadingIcon = { Icon(Icons.Rounded.PushPin, null, Modifier.size(18.dp)) })
                     }
                 }
             }
@@ -179,6 +183,7 @@ fun MiniAppsScreen(apps: List<MiniAppInfo>, onBack: () -> Unit, onOpen: (String)
 fun MiniAppFrame(id: String, apps: List<MiniAppInfo>, dark: Boolean, accent: String, onBack: () -> Unit) {
     val app = apps.firstOrNull { it.id == id }
     val scope = rememberCoroutineScope()
+    val ctx = LocalContext.current
     var sessionId by remember(id) { mutableStateOf<String?>(null) }
     var failed by remember(id) { mutableStateOf<String?>(null) }
     var view by remember(id) { mutableStateOf<WebView?>(null) }
@@ -187,10 +192,10 @@ fun MiniAppFrame(id: String, apps: List<MiniAppInfo>, dark: Boolean, accent: Str
     DisposableEffect(id) {
         val job = scope.launch {
             val s = MiniAppsHub.session()
-            if (s == null) { failed = "Not linked to a computer right now."; return@launch }
+            if (s == null) { failed = ctx.getString(R.string.mini_not_linked); return@launch }
             runCatching { s.call("miniapps.session", listOf(id), 20_000) as? String }
-                .onSuccess { sid -> if (sid == null) failed = "This app is not on the computer." else sessionId = sid }
-                .onFailure { failed = it.message ?: "Could not open it." }
+                .onSuccess { sid -> if (sid == null) failed = ctx.getString(R.string.mini_not_on_computer) else sessionId = sid }
+                .onFailure { failed = it.message ?: ctx.getString(R.string.mini_could_not_open) }
         }
         onDispose {
             job.cancel()
@@ -226,7 +231,7 @@ fun MiniAppFrame(id: String, apps: List<MiniAppInfo>, dark: Boolean, accent: Str
         val sid = sessionId
         val inset = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)
         when {
-            failed != null -> Box(inset, contentAlignment = Alignment.Center) { EmptyState("This app cannot open", failed ?: "") }
+            failed != null -> Box(inset, contentAlignment = Alignment.Center) { EmptyState(stringResource(R.string.mini_cannot_open), failed ?: "") }
             sid == null -> Box(inset, contentAlignment = Alignment.Center) { LoadingIndicator() }
             else -> key(version) {
                 AndroidView(modifier = inset, factory = { context ->
@@ -254,9 +259,10 @@ fun MiniAppFrame(id: String, apps: List<MiniAppInfo>, dark: Boolean, accent: Str
                 })
             }
         }
+        val closeCd = stringResource(R.string.mini_close_app, app?.name ?: stringResource(R.string.mini_the_app))
         // The one control: small, floating, in the corner the app's own content leaves free.
         Surface(onClick = onBack, shape = androidx.compose.foundation.shape.CircleShape, color = cs.surfaceContainerHigh.copy(alpha = 0.92f), contentColor = cs.onSurface, shadowElevation = 2.dp,
-            modifier = Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(top = 6.dp, end = 8.dp).size(36.dp).semantics { contentDescription = "Close ${app?.name ?: "the app"}" }) {
+            modifier = Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(top = 6.dp, end = 8.dp).size(36.dp).semantics { contentDescription = closeCd }) {
             Box(contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Close, null, Modifier.size(18.dp)) }
         }
     }

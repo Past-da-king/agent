@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="assist_ctx_waiting">รอคุณอยู่: %d</string>
+    <string name="assist_ctx_working">กำลังทำงาน: %d</string>
+    <string name="assist_ctx_which">นี่สำหรับอันไหน</string>
+    <string name="assist_ctx_your_words">คุณพูดว่า: %1$s</string>
+    <string name="assist_ctx_sent_to">ส่งถึง %1$s แล้ว: %2$s</string>
+</resources>

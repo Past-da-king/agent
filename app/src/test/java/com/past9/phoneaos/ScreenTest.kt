@@ -222,7 +222,7 @@ class ScreenBlocklistTest {
 
     @Test fun everydayAppsAreNotBlocked() {
         val fine = listOf("com.whatsapp", "com.whatsapp.w4b", "com.google.android.apps.bard", "com.google.android.googlequicksearchbox", "com.android.settings", "com.android.contacts", "com.android.chrome",
-            "com.past9.phoneaos", "com.google.android.youtube", "com.spotify.music", "com.google.android.apps.maps", "com.microsoft.office.outlook", "com.google.android.gm", "com.sec.android.app.sbrowser",
+            "com.past9.phoneaos", "com.example.video", "com.spotify.music", "com.google.android.apps.maps", "com.microsoft.office.outlook", "com.google.android.gm", "com.sec.android.app.sbrowser",
             "com.samsung.android.messaging", "com.android.vending", "com.google.android.play.games", "com.samsung.android.app.spage", "com.disney.disneyplus", "com.android.exchange", "com.google.android.calendar", NOTES)
         fine.forEach { assertNull("should not be blocked: $it (${list.blocked(it)})", list.blocked(it)) }
     }

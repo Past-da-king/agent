@@ -61,14 +61,14 @@ class LiveService : Service() {
 
     private fun notification(): Notification {
         val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Live voice", NotificationManager.IMPORTANCE_LOW).apply { setSound(null, null); enableVibration(false) })
+        nm.createNotificationChannel(NotificationChannel(CHANNEL, getString(com.past9.phoneaos.R.string.live_channel), NotificationManager.IMPORTANCE_LOW).apply { setSound(null, null); enableVibration(false) })
         val st = App.graph(this).settings.state.value
-        val name = st.agentName.takeIf { it.isNotBlank() && it != "Your agent" } ?: "Your agent"
+        val name = st.agentName.takeIf { it.isNotBlank() && it != "Your agent" } ?: getString(com.past9.phoneaos.R.string.svc_your_agent)
         val open = PendingIntent.getActivity(this, 11, AssistEntry.intent(this, LiveHost.source), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val end = PendingIntent.getService(this, 12, Intent(this, LiveService::class.java).setAction(ACTION_END), PendingIntent.FLAG_IMMUTABLE)
         return NotificationCompat.Builder(this, CHANNEL).setSmallIcon(Identity.statIcon(this, st.mascot))
-            .setContentTitle("Live with $name").setContentText("Listening. Tap to open it.")
-            .addAction(0, "End", end)
+            .setContentTitle(getString(com.past9.phoneaos.R.string.live_notif_title, name)).setContentText(getString(com.past9.phoneaos.R.string.live_notif_text))
+            .addAction(0, getString(com.past9.phoneaos.R.string.voice_end), end)
             .setOngoing(true).setSilent(true).setContentIntent(open).setCategory(NotificationCompat.CATEGORY_SERVICE).build()
     }
 

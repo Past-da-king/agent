@@ -25,6 +25,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -213,8 +215,12 @@ class MicCapture(
  * the engine answers with a retry.
  */
 object PieceTranscriber {
+    /** How long a call waits for a dropped link to the computer to come back before it fails (the engine then retries). */
+    const val LINK_WAIT_MS = 8_000L
+
+    /** Whether there is, or soon will be, a way to write a take down: the link (even while it is reconnecting) or this phone's own key. */
     fun available(context: Context): Boolean =
-        com.past9.phoneaos.remote.RemoteHub.session.value != null || runCatching { com.past9.phoneaos.App.graph(context).settings.voiceKey("gemini") }.getOrNull() != null
+        com.past9.phoneaos.remote.RemoteHub.session.value != null || com.past9.phoneaos.remote.RemoteHub.link.value?.on == true || runCatching { com.past9.phoneaos.App.graph(context).settings.voiceKey("gemini") }.getOrNull() != null
 
     /** The names this phone knows without the computer: his own and the agent's, from Settings > Voice. */
     private fun ownNames(context: Context): List<String> {
@@ -229,7 +235,10 @@ object PieceTranscriber {
     }
 
     suspend fun transcribe(context: Context, pcm: ByteArray): String {
-        val linked = com.past9.phoneaos.remote.RemoteHub.session.value
+        var linked = com.past9.phoneaos.remote.RemoteHub.session.value
+        // The link to the computer drops often; a take that starts or ends in the gap must still be written down.
+        if (linked == null && com.past9.phoneaos.remote.RemoteHub.link.value?.on == true)
+            linked = kotlinx.coroutines.withTimeoutOrNull(LINK_WAIT_MS) { com.past9.phoneaos.remote.RemoteHub.session.filterNotNull().first() }
         if (linked != null) {
             val r = linked.call("voice.transcribe", listOf(JSONObject().put("\$b64", Base64.encodeToString(pcm, Base64.NO_WRAP))),
                 DictationEngine.pieceLimitMs(pcm.size.toLong()))
@@ -259,7 +268,7 @@ object DictationHub {
     private var netCallback: ConnectivityManager.NetworkCallback? = null
     private var appContext: Context? = null
     private var owner: Any? = null
-    private var onText: ((String) -> Unit)? = null
+    private var onText: ((String, Boolean) -> Unit)? = null
     private val main = Handler(Looper.getMainLooper())
     private var currentId: String? = null
     private var currentStarted = 0L
@@ -287,8 +296,8 @@ object DictationHub {
     fun supported(context: Context): Boolean =
         (Build.VERSION.SDK_INT >= 33 && SystemDictation.available(context)) || PieceTranscriber.available(context)
 
-    /** Start listening into [owner]'s box. [onText] gets the whole dictated text every time it changes. Main thread. */
-    fun start(context: Context, owner: Any?, chat: String = "", onText: (String) -> Unit): Boolean {
+    /** Start listening into [owner]'s box. [onText] gets the whole dictated text every time it changes, and whether it is the whole take written down from the audio (which replaces the caption whatever its length). Main thread. */
+    fun start(context: Context, owner: Any?, chat: String = "", onText: (String, Boolean) -> Unit): Boolean {
         if (active) return false
         release()
         val ctx = context.applicationContext
@@ -307,12 +316,12 @@ object DictationHub {
         scope = s
         val live = if (Build.VERSION.SDK_INT >= 33 && SystemDictation.available(ctx)) RecognizerLive(ctx) else null
         recogniser = live
-        val transcribe: (suspend (ByteArray) -> String)? = if (PieceTranscriber.available(ctx) || com.past9.phoneaos.remote.RemoteHub.session.value != null)
+        val transcribe: (suspend (ByteArray) -> String)? = if (PieceTranscriber.available(ctx))
             ({ pcm: ByteArray -> PieceTranscriber.transcribe(ctx, pcm) }) else null
         val e = DictationEngine(s, { android.os.SystemClock.elapsedRealtime() }, tape, live, transcribe,
             onView = { v ->
-                _ui.value = Ui(this.owner, v); this.onText?.invoke(v.text)
-                saved.note(id, startedAt, v.elapsedMs, v.text, noteState(v), chat, flush = v.ended)
+                _ui.value = Ui(this.owner, v); this.onText?.invoke(v.text, v.final)
+                saved.note(id, startedAt, v.elapsedMs, v.text, noteState(v), chat, flush = v.ended, final = v.final)
                 if (v.ended) ended(v)
             },
             log = { Log.i(TAG, it) })

@@ -32,7 +32,7 @@
     <string name="rt_branch_failed">A side thread (\"%1$s\") failed: %2$s</string>
     <string name="rt_done">Done</string>
     <string name="rt_interrupted_by_close">I was partway through \"%1$s\" when the app closed. Tell me to carry on and I will.</string>
-    <string name="rt_not_claude_token">That isn\'t a Claude token. It starts with sk-ant-. Use Sign in with Claude instead.</string>
+    <string name="rt_not_claude_access">That isn\'t a Claude token. It starts with sk-ant-. Use Sign in with Claude instead.</string>
     <string name="rt_note_installed">Installed · sign in with %1$s</string>
     <string name="rt_note_no_pack">%1$s runtime pack not in this build</string>
     <string name="rt_note_ready">Ready · signed in to %1$s</string>

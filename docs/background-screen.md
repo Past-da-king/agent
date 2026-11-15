@@ -84,6 +84,50 @@ The loop: try, record, save, replay.
 - The person can teach one too: Settings > Background screen > Recordings and learned apps > Show it a job. They do
   it once by hand on the live picture, and it is saved in the same format.
 
+## play_media: music and video play here, never on the user's screen (0.15.65)
+
+`play_media` is the only way the agent plays something. It never opens an app on the user's own screen (display 0)
+unless the app is already in front there. Order, in `media/MediaTools.kt`:
+
+1. A saved play job for the app (learned app of the app, tool `play`, `app_<app>_play(query)`), when there is one:
+   replayed on the background screen, then checked with the media session (notification listener). Seconds.
+2. The app's own media session (`playFromSearch`), or its media browser service when the app is closed. Opens nothing.
+3. No saved job, or the replay broke: `MediaScreenLearner` works it out on the background screen once. It opens the
+   app there (a cold start, through the helper, so `ScreenLanding` moves anything that lands on display 0 and puts
+   the user's front app back), finds the search box (or presses a search button / tab), types the words, presses
+   the row that carries most of them (`MediaScreenPlan`, which reads words, hints and ids, never an app name), and
+   a Play button when the row only opened a page. It then watches the media session until it plays what was asked.
+   Audio from the virtual display plays. A saved job that stops at a step (or runs and plays nothing) is marked stale,
+   learned again once from a clean start (fresh task on the background screen), and saved over when that run is clean;
+   a stale job is not replayed again. After pressing search the learner waits up to about 3 s for a text box and presses
+   search once more before giving up; a toolbar or full-screen search box is accepted.
+4. Video goes the same way as music (a video kind only changes which apps are candidates: those that take play
+   requests or open video files, the user's video default, or the one named). There is no lookup of a video online and
+   no link: the chosen app's session if it has one, else the learner on the background screen. Music files are not
+   searched for a video.
+5. An app already in front on the user's own screen is asked in place (a play-from-search intent to the app that is
+   already showing: it stays in front, so the user's screen is the same before and after). The background screen
+   cannot take it from under them: `ScreenSession.open` refuses, and so does the helper.
+
+If the background screen is off and the app has no session, `play_media` fails with that reason; it does not fall back
+to opening the app.
+
+**Saving the job.** Saving a learned tool normally shows an approval card. The play job is saved without one
+(`ScreenLearned.save(autoApprove = true)`) only when it is read-only (playback: it never sends, pays or deletes; a
+press on such a button still asks through the usual gate), the run just proved it by playing what was asked, and the
+run took one clean path (no wrong rows pressed first). The job is visible and removable in Connections > Learned apps.
+A result row is saved as "the row at this place" (id, kind, position) and not by the words it had that day
+(`generic` taps in `ScreenSkills.fromRun`), so the same steps play any query.
+
+**Phone asleep.** When the screen is off (not interactive) the background screen draws nothing. `play_media` then says
+"the phone is asleep, the background screen can't draw" and uses only the app's media session. It never wakes the screen.
+
+**Nothing else plays.** `android_intent` and the phone's `open_url` refuse a play request, with the reason and the way
+to `play_media` (`MediaIntentGuard`). The rule names no app: an explicit play-from-search, an audio or video file, or
+an intent whose target resolves (package manager) to an app that offers media playback (declares play-from-search,
+exports a media browser service, or owns a media session now) is refused. Browsers are never counted as media apps.
+The rule is a pure function over `MediaIntentGuard.Targets`; the phone's facts are `AndroidMediaTargets`. The Live
+voice and call prompts say `play_media` is the only way and that a failure is reported, not worked around.
 ## Recordings
 
 Kept on the phone only, in `files/screen-runs/<id>/` (`run.json` and one JPEG per step). Password fields and
@@ -100,3 +144,24 @@ anything typed as private are painted over before a picture is kept, and their t
 ## Credits
 
 The approach follows scrcpy (Apache-2.0) and Agent-VScreen (MIT). See `THIRD-PARTY-NOTICES.md`.
+
+### An app that opens in a state that hides its search (0.15.66)
+
+An app often comes back to where it was left: a full-screen or mini player, a dialog, a stale page. The learner never assumes the front door.
+Before it looks for a search box it calls `MediaScreenLearner.reachSearch()`, generic steps only, all on the background screen:
+
+1. If a search box or a search button shows, nothing is touched.
+2. Back, up to 3 times, looking after each press (an empty screen means Back left the app, so it stops pressing).
+3. One swipe down (folds an expanded player).
+4. The app is started fresh with a clean task (`ScreenSession.open(fresh = true)`), which forgets where it was left.
+5. Still no search: it fails and says what was tried.
+
+The first open of a learning run is also a fresh start. Display 0 is never touched.
+
+A media session that is stopped or paused ON THE RIGHT TRACK (title, artist or album carry the words asked for) is sent transport Play once before any screen route.
+If that starts something that is not what was asked for, it is paused again. A saved play job that was replayed says so in the answer, with the time it took.
+The length shown by `media_control now_playing` is read from the metadata and left out when it is shorter than the position (some apps publish a [vault:vercel-recovery-past952.token] length while the real track plays); the right track is judged by title, artist and album, never by length.
+
+A session in error is never asked (0.15.68): an app asked to recover from an error can open its own window on the user's screen, so the background screen is used instead.
+
+A session in error is never asked (0.15.68): an app asked to recover from an error can open its own window on the user's screen, so the background screen is used instead.

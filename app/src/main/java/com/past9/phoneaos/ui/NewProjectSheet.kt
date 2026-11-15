@@ -16,6 +16,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.contentDescription
@@ -25,6 +27,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.past9.phoneaos.R
 import com.past9.phoneaos.remote.ProjectDraft
 import com.past9.phoneaos.remote.ProjectsApi
 import com.past9.phoneaos.remote.RemoteHub
@@ -58,10 +61,10 @@ fun NewProjectSheet(
     if (api == null) {
         AgentSheet(onDismiss) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 20.dp).navigationBarsPadding()) {
-                SheetHead(Icons.Rounded.Computer, "New project", "Projects need a linked computer",
-                    "A project lives on your computer, with its own chats and files. Link a computer in Settings, then make one here.")
+                SheetHead(Icons.Rounded.Computer, stringResource(R.string.proj_new), stringResource(R.string.proj_needs_computer),
+                    stringResource(R.string.proj_needs_computer_line))
                 Spacer(Modifier.height(24.dp))
-                OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth().height(56.dp), shapes = ButtonDefaults.shapes()) { Text("Close", style = MaterialTheme.typography.titleSmall) }
+                OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth().height(56.dp), shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.ui_close), style = MaterialTheme.typography.titleSmall) }
             }
         }
         return
@@ -72,16 +75,17 @@ fun NewProjectSheet(
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf(initialError) }
     val scope = rememberCoroutineScope()
+    val ctx = LocalContext.current
     LaunchedEffect(api) { runCatching { api.profiles() }.onSuccess { profiles = it } }
 
-    AppSheet(Icons.Rounded.CreateNewFolder, "New project", "What is it?", onDismiss,
-        primary = if (busy) "Creating" else "Create project", primaryEnabled = !busy && ProjectsApi.canCreate(draft),
+    AppSheet(Icons.Rounded.CreateNewFolder, stringResource(R.string.proj_new), stringResource(R.string.proj_what_is_it), onDismiss,
+        primary = if (busy) stringResource(R.string.proj_creating) else stringResource(R.string.proj_create), primaryEnabled = !busy && ProjectsApi.canCreate(draft),
         onPrimary = {
             busy = true; error = ""
             scope.launch {
                 runCatching { api.create(draft) }
                     .onSuccess { busy = false; onCreated(it.id) }
-                    .onFailure { busy = false; error = "Couldn't make the project: ${it.message?.trim()?.trimEnd('.')?.ifBlank { null } ?: "your computer did not answer"}. Nothing you typed is lost." }
+                    .onFailure { busy = false; error = ctx.getString(R.string.proj_create_failed, it.message?.trim()?.trimEnd('.')?.ifBlank { null } ?: ctx.getString(R.string.proj_no_answer)) }
             }
         },
         secondary = if (busy) ({ LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 12.dp)) }) else null,
@@ -96,14 +100,14 @@ fun NewProjectSheet(
             ProjectIconTile(ProjectsApi.cleanName(draft.name).ifEmpty { "P" }, ProjectsApi.cleanGlyph(draft.glyph), draft.color, "", 56.dp)
             Spacer(Modifier.width(12.dp))
             AppTextField(draft.name, { draft = draft.copy(name = it.take(ProjectsApi.NAME_MAX)) }, Modifier.weight(1f), enabled = !busy, singleLine = true,
-                label = { Text("Name") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Next))
+                label = { Text(stringResource(R.string.machines_name)) }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Next))
         }
         Spacer(Modifier.height(12.dp))
         AppTextField(draft.description, { draft = draft.copy(description = it.take(ProjectsApi.DESCRIPTION_MAX)) }, Modifier.fillMaxWidth(), enabled = !busy, minLines = 2, maxLines = 5,
-            label = { Text("What it is for (optional)") }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-            supportingText = if (draft.description.length > ProjectsApi.DESCRIPTION_MAX - 100) ({ Text("${draft.description.length} of ${ProjectsApi.DESCRIPTION_MAX}") }) else null)
+            label = { Text(stringResource(R.string.proj_what_for)) }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+            supportingText = if (draft.description.length > ProjectsApi.DESCRIPTION_MAX - 100) ({ Text(stringResource(R.string.proj_chars_of, draft.description.length, ProjectsApi.DESCRIPTION_MAX)) }) else null)
 
-        FormLabel("Profile", "Which accounts its agent may use")
+        FormLabel(stringResource(R.string.profiles_profile), stringResource(R.string.proj_profile_line))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             profiles.forEach { (id, name) ->
                 val on = draft.profile == id
@@ -117,7 +121,7 @@ fun NewProjectSheet(
             }
         }
 
-        FormLabel("Colour")
+        FormLabel(stringResource(R.string.proj_colour))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             ProjectsApi.COLORS.forEach { c ->
                 val on = draft.color == c
@@ -133,7 +137,7 @@ fun NewProjectSheet(
             }
         }
 
-        FormLabel("Icon")
+        FormLabel(stringResource(R.string.proj_icon))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             ProjectsApi.GLYPHS.forEach { gl ->
                 val on = emoji.isEmpty() && draft.glyph == gl
@@ -151,10 +155,10 @@ fun NewProjectSheet(
             val one = typed.trim().let { t -> if (t.isEmpty()) "" else ProjectsApi.cleanGlyph(t).takeIf { it != "folder" }.orEmpty() }
             emoji = one
             draft = draft.copy(glyph = one.ifEmpty { draft.glyph.takeIf { it in ProjectsApi.GLYPHS } ?: "folder" })
-        }, Modifier.fillMaxWidth(), enabled = !busy, singleLine = true, label = { Text("Or one emoji (optional)") })
+        }, Modifier.fillMaxWidth(), enabled = !busy, singleLine = true, label = { Text(stringResource(R.string.proj_emoji)) })
 
-        FormLabel("Folder on your computer", "Optional. Type the full path, or leave it empty and set it on the computer later.")
-        AppTextField(draft.path, { draft = draft.copy(path = it) }, Modifier.fillMaxWidth(), enabled = !busy, singleLine = true, label = { Text("Folder path") },
+        FormLabel(stringResource(R.string.proj_folder), stringResource(R.string.proj_folder_line))
+        AppTextField(draft.path, { draft = draft.copy(path = it) }, Modifier.fillMaxWidth(), enabled = !busy, singleLine = true, label = { Text(stringResource(R.string.proj_folder_path)) },
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, imeAction = ImeAction.Done))
     }
 }

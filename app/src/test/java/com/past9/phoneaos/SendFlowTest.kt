@@ -5,6 +5,8 @@ import com.past9.phoneaos.remote.BrainRef
 import com.past9.phoneaos.remote.RpcException
 import com.past9.phoneaos.remote.SendFlow
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -93,6 +95,20 @@ class SendFlowTest {
         val e = assertThrows(RpcException::class.java) { runBlocking { rig.flow(giveUp = 200).run() } }
         assertEquals(SendFlow.NO_BRAIN, e.message)
         assertEquals(listOf("pc", "server"), rig.asked)
+    }
+
+    @Test fun aMessageSentWhileNoBrainIsUpIsHeldAndGoesOnceWhenOneReturns() = runBlocking {
+        // The computer is restarting and the server cannot answer (not ready): nobody to ask. His words wait.
+        val rig = Rig("pc" to ok)
+        rig.order.clear()
+        val back = launch { delay(300); rig.order.add("pc") }
+        rig.flow(giveUp = 5_000).run()
+        back.join()
+        assertEquals("once, to the computer that came back", listOf("pc"), rig.asked)
+    }
+
+    @Test fun theHoldIsLongerThanARestart() {
+        assertTrue("a computer restart takes a minute or more", SendFlow.GIVE_UP_MS >= 5 * 60_000L)
     }
 
     private val desk = BrainRef("desk", "Desk", listOf("https://desk-lan:7787", "https://desk-vpn:7787"), "aa", 0)

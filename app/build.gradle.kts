@@ -16,8 +16,8 @@ android {
     applicationId = "com.past9.phoneaos"
     minSdk = 28
     targetSdk = 28
-    versionCode = 155
-    versionName = "0.15.52"
+    versionCode = 175
+    versionName = "0.15.72"
     // Android never lets an installed app rename itself or change the icon Samsung shows on
     // notifications, so a personal build bakes the owner's agent in: -PagentName=Hina -PagentIcon=ic_app_heart_red
     resValue("string", "app_name", (project.findProperty("agentName") as String?) ?: "Agent")
@@ -74,6 +74,8 @@ android {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
   }
+  // Lists the app's languages for the phone's per-app language setting (Android 13+).
+  androidResources { generateLocaleConfig = true }
   buildFeatures {
     resValues = true
     compose = true
@@ -158,6 +160,9 @@ dependencies {
   implementation("dev.rikka.shizuku:api:13.1.5")
   implementation("dev.rikka.shizuku:provider:13.1.5")
   implementation(libs.kotlinx.coroutines.android)
+  // The watch relay (docs/wear.md): the protocol shared with the watch app, and the Wearable Data Layer.
+  implementation(project(":wearproto"))
+  implementation(libs.play.services.wearable)
   // Wake word: on-device keyword spotting (sherpa-onnx with onnxruntime linked in, one .so, arm64 only). No network, no key.
   implementation("com.k2fsa.sherpa.onnx:sherpa-onnx-static-link-onnxruntime:2.0.1@aar")
   implementation(libs.androidx.credentials)

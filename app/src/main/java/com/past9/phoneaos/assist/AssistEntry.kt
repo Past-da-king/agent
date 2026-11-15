@@ -108,17 +108,17 @@ object AssistEntry {
     private fun notify(app: Context, source: String) {
         val nm = app.getSystemService(NotificationManager::class.java) ?: return
         if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(CHANNEL) == null) {
-            nm.createNotificationChannel(NotificationChannel(CHANNEL, "Assistant", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Opens the assistant when it is called while another app is on screen"
+            nm.createNotificationChannel(NotificationChannel(CHANNEL, app.getString(com.past9.phoneaos.R.string.assist_channel), NotificationManager.IMPORTANCE_HIGH).apply {
+                description = app.getString(com.past9.phoneaos.R.string.assist_channel_desc)
                 setSound(null, null); enableVibration(false)
             })
         }
         val pi = PendingIntent.getActivity(app, 0, intent(app, source), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val name = app.getSharedPreferences("settings", Context.MODE_PRIVATE).getString("agentName", null)?.takeIf { it.isNotBlank() && it != "Your agent" } ?: "your agent"
+        val name = app.getSharedPreferences("settings", Context.MODE_PRIVATE).getString("agentName", null)?.takeIf { it.isNotBlank() && it != "Your agent" } ?: app.getString(com.past9.phoneaos.R.string.assist_your_agent_lc)
         val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(app, CHANNEL) else @Suppress("DEPRECATION") Notification.Builder(app)
         b.setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle("Talk to $name")
-            .setContentText("Tap to open the assistant")
+            .setContentTitle(app.getString(com.past9.phoneaos.R.string.assist_talk_to, name))
+            .setContentText(app.getString(com.past9.phoneaos.R.string.assist_tap_to_open))
             .setContentIntent(pi).setFullScreenIntent(pi, true).setAutoCancel(true).setOngoing(false)
         if (Build.VERSION.SDK_INT >= 26) b.setTimeoutAfter(20_000)
         runCatching { nm.notify(NOTE_ID, b.build()) }.onFailure { Log.w(TAG, "notification refused: ${it.message}") }

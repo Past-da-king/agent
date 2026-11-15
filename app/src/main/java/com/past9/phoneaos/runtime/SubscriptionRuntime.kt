@@ -82,7 +82,7 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
     fun setToken(t: String?) {
         if (t == null) { tokenFile.delete(); return }
         dir.mkdirs()
-        if (kind == SubKind.CLAUDE && !t.trim().startsWith("sk-ant-")) error("That isn't a Claude token. It starts with sk-ant-. Use Sign in with Claude instead.")
+        if (kind == SubKind.CLAUDE && !t.trim().startsWith("sk-ant-")) error(context.getString(com.past9.phoneaos.R.string.rt_not_claude_access))
         if (kind == SubKind.CODEX && t.trim().startsWith("{")) { File(home, ".codex").mkdirs(); File(home, ".codex/auth.json").writeText(t.trim()); return }
         tokenFile.writeText(t.trim()); tokenFile.setReadable(false, false); tokenFile.setReadable(true, true)
     }
@@ -92,10 +92,10 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
     fun info(): RuntimeInfo = RuntimeInfo(
         available = available, installedBytes = sizeBytes(), signedIn = signedIn,
         note = when {
-            !available -> "${kind.label} isn't available on this phone yet"
-            !installed -> "Downloads ${RuntimePacks.pendingMb(context, packIds)} MB on first use"
-            !signedIn -> "Installed · sign in with ${kind.label}"
-            else -> "Ready · signed in to ${kind.label}"
+            !available -> context.getString(com.past9.phoneaos.R.string.rt_note_unavailable, kind.label)
+            !installed -> context.getString(com.past9.phoneaos.R.string.rt_note_downloads, RuntimePacks.pendingMb(context, packIds).toString())
+            !signedIn -> context.getString(com.past9.phoneaos.R.string.rt_note_installed, kind.label)
+            else -> context.getString(com.past9.phoneaos.R.string.rt_note_ready, kind.label)
         },
     )
 
@@ -136,7 +136,7 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
         }
         // Prove Android really lets this app execute the downloaded binary (targetSdk 28). If this fails,
         // nothing else will work, so say so here instead of at the first message.
-        progress("Checking the runtime")
+        progress(context.getString(com.past9.phoneaos.R.string.rt_checking_runtime))
         val out = StringBuilder()
         val code = runCatching {
             ProcessBuilder(node.path, "--version").directory(dir).redirectErrorStream(true).apply { environment().putAll(env()) }.start().let { p ->
@@ -145,7 +145,7 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
             }
         }.getOrElse { out.appendLine(it.message); -1 }
         check(code == 0) { "Android blocked the downloaded runtime (exit $code). ${out.toString().take(300)}" }
-        progress("Installed")
+        progress(context.getString(com.past9.phoneaos.R.string.rt_installed))
     }
 
     /** While a sign-in waits for the code the user copies from the browser. */
@@ -158,11 +158,11 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
      * Antigravity show a code: [needsCode] asks for it and [submitCode] types it in.
      */
     suspend fun login(onUrl: (String) -> Unit, progress: (String) -> Unit, needsCode: () -> Unit = {}): String? = withContext(Dispatchers.IO) {
-        if (!installed) return@withContext "The ${kind.label} runtime isn't downloaded yet."
+        if (!installed) return@withContext context.getString(com.past9.phoneaos.R.string.rt_not_downloaded, kind.label)
         val cmd = when (kind) {
             SubKind.CLAUDE -> listOf(File(bin, "claude").path, "auth", "login", "--claudeai")
             SubKind.CODEX -> listOf(File(bin, "codex").path, "login")
-            SubKind.OPENCODE -> return@withContext "OpenCode sign-in isn't available yet"
+            SubKind.OPENCODE -> return@withContext context.getString(com.past9.phoneaos.R.string.rt_opencode_signin_unavailable)
             SubKind.ANTIGRAVITY -> listOf(File(bin, "antigravity").path, "-p", "Signing in", "--output-format", "stream-json",
                 "--dangerously-skip-permissions", "--print-timeout", "2m")
         }
@@ -194,7 +194,7 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
                 }
             }
             val code = p.waitFor()
-            if (code == 0 && signedIn) null else "Sign-in didn't finish. ${lines.lines().lastOrNull { it.isNotBlank() && !it.startsWith("http") }.orEmpty().take(200)}"
+            if (code == 0 && signedIn) null else context.getString(com.past9.phoneaos.R.string.rt_signin_not_finished, lines.lines().lastOrNull { it.isNotBlank() && !it.startsWith("http") }.orEmpty().take(200))
         } finally { watcher.cancel(); loginStdin = null; runCatching { p.destroy() } }
     }
 
@@ -215,6 +215,9 @@ class SubscriptionRuntime(private val context: Context, val kind: SubKind) {
             "NODE_PATH" to File(dir, "node_modules").path,
             "SSL_CERT_FILE" to File(dir, "cacert.pem").path, "NODE_EXTRA_CA_CERTS" to File(dir, "cacert.pem").path,
             "SSL_CERT_DIR" to File(dir, "certs").apply { mkdirs() }.path,
+            // The node build reads OpenSSL's config from Termux's prefix, which Android refuses to another app ("Permission denied"
+            // even when Termux isn't installed), and then exits. An empty config of our own avoids that path.
+            "OPENSSL_CONF" to File(dir, "openssl.cnf").apply { if (!exists()) writeText("") }.path,
             "USE_BUILTIN_RIPGREP" to "0", "DISABLE_AUTOUPDATER" to "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC" to "1",
             "CODEX_HOME" to File(home, ".codex").apply { mkdirs() }.path, "CODEX_BIN" to File(bin, "codex").path,
             "CLAUDE_BIN" to File(bin, "claude").path, "ANTIGRAVITY_BIN" to File(bin, "antigravity").path,

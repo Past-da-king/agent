@@ -84,9 +84,28 @@ class AgentRuntime(
     var onRoutineChanged: suspend (com.past9.phoneaos.data.TriggerRow?) -> Unit = {},
     var onRoutineDeleted: suspend (Long) -> Unit = {},
     var subscription: SubscriptionEngine? = null,
+    /** Overridable for tests: build the provider a route runs on (provider, key, address, allow plain http, session id). */
+    private val routeProviderFactory: (Provider, String, String, Boolean, () -> String) -> LlmProvider = { p, k, b, h, s -> providerFor(p, k, b, h, s) },
 ) {
     /** People (the personal CRM, issue #13). One repository: the screens and the tools read and write the same rows. */
     val people = com.past9.phoneaos.people.PeopleRepository(db.people())
+
+    /**
+     * The route's account and model, or null to run on the default power source exactly as before. A route that cannot be
+     * used throws a [RouteFailure] that names it; it never falls back to the default.
+     */
+    private fun routed(route: com.past9.phoneaos.data.ModelRoute): ModelRouting.Pick.Routed? = when (val p = ModelRouting.resolve(route, settings.state.value) { settings.apiKey(it) }) {
+        ModelRouting.Pick.Default -> null
+        is ModelRouting.Pick.Routed -> p
+        is ModelRouting.Pick.Broken -> throw RouteFailure(p.message)
+    }
+
+    private fun routedProvider(r: ModelRouting.Pick.Routed): LlmProvider = routeProviderFactory(r.provider, r.key, r.baseUrl, r.allowHttp) { conversationId(settings) }
+
+    /** Runs a routed turn; when the provider refuses it, the error names the route. A turn on the default is untouched. */
+    private suspend fun <T> onRoute(r: ModelRouting.Pick.Routed?, block: suspend () -> T): T = try { block() } catch (e: CancellationException) { throw e } catch (e: ProviderException) {
+        if (r == null) throw e else throw ModelRouting.failed(r, friendlyError(e))
+    }
 
     /** Our tools, served to Claude Code on 127.0.0.1 with a per-install token. Started on first use. */
     val mcp by lazy {
@@ -259,7 +278,7 @@ class AgentRuntime(
             val rows = db.chat().all().first().filter { it.kind == "branch" }
             rows.filter { JSONObject(it.meta).optString("state") == "running" }.forEach { r ->
                 db.chat().update(r.copy(meta = JSONObject(r.meta).put("state", "interrupted").put("error", "Interrupted when the app closed.").toString()))
-                db.chat().insert(ChatItem(kind = "notice", text = "I was partway through \"${r.text.take(80)}\" when the app closed. Tell me to carry on and I will."))
+                db.chat().insert(ChatItem(kind = "notice", text = context.getString(com.past9.phoneaos.R.string.rt_interrupted_by_close, r.text.take(80))))
             }
             unmerged.set(rows.count { !JSONObject(it.meta).optBoolean("merged") })
             if (unmerged.get() > 0) mergeBranches()
@@ -328,7 +347,7 @@ class AgentRuntime(
         }
         if (picked.isNotEmpty()) {
             val list = picked.joinToString("; ")
-            db.chat().insert(ChatItem(kind = "notice", text = "The app restarted. ${picked.size} helper${if (picked.size > 1) "s" else ""} picked up where ${if (picked.size > 1) "they" else "it"} left off."))
+            db.chat().insert(ChatItem(kind = "notice", text = context.resources.getQuantityString(com.past9.phoneaos.R.plurals.rt_restart_resumed, picked.size, picked.size)))
             // The main agent hears it too, so it doesn't brief them again or tell the user they were lost.
             deliver("[The app restarted. These helpers were cut off and have been resumed from their last checkpoint: $list. They carry on by themselves; don't start them again. Their results arrive as usual. Say nothing to the user unless it matters.]")
         }
@@ -552,6 +571,9 @@ class AgentRuntime(
             if (!s.composioEnabled) appendLine("- No apps are connected yet (Gmail, Calendar...). If a task needs one, tell the user they can connect apps in Connections.")
             else if (com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(settings.composioKey())) appendLine("- Connected apps run through the COMPOSIO_* tools (Composio Connect): search for the right tool, check or start connections, then execute. If an app isn't connected, COMPOSIO_MANAGE_CONNECTIONS with action add and a short reason: the user gets a Connect card and the tool waits until it's done. Never paste sign-in links into the chat. An app can have several accounts (two Outlooks, four Gmails): COMPOSIO_MANAGE_CONNECTIONS list shows each with its email, and COMPOSIO_MULTI_EXECUTE_TOOL takes `account` to pick one. Act in the account the task belongs to; for 'my email' in general check every account and say which one each result came from. Never move data from one account through another unless asked, and always name the account used. Actions that send, post, pay or delete ask the user first automatically.")
             else appendLine("- Connected apps run through apps_find_tools then apps_run (apps_connected lists accounts; pass `account` to pick one). If an app isn't connected, apps_connect asks the user and opens the sign-in. Act in the account the task belongs to and name the account used.")
+            // The tools couldn't be loaded: say so, or the agent concludes the user's connections are broken.
+            if (s.composioEnabled && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(settings.composioKey()) && com.past9.phoneaos.tools.ComposioConnect.tools.isEmpty())
+                appendLine("- Right now this app couldn't load the Composio tools (${com.past9.phoneaos.tools.ComposioConnect.lastError ?: "not loaded yet"}), so you have no connected-app tools this turn. The user's connections are not the problem: don't ask them to reconnect or disconnect apps. Say plainly that the apps can't be reached right now and that it is retried on the next message.")
             // Composio Connect can't list the user's apps, so the agent would only ever try the ones it can name. Tell it which they are.
             if (s.composioEnabled && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(settings.composioKey())) settings.composioApps().keys.sorted().takeIf { it.isNotEmpty() }?.let { apps ->
                 fun named(slugs: List<String>) = slugs.joinToString { "${com.past9.phoneaos.tools.AppCatalog.name(it)} ($it)" }
@@ -750,6 +772,7 @@ class AgentRuntime(
 
     /** Run one turn on a branch: its first (forked from the parent's state), or a helper's result coming back to it. */
     private suspend fun runBranchTurn(b: Branch, text: String, images: List<String>, first: Boolean, base: List<Msg> = emptyList(), parentSession: String? = null) {
+        ensureAppTools()
         val line = b.line
         b.lock.withLock {
             line.job = kotlin.coroutines.coroutineContext[Job]
@@ -760,10 +783,10 @@ class AgentRuntime(
                 if (sub != null) branchSub(b, sub, text, images, first, parentSession) else branchApi(b, text, images, first, base)
             } catch (e: CancellationException) {
                 b.outcome = if (line.supersededBy != null) "superseded" else "stopped"
-                if (line.supersededBy == null) db.chat().insert(ChatItem(kind = "notice", text = "Stopped.", meta = JSONObject().put("branch", b.item).toString()))
+                if (line.supersededBy == null) db.chat().insert(ChatItem(kind = "notice", text = context.getString(com.past9.phoneaos.R.string.rt_stopped), meta = JSONObject().put("branch", b.item).toString()))
             } catch (e: Exception) {
                 b.outcome = "failed"; b.error = friendlyError(e)
-                db.chat().insert(ChatItem(kind = "notice", text = "A side thread (\"${b.userText.take(50)}\") failed: ${friendlyError(e)}", meta = JSONObject().put("error", true).put("branch", b.item).toString()))
+                db.chat().insert(ChatItem(kind = "notice", text = context.getString(com.past9.phoneaos.R.string.rt_branch_failed, b.userText.take(50), friendlyError(e)), meta = JSONObject().put("error", true).put("branch", b.item).toString()))
             } finally {
                 // A side thread's answer tells them too, when they are not looking at the chat (issue #15).
                 turnEnded(b.turn)
@@ -773,7 +796,8 @@ class AgentRuntime(
     }
 
     private suspend fun branchApi(b: Branch, text: String, images: List<String>, first: Boolean, base: List<Msg>) {
-        val provider = providerFactory(settings) ?: error(if (settings.state.value.mode == PowerMode.SUBSCRIPTION) "Your ${settings.state.value.subKind.label} subscription isn't set up on this phone yet." else "Add an API key in Settings.")
+        val route = routed(com.past9.phoneaos.data.ModelRoute.CHAT)
+        val provider = (if (route != null) routedProvider(route) else providerFactory(settings)) ?: error(if (settings.state.value.mode == PowerMode.SUBSCRIPTION) "Your ${settings.state.value.subKind.label} subscription isn't set up on this phone yet." else "Add an API key in Settings.")
         val thread = "branch-${b.item}"
         if (first) {
             // Forked from the parent's transcript as it stands. If it hasn't got going yet, use what is saved.
@@ -785,7 +809,7 @@ class AgentRuntime(
         val msg = Msg.user(if (first) Branching.framed(text, b.relation, b.parent.userText) else text, if (first) images else emptyList())
         history += msg; db.chat().insertTurn(TurnRow(thread = thread, json = msg.toJson().toString())); b.line.snapshot = history.toList()
         val ctx = branchCtx.getValue(b.item)
-        AgentLoop(provider, settings.state.value.model, tools(turn = b.turn)).run(systemPrompt(b.userText), history, ctx,
+        onRoute(route) { AgentLoop(provider, route?.model ?: settings.state.value.model, tools(turn = b.turn)).run(systemPrompt(b.userText), history, ctx,
             onEvent = { e ->
                 when (e) {
                     is AgentEvent.Thinking -> _status.value = _status.value.copy(working = true, label = if (e.step == 1) "Thinking" else "Working")
@@ -795,7 +819,7 @@ class AgentRuntime(
                 }
             },
             onAppend = { m -> db.chat().insertTurn(TurnRow(thread = thread, json = m.toJson().toString())); b.line.snapshot = history.toList() },
-            incoming = { generateSequence { b.line.notes.poll() }.toList() })
+            incoming = { generateSequence { b.line.notes.poll() }.toList() }) }
     }
 
     private suspend fun branchSub(b: Branch, engine: SubscriptionEngine, text: String, images: List<String>, first: Boolean, parentSession: String?) {
@@ -1001,15 +1025,29 @@ class AgentRuntime(
     }
 
     /** @param fromUser a message the user sent: it starts a fresh 5-step budget. A helper's result coming back doesn't. */
+    /** Composio Connect's tools for this turn: loaded if missing (see ComposioConnect.ensureLoaded). */
+    private suspend fun ensureAppTools() {
+        val k = settings.composioKey()?.trim() ?: return
+        if (settings.state.value.composioEnabled && com.past9.phoneaos.tools.ComposioConnect.isConsumerKey(k)) com.past9.phoneaos.tools.ComposioConnect.ensureLoaded(k)
+    }
+
     private suspend fun runTurn(userText: String, images: List<String> = emptyList(), fromUser: Boolean = true, replyTo: Long? = null) {
+        ensureAppTools()
         if (fromUser) { mainBudget.used = 0; mainLine.calls.used = 0 }
         mainTurn.origin = replyTo; mainTurn.late = !fromUser
         mainTurn.lastSaid = null
         if (settings.state.value.mode == PowerMode.SUBSCRIPTION && subscription?.ready == true) return runSubscriptionTurn(userText, subscription!!, images)
-        val provider = providerFactory(settings)
+        val route = try { routed(com.past9.phoneaos.data.ModelRoute.CHAT) } catch (e: RouteFailure) {
+            // The route is saved but cannot be used: this message fails, with the reason, and nothing else answers it.
+            val why = e.message.orEmpty()
+            db.chat().insert(ChatItem(kind = "notice", text = why, meta = JSONObject().put("error", true).toString()))
+            phone.replyPosted(why)
+            return
+        }
+        val provider = if (route != null) routedProvider(route) else providerFactory(settings)
         if (provider == null) {
             val why = if (settings.state.value.mode == PowerMode.SUBSCRIPTION)
-                "Your ${settings.state.value.subKind.label} subscription isn't set up on this phone yet. Open Settings to finish setup, or switch to an API key." else "Add an API key in Settings so I can start working."
+                context.getString(com.past9.phoneaos.R.string.rt_sub_not_setup, settings.state.value.subKind.label) else context.getString(com.past9.phoneaos.R.string.rt_add_key)
             db.chat().insert(ChatItem(kind = "notice", text = why))
             // Nothing started, so nothing will end: tell them now instead of leaving the phone quiet (issue #15).
             phone.replyPosted(why)
@@ -1025,7 +1063,7 @@ class AgentRuntime(
         val ctx = ChatContext("main", interactive = true)
         try {
             val s = settings.state.value
-            AgentLoop(provider, s.model, tools()).run(systemPrompt(userText), history, ctx,
+            onRoute(route) { AgentLoop(provider, route?.model ?: s.model, tools()).run(systemPrompt(userText), history, ctx,
                 onEvent = { e ->
                     when (e) {
                         is AgentEvent.Thinking -> _status.value = _status.value.copy(working = true, label = if (e.step == 1) "Thinking" else "Working")
@@ -1035,10 +1073,10 @@ class AgentRuntime(
                     }
                 },
                 onAppend = { m -> db.chat().insertTurn(TurnRow(thread = "main", json = m.toJson().toString())); mainLine.snapshot = history.toList() },
-                incoming = { generateSequence { mainLine.notes.poll() }.toList() })
+                incoming = { generateSequence { mainLine.notes.poll() }.toList() }) }
         } catch (e: CancellationException) {
             // A correction closed this line: its work is kept, and the branch that replaced it carries on. That isn't "Stopped".
-            if (mainLine.supersededBy == null) db.chat().insert(ChatItem(kind = "notice", text = "Stopped."))
+            if (mainLine.supersededBy == null) db.chat().insert(ChatItem(kind = "notice", text = context.getString(com.past9.phoneaos.R.string.rt_stopped)))
         } catch (e: Exception) {
             // It failed while nobody was watching: the failure IS what this turn has to tell them (issue #15).
             val why = friendlyError(e)
@@ -1111,7 +1149,7 @@ class AgentRuntime(
                         m.contains("Invalid bearer token", true) || m.contains("authentication_error", true) || m.contains("401") -> {
                             engine.forgetBadSignIn(); settings.setExtra("claude_session", null)
                             r.error = "sign-in rejected"
-                            db.chat().insert(ChatItem(kind = "notice", text = "Your ${settings.state.value.subKind.label} sign-in didn't work. Open Settings, Subscription, and sign in again.", meta = tag(JSONObject().put("error", true)).toString()))
+                            db.chat().insert(ChatItem(kind = "notice", text = context.getString(com.past9.phoneaos.R.string.rt_signin_failed, settings.state.value.subKind.label), meta = tag(JSONObject().put("error", true)).toString()))
                         }
                         // The same failure also came as text a moment ago: say it once.
                         m.contains("API Error:") -> {}
@@ -1142,7 +1180,7 @@ class AgentRuntime(
                 break
             }
         } catch (e: CancellationException) {
-            if (mainLine.supersededBy == null) db.chat().insert(ChatItem(kind = "notice", text = "Stopped."))
+            if (mainLine.supersededBy == null) db.chat().insert(ChatItem(kind = "notice", text = context.getString(com.past9.phoneaos.R.string.rt_stopped)))
         } catch (e: Exception) {
             val why = friendlyError(e)
             mainTurn.lastSaid = why
@@ -1267,7 +1305,7 @@ class AgentRuntime(
         val pm = context.getSystemService(android.os.PowerManager::class.java) ?: return
         if (pm.isIgnoringBatteryOptimizations(context.packageName) || settings.extra("battery_hint") != null) return
         settings.setExtra("battery_hint", "1")
-        db.chat().insert(ChatItem(kind = "notice", text = "Tip: helpers keep working with the app closed, but some phones (Samsung especially) stop background apps to save battery. Open Settings and tap \"Battery: unrestricted\" so they aren't cut off."))
+        db.chat().insert(ChatItem(kind = "notice", text = context.getString(com.past9.phoneaos.R.string.rt_battery_tip)))
     }
 
     /** One writer at a time: the step counter, the gate and the finish all edit the same row, and a read-modify-write that overlaps loses an edit. */
@@ -1397,6 +1435,7 @@ class AgentRuntime(
 
     private suspend fun runHelper(itemId: Long, label: String, history: MutableList<Msg>, prompt: String, resume: String?, ctx: ChatContext,
                                   provider: LlmProvider?, sub: SubscriptionEngine?, model: String, brief: String = history.first().text) {
+        ensureAppTools()
         phone.workStarted()
         var state = "failed"; var result = ""
         try {
@@ -1526,15 +1565,25 @@ class AgentRuntime(
      */
     suspend fun runBackground(name: String, prompt: String, silentIf: ((String) -> Boolean)? = null,
                               /** What this run is: an instruction from an automation app runs as the main agent, a routine as a routine. */
-                              role: PromptRole = PromptRole.ROUTINE): String {
+                              role: PromptRole = PromptRole.ROUTINE,
+                              /** Which route's model this run uses: routines and wake-ups the Routines route, watchers the Watchers route. */
+                              route: com.past9.phoneaos.data.ModelRoute = if (role == PromptRole.MAIN) com.past9.phoneaos.data.ModelRoute.CHAT else com.past9.phoneaos.data.ModelRoute.ROUTINE): String {
+        ensureAppTools()
         val sub = subscriptionForBackground()
-        val provider = if (sub == null) providerFactory(settings) else null
+        val picked = if (sub == null) { try { routed(route) } catch (e: RouteFailure) {
+            // Saved but unusable: the run fails and says so, it does not quietly use the default.
+            val msg = context.getString(com.past9.phoneaos.R.string.rt_routine_failed, name, e.message.orEmpty())
+            db.chat().insert(ChatItem(kind = "notice", text = msg))
+            phone.notify(context.getString(com.past9.phoneaos.R.string.rt_routine_didnt_run, name), e.message.orEmpty().take(180))
+            return e.message.orEmpty()
+        } } else null
+        val provider = if (sub != null) null else if (picked != null) routedProvider(picked) else providerFactory(settings)
         if (sub == null && provider == null) {
             val msg = if (settings.state.value.mode == PowerMode.SUBSCRIPTION)
-                "Your ${settings.state.value.subKind.label} subscription isn't signed in or ready on this phone, so \"$name\" couldn't run. Open Settings to sign in again."
-            else "No AI is set up (no API key and no subscription), so \"$name\" couldn't run. Open Settings to set one up."
+                context.getString(com.past9.phoneaos.R.string.rt_routine_no_sub, settings.state.value.subKind.label, name)
+            else context.getString(com.past9.phoneaos.R.string.rt_routine_no_ai, name)
             db.chat().insert(ChatItem(kind = "notice", text = msg))
-            phone.notify("\"$name\" didn't run", msg)
+            phone.notify(context.getString(com.past9.phoneaos.R.string.rt_routine_didnt_run, name), msg)
             return msg
         }
         val ctx = ChatContext("routine", interactive = false)
@@ -1543,14 +1592,14 @@ class AgentRuntime(
             // A routine is work, not conversation: it runs with the helpers' tools.
             val sys = systemPrompt(prompt, role = role)
             val out = if (sub != null) runRoutineOnSubscription(sub, "Routine \"$name\": $prompt", sys, ctx)
-                else AgentLoop(provider!!, settings.state.value.model, routineTools()).run(sys, mutableListOf(Msg.user("Routine \"$name\": $prompt")), ctx)
+                else onRoute(picked) { AgentLoop(provider!!, picked?.model ?: settings.state.value.model, routineTools()).run(sys, mutableListOf(Msg.user("Routine \"$name\": $prompt")), ctx) }
             if (silentIf?.invoke(out) == true) return out
             db.chat().insert(ChatItem(kind = "agent", text = out, meta = JSONObject().put("routine", name).toString()))
-            phone.notify(name, out.lineSequence().firstOrNull { it.isNotBlank() }?.take(180) ?: "Done")
+            phone.notify(name, out.lineSequence().firstOrNull { it.isNotBlank() }?.take(180) ?: context.getString(com.past9.phoneaos.R.string.rt_done))
             out
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
             val msg = friendlyError(e)
-            db.chat().insert(ChatItem(kind = "notice", text = "Routine \"$name\" failed: $msg"))
+            db.chat().insert(ChatItem(kind = "notice", text = context.getString(com.past9.phoneaos.R.string.rt_routine_failed, name, msg)))
             msg
         } finally { phone.workFinished() }
     }
@@ -1635,7 +1684,7 @@ class AgentRuntime(
     internal suspend fun clearChat() {
         val outcome = runCatching { newChatOnComputer("main") }.getOrElse { NewChatOutcome.of(it) }
         clearLocalChat()
-        clearNotice(outcome)?.let { line -> db.chat().insert(ChatItem(kind = "notice", text = line)) }
+        clearNotice(outcome, context)?.let { line -> db.chat().insert(ChatItem(kind = "notice", text = line)) }
     }
 
     /** What the phone itself keeps: the rows, both threads' turns, and every id a turn picks up from. */
@@ -1675,10 +1724,10 @@ class AgentRuntime(
             val isApproval = question.startsWith("APPROVAL|")
             val connect = com.past9.phoneaos.tools.ConnectRequest.parse(question)
             when {
-                connect != null -> phone.notify("Connect ${connect.name}?", connect.summary, id, options)
-                isApproval -> phone.notify("Approve?", question.split("|").getOrElse(1) { "" }, id, options)
-                why != null -> phone.notify("${agentName()} needs you", "$why\n$question", id, options)
-                else -> phone.notify("Your agent has a question", question, id, options)
+                connect != null -> phone.notify(context.getString(com.past9.phoneaos.R.string.rt_notify_connect, connect.name), connect.summary, id, options)
+                isApproval -> phone.notify(context.getString(com.past9.phoneaos.R.string.rt_notify_approve), question.split("|").getOrElse(1) { "" }, id, options)
+                why != null -> phone.notify(context.getString(com.past9.phoneaos.R.string.rt_notify_needs_you, agentName()), "$why\n$question", id, options)
+                else -> phone.notify(context.getString(com.past9.phoneaos.R.string.rt_notify_question), question, id, options)
             }
             return try { d.await() } finally { mainQuestions.remove(id); if (helperItem == null) _status.value = prev.copy(helpers = helpers.size) }
         }
@@ -1748,7 +1797,7 @@ class AgentRuntime(
         com.past9.phoneaos.agent.Crashes.record(context, "self-check failed: $msg", null)
         if (before != msg) {
             db.chat().insert(ChatItem(kind = "notice", text = SelfCheck.notice(result)))
-            phone.notify("Tools don't work with $power", detail.take(160))
+            phone.notify(context.getString(com.past9.phoneaos.R.string.rt_notify_tools_broken, power), detail.take(160))
         }
         return result
     }
@@ -1811,6 +1860,7 @@ class AgentRuntime(
         }
 
         fun friendlyError(e: Exception): String = when {
+            e is RouteFailure -> e.message.orEmpty()
             e is ProviderException && e.status == 401 -> "Your API key was rejected. Check it in Settings."
             e is ProviderException && e.status == 429 -> "The AI provider says we are sending too much right now (rate limit or out of credit). Try again shortly."
             e is ProviderException && e.status == HttpPolicy.BLOCKED -> e.message.orEmpty()
@@ -1842,10 +1892,11 @@ class GuardedAppsRunTool(private val inner: AppsRunTool, private val guard: com.
  * computer too old to know memory.newChat and one that cannot be reached need different things done about them, so
  * they are never one message (issue #14).
  */
-internal fun clearNotice(outcome: NewChatOutcome): String? = when (outcome) {
+/** @param context when given, the line is in the app's language (English without it). */
+internal fun clearNotice(outcome: NewChatOutcome, context: Context? = null): String? = when (outcome) {
     NewChatOutcome.STARTED, NewChatOutcome.NOT_LINKED -> null
-    NewChatOutcome.COMPUTER_OLDER ->
+    NewChatOutcome.COMPUTER_OLDER -> context?.getString(com.past9.phoneaos.R.string.rt_clear_computer_older) ?:
         "This phone's chat is cleared. Your computer's chat is not: the Agent app on it is older than this one, so it cannot start a new chat. Update the app on your computer, then clear again."
-    NewChatOutcome.UNREACHABLE ->
+    NewChatOutcome.UNREACHABLE -> context?.getString(com.past9.phoneaos.R.string.rt_clear_unreachable) ?:
         "This phone's chat is cleared. Your computer could not be reached just now, so its chat is still there and will show again when it syncs. Clear again once it is back."
 }

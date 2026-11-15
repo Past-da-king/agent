@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The window is black from the first instant, so a tap on the app answers at once (docs/wear.md, "When the app will not open"). -->
+    <style name="Theme.Agent.Launch" parent="@android:style/Theme.DeviceDefault">
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>

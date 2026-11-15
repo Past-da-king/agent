@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="assist_ctx_waiting">Suna jiran ka: %d</string>
+    <string name="assist_ctx_working">Ana aiki: %d</string>
+    <string name="assist_ctx_which">Na wanne ne?</string>
+    <string name="assist_ctx_your_words">Ka ce: %1$s</string>
+    <string name="assist_ctx_sent_to">An aika wa %1$s: %2$s</string>
+</resources>

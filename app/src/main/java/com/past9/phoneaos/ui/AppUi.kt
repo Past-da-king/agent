@@ -8,10 +8,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.past9.phoneaos.R
 import com.past9.phoneaos.ui.theme.Eyebrow
 import kotlinx.coroutines.launch
 
@@ -27,19 +30,19 @@ fun AppDrawer(agentName: String, counts: NavCounts, onGo: (String) -> Unit) {
                 Spacer(Modifier.width(14.dp))
                 Column {
                     Text(agentName, style = MaterialTheme.typography.titleLarge)
-                    Text("Everything it keeps for you", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.ui_drawer_sub), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             Spacer(Modifier.height(16.dp))
-            Text("YOUR AGENT", style = Eyebrow, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-            Item(Icons.Rounded.ChatBubble, "Chat", null) { onGo("chat") }
-            Item(Icons.Rounded.TaskAlt, "Tasks", counts.tasks.takeIf { it > 0 }?.let { "$it open" }) { onGo("tasks") }
-            Item(Icons.Rounded.Psychology, "Memory", counts.memories.takeIf { it > 0 }?.toString()) { onGo("memory") }
-            Item(Icons.Rounded.Schedule, "Routines", counts.routines.takeIf { it > 0 }?.let { "$it on" }) { onGo("routines") }
-            Item(Icons.Rounded.Language, "Browser", null) { onGo("browser") }
+            Text(stringResource(R.string.ui_drawer_your_agent), style = Eyebrow, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            Item(Icons.Rounded.ChatBubble, stringResource(R.string.ui_nav_chat), null) { onGo("chat") }
+            Item(Icons.Rounded.TaskAlt, stringResource(R.string.ui_nav_tasks), counts.tasks.takeIf { it > 0 }?.let { stringResource(R.string.ui_nav_tasks_open, it) }) { onGo("tasks") }
+            Item(Icons.Rounded.Psychology, stringResource(R.string.ui_nav_memory), counts.memories.takeIf { it > 0 }?.toString()) { onGo("memory") }
+            Item(Icons.Rounded.Schedule, stringResource(R.string.ui_nav_routines), counts.routines.takeIf { it > 0 }?.let { stringResource(R.string.ui_nav_routines_on, it) }) { onGo("routines") }
+            Item(Icons.Rounded.Language, stringResource(R.string.ui_nav_browser), null) { onGo("browser") }
             HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), color = MaterialTheme.colorScheme.outlineVariant)
-            Item(Icons.Rounded.Apps, "Connections", counts.apps.takeIf { it > 0 }?.let { "$it apps" }) { onGo("connections") }
-            Item(Icons.Rounded.Settings, "Settings", null) { onGo("settings") }
+            Item(Icons.Rounded.Apps, stringResource(R.string.ui_nav_connections), counts.apps.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.ui_nav_apps_count, it, it) }) { onGo("connections") }
+            Item(Icons.Rounded.Settings, stringResource(R.string.ui_nav_settings), null) { onGo("settings") }
         }
     }
 }

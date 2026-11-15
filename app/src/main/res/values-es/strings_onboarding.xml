@@ -142,10 +142,10 @@
     <string name="sub_sign_in_button">Iniciar sesión con %1$s</string>
     <string name="sub_error">No ha funcionado. %1$s</string>
     <string name="sub_hide">Ocultar</string>
-    <string name="sub_have_token">¿Tienes un token?</string>
-    <string name="sub_token_label">Token (empieza por sk-ant-)</string>
+    <string name="sub_have_access">¿Tienes un token?</string>
+    <string name="sub_access_label">Token (empieza por sk-ant-)</string>
     <string name="sub_auth_json">Contenido de auth.json</string>
-    <string name="sub_use_token">Usar este token</string>
+    <string name="sub_use_access">Usar este token</string>
     <string name="sub_hide_details">Ocultar detalles</string>
     <string name="sub_details">Detalles</string>
     <string name="settings_title">Ajustes</string>
@@ -159,6 +159,7 @@
     <string name="settings_style">Color y compañero</string>
     <string name="settings_language">Idioma</string>
     <string name="settings_language_phone">Idioma del móvil</string>
+    <string name="settings_language_machine">Traducción automática, ayuda a mejorarla en GitHub</string>
     <string name="settings_power">Motor</string>
     <string name="settings_power_sub">Con qué piensa tu agente</string>
     <string name="settings_api_key">Clave API</string>
@@ -247,4 +248,6 @@
     <string name="data_sub_codex_needs_pack">Codex de OpenAI funciona dentro de la app con tu plan. Necesita el paquete del entorno.</string>
     <string name="data_sub_opencode_plan">Zen o Go</string>
     <string name="data_sub_opencode_line">Pega tu clave de OpenCode y tu agente funcionará con tu plan de OpenCode.</string>
+    <string name="data_sub_antigravity_plan">Gratis o Google AI</string>
+    <string name="data_sub_antigravity_line">La CLI de Antigravity funciona dentro de la app con tu cuenta de Google.</string>
 </resources>

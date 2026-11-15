@@ -22,9 +22,9 @@ class LiveAssistTest {
 
     @Test fun liveHandsEverythingToTheAgentExceptMusicAndVideoWhichRunOnThePhone() {
         val decls = LiveAssistCore.tools().getJSONObject(0).getJSONArray("functionDeclarations")
-        assertEquals(listOf("hand_to_agent", "play_media", "media_control"), (0 until decls.length()).map { decls.getJSONObject(it).getString("name") })
-        assertTrue(decls.getJSONObject(1).getJSONObject("parameters").getJSONObject("properties").has("query"))
-        assertTrue(decls.getJSONObject(2).getJSONObject("parameters").getJSONObject("properties").has("action"))
+        assertEquals(listOf("hand_to_agent", "answer_ask", "play_media", "media_control"), (0 until decls.length()).map { decls.getJSONObject(it).getString("name") })
+        assertTrue(decls.getJSONObject(2).getJSONObject("parameters").getJSONObject("properties").has("query"))
+        assertTrue(decls.getJSONObject(3).getJSONObject("parameters").getJSONObject("properties").has("action"))
         val t = decls.getJSONObject(0)
         assertEquals("hand_to_agent", t.getString("name"))
         val props = t.getJSONObject("parameters").getJSONObject("properties")
@@ -92,7 +92,7 @@ class LiveAssistTest {
         val told = c.rows(listOf(row(5, "user", "x"), row(6, "agent", "Done. Sam has it.")), false)
         assertEquals(1, told.size)
         assertTrue(told[0].contains("Done. Sam has it."))
-        assertTrue(told[0].contains("short")); assertFalse(c.handOffOpen)
+        assertTrue(told[0].startsWith(com.past9.phoneaos.voice.SpokenResult.HEAD)); assertFalse(c.handOffOpen)
         assertEquals(LivePhase.LISTENING, c.current.phase)
         // The same row again says nothing more.
         assertTrue(c.rows(listOf(row(6, "agent", "Done. Sam has it.")), false).isEmpty())

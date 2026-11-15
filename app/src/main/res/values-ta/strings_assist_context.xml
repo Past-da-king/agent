@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="assist_ctx_waiting">உங்களுக்காக காத்திருக்கிறது: %d</string>
+    <string name="assist_ctx_working">வேலை நடக்கிறது: %d</string>
+    <string name="assist_ctx_which">இது எதற்கானது?</string>
+    <string name="assist_ctx_your_words">நீங்கள் சொன்னது: %1$s</string>
+    <string name="assist_ctx_sent_to">%1$s க்கு அனுப்பப்பட்டது: %2$s</string>
+</resources>

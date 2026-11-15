@@ -38,7 +38,7 @@ object Reminders {
         val p = ReminderPlan.plan(open, armed, said, now, force)
         p.cancel.forEach { ExactAlarms.cancel(context, ExactAlarms.ACTION_REMINDER, it); armed.remove(it) }
         p.arm.forEach { (id, at) -> ExactAlarms.set(context, ExactAlarms.ACTION_REMINDER, id, at, clock = true); armed[id] = at }
-        p.missed.forEach { show(context, it.id, it.title, "Was due ${WakeClock.label(it.dueAt)}. Missed while the phone was off."); said += ReminderPlan.key(it.id, it.dueAt) }
+        p.missed.forEach { show(context, it.id, it.title, context.getString(com.past9.phoneaos.R.string.svc_reminder_missed, WakeClock.label(it.dueAt, context))); said += ReminderPlan.key(it.id, it.dueAt) }
         // Keep the record small: only keys for tasks that are still open.
         val openIds = open.map { it.id.toString() }.toSet()
         prefs(context).edit().putString("armed", JSONObject(armed.mapKeys { it.key.toString() }).toString())
@@ -51,7 +51,7 @@ object Reminders {
         val armed = armed(context); armed.remove(id)
         val said = said(context)
         if (t.status != "done" && t.dueAt == at && ReminderPlan.key(id, at) !in said) {
-            show(context, id, t.title, t.notes.take(200).ifBlank { "It's time." })
+            show(context, id, t.title, t.notes.take(200).ifBlank { context.getString(com.past9.phoneaos.R.string.svc_reminder_time) })
             said += ReminderPlan.key(id, at)
         }
         prefs(context).edit().putString("armed", JSONObject(armed.mapKeys { it.key.toString() }).toString()).putStringSet("said", said).commit()
@@ -59,7 +59,7 @@ object Reminders {
 
     fun show(context: Context, id: Long, title: String, body: String) {
         val nm = context.getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Reminders", NotificationManager.IMPORTANCE_HIGH))
+        nm.createNotificationChannel(NotificationChannel(CHANNEL, context.getString(com.past9.phoneaos.R.string.svc_reminders_channel), NotificationManager.IMPORTANCE_HIGH))
         val st = App.graph(context).settings.state.value
         val nid = 200_000 + id.toInt()
         fun action(what: String, code: Int) = PendingIntent.getBroadcast(context, nid * 4 + code,
@@ -68,15 +68,21 @@ object Reminders {
         val n = NotificationCompat.Builder(context, CHANNEL).setSmallIcon(Identity.statIcon(context, st.mascot))
             .setContentTitle(title).setContentText(body).setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setCategory(NotificationCompat.CATEGORY_REMINDER).setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true).setContentIntent(open)
-            .addAction(0, "Done", action(ReminderActionReceiver.DONE, 0)).addAction(0, "In 1 hour", action(ReminderActionReceiver.LATER, 1)).build()
+            .addAction(0, context.getString(com.past9.phoneaos.R.string.rt_done), action(ReminderActionReceiver.DONE, 0)).addAction(0, context.getString(com.past9.phoneaos.R.string.svc_reminder_later), action(ReminderActionReceiver.LATER, 1)).build()
         runCatching { NotificationManagerCompat.from(context).notify(nid, n) }
     }
 }
 
 object WakeClock {
-    fun label(ms: Long): String {
+    /** @param context when given, the label is in the app's language (English without it). */
+    fun label(ms: Long, context: Context? = null): String {
         val z = java.time.ZoneId.systemDefault(); val t = java.time.Instant.ofEpochMilli(ms).atZone(z); val today = java.time.LocalDate.now(z)
         val hm = "%02d:%02d".format(t.hour, t.minute)
+        if (context != null) return when (t.toLocalDate()) {
+            today -> context.getString(com.past9.phoneaos.R.string.svc_clock_at, hm)
+            today.minusDays(1) -> context.getString(com.past9.phoneaos.R.string.svc_clock_yesterday, hm)
+            else -> context.getString(com.past9.phoneaos.R.string.svc_clock_date, t.toLocalDate().toString(), hm)
+        }
         return when (t.toLocalDate()) { today -> "at $hm"; today.minusDays(1) -> "yesterday at $hm"; else -> "${t.toLocalDate()} at $hm" }
     }
 }

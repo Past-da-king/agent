@@ -141,7 +141,10 @@ internal object Flags {
         }
         out += basic
         out += PUBLIC or OWN_CONTENT_ONLY
-        return out.distinct()
+        // Every set first WITH "destroy content on removal": if the display is ever torn down (the helper dies, the
+        // system removes it), its apps are destroyed there instead of being moved onto the person's own screen.
+        // The same sets without it are the fallback for a system that refuses the flag.
+        return (out.map { it or DESTROY_CONTENT_ON_REMOVAL } + out).distinct()
     }
 }
 
@@ -207,6 +210,8 @@ internal class HiddenDisplay private constructor(
         for (iy in 1..11) for (ix in 1..7) if (b.getPixel(b.width * ix / 8, b.height * iy / 12) != first) return false
         return true
     }
+
+    val destroysContent: Boolean get() = flags and Flags.DESTROY_CONTENT_ON_REMOVAL != 0
 
     fun release() {
         runCatching { vd.release() }
@@ -320,6 +325,12 @@ internal object Tasks {
     fun toFront(taskId: Int): Boolean = runCatching {
         atm.javaClass.getMethod("startActivityFromRecents", Int::class.javaPrimitiveType, android.os.Bundle::class.java).invoke(atm, taskId, null); true
     }.getOrDefault(false)
+
+    /** The displays of ours that exist now (the system lists them by name). */
+    fun ourDisplays(name: String): Set<Int> = runCatching {
+        val dm = Sys.systemContext.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+        dm.displays.filter { it.name == name }.map { it.displayId }.toSet()
+    }.getOrDefault(emptySet())
 
     fun remove(taskId: Int): Boolean = runCatching {
         atm.javaClass.getMethod("removeTask", Int::class.javaPrimitiveType).invoke(atm, taskId) as? Boolean ?: true

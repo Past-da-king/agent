@@ -41,17 +41,16 @@ object SpeechModel {
     }
 
     /**
-     * The languages to tell the model, from the phone's own setting (11 Nov 2026). Empty is fine: it detects the
-     * language, and switches between languages inside a sentence, by itself.
-     *
-     * isiZulu is deliberately NOT added for South African English. That was tried first and measured worse on his own
-     * recordings: with zu-ZA in the list "My guy" came back as "Shumayela", and with en-ZA alone the same audio came
-     * back word for word. isiZulu he mixes into English is still written as isiZulu; the English is not biased at it.
+     * The languages to tell the model (12 Nov 2026): the phone's own languages, then those spoken beside them in its
+     * country (voice/SpeechLanguages.kt). ONE language, even none, makes the model drop the rest: isiZulu vanished
+     * from a dictation when only en-ZA was sent. English is not biased away by the others (measured).
      */
-    fun languages(locale: Locale = Locale.getDefault()): List<String> {
-        val tag = locale.toLanguageTag().replace('_', '-')
-        if (tag.isBlank() || tag == "und") return emptyList()
-        return listOf(tag)
+    fun languages(locales: List<Locale> = phoneLocales()): List<String> = SpeechLanguages.forLocales(locales)
+
+    /** All of the phone's languages, first choice first (not only the first one). */
+    fun phoneLocales(): List<Locale> {
+        val list = android.os.LocaleList.getDefault()
+        return (0 until list.size()).map { list.get(it) }
     }
 
     /** The request body for the speech model, with the settings that make the difference. */

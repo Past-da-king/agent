@@ -337,7 +337,7 @@ class ScreenSession(
     }
 
     /** Press [target], or the point. Null when done; otherwise why not. [quick]: a replay, which does not wait for the screen to settle. */
-    private suspend fun doPress(ctx: ToolContext, target: ScreenElement?, x: Int, y: Int, long: Boolean, by: String = "agent", quick: Boolean = false): String? {
+    private suspend fun doPress(ctx: ToolContext, target: ScreenElement?, x: Int, y: Int, long: Boolean, by: String = "agent", quick: Boolean = false, generic: Boolean = false): String? {
         val s = _state.value
         val px = target?.centerX ?: x; val py = target?.centerY ?: y
         if (px !in 0 until s.width.coerceAtLeast(1) || py !in 0 until s.height.coerceAtLeast(1)) return "That point is off the screen (${s.width}x${s.height})."
@@ -361,7 +361,7 @@ class ScreenSession(
         if (!quick) settle() else settle(150, 1_200)
         runCatching { readTree() }.onFailure { if (it is ScreenBlocked) throw it }
         log(if (long) "long" else "tap", "Pressed \"$name\"", sel, by = by, took = now() - t0,
-            extra = JSONObject().put("fx", px.toDouble() / s.width.coerceAtLeast(1)).put("fy", py.toDouble() / s.height.coerceAtLeast(1)))
+            extra = JSONObject().put("fx", px.toDouble() / s.width.coerceAtLeast(1)).put("fy", py.toDouble() / s.height.coerceAtLeast(1)).apply { if (generic) put("generic", true) })
         return null
     }
 
@@ -510,7 +510,7 @@ class ScreenSession(
     } }
 
     /** Open [app] on the hidden display: its front door, or [link] inside it. */
-    suspend fun open(ctx: ToolContext, app: String, link: String = "", owner: String = ""): String = mutex.withLock { safely {
+    suspend fun open(ctx: ToolContext, app: String, link: String = "", owner: String = "", fresh: Boolean = false): String = mutex.withLock { safely {
         blocked(ctx, needOpen = false)?.let { return it }
         // One job at a time. Every caller from a linked computer looks alike, so a helper says its own name when it opens an app.
         val who = owner.trim().take(40).ifBlank { ctx.agentLabel }
@@ -520,7 +520,7 @@ class ScreenSession(
         if (!cur.open || cur.owner != who) jobStart = now()
         jobOwner = who; ownerLabel = ctx.agentLabel
         val ref = apps.find(app) ?: return "No app called \"$app\" is installed.${apps.near(app).takeIf { it.isNotEmpty() }?.let { " Close matches: ${it.joinToString(", ")}." } ?: " Use android_apps to see what is installed."}"
-        val out = doOpen(ctx, ref, link, fresh = false)
+        val out = doOpen(ctx, ref, link, fresh = fresh)
         if (out != null && !out.startsWith("!")) return out
         runCatching { ctx.activity("Background screen: opened ${ref.label}", JSONObject().put("tool", "screen").put("app", ref.pkg)) }
         "${ref.label} is open on the background screen. The user's own screen was not touched.\n" + (out?.removePrefix("!")?.plus("\n") ?: "") + read()
@@ -534,7 +534,15 @@ class ScreenSession(
         read(mode.ifBlank { "tree" }, filter).also { log("look", "Looked at the screen") }
     } }
 
-    suspend fun tap(ctx: ToolContext, element: Int?, words: String, x: Int?, y: Int?, long: Boolean): String = mutex.withLock { safely {
+    /** The package the user has in front on their own screen (display 0), or null when nothing is or the helper cannot be reached. Reads only. */
+    suspend fun userFront(): String? = mutex.withLock { runCatching {
+        if (helper() != null) return@runCatching null
+        val list = tasks().map { ScreenLanding.Task(it.optInt("id"), it.optInt("display"), it.optString("pkg"), it.optBoolean("visible")) }
+        ScreenLanding.front(list)?.pkg?.takeIf { it.isNotBlank() }
+    }.getOrNull() }
+
+    /** [generic]: the press is on "the row that matched this time" (a search result), so a learned step finds it by place and kind, not by the words it had. */
+    suspend fun tap(ctx: ToolContext, element: Int?, words: String, x: Int?, y: Int?, long: Boolean, generic: Boolean = false): String = mutex.withLock { safely {
         blocked(ctx, needOpen = true)?.let { return it }
         helper()?.let { return it }
         if (displayId == 0) return CLOSED
@@ -544,7 +552,7 @@ class ScreenSession(
             x != null && y != null -> null
             else -> return "Say what to press: element (its number), text (its words) or x and y."
         }
-        doPress(ctx, target, x ?: 0, y ?: 0, long)?.let { return it }
+        doPress(ctx, target, x ?: 0, y ?: 0, long, generic = generic)?.let { return it }
         val last = runSteps.lastOrNull { it.kind == "tap" || it.kind == "long" }?.say ?: "Pressed"
         runCatching { ctx.activity("Background screen: ${last.replaceFirstChar { it.lowercase() }} in ${_state.value.app}", JSONObject().put("tool", "screen").put("app", _state.value.pkg)) }
         "$last.\n" + read()
@@ -643,7 +651,7 @@ class ScreenSession(
         val back = LinkedHashSet<String>()
         if (keepApp) _state.value.pkg.takeIf { it.isNotBlank() }?.let { back += it }
         note("close", "Closed the background screen")
-        val r = runCatching { backend.call(op("release").put("move_back", JSONArray(back.toList()))) }.getOrNull()
+        val r = runCatching { backend.call(op("release").put("move_back", JSONArray(back.toList())).put("why", if (back.isEmpty()) "close" else "keep_app")) }.getOrNull()
         val wasStopped = _state.value.stopped
         forget()
         _state.value = ScreenState(stopped = wasStopped)
@@ -759,7 +767,9 @@ class ScreenSession(
                     "type" -> doType(ctx, ScreenSkills.fill(s.optString("text"), args), target, extra.optBoolean("append"), extra.optBoolean("submit"), secret = s.optString("text").startsWith("{secret"), quick = true).first
                     "swipe" -> doSwipe(ctx, extra.optString("dir"), target, extra.optInt("x1"), extra.optInt("y1"), extra.optInt("x2"), extra.optInt("y2"), quick = true)
                     "key" -> doKey(ctx, extra.optString("key"), quick = true)
-                    "wait" -> doWait(ScreenSkills.fill(s.optString("text"), args), extra.optBoolean("gone"), extra.optInt("seconds", 20), extra.optInt("stable")).let { (ok, said) -> if (ok) null else said }
+                    "wait" -> doWait(ScreenSkills.fill(s.optString("text"), args), extra.optBoolean("gone"), extra.optInt("seconds", 20), extra.optInt("stable")).let { (ok, said) ->
+                        // A wait for the screen to stop changing is a pause, not a check: a screen that never stops (a player, a timer, a live feed) is where the steps go on.
+                        if (ReplayRules.waitHolds(ok, s.optString("text"), extra.optInt("stable"), said)) null else said }
                     else -> null
                 }
                 if (why != null) return fail(i, "Step ${i + 1} of ${steps.length()} (${ScreenSkills.say(s)}) stopped: $why\n" + runCatching { read() }.getOrDefault(""))
@@ -796,10 +806,10 @@ class ScreenSession(
         if (displayId == 0) return "Nothing is open on the background screen."
         val f = runCatching { front() }.getOrNull() ?: return "No app is in front on the background screen."
         var how = "moved"
-        val moved = runCatching { ask(op("move").put("task", f.taskId).put("to", "main")).optBoolean("ok") }.getOrDefault(false)
+        val moved = runCatching { ask(op("move").put("task", f.taskId).put("to", "main").put("why", "take_over")).optBoolean("ok") }.getOrDefault(false)
         if (!moved) {
             how = "opened again"
-            if (runCatching { ask(op("launch").put("pkg", f.pkg).put("where", "main")).optBoolean("ok") }.getOrDefault(false) != true) return "It could not be brought to your screen."
+            if (runCatching { ask(op("launch").put("pkg", f.pkg).put("where", "main").put("why", "take_over")).optBoolean("ok") }.getOrDefault(false) != true) return "It could not be brought to your screen."
         }
         handed = f; borrowed -= f.pkg
         lastUsed = now()
@@ -895,7 +905,7 @@ class ScreenSession(
     suspend fun userBringToMyScreen(): Boolean = mutex.withLock {
         if (displayId == 0) return false
         val f = runCatching { front() }.getOrNull() ?: return false
-        val ok = runCatching { ask(op("move").put("task", f.taskId).put("to", "main")).optBoolean("ok") }.getOrDefault(false)
+        val ok = runCatching { ask(op("move").put("task", f.taskId).put("to", "main").put("why", "bring_to_screen")).optBoolean("ok") }.getOrDefault(false)
         if (ok) {
             runCatching { backend.call(op("release").put("move_back", JSONArray())) }
             val stopped = _state.value.stopped

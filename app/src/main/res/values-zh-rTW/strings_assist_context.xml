@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="assist_ctx_waiting">等待你回覆: %d</string>
+    <string name="assist_ctx_working">正在工作: %d</string>
+    <string name="assist_ctx_which">這是回答哪一個?</string>
+    <string name="assist_ctx_your_words">你說: %1$s</string>
+    <string name="assist_ctx_sent_to">已傳送給 %1$s: %2$s</string>
+</resources>

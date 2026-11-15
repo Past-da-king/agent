@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="assist_ctx_waiting">あなたの返事待ち: %d</string>
+    <string name="assist_ctx_working">作業中: %d</string>
+    <string name="assist_ctx_which">どれへの回答ですか?</string>
+    <string name="assist_ctx_your_words">あなたの発言: %1$s</string>
+    <string name="assist_ctx_sent_to">%1$s に送信しました: %2$s</string>
+</resources>

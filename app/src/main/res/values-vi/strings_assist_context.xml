@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="assist_ctx_waiting">Đang chờ bạn: %d</string>
+    <string name="assist_ctx_working">Đang làm việc: %d</string>
+    <string name="assist_ctx_which">Đây là cho mục nào?</string>
+    <string name="assist_ctx_your_words">Bạn đã nói: %1$s</string>
+    <string name="assist_ctx_sent_to">Đã gửi tới %1$s: %2$s</string>
+</resources>

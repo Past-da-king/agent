@@ -33,11 +33,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.past9.phoneaos.R
 import com.past9.phoneaos.remote.RemoteHub
 import com.past9.phoneaos.remote.RunningFeed
 import com.past9.phoneaos.remote.RunningList
@@ -66,13 +69,13 @@ fun ProjectSwitcherSheet(rows: List<SwitchRow>, lines: Map<String, String>, onPi
     AgentSheet(onDismiss) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
             Column(Modifier.padding(horizontal = 24.dp)) {
-                SheetHead(Icons.Rounded.SwapHoriz, "Switch", "Chats and projects")
+                SheetHead(Icons.Rounded.SwapHoriz, stringResource(R.string.proj_switch), stringResource(R.string.proj_switch_sub))
                 Spacer(Modifier.height(16.dp))
             }
             LazyColumn(Modifier.weight(1f, fill = false).fillMaxWidth(), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(rows, key = { it.key }) { r -> SwitcherRow(r, lines[r.key].orEmpty()) { onPick(r) } }
                 if (rows.size <= 1) item(key = "none") {
-                    Text("No projects yet. A project keeps its own chats, files and memory.", style = MaterialTheme.typography.bodyMedium,
+                    Text(stringResource(R.string.proj_none_yet), style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp))
                 }
             }
@@ -83,7 +86,7 @@ fun ProjectSwitcherSheet(rows: List<SwitchRow>, lines: Map<String, String>, onPi
                     Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Add, null, Modifier.size(24.dp)) }
                         Spacer(Modifier.width(14.dp))
-                        Text("New project", style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.proj_new), style = MaterialTheme.typography.titleMedium)
                     }
                 }
             } else Spacer(Modifier.height(16.dp))
@@ -94,10 +97,11 @@ fun ProjectSwitcherSheet(rows: List<SwitchRow>, lines: Map<String, String>, onPi
 @Composable
 private fun SwitcherRow(r: SwitchRow, line: String, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    val sub = line.ifBlank { if (r.project == null) "Your agent's own chat" else if (r.chat.isBlank()) "No chat yet" else "" }
+    val hereCd = stringResource(R.string.proj_here_cd); val workingCd = stringResource(R.string.proj_n_working, r.running)
+    val sub = line.ifBlank { if (r.project == null) stringResource(R.string.proj_agent_own_chat) else if (r.chat.isBlank()) stringResource(R.string.proj_no_chat_yet) else "" }
     Surface(onClick = onClick, shape = MaterialTheme.shapes.large, color = if (r.current) cs.primaryContainer else cs.surfaceContainerHigh,
         contentColor = if (r.current) cs.onPrimaryContainer else cs.onSurface,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).semantics { contentDescription = r.name + (if (r.current) ", you are here" else "") + (if (r.running > 0) ", ${r.running} working" else "") }) {
+        modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).semantics { contentDescription = r.name + (if (r.current) ", $hereCd" else "") + (if (r.running > 0) ", $workingCd" else "") }) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             val p = r.project
             if (p == null) Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) { AgentAvatar(working = r.running > 0, size = 34.dp) }
@@ -110,9 +114,9 @@ private fun SwitcherRow(r: SwitchRow, line: String, onClick: () -> Unit) {
             }
             if (r.running > 0) {
                 Spacer(Modifier.width(10.dp))
-                StatusPill("${r.running} working", if (r.current) cs.surface else cs.primaryContainer, if (r.current) cs.onSurface else cs.onPrimaryContainer)
+                StatusPill(workingCd, if (r.current) cs.surface else cs.primaryContainer, if (r.current) cs.onSurface else cs.onPrimaryContainer)
             }
-            if (r.current) { Spacer(Modifier.width(8.dp)); Icon(Icons.Rounded.Check, "You are here", Modifier.size(22.dp)) }
+            if (r.current) { Spacer(Modifier.width(8.dp)); Icon(Icons.Rounded.Check, stringResource(R.string.proj_you_are_here), Modifier.size(22.dp)) }
         }
     }
 }
@@ -125,6 +129,7 @@ private fun SwitcherRow(r: SwitchRow, line: String, onClick: () -> Unit) {
 @Composable
 fun ProjectSwitcher(current: String, onOpenChat: (chat: String, name: String) -> Unit, onDismiss: () -> Unit, onNewProject: (() -> Unit)? = LocalNewProject.current) {
     RunningFeed.Follow()
+    val ctx = LocalContext.current
     val session = RemoteHub.session.collectAsStateWithLifecycle().value
     val cards = session?.cards?.collectAsStateWithLifecycle()?.value.orEmpty()
     val projects = RunningFeed.projects
@@ -142,7 +147,7 @@ fun ProjectSwitcher(current: String, onOpenChat: (chat: String, name: String) ->
     ProjectSwitcherSheet(rows, lines, onPick = { r ->
         when {
             r.current -> onDismiss()
-            r.chat.isBlank() -> AppNotice.say("${r.name} has no chat yet. Start one on your computer.")
+            r.chat.isBlank() -> AppNotice.say(ctx.getString(R.string.proj_has_no_chat, r.name))
             else -> { onDismiss(); onOpenChat(r.chat, r.name) }
         }
     }, onNewProject = onNewProject?.let { f -> { onDismiss(); f() } }, onDismiss = onDismiss)

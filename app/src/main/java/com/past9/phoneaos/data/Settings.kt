@@ -11,11 +11,11 @@ import kotlinx.coroutines.flow.StateFlow
 enum class PowerMode { NONE, API_KEY, SUBSCRIPTION }
 
 /** Subscriptions people already pay for that come with a coding-agent CLI we can run in-app. */
-enum class SubKind(val label: String, val plan: String, val line: String) {
-    CLAUDE("Claude", "Pro or Max", "Claude Code runs inside the app on your Claude plan."),
-    CODEX("ChatGPT", "Plus or Pro", "OpenAI's Codex runs inside the app on your ChatGPT plan."),
-    OPENCODE("OpenCode", "Zen or Go", "Paste your OpenCode key and your agent runs on your OpenCode plan."),
-    ANTIGRAVITY("Antigravity", "Free or Google AI", "Antigravity CLI runs inside the app on your Google account."),
+enum class SubKind(val label: String, @androidx.annotation.StringRes val plan: Int, @androidx.annotation.StringRes val line: Int, @androidx.annotation.StringRes val needsPack: Int) {
+    CLAUDE("Claude", com.past9.phoneaos.R.string.data_sub_claude_plan, com.past9.phoneaos.R.string.data_sub_claude_line, com.past9.phoneaos.R.string.data_sub_claude_needs_pack),
+    CODEX("ChatGPT", com.past9.phoneaos.R.string.data_sub_codex_plan, com.past9.phoneaos.R.string.data_sub_codex_line, com.past9.phoneaos.R.string.data_sub_codex_needs_pack),
+    OPENCODE("OpenCode", com.past9.phoneaos.R.string.data_sub_opencode_plan, com.past9.phoneaos.R.string.data_sub_opencode_line, com.past9.phoneaos.R.string.data_sub_opencode_line),
+    ANTIGRAVITY("Antigravity", com.past9.phoneaos.R.string.data_sub_antigravity_plan, com.past9.phoneaos.R.string.data_sub_antigravity_line, com.past9.phoneaos.R.string.data_sub_antigravity_line),
 }
 
 enum class Provider(val label: String, val defaultModel: String, val helperModel: String, val baseUrl: String, val keyHint: String) {
@@ -78,6 +78,8 @@ data class AgentSettings(
     val liveEnabled: Boolean = false,
     /** Play voice notes (and read replies) automatically while earphones are in. */
     val autoPlayEarphones: Boolean = true,
+    /** Which account and model each kind of turn runs on (issue #64). A kind with no entry runs on the default above. */
+    val routes: Map<ModelRoute, RouteChoice> = emptyMap(),
 ) {
     val ready: Boolean get() = when (mode) {
         PowerMode.API_KEY -> hasKey
@@ -134,6 +136,7 @@ class SettingsStore(context: Context) {
             browserProfiles = (prefs.getString("browserProfiles", null) ?: "Personal").split("\n").filter { it.isNotBlank() }.ifEmpty { listOf("Personal") },
             subKind = runCatching { SubKind.valueOf(prefs.getString("subKind", "CLAUDE")!!) }.getOrDefault(SubKind.CLAUDE),
             helperRoster = HelperModel.listFrom(prefs.getString(rosterKey(), null)),
+            routes = ModelRoute.entries.mapNotNull { r -> RouteChoice.fromJson(prefs.getString("x_route_${r.name}", null))?.let { r to it } }.toMap(),
         )
     }
 
@@ -167,6 +170,18 @@ class SettingsStore(context: Context) {
     fun setSubHelperModel(m: String) = edit { putString("subHelperModel_" + _state.value.subKind.name, m) }
     fun setTts(provider: String, voice: String) = edit { putString("ttsProvider", provider); putString("ttsVoice", voice) }
     fun setAutoPlayEarphones(on: Boolean) = edit { putBoolean("autoPlayEarphones", on) }
+    /**
+     * Run this kind of turn on [provider]'s [model] (issue #64). Written to disk before it returns, and kept when the main
+     * power source changes: a route is its own choice. A blank model clears the route.
+     */
+    fun setRoute(route: ModelRoute, provider: Provider, model: String) {
+        if (model.isBlank()) return clearRoute(route)
+        prefs.edit().putString("x_route_${route.name}", RouteChoice(provider, model.trim()).toJson()).commit(); _state.value = read()
+    }
+    /** Back to the default power source for this kind of turn. */
+    fun clearRoute(route: ModelRoute) { prefs.edit().remove("x_route_${route.name}").commit(); _state.value = read() }
+    /** The providers the user has saved a key for: the accounts a route can pick from. */
+    fun accounts(): List<Provider> = Provider.entries.filter { !secrets.getString("key_${it.name}", null).isNullOrBlank() }
     fun setLive(on: Boolean) = edit { putBoolean("liveEnabled", on) }
     /** A voice key: its own, or the user's main API key when it's the same provider. */
     fun voiceKey(provider: String): String? = secrets.getString("voice_$provider", null)?.takeIf { it.isNotBlank() } ?: when (provider) {

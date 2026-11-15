@@ -19,11 +19,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.past9.phoneaos.R
 import com.past9.phoneaos.voice.DictationHub
 import com.past9.phoneaos.voice.DictationView
 
@@ -50,8 +52,8 @@ fun DictationStatus(owner: Any?) {
         Box(Modifier.size(8.dp).background(dot, CircleShape))
         Text(line, style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant, modifier = Modifier.weight(1f))
         if (v.phase == DictationView.Phase.KEPT) {
-            TextButton(onClick = { DictationHub.retry() }) { Text("Retry", style = MaterialTheme.typography.labelLarge) }
-            IconButton(onClick = { DictationHub.dismiss() }) { Icon(Icons.Rounded.Close, "Dismiss", Modifier.size(18.dp), tint = c.onSurfaceVariant) }
+            TextButton(onClick = { DictationHub.retry() }) { Text(stringResource(R.string.ui_retry), style = MaterialTheme.typography.labelLarge) }
+            IconButton(onClick = { DictationHub.dismiss() }) { Icon(Icons.Rounded.Close, stringResource(R.string.camera_dismiss), Modifier.size(18.dp), tint = c.onSurfaceVariant) }
         }
     }
 }

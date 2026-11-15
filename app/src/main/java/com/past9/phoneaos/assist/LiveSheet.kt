@@ -1,5 +1,7 @@
 package com.past9.phoneaos.assist
 
+import androidx.compose.ui.res.stringResource
+import com.past9.phoneaos.R
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -14,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.CallEnd
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloseFullscreen
 import androidx.compose.material.icons.rounded.PictureInPictureAlt
@@ -41,20 +44,26 @@ import com.past9.phoneaos.ui.theme.Radius
 data class LiveActions(
     val onEnd: () -> Unit = {},
     val onMute: (Boolean) -> Unit = {},
+    /** Wait-for-me: Tap to talk, then I'm done. */
+    val onTurn: () -> Unit = {},
     val onOpenApp: () -> Unit = {},
     val onAnswer: (Long, String) -> Unit = { _, _ -> },
     /** Shrink the sheet to a floating bubble; the session keeps going. */
     val onMinimise: () -> Unit = {},
+    /** He picked which waiting question his words answer (the choice sheet), or closed it. */
+    val onPickAsk: (CtxAsk, String) -> Unit = { _, _ -> },
+    val onDismissChoice: () -> Unit = {},
 )
 
 object LiveWords {
+    @Composable
     fun caption(v: LiveView): String = when (v.phase) {
-        LivePhase.CONNECTING -> "Connecting"
-        LivePhase.LISTENING -> if (v.muted) "Muted" else "Listening"
-        LivePhase.SPEAKING -> "Speaking"
-        LivePhase.WORKING -> "Working on it"
-        LivePhase.NEEDS_YOU -> "Needs you"
-        LivePhase.ERROR -> "Live voice stopped"
+        LivePhase.CONNECTING -> stringResource(R.string.voice_connecting_short)
+        LivePhase.LISTENING -> if (v.muted) stringResource(R.string.voice_muted) else stringResource(R.string.voice_listening)
+        LivePhase.SPEAKING -> stringResource(R.string.live_speaking)
+        LivePhase.WORKING -> stringResource(R.string.svc_work_on_it)
+        LivePhase.NEEDS_YOU -> stringResource(R.string.chat_needs_you_title)
+        LivePhase.ERROR -> stringResource(R.string.live_stopped)
     }
 }
 
@@ -67,6 +76,7 @@ object LiveWords {
 fun LiveSheetBody(view: LiveView, agentName: String, screen: ScreenLine?, actions: LiveActions, modifier: Modifier = Modifier) {
     val cs = MaterialTheme.colorScheme
     val speaking = view.phase == LivePhase.SPEAKING
+    val minimiseDesc = stringResource(R.string.live_minimise); val endDesc = stringResource(R.string.voice_end)
     Column(modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 10.dp, bottom = 14.dp)) {
         Box(Modifier.align(Alignment.CenterHorizontally).width(36.dp).height(4.dp).clip(CircleShape).background(cs.outlineVariant))
         Spacer(Modifier.height(14.dp))
@@ -80,17 +90,21 @@ fun LiveSheetBody(view: LiveView, agentName: String, screen: ScreenLine?, action
             if (view.phase != LivePhase.ERROR) LiveBadge(view.phase != LivePhase.CONNECTING)
             if (view.phase != LivePhase.ERROR) {
                 Spacer(Modifier.width(4.dp))
-                IconButton(onClick = actions.onMinimise, modifier = Modifier.size(44.dp).semantics { contentDescription = "Minimise" }) {
+                IconButton(onClick = actions.onMinimise, modifier = Modifier.size(44.dp).semantics { contentDescription = minimiseDesc }) {
                     Icon(Icons.Rounded.CloseFullscreen, null, tint = cs.onSurfaceVariant)
                 }
             }
         }
         Spacer(Modifier.height(14.dp))
+        if (view.phase != LivePhase.ERROR) {
+            ContextStrip(view.context, agentName)
+            if (view.context != null && (view.context.asks.isNotEmpty() || view.context.agents.isNotEmpty())) Spacer(Modifier.height(12.dp))
+        }
         Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).heightIn(min = 72.dp)) {
             if (view.phase == LivePhase.ERROR) {
                 Row(verticalAlignment = Alignment.Top) {
                     Icon(Icons.Rounded.ErrorOutline, null, Modifier.size(20.dp), tint = cs.error); Spacer(Modifier.width(8.dp))
-                    Text(view.problem.ifBlank { "Live voice stopped. Try again." }, style = MaterialTheme.typography.bodyLarge, color = cs.error)
+                    Text(view.problem.ifBlank { stringResource(R.string.live_stopped_retry) }, style = MaterialTheme.typography.bodyLarge, color = cs.error)
                 }
             } else {
                 if (view.you.isNotBlank()) YouSaid(LiveAssistCore.tail(view.you, 140))
@@ -98,17 +112,24 @@ fun LiveSheetBody(view: LiveView, agentName: String, screen: ScreenLine?, action
                     Spacer(Modifier.height(10.dp))
                     Text(LiveAssistCore.tail(view.agent), style = MaterialTheme.typography.titleMedium, color = cs.onSurface, maxLines = 4, overflow = TextOverflow.Ellipsis)
                 } else if (view.you.isBlank()) {
-                    Text(if (view.phase == LivePhase.CONNECTING) "Getting ready" else "Go ahead, just talk", style = MaterialTheme.typography.headlineSmall, color = cs.onSurfaceVariant)
+                    Text(if (view.phase == LivePhase.CONNECTING) stringResource(R.string.live_getting_ready) else stringResource(R.string.live_go_ahead), style = MaterialTheme.typography.headlineSmall, color = cs.onSurfaceVariant)
                 }
                 view.card?.let { card ->
                     Spacer(Modifier.height(12.dp))
                     if (com.past9.phoneaos.ui.screens.Approval.isApproval(card)) ApprovalInSheet(card, actions.onAnswer) else QuestionCard(card, actions.onAnswer, onBrowser = actions.onOpenApp)
                 }
+                if (view.routed.isNotBlank()) {
+                    Spacer(Modifier.height(12.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Check, null, Modifier.size(18.dp), tint = cs.primary); Spacer(Modifier.width(8.dp))
+                        Text(view.routed, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
                 if (view.phase == LivePhase.WORKING) {
                     Spacer(Modifier.height(12.dp))
                     Surface(shape = RoundedCornerShape(Radius.md), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(14.dp)) {
-                            Text(view.label.ifBlank { "Working on it" }, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(view.label.ifBlank { stringResource(R.string.svc_work_on_it) }, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             Spacer(Modifier.height(10.dp))
                             LinearProgressIndicator(Modifier.fillMaxWidth().clip(CircleShape))
                         }
@@ -116,7 +137,15 @@ fun LiveSheetBody(view: LiveView, agentName: String, screen: ScreenLine?, action
                 }
             }
         }
-        if (screen != null && view.phase != LivePhase.ERROR) {
+        if (view.seeing != Seeing.OFF && view.phase != LivePhase.ERROR) {
+            // Live is looking at the screen (or cannot, because it is private): said plainly, so nothing is hidden.
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(if (view.seeing == Seeing.SEEING) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff, null, Modifier.size(16.dp), tint = if (view.seeing == Seeing.SEEING) cs.primary else cs.onSurfaceVariant)
+                Spacer(Modifier.width(6.dp))
+                Text(if (view.seeing == Seeing.SEEING) "Live can see your screen" else "Private screen: Live can't see it", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        } else if (screen != null && view.phase != LivePhase.ERROR) {
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(if (screen.reading) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff, null, Modifier.size(16.dp), tint = cs.onSurfaceVariant)
@@ -124,18 +153,29 @@ fun LiveSheetBody(view: LiveView, agentName: String, screen: ScreenLine?, action
                 Text(screen.text, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
+        if (view.manual && view.phase != LivePhase.ERROR) {
+            // Wait for me: Live answers only after this is tapped again, so a long pause can never end his turn.
+            Spacer(Modifier.height(12.dp))
+            val turnLabel = if (view.talking) "I'm done" else "Tap to talk"
+            Button(onClick = actions.onTurn, enabled = view.phase != LivePhase.CONNECTING, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).semantics { contentDescription = turnLabel },
+                colors = if (view.talking) ButtonDefaults.buttonColors(containerColor = cs.primary) else ButtonDefaults.filledTonalButtonColors()) {
+                Icon(if (view.talking) Icons.Rounded.Check else Icons.Rounded.Mic, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text(turnLabel)
+            }
+        }
         Spacer(Modifier.height(16.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             MorphIconButton(onClick = { actions.onMute(!view.muted) }, size = 52.dp, enabled = view.phase != LivePhase.ERROR && view.phase != LivePhase.CONNECTING) {
-                Icon(if (view.muted) Icons.Rounded.MicOff else Icons.Rounded.Mic, if (view.muted) "Unmute" else "Mute", tint = if (view.muted) cs.error else cs.onSurface)
+                Icon(if (view.muted) Icons.Rounded.MicOff else Icons.Rounded.Mic, if (view.muted) stringResource(R.string.voice_unmute) else stringResource(R.string.voice_mute), tint = if (view.muted) cs.error else cs.onSurface)
             }
-            FilledIconButton(onClick = actions.onEnd, modifier = Modifier.size(68.dp).semantics { contentDescription = "End" },
+            FilledIconButton(onClick = actions.onEnd, modifier = Modifier.size(68.dp).semantics { contentDescription = endDesc },
                 colors = IconButtonDefaults.filledIconButtonColors(containerColor = cs.errorContainer, contentColor = cs.onErrorContainer)) {
                 Icon(Icons.Rounded.CallEnd, null, Modifier.size(30.dp))
             }
-            MorphIconButton(onClick = actions.onOpenApp, size = 52.dp) { Icon(Icons.AutoMirrored.Rounded.OpenInNew, "Open the app", tint = cs.onSurface) }
+            MorphIconButton(onClick = actions.onOpenApp, size = 52.dp) { Icon(Icons.AutoMirrored.Rounded.OpenInNew, stringResource(R.string.share_open_app), tint = cs.onSurface) }
         }
     }
+    // More than one waiting question could take his words: a slide-up sheet, never a centred dialog.
+    view.choice?.let { c -> AskChoiceSheet(c, agentName, onPick = { k -> actions.onPickAsk(k, c.answer) }, onDismiss = actions.onDismissChoice) }
 }
 
 @Composable
@@ -154,11 +194,12 @@ fun LiveBadge(on: Boolean) {
     val cs = MaterialTheme.colorScheme
     val t = rememberInfiniteTransition(label = "live")
     val a by t.animateFloat(0.35f, 1f, infiniteRepeatable(tween(800), RepeatMode.Reverse), label = "a")
-    Surface(shape = CircleShape, color = cs.errorContainer, modifier = Modifier.semantics { contentDescription = if (on) "Live session open" else "Connecting" }) {
+    val desc = if (on) stringResource(R.string.live_session_open) else stringResource(R.string.voice_connecting_short)
+    Surface(shape = CircleShape, color = cs.errorContainer, modifier = Modifier.semantics { contentDescription = desc }) {
         Row(Modifier.padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(8.dp).alpha(if (on) a else 0.5f).clip(CircleShape).background(cs.error))
             Spacer(Modifier.width(6.dp))
-            Text("LIVE", style = MaterialTheme.typography.labelSmall, color = cs.onErrorContainer)
+            Text(stringResource(R.string.live_badge), style = MaterialTheme.typography.labelSmall, color = cs.onErrorContainer)
         }
     }
 }

@@ -114,6 +114,25 @@ Onboarding walks you through this. In order:
 4. **Voice, if you want it.** Under **Settings, Voice**, add a Gemini, OpenAI or ElevenLabs key for spoken replies. A Gemini key also turns on live calls.
 5. **Notifications, if you want them.** Choose which apps the agent may read. Nothing is read until you pick.
 
+## Languages
+
+Agent speaks English and Spanish (written by people) and **53 more languages, translated by machine**. Pick one in Settings > You > Language, or in Android's own per-app language page (Android 13 and later). "Phone's language" follows the phone. The machine translated ones say so in the picker.
+
+**English**, **Spanish** (Magarto), and, machine translated: Afrikaans (Afrikaans), Amharic (አማርኛ), Arabic (العربية), Bengali (বাংলা), Catalan (Català), Chinese, Simplified (中文 (简体)), Chinese, Traditional (中文 (繁體)), Czech (Čeština), Danish (Dansk), Dutch (Nederlands), Filipino (Filipino), Finnish (Suomi), French (Français), German (Deutsch), Greek (Ελληνικά), Gujarati (ગુજરાતી), Hausa (Hausa), Hebrew (עברית), Hindi (हिन्दी), Hungarian (Magyar), Igbo (Igbo), Indonesian (Bahasa Indonesia), Italian (Italiano), Japanese (日本語), Kannada (ಕನ್ನಡ), Khmer (ខ្មែរ), Korean (한국어), Malay (Bahasa Melayu), Malayalam (മലയാളം), Marathi (मराठी), Nepali (नेपाली), Norwegian (Norsk bokmål), Persian (فارسی), Polish (Polski), Portuguese (Brazil) (Português (Brasil)), Portuguese (Portugal) (Português (Portugal)), Punjabi (ਪੰਜਾਬੀ), Romanian (Română), Russian (Русский), Sesotho (Sesotho), Swahili (Kiswahili), Swedish (Svenska), Tamil (தமிழ்), Telugu (తెలుగు), Thai (ไทย), Tswana (Setswana), Turkish (Türkçe), Ukrainian (Українська), Urdu (اردو), Vietnamese (Tiếng Việt), Xhosa (isiXhosa), Yoruba (Yorùbá), Zulu (isiZulu).
+
+The model's own instructions and tool descriptions stay in English on purpose; only what you read on screen is translated.
+
+### Fix a translation
+
+Machine translation gets things wrong. If you speak one of these languages, please fix it with a pull request, the way [@magarto](https://github.com/magarto) did Spanish, whose structure all the languages follow:
+
+1. Edit the files in `app/src/main/res/values-<language>/`. The file names and the keys are the same as in `values/` (English).
+2. Keep the placeholders (`%1$s`, `%d`) and the HTML tags as they are, and escape apostrophes as `'`.
+3. Run `python3 scripts/check-translations.py`. It checks keys, placeholders, HTML, escaping, plural forms for the language, and leftover English. The unit tests run the same check.
+4. When a language has been proofread by a native speaker, send a PR that sets `machine = false` for it in `AppLocale.kt`, and the "machine translated" line goes away.
+
+Right to left languages (Arabic, Hebrew, Persian, Urdu) mirror the whole app. To add a language that is not here, copy `values/` to `values-<code>/`, translate it, and add one line to `AppLocale.choices`.
+
 ## Self-hosted servers (Ollama, LM Studio, vLLM)
 
 Pick **Other (OpenAI-compatible)**, then enter the server's base URL, usually ending in `/v1`, the model name and a key. Any placeholder works if your server does not check keys.

@@ -1,3 +1,4 @@
 <resources>
     <string name="share_label">Enviar a tu agente</string>
+    <string name="assist_label">Habla con tu agente</string>
 </resources>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="assist_ctx_waiting">Περιμένουν εσένα: %d</string>
+    <string name="assist_ctx_working">Σε εξέλιξη: %d</string>
+    <string name="assist_ctx_which">Για ποιο είναι;</string>
+    <string name="assist_ctx_your_words">Είπες: %1$s</string>
+    <string name="assist_ctx_sent_to">Στάλθηκε σε %1$s: %2$s</string>
+</resources>

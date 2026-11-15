@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="assist_ctx_waiting">Odottaa sinua: %d</string>
+    <string name="assist_ctx_working">Työssä: %d</string>
+    <string name="assist_ctx_which">Kumpaa tämä koskee?</string>
+    <string name="assist_ctx_your_words">Sanoit: %1$s</string>
+    <string name="assist_ctx_sent_to">Lähetetty: %1$s: %2$s</string>
+</resources>

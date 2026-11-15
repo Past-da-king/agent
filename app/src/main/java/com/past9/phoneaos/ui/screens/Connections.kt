@@ -1,5 +1,8 @@
 package com.past9.phoneaos.ui.screens
 
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import com.past9.phoneaos.R
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -107,8 +110,9 @@ fun accountRows(connected: List<Connection>): List<Pair<Connection, Int>> =
  * The computer's profiles as sheet choices, General first. General holds none of his accounts, which is exactly what
  * "no profile" means, so the two are one choice (id "" = no profile) and a profile named General is not offered twice.
  */
-fun profileChoices(profs: List<Pair<String, String>>): List<com.past9.phoneaos.ui.SheetChoice> =
-    listOf(com.past9.phoneaos.ui.SheetChoice("", "General", "Not one part of your life in particular")) +
+/** English without a context (tests), the app's language with one. */
+fun profileChoices(profs: List<Pair<String, String>>, ctx: android.content.Context? = null): List<com.past9.phoneaos.ui.SheetChoice> =
+    listOf(com.past9.phoneaos.ui.SheetChoice("", ctx?.getString(R.string.conn_general) ?: "General", ctx?.getString(R.string.conn_general_sub) ?: "Not one part of your life in particular")) +
         profs.filter { (id, name) -> id.isNotBlank() && !name.trim().equals("General", true) }.distinctBy { it.first }
             .map { (id, name) -> com.past9.phoneaos.ui.SheetChoice(id, name) }
 
@@ -146,20 +150,20 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
     } }
     // Each account once (the computer can list one account per profile it is in).
     val activeCount = accountRows(state.connected).size
-    SubScreen("Connections", if (state.hasKey) (if (activeCount == 1) "1 app connected" else "$activeCount apps connected") else "Connect your apps", actions.onBack,
-        actions = { if (state.hasKey) IconButton(onClick = actions.onRefresh) { Icon(Icons.Rounded.Refresh, "Refresh") } }) { pad ->
+    SubScreen(stringResource(R.string.conn_title), if (state.hasKey) pluralStringResource(R.plurals.conn_apps_connected, activeCount, activeCount) else stringResource(R.string.conn_connect_your_apps), actions.onBack,
+        actions = { if (state.hasKey) IconButton(onClick = actions.onRefresh) { Icon(Icons.Rounded.Refresh, stringResource(R.string.conn_refresh)) } }) { pad ->
         LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(start = com.past9.phoneaos.ui.sidePad(16.dp), end = com.past9.phoneaos.ui.sidePad(16.dp), bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            item { SectionHeader("Built in", "On this phone, plus the machines you add", Modifier.padding(start = 4.dp, top = 4.dp)) }
+            item { SectionHeader(stringResource(R.string.conn_built_in), stringResource(R.string.conn_built_in_sub), Modifier.padding(start = 4.dp, top = 4.dp)) }
             item {
                 AppCard(padding = PaddingValues(vertical = 4.dp)) {
-                    PhoneLine(Icons.Rounded.Language, "Background browser", "Your agent's own browser keeps working while you use other apps", true, null)
-                    PhoneLine(Icons.Rounded.IosShare, "Share to your agent", "From any app, tap Share and pick your agent", true, null)
-                    PhoneLine(Icons.Rounded.Notifications, "Notifications", if (state.notificationsAllowed) "Results and questions reach you anywhere" else "Off: you'll only see results in the app",
+                    PhoneLine(Icons.Rounded.Language, stringResource(R.string.conn_browser), stringResource(R.string.conn_browser_sub), true, null)
+                    PhoneLine(Icons.Rounded.IosShare, stringResource(R.string.conn_share), stringResource(R.string.conn_share_sub), true, null)
+                    PhoneLine(Icons.Rounded.Notifications, stringResource(R.string.conn_notifications), if (state.notificationsAllowed) stringResource(R.string.conn_notifications_on) else stringResource(R.string.conn_notifications_off),
                         state.notificationsAllowed, if (state.notificationsAllowed) null else actions.onAllowNotifications)
                     Surface(onClick = actions.onNotifications, color = androidx.compose.ui.graphics.Color.Transparent) {
-                        PhoneLine(Icons.Rounded.MarkEmailUnread, "Read my notifications", "Pick the apps your agent may learn from", false, null)
+                        PhoneLine(Icons.Rounded.MarkEmailUnread, stringResource(R.string.conn_read_notifications), stringResource(R.string.conn_read_notifications_sub), false, null)
                     }
-                    PhoneLine(Icons.Rounded.FolderOpen, "Files on this phone", if (state.phoneFiles) "Your agent can find and upload your files" else "Let your agent find files to upload or send",
+                    PhoneLine(Icons.Rounded.FolderOpen, stringResource(R.string.conn_files), if (state.phoneFiles) stringResource(R.string.conn_files_on) else stringResource(R.string.conn_files_off),
                         state.phoneFiles, if (state.phoneFiles) null else actions.onAllowPhoneFiles)
                     if (!state.remote) MachinesLine(state.machines) { sheet = "list" }
                     LearnedLine(state.learned, state.remote) { sheet = "learned" }
@@ -170,7 +174,7 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
             if (state.remote) item { LinkedMachines(state.devices, state.machines, onDevices = actions.onLinkedDevices, onAdd = { sheet = "list" }) }
             if (state.remote) { if (state.remoteProfiles.isNotEmpty()) item { ProfilesSection(state.remoteProfiles, logos, readOnly = true) { } } }
             else if (state.hasKey) item { ProfilesSection(state.profiles, logos) { id -> sheet = "profile:" + (id ?: "new") } }
-            item { SectionHeader("Your apps", if (state.remote) "Connected on your computer. Manage them there." else if (state.consumer) "Tap Connect and sign in. Your agent can use it straight away." else "Gmail, Calendar, Drive, Slack and 250+ more, through Composio with your own key", Modifier.padding(start = 4.dp, top = 16.dp)) }
+            item { SectionHeader(stringResource(R.string.conn_your_apps), if (state.remote) stringResource(R.string.conn_your_apps_remote) else if (state.consumer) stringResource(R.string.conn_your_apps_consumer) else stringResource(R.string.conn_your_apps_key), Modifier.padding(start = 4.dp, top = 16.dp)) }
             if (state.remote) {
                 if (state.error != null) item { Text(state.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(4.dp)) }
                 if (state.loading) item { Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { LoadingIndicator() } }
@@ -182,7 +186,7 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                     }
                 }
                 if (appsOpen) item {
-                    com.past9.phoneaos.ui.AppTextField(query, { query = it }, placeholder = { Text("Search apps to add") }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                    com.past9.phoneaos.ui.AppTextField(query, { query = it }, placeholder = { Text(stringResource(R.string.conn_search_to_add)) }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
                         singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp), shape = MaterialTheme.shapes.extraLarge)
                 }
                 val rlist = if (!appsOpen) emptyList() else state.toolkits.filter { query.isBlank() || it.name.contains(query, true) || it.slug.contains(query, true) || (state.searched == query.trim() && it.slug in state.hits) }
@@ -190,7 +194,7 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                     val mine = state.connected.filter { it.toolkit == t.slug && it.status == "ACTIVE" }
                     ToolkitLine(t, mine.isNotEmpty(), canAddAnother = mine.isNotEmpty()) { actions.onConnect(t.slug) } }
                 if (appsOpen && query.isNotBlank() && state.searched != query.trim()) item {
-                    TextButton(onClick = { actions.onSearchAll(query.trim()) }, enabled = !state.searching, modifier = Modifier.fillMaxWidth()) { Text(if (state.searching) "Searching" else "Search all apps for “${query.trim()}”") }
+                    TextButton(onClick = { actions.onSearchAll(query.trim()) }, enabled = !state.searching, modifier = Modifier.fillMaxWidth()) { Text(if (state.searching) stringResource(R.string.conn_searching_short) else stringResource(R.string.conn_search_all_short, query.trim())) }
                 }
             } else if (!state.hasKey) item {
                 AppCard { ComposioKeyForm(actions.onSaveKey, actions.onOpenUrl) {} }
@@ -206,10 +210,10 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                             Icon(Icons.Rounded.ContentCopy, null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
-                                Text("$name is connected ${g.size} times", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
-                                Text(identityOf(g.first()).ifBlank { "As the same sign-in" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                                Text(stringResource(R.string.conn_dupe_title, name, g.size), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                                Text(identityOf(g.first()).ifBlank { stringResource(R.string.conn_same_sign_in) }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
                             }
-                            FilledTonalButton(onClick = { actions.onKeepOne(g.first(), g.drop(1)) }, shapes = ButtonDefaults.shapes()) { Text("Keep one") }
+                            FilledTonalButton(onClick = { actions.onKeepOne(g.first(), g.drop(1)) }, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.conn_keep_one)) }
                         }
                     }
                 }
@@ -223,7 +227,7 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                     }
                 }
                 if (appsOpen) item {
-                    com.past9.phoneaos.ui.AppTextField(query, { query = it }, placeholder = { Text(if (state.consumer) "Search apps" else "Search ${if (state.toolkits.isEmpty()) "" else "${state.toolkits.size} "}apps") }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                    com.past9.phoneaos.ui.AppTextField(query, { query = it }, placeholder = { Text(if (state.consumer || state.toolkits.isEmpty()) stringResource(R.string.conn_search_apps) else stringResource(R.string.conn_search_n_apps, state.toolkits.size)) }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
                         singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp), shape = MaterialTheme.shapes.extraLarge)
                 }
                 if (state.loading && appsOpen) item { Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { LoadingIndicator() } }
@@ -239,16 +243,16 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                             if (state.searching) LoadingIndicator(Modifier.size(24.dp)) else Icon(Icons.Rounded.TravelExplore, null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
                             Spacer(Modifier.width(14.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(if (state.searching) "Searching Composio…" else "Search all 500+ apps for \u201c${query.trim()}\u201d", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                                if (list.isEmpty() && !state.searching) Text("Not in the popular list", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                                Text(if (state.searching) stringResource(R.string.conn_searching) else stringResource(R.string.conn_search_all, query.trim()), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                                if (list.isEmpty() && !state.searching) Text(stringResource(R.string.conn_not_popular), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
                             }
                         }
                     }
                 }
                 if (appsOpen && state.consumer && query.isNotBlank() && state.searched == query.trim() && list.isEmpty()) item {
-                    Text("No app called \u201c${query.trim()}\u201d on Composio.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp))
+                    Text(stringResource(R.string.conn_no_app, query.trim()), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp))
                 }
-                if (appsOpen) item { TextButton(onClick = actions.onRemoveKey, modifier = Modifier.padding(top = 12.dp)) { Text("Remove Composio key", color = MaterialTheme.colorScheme.error) } }
+                if (appsOpen) item { TextButton(onClick = actions.onRemoveKey, modifier = Modifier.padding(top = 12.dp)) { Text(stringResource(R.string.conn_remove_key), color = MaterialTheme.colorScheme.error) } }
             }
         }
     }
@@ -263,9 +267,9 @@ private fun PhoneLine(icon: androidx.compose.ui.graphics.vector.ImageVector, tit
             Text(title, style = MaterialTheme.typography.titleSmall)
             Text(line, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        if (fix != null) FilledTonalButton(onClick = fix) { Text("Allow") }
-        else if (on) Icon(Icons.Rounded.CheckCircle, "On", tint = LocalExtra.current.success)
-        else Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (fix != null) FilledTonalButton(onClick = fix) { Text(stringResource(R.string.conn_allow)) }
+        else if (on) Icon(Icons.Rounded.CheckCircle, stringResource(R.string.conn_on), tint = LocalExtra.current.success)
+        else Icon(com.past9.phoneaos.ui.ChevronEnd, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -300,16 +304,16 @@ private fun ConnectedLine(c: Connection, name: String, actions: ConnectionsActio
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(name, style = MaterialTheme.typography.titleSmall)
-            Text(identityOf(c).ifBlank { if (c.status == "ACTIVE") "Connected" else "Sign-in not finished" } + (if (copies > 1) " \u00b7 connected $copies times on your computer" else ""), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(identityOf(c).ifBlank { if (c.status == "ACTIVE") stringResource(R.string.conn_connected) else stringResource(R.string.conn_sign_in_unfinished) } + (if (copies > 1) " \u00b7 " + stringResource(R.string.conn_copies_on_computer, copies) else ""), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             ProfileTags(profiles, rules)
         }
         val extra = LocalExtra.current
         when (c.status) {
-            "ACTIVE" -> StatusPill("Connected", extra.successContainer, extra.success)
-            "INITIATED", "INITIALIZING" -> StatusPill("Finish sign-in", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
+            "ACTIVE" -> StatusPill(stringResource(R.string.conn_connected), extra.successContainer, extra.success)
+            "INITIATED", "INITIALIZING" -> StatusPill(stringResource(R.string.conn_finish_sign_in), MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
             else -> StatusPill(c.status.lowercase().replaceFirstChar { it.uppercase() }, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
         }
-        Icon(Icons.Rounded.ChevronRight, "Rules and profiles for ${c.toolkit}", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp))
+        Icon(com.past9.phoneaos.ui.ChevronEnd, stringResource(R.string.conn_rules_for, c.toolkit), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp))
     }
     }
 }
@@ -322,13 +326,13 @@ private fun ToolkitLine(t: Toolkit, connected: Boolean, canAddAnother: Boolean =
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(t.name, style = MaterialTheme.typography.titleSmall)
-                Text(t.description.ifBlank { "${t.toolsCount} actions" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(t.description.ifBlank { pluralStringResource(R.plurals.conn_actions, t.toolsCount, t.toolsCount) }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             Spacer(Modifier.width(8.dp))
             // Connected apps can take more accounts (work and personal Gmail, say).
-            if (connected && canAddAnother) OutlinedButton(onClick = onConnect, shapes = ButtonDefaults.shapes()) { Icon(Icons.Rounded.PersonAdd, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Add") }
-            else if (connected) StatusPill("Connected", LocalExtra.current.successContainer, LocalExtra.current.success)
-            else FilledTonalButton(onClick = onConnect, shapes = ButtonDefaults.shapes()) { Text("Connect") }
+            if (connected && canAddAnother) OutlinedButton(onClick = onConnect, shapes = ButtonDefaults.shapes()) { Icon(Icons.Rounded.PersonAdd, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.conn_add)) }
+            else if (connected) StatusPill(stringResource(R.string.conn_connected), LocalExtra.current.successContainer, LocalExtra.current.success)
+            else FilledTonalButton(onClick = onConnect, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.conn_connect)) }
         }
     }
 }
@@ -351,11 +355,11 @@ private fun AppsSummary(connected: List<Connection>, logos: Map<String, String>,
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(when (apps.size) { 0 -> "No apps connected"; 1 -> "1 app connected"; else -> "${apps.size} apps connected" }, style = MaterialTheme.typography.titleMedium)
-                Text(if (apps.isEmpty()) "Gmail, Calendar, Slack and 500+ more" else if (active.size > apps.size) "${active.size} accounts · tap to manage or add" else "Tap to manage or add",
+                Text(if (apps.isEmpty()) stringResource(R.string.conn_no_apps) else pluralStringResource(R.plurals.conn_apps_connected, apps.size, apps.size), style = MaterialTheme.typography.titleMedium)
+                Text(if (apps.isEmpty()) stringResource(R.string.conn_summary_empty) else if (active.size > apps.size) stringResource(R.string.conn_summary_accounts, active.size) else stringResource(R.string.conn_summary_manage),
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
-            Icon(Icons.Rounded.ExpandMore, if (open) "Fold" else "Open", tint = cs.onSurfaceVariant, modifier = Modifier.graphicsLayer { rotationZ = turn })
+            Icon(Icons.Rounded.ExpandMore, if (open) stringResource(R.string.conn_fold) else stringResource(R.string.conn_open), tint = cs.onSurfaceVariant, modifier = Modifier.graphicsLayer { rotationZ = turn })
         }
         if (apps.isNotEmpty()) {
             Spacer(Modifier.height(16.dp))
@@ -376,7 +380,7 @@ private fun AppsSummary(connected: List<Connection>, logos: Map<String, String>,
         } else if (!open) {
             Spacer(Modifier.height(14.dp))
             FilledTonalButton(onClick = onToggle, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shapes = ButtonDefaults.shapes()) {
-                Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Connect an app")
+                Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.conn_connect_an_app))
             }
         }
     }
@@ -391,8 +395,8 @@ private fun LearnedLine(apps: List<com.past9.phoneaos.connections.LearnedApp>, r
         Icon(Icons.Rounded.Hub, null, tint = cs.primary)
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
-            Text("Learned apps", style = MaterialTheme.typography.titleSmall)
-            Text(if (apps.isEmpty()) (if (remote) "None on your computer yet" else "Sites your agent maps once, then uses without clicking") else apps.joinToString(" \u00b7 ") { it.name },
+            Text(stringResource(R.string.conn_learned_apps), style = MaterialTheme.typography.titleSmall)
+            Text(if (apps.isEmpty()) (if (remote) stringResource(R.string.conn_learned_none_remote) else stringResource(R.string.conn_learned_sub)) else apps.joinToString(" \u00b7 ") { it.name },
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (apps.isNotEmpty()) {
@@ -401,7 +405,7 @@ private fun LearnedLine(apps: List<com.past9.phoneaos.connections.LearnedApp>, r
             }
             Spacer(Modifier.width(4.dp))
         }
-        Icon(Icons.Rounded.ChevronRight, null, tint = cs.onSurfaceVariant)
+        Icon(com.past9.phoneaos.ui.ChevronEnd, null, tint = cs.onSurfaceVariant)
     }
 }
 
@@ -413,15 +417,15 @@ private fun LearnedLine(apps: List<com.past9.phoneaos.connections.LearnedApp>, r
 internal fun LearnedSheet(apps: List<com.past9.phoneaos.connections.LearnedApp>, actions: ConnectionsActions, onDismiss: () -> Unit, initialOpen: String? = null, remote: Boolean = false) {
     var teach by remember { mutableStateOf("") }
     var open by remember { mutableStateOf(initialOpen) }
-    AppSheet(Icons.Rounded.Hub, "Learned apps", if (remote) "On your computer" else "Sites your agent knows", onDismiss, primary = "Teach your agent this app", primaryEnabled = teach.isNotBlank(),
+    AppSheet(Icons.Rounded.Hub, stringResource(R.string.conn_learned_apps), if (remote) stringResource(R.string.conn_learned_on_computer) else stringResource(R.string.conn_learned_sheet_sub), onDismiss, primary = stringResource(R.string.conn_learned_teach), primaryEnabled = teach.isNotBlank(),
         onPrimary = { actions.onTeach(teach.trim()); onDismiss() }, shape = MaterialShapes.Cookie7Sided) {
-        if (apps.isEmpty()) Text("Name a site or app you use all the time. Your agent opens it, works out how it works, and writes itself tools for it, so next time it calls a tool instead of clicking through the app.",
+        if (apps.isEmpty()) Text(stringResource(R.string.conn_learned_empty),
             style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             apps.forEach { a -> LearnedTile(a, open == a.id, { open = if (open == a.id) null else a.id }, actions, remote) }
         }
         Spacer(Modifier.height(24.dp))
-        com.past9.phoneaos.ui.SheetField(teach, { teach = it }, "Teach a new one", "WhatsApp Web, your school portal, your bank", singleLine = true,
+        com.past9.phoneaos.ui.SheetField(teach, { teach = it }, stringResource(R.string.conn_learned_teach_new), stringResource(R.string.conn_learned_teach_hint), singleLine = true,
             keyboard = androidx.compose.foundation.text.KeyboardOptions(capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.None, keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri))
     }
 }
@@ -437,12 +441,12 @@ private fun LearnedTile(a: com.past9.phoneaos.connections.LearnedApp, expanded: 
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(a.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text((if (a.isScreen) "App on this phone" else a.host) + " \u00b7 " + a.tools.size + (if (a.tools.size == 1) " tool" else " tools"),
+                    Text((if (a.isScreen) stringResource(R.string.conn_learned_phone_app) else a.host) + " \u00b7 " + pluralStringResource(R.plurals.conn_learned_tools, a.tools.size, a.tools.size),
                         style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 // A small mark when the app has tools that send, post or delete (it asks first unless trusted).
-                if (a.writes > 0) Icon(Icons.Rounded.EditNote, "Can change things", Modifier.padding(end = 6.dp).size(22.dp), tint = if (a.trusted) cs.tertiary else cs.onSurfaceVariant)
-                Icon(if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, if (expanded) "Hide" else "Open", tint = cs.onSurfaceVariant)
+                if (a.writes > 0) Icon(Icons.Rounded.EditNote, stringResource(R.string.conn_learned_can_change), Modifier.padding(end = 6.dp).size(22.dp), tint = if (a.trusted) cs.tertiary else cs.onSurfaceVariant)
+                Icon(if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, if (expanded) stringResource(R.string.conn_hide) else stringResource(R.string.conn_open), tint = cs.onSurfaceVariant)
             }
             if (expanded) Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp)) {
                 if (a.about.isNotBlank()) Text(a.about, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
@@ -452,19 +456,19 @@ private fun LearnedTile(a: com.past9.phoneaos.connections.LearnedApp, expanded: 
                         Text(t.name.replace('_', ' '), Modifier.padding(horizontal = 10.dp, vertical = 5.dp), style = MaterialTheme.typography.labelMedium, color = if (t.readOnly) cs.onSurfaceVariant else cs.onTertiaryContainer) } }
                 }
                 // Linked: trusting or removing one is done on the computer itself (it decides what may run without asking).
-                if (remote) Text(if (a.trusted) "Runs changes without asking (set on your computer)" else "Asks before it sends, posts or deletes", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
+                if (remote) Text(if (a.trusted) stringResource(R.string.conn_learned_trust_remote_on) else stringResource(R.string.conn_learned_trust_remote_off), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
                 if (!remote && a.writes > 0 && !a.isScreen) Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Change things without asking", style = MaterialTheme.typography.titleSmall)
-                        Text(if (a.trusted) "Sending, posting and deleting run straight away" else "It asks you each time before it sends, posts or deletes", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                        Text(stringResource(R.string.conn_learned_trust), style = MaterialTheme.typography.titleSmall)
+                        Text(if (a.trusted) stringResource(R.string.conn_learned_trust_on) else stringResource(R.string.conn_learned_trust_off), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     }
                     Switch(a.trusted, { actions.onTrustLearned(a.id, it) })
                 }
                 Spacer(Modifier.height(8.dp))
-                if (remote) Unit else if (!confirming) TextButton(onClick = { confirming = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Remove", color = cs.error) }
+                if (remote) Unit else if (!confirming) TextButton(onClick = { confirming = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.conn_remove), color = cs.error) }
                 else Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(onClick = { confirming = false }, shapes = ButtonDefaults.shapes(), modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("Keep") }
-                    Button(onClick = { actions.onRemoveLearned(a.id) }, shapes = ButtonDefaults.shapes(), colors = ButtonDefaults.buttonColors(containerColor = cs.error, contentColor = cs.onError), modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("Remove its tools") }
+                    OutlinedButton(onClick = { confirming = false }, shapes = ButtonDefaults.shapes(), modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text(stringResource(R.string.conn_keep)) }
+                    Button(onClick = { actions.onRemoveLearned(a.id) }, shapes = ButtonDefaults.shapes(), colors = ButtonDefaults.buttonColors(containerColor = cs.error, contentColor = cs.onError), modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text(stringResource(R.string.conn_learned_remove_tools)) }
                 }
             }
         }
@@ -481,8 +485,8 @@ private fun MiniAppsLine(apps: List<com.past9.phoneaos.miniapps.MiniAppInfo>, on
         Icon(Icons.Rounded.Dashboard, null, tint = cs.primary)
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
-            Text("Mini apps", style = MaterialTheme.typography.titleSmall)
-            Text(if (apps.isEmpty()) "Dashboards and trackers your agent makes for you" else (if (pinned > 0) "$pinned pinned · " else "") + apps.joinToString(" · ") { it.name },
+            Text(stringResource(R.string.conn_mini_apps), style = MaterialTheme.typography.titleSmall)
+            Text(if (apps.isEmpty()) stringResource(R.string.conn_mini_apps_sub) else (if (pinned > 0) stringResource(R.string.conn_mini_pinned, pinned) + " · " else "") + apps.joinToString(" · ") { it.name },
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (apps.isNotEmpty()) {
@@ -491,7 +495,7 @@ private fun MiniAppsLine(apps: List<com.past9.phoneaos.miniapps.MiniAppInfo>, on
             }
             Spacer(Modifier.width(4.dp))
         }
-        Icon(Icons.Rounded.ChevronRight, null, tint = cs.onSurfaceVariant)
+        Icon(com.past9.phoneaos.ui.ChevronEnd, null, tint = cs.onSurfaceVariant)
     }
 }
 
@@ -503,7 +507,7 @@ private fun MiniAppsLine(apps: List<com.past9.phoneaos.miniapps.MiniAppInfo>, on
 internal fun LinkedMachines(devices: List<com.past9.phoneaos.remote.MeshDevice>, ssh: List<com.past9.phoneaos.machines.Machine>, onDevices: () -> Unit, onAdd: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     Column {
-        SectionHeader("Your machines", if (devices.isEmpty()) "Reading them from your computer" else "Linked to this phone", Modifier.padding(start = 4.dp, top = 16.dp, bottom = 8.dp))
+        SectionHeader(stringResource(R.string.machines_your), if (devices.isEmpty()) stringResource(R.string.conn_machines_reading) else stringResource(R.string.conn_machines_linked), Modifier.padding(start = 4.dp, top = 16.dp, bottom = 8.dp))
         AppCard(padding = PaddingValues(vertical = 4.dp)) {
             devices.forEach { d ->
                 Row(Modifier.fillMaxWidth().clickable(onClick = onDevices).heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -517,22 +521,22 @@ internal fun LinkedMachines(devices: List<com.past9.phoneaos.remote.MeshDevice>,
                     }
                     val extra = LocalExtra.current
                     when (d.state) {
-                        com.past9.phoneaos.remote.MeshDevice.State.ANSWERING -> StatusPill("Answering", extra.successContainer, extra.success)
-                        com.past9.phoneaos.remote.MeshDevice.State.ONLINE -> StatusPill("Online", extra.successContainer, extra.success)
-                        com.past9.phoneaos.remote.MeshDevice.State.SELF -> StatusPill("This phone", cs.primaryContainer, cs.onPrimaryContainer)
-                        com.past9.phoneaos.remote.MeshDevice.State.AWAY -> StatusPill("Away", cs.surfaceContainerHighest, cs.onSurfaceVariant)
+                        com.past9.phoneaos.remote.MeshDevice.State.ANSWERING -> StatusPill(stringResource(R.string.conn_answering), extra.successContainer, extra.success)
+                        com.past9.phoneaos.remote.MeshDevice.State.ONLINE -> StatusPill(stringResource(R.string.machines_online), extra.successContainer, extra.success)
+                        com.past9.phoneaos.remote.MeshDevice.State.SELF -> StatusPill(stringResource(R.string.conn_this_phone), cs.primaryContainer, cs.onPrimaryContainer)
+                        com.past9.phoneaos.remote.MeshDevice.State.AWAY -> StatusPill(stringResource(R.string.conn_away), cs.surfaceContainerHighest, cs.onSurfaceVariant)
                     }
                 }
             }
             if (ssh.isNotEmpty()) Row(Modifier.fillMaxWidth().clickable(onClick = onAdd).heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Terminal, null, tint = cs.primary); Spacer(Modifier.width(16.dp))
-                Text("SSH machines: " + ssh.joinToString(" · ") { it.name }, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                Icon(Icons.Rounded.ChevronRight, null, tint = cs.onSurfaceVariant)
+                Text(stringResource(R.string.conn_ssh_machines, ssh.joinToString(" · ") { it.name }), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Icon(com.past9.phoneaos.ui.ChevronEnd, null, tint = cs.onSurfaceVariant)
             }
         }
         Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            TextButton(onClick = onAdd) { Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Add a machine") }
-            TextButton(onClick = onDevices) { Text("Linked devices") }
+            TextButton(onClick = onAdd) { Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.machines_add)) }
+            TextButton(onClick = onDevices) { Text(stringResource(R.string.conn_linked_devices)) }
         }
     }
 }

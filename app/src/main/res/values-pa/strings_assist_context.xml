@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="assist_ctx_waiting">ਤੁਹਾਡੀ ਉਡੀਕ ਵਿੱਚ: %d</string>
+    <string name="assist_ctx_working">ਕੰਮ ਜਾਰੀ: %d</string>
+    <string name="assist_ctx_which">ਇਹ ਕਿਸ ਲਈ ਹੈ?</string>
+    <string name="assist_ctx_your_words">ਤੁਸੀਂ ਕਿਹਾ: %1$s</string>
+    <string name="assist_ctx_sent_to">%1$s ਨੂੰ ਭੇਜਿਆ: %2$s</string>
+</resources>

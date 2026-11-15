@@ -161,6 +161,14 @@ class DraftSafeTest {
         assertEquals(long + " word31", w.next(long, "$long word31"))
     }
 
+    @Test fun theWholeTakeWrittenFromTheAudioReplacesALongerCaption() {
+        val w = BoxWriter("")
+        val caption = (1..30).joinToString(" ") { "junk" }
+        assertEquals(caption, w.next("", caption))
+        val truth = "Sawubona my friend. Ngiyaphila, and back to English."
+        assertEquals(truth, w.next(caption, truth, final = true))
+    }
+
     @Test fun whatWasInTheBoxBeforeStaysWhateverHappens() {
         val w = BoxWriter("typed first")
         assertEquals("typed first hello", w.next("typed first", "hello"))

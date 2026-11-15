@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Pairing, robust and observable (docs/wear.md): the notice under the code and the notification that keeps the pairing state one tap away. -->
+    <string name="pair_battery_low">Battery low, pairing may be slow. Keep the watch awake on this screen</string>
+    <string name="launch_power_save">Power saving is limiting Agent. Charge the watch or turn power saving off.</string>
+    <string name="launch_very_low">Battery is very low and Agent may not open. Charge the watch.</string>
+    <string name="pair_channel">Pairing</string>
+    <string name="pair_notice_title">Pairing with your phone</string>
+    <string name="pair_notice_text">Tap to show the code</string>
+</resources>

@@ -191,15 +191,6 @@
     <string name="routines_kind_email">On email</string>
     <string name="routines_kind_email_sub">When a matching email lands</string>
     <string name="routines_days">DAYS</string>
-    <string-array name="routines_day_letters">
-        <item>M</item>
-        <item>T</item>
-        <item>W</item>
-        <item>T</item>
-        <item>F</item>
-        <item>S</item>
-        <item>S</item>
-    </string-array>
     <string name="routines_time">Time</string>
     <string name="routines_int_15">15 min</string>
     <string name="routines_int_hour">Every hour</string>

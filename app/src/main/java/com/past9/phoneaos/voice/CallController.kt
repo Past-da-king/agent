@@ -41,13 +41,13 @@ class CallController(
     val available: Boolean get() = unavailableReason(linked() != null) == null
 
     /** Why this phone can't place a call right now, in plain words, or null when it can. */
-    fun unavailableReason(linked: Boolean): String? = reason(settings.voiceKey("gemini") != null, linked)
+    fun unavailableReason(linked: Boolean): String? = reason(settings.voiceKey("gemini") != null, linked)?.let { context.getString(com.past9.phoneaos.R.string.svc_call_needs_gemini) }
 
     /** Linked: the computer mints a one-use token from its own key; if it has none, this phone's key (if any) is used. */
     private suspend fun linkedAuth(r: com.past9.phoneaos.remote.RemoteSession): LiveAuth.Token = try {
         LiveAuth.parse(r.call("voice.liveToken", emptyList(), 20_000))
     } catch (e: Exception) {
-        LiveAuth.Token.No(if (LiveAuth.isOldComputer(e.message)) LiveAuth.OLD_COMPUTER else e.message ?: "Your computer didn't answer the call request.", false)
+        LiveAuth.Token.No(if (LiveAuth.isOldComputer(e.message)) LiveAuth.OLD_COMPUTER else e.message ?: context.getString(com.past9.phoneaos.R.string.svc_call_no_answer), false)
     }
 
     companion object {
@@ -93,7 +93,7 @@ class CallController(
                 There is only you. Speak in the first person about everything you do: "I'll do that", "I'm on it", "I've started a helper on it", "I'll check". Never speak of yourself as someone else, and never say you are passing work on to anyone: your main chat, your project chats and your helpers are simply how you work.
                 You can do ANYTHING they ask: send emails and messages, reply to people, talk to or message someone for them, start helpers, use their connected apps (mail, calendar, Slack, WhatsApp and the rest), browse the web, run things, read and write files, remember things, manage tasks, routines and reminders, and look anything up.
                 So NEVER say you can't do something, that you have no access, or that the user should do it themselves. For anything that needs doing, finding, checking, sending or remembering, call start_work with the full request and every detail the user gave (names, who to, what to say), say a quick "I'm on it", and keep talking. If it's unclear, ask one short question first, then start it.
-                When an update on your work arrives, tell the user the part that matters in a sentence or two, as your own news ("I've sent it", "I found three"). Never invent results; if you don't know yet, say you're still on it (work_status tells you).
+                When a short status arrives, say it as your own news ("I've sent it", "I found three"). ${SpokenResult.RULE_CALL} Wait until they have clearly finished before you answer: people pause mid-sentence and mix languages in one sentence, and a pause is not the end of their turn. Never invent results; if you don't know yet, say you're still on it (work_status tells you).
                 When your work needs an answer from the user, it waits while the call carries on. Put the question to them out loud at a good moment. Take their answer (or decide if they tell you to) and call answer_question with it plus anything from the call that matters.
                 When you need the user's OK, say plainly what you want to do and ask, for example "I need your OK to send the invoice to Shey. Approve?". If they clearly say yes, call answer_question with answer "Approve" and their exact words in user_said. If they say no, answer "Decline". Never approve on your own. They can also tap the card on the call screen. If they need to DO something (sign in, type a code), tell them exactly what to tap.
             """.trimIndent() + if (!linked) "" else "\n" + """
@@ -142,7 +142,7 @@ class CallController(
                 .put("description", "What you are working on right now, the last thing you said in the chat, and anything you are waiting on the user for.")
                 .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject())))
             .put(JSONObject().put("name", "play_media")
-                .put("description", "Play music or a video on the user's phone right now, in the app they use. Use it at once when they ask to play something. Answers what is playing.")
+                .put("description", "Play music or a video on the user's phone right now, in the app they use, without touching their screen. This is the ONLY way to play: use it at once when they ask to play something, and never hand playing to hand_to_agent or have an app opened. Answers what is playing, or that it failed: then say so.")
                 .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject()
                     .put("query", JSONObject().put("type", "STRING").put("description", "What to play, in their words"))
                     .put("kind", JSONObject().put("type", "STRING").put("description", "song, artist, album, playlist, podcast or video. Song when unsure."))
@@ -190,11 +190,36 @@ class CallController(
     /** Moves the sound to the next place it can go (earphones, loudspeaker, earpiece). */
     fun nextRoute() { live?.nextRoute() }
 
+    /**
+     * Where the sound goes in a call placed from the watch (wear/WatchCallBridge): [phoneMic] / [phoneSpeaker] say which of this
+     * phone's own mic and speaker the call uses; the others are the watch's, [out] being where the voice is sent and
+     * [feedWatchAudio] where the watch's mic comes in. Null for an ordinary call on the phone.
+     */
+    class WatchAudio(val phoneMic: Boolean, val phoneSpeaker: Boolean, val out: ExternalAudio?)
+    @Volatile private var watchAudio: WatchAudio? = null
+
+    /** Start a call whose sound is split with the watch. False when a call is already on (nothing changes). */
+    fun startFromWatch(audio: WatchAudio): Boolean {
+        if (state.value.active) return false
+        watchAudio = audio
+        start()
+        return true
+    }
+
+    /** The watch's mic, 16 kHz mono PCM16 (the watch call only). False when it was not used (muted, not ready, ended). */
+    fun feedWatchAudio(pcm: ByteArray): Boolean {
+        val s = live ?: return false
+        if (!state.value.active) return false
+        core.level(gen, true, LiveSession.loudness(pcm, pcm.size))
+        return s.sendAudio(pcm)
+    }
+
     fun start() {
         // One call at a time: a second tap while it connects or is live changes nothing.
         val g = core.begin() ?: return
         gen = g
-        if (!hasMic()) { core.refuse(g, CallCore.NO_MIC, needsMic = true); return }
+        // The phone's mic is needed only when the call uses it (a watch call with the watch's own mic does not).
+        if (watchAudio?.phoneMic != false && !hasMic()) { core.refuse(g, CallCore.NO_MIC, needsMic = true); return }
         remote = linked()
         val r = remote
         val key = settings.voiceKey("gemini")
@@ -229,19 +254,23 @@ class CallController(
         val waiting = pendingQuestion()
         // Linked: who is on the computer (main agent, projects and their chats, helpers), so a hand-off goes to the one he names.
         val who = remote?.let { roster(fetchTargets(it)) }.orEmpty()
+        // The same picture the assistant's Live voice gets (assist/AssistContextSource): agents with what each is doing and
+        // waiting on, what waits on the user, the last of the main chat. One builder for both voices.
+        val ctx = runCatching { kotlinx.coroutines.withTimeoutOrNull(3_500) { com.past9.phoneaos.assist.AssistContextSource.snapshot(context, com.past9.phoneaos.App.graph(context), com.past9.phoneaos.assist.AskRefs(), System.currentTimeMillis()) } }.getOrNull()
         val system = base + (if (pinned.isNotBlank()) "\n\nWhat you know about them:\n$pinned" else "") +
             (if (who.isNotBlank()) "\n\n$who" else "") +
-            (if (recent.isNotBlank()) "\n\nThe chat so far (this call continues it):\n$recent" else "") +
+            (if (ctx != null) "\n\n" + ctx.prompt() else "") +
+            (if (ctx == null && recent.isNotBlank()) "\n\nThe chat so far (this call continues it):\n$recent" else "") +
             (if (waiting != null) "\n\nWaiting on the user right now (bring it up early): ${cardPrompt(waiting)}" else "")
         // Ended (or timed out, or replaced by a newer call) while the token was on its way: nothing to start.
         if (!core.current(g)) return
         callStart = System.currentTimeMillis(); callLines.clear(); callTimes.clear()
         serviceUp = true
-        CallService.start(context)
+        CallService.start(context, phoneMic = watchAudio?.phoneMic != false)
         // A computer's token is locked to the Live model its key reaches, so the call uses that model.
         val phoneVoice = s.ttsVoice.takeIf { s.ttsProvider == "gemini" && it.isNotBlank() }
         live = LiveSession(url, model?.ifBlank { null } ?: "gemini-3.1-flash-live-preview", phoneVoice ?: voice?.ifBlank { null } ?: "Kore", system,
-            tools = tools, renew = renew) { e -> if (g == gen) onEvent(e) }.also { it.start() }
+            tools = tools, renew = renew, tuning = com.past9.phoneaos.assist.AssistPrefs.liveTuning(context)) { e -> if (g == gen) onEvent(e) }.also { it.start() }
         // Ended in the instant between the check and the session: let go of it again.
         if (!core.current(g)) { releaseAll(); return }
         // Read the main agent's new messages and questions into the call.
@@ -286,7 +315,7 @@ class CallController(
                     sentTo.remove(key); workingSeen.remove(key)
                     val what = c.result.ifBlank { c.done }.ifBlank { c.line }
                     core.patch { it.copy(reply = "$name: ${what.take(360)}") }
-                    tell("[$name finished. Tell the user the part that matters, briefly, as your own work] ${what.take(1200)}")
+                    tell(SpokenResult.frame(what))
                 }
             }
         } }
@@ -368,7 +397,9 @@ class CallController(
         val g = gen
         when (e) {
             is LiveSession.Event.SetupComplete -> {
-                live?.openAudio(context.getSystemService(AudioManager::class.java))
+                val w = watchAudio
+                if (w == null) live?.openAudio(context.getSystemService(AudioManager::class.java))
+                else live?.openSplit(context.getSystemService(AudioManager::class.java), w.phoneMic, w.out)
                 // Muted while it was still connecting: the session starts muted too.
                 if (state.value.muted) live?.setMuted(true)
                 core.live(g)
@@ -501,6 +532,6 @@ class CallController(
         callLines.clear(); callTimes.clear()
         watcher?.cancel(); watcher = null; cardWatcher?.cancel(); cardWatcher = null
         sentTo.clear(); sentAt.clear(); workingSeen.clear()
-        live = null; remote = null
+        live = null; remote = null; watchAudio = null
     }
 }

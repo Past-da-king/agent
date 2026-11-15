@@ -33,7 +33,7 @@
     <string name="rt_branch_failed">Un hilo paralelo («%1$s») ha fallado: %2$s</string>
     <string name="rt_done">Listo</string>
     <string name="rt_interrupted_by_close">Estaba a medias con «%1$s» cuando se cerró la app. Dime que siga y lo haré.</string>
-    <string name="rt_not_claude_token">Eso no es un token de Claude: empiezan por sk-ant-. Usa Iniciar sesión con Claude.</string>
+    <string name="rt_not_claude_access">Eso no es un token de Claude: empiezan por sk-ant-. Usa Iniciar sesión con Claude.</string>
     <string name="rt_note_installed">Instalado · inicia sesión con %1$s</string>
     <string name="rt_note_no_pack">El paquete del entorno de %1$s no está en esta versión</string>
     <string name="rt_note_ready">Listo · sesión iniciada en %1$s</string>

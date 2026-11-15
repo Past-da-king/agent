@@ -7,6 +7,7 @@ import android.view.MotionEvent
 import com.past9.phoneaos.screen.ScreenBlocklist
 import com.past9.phoneaos.screen.ScreenLanding
 import com.past9.phoneaos.screen.ScreenProtocol
+import com.past9.phoneaos.screen.ScreenRelease
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.DataInputStream
@@ -29,6 +30,21 @@ import java.io.DataOutputStream
  */
 object HelperMain {
     private const val IDLE_RELEASE_MS = 10 * 60_000L
+    private const val DISPLAY_NAME = "Agent background screen"
+    /** How long the app may be gone (an update, a restart) before its apps are removed from the hidden display. */
+    private const val CLIENT_GRACE_MS = 6_000L
+    private val watch = ScreenRelease.ClientWatch(CLIENT_GRACE_MS)
+    private val logFile = java.io.File("/data/local/tmp/agent-screen-helper.log")
+
+    /** Printed and kept in a small file, so a landing on the person's screen can be traced afterwards. */
+    private fun log(msg: String) {
+        val line = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date()) + " screen helper: " + msg
+        println(line)
+        runCatching {
+            if (logFile.length() > 200_000) logFile.writeText("")
+            logFile.appendText(line + "\n")
+        }
+    }
     private val lock = Any()
     private var display: HiddenDisplay? = null
     private var keyboard = ""
@@ -68,7 +84,9 @@ object HelperMain {
                 Thread.sleep(400)
                 // A money app that lands on the hidden display is closed at once, whoever put it there.
                 if (display != null) runCatching { sweep() }
-                if (++n % 75 == 0) synchronized(lock) { if (display != null && SystemClock.uptimeMillis() - lastAsked > IDLE_RELEASE_MS) { println("screen helper: idle, closing the display"); release(emptySet()) } }
+                // The app that owns the display is gone (updated, killed, crashed): its apps are removed, never left to fall onto the person's screen.
+                synchronized(lock) { if (watch.due(SystemClock.uptimeMillis(), display != null)) { log("the app is gone, removing its apps and closing the display"); release(emptySet(), "app_gone"); watch.reset() } }
+                if (++n % 75 == 0) synchronized(lock) { if (display != null && SystemClock.uptimeMillis() - lastAsked > IDLE_RELEASE_MS) { log("idle, closing the display"); release(emptySet(), "idle") } }
             }
         }, "screen-watch").apply { isDaemon = true; start() }
         Looper.loop()
@@ -117,6 +135,7 @@ object HelperMain {
     }
 
     private fun serve(s: java.net.Socket) {
+        var counted = false
         try {
             s.tcpNoDelay = true
             val inp = DataInputStream(s.getInputStream()); val out = DataOutputStream(s.getOutputStream())
@@ -129,6 +148,7 @@ object HelperMain {
             if (hello.optString("nonce").length < 8 || auth.optString("proof") != ScreenProtocol.proof(token, mine)) { s.close(); return }
             ScreenProtocol.write(out, ScreenProtocol.ok())
             s.soTimeout = 0
+            watch.came(); counted = true
             while (true) {
                 val m = try { ScreenProtocol.read(inp) } catch (e: java.io.IOException) { break }
                 lastAsked = SystemClock.uptimeMillis()
@@ -140,7 +160,7 @@ object HelperMain {
                 if (m.json.optString("op") == "exit") { Thread.sleep(100); System.exit(0) }
             }
         } catch (_: Throwable) {
-        } finally { runCatching { s.close() } }
+        } finally { runCatching { s.close() }; if (counted) watch.went(SystemClock.uptimeMillis()) }
     }
 
     private fun need(): HiddenDisplay = display ?: throw IllegalStateException("No hidden display is open.")
@@ -151,7 +171,7 @@ object HelperMain {
         if (lastBlocked.isNotEmpty()) o.put("last_blocked", lastBlocked).put("last_blocked_at", lastBlockedAt)
         if (d != null) o.put("display", d.id).put("width", d.width).put("height", d.height).put("dpi", d.dpi).put("flags", JSONArray(Flags.names(d.flags)))
             .put("trusted", d.flags and Flags.TRUSTED != 0).put("own_focus", d.flags and Flags.OWN_FOCUS != 0)
-            .put("keeps_focus_off", d.flags and Flags.STEAL_TOP_FOCUS_DISABLED != 0).put("keyboard", keyboard).put("frames", d.seq)
+            .put("keeps_focus_off", d.flags and Flags.STEAL_TOP_FOCUS_DISABLED != 0).put("keyboard", keyboard).put("frames", d.seq).put("destroys_content", d.destroysContent)
         else o.put("display", 0)
         return o
     }
@@ -180,21 +200,30 @@ object HelperMain {
             for (t in fix.move) runCatching { Tasks.move(t, hidden) }.onFailure { Tasks.remove(t) }
             fix.restore?.let { Tasks.toFront(it) }
             moved = true
-            println("screen helper: $pkg came up on the main screen and was moved to the hidden display")
+            log("$pkg came up on the main screen and was moved to the hidden display")
         }
         return moved
     }
 
     /** Close the hidden display. Apps named in [moveBack] go to the person's screen; the rest are closed. */
-    private fun release(moveBack: Set<String>) {
+    private fun release(moveBack: Set<String>, why: String = "release") {
         val d = display ?: return
-        runCatching {
-            for (t in Tasks.all().filter { it.displayId == d.id }) {
-                if (t.top?.packageName in moveBack) runCatching { Tasks.move(t.taskId, 0) } else Tasks.remove(t.taskId)
-            }
+        val rows = runCatching { Tasks.all().map { ScreenRelease.Row(it.taskId, it.displayId, it.top?.packageName.orEmpty()) } }.getOrDefault(emptyList())
+        // Every app on the display is removed FIRST. Only then is the display released, so none of them can fall onto the person's screen.
+        for (step in ScreenRelease.plan(rows, d.id, moveBack)) when (step) {
+            is ScreenRelease.Step.Remove -> { Tasks.remove(step.task); log("$why: removed task ${step.task} from the hidden display") }
+            is ScreenRelease.Step.Keep -> { log("MOVED TO THE PERSON'S SCREEN: task ${step.task} ($why, keep_app)"); runCatching { Tasks.move(step.task, 0) }.onFailure { Tasks.remove(step.task) } }
+            ScreenRelease.Step.ReleaseDisplay -> {}
         }
         Tree.unlink()
         d.release(); display = null; keyboard = ""
+        log("$why: hidden display ${d.id} released")
+    }
+
+    /** Apps left on a hidden display of ours that this helper does not own (a previous run): removed, never moved. */
+    private fun removeOrphans() {
+        val rows = runCatching { Tasks.all().map { ScreenRelease.Row(it.taskId, it.displayId, it.top?.packageName.orEmpty()) } }.getOrDefault(emptyList())
+        for (id in ScreenRelease.orphans(rows, Tasks.ourDisplays(DISPLAY_NAME), display?.id)) { Tasks.remove(id); log("removed orphan task $id from a hidden display left by an earlier run") }
     }
 
     private val guarded = setOf("frame", "touch", "idle", "tree", "text", "act", "type_keys", "tap", "swipe", "key")
@@ -231,7 +260,9 @@ object HelperMain {
                 val w = q.optInt("w", 720); val h = q.optInt("h", 1600); val dpi = q.optInt("dpi", 320)
                 q.optJSONArray("block")?.let { a -> blocklist = ScreenBlocklist(builtIn, (0 until a.length()).map { a.getString(it) }) }
                 display?.let { if (it.width == w && it.height == h) return describe(ScreenProtocol.ok()) else release(emptySet()) }
-                val d = onMain { HiddenDisplay.create("Agent background screen", w, h, dpi, q.optBoolean("locked", false)) }
+                runCatching { removeOrphans() }
+                val d = onMain { HiddenDisplay.create(DISPLAY_NAME, w, h, dpi, q.optBoolean("locked", false)) }
+                log("hidden display ${d.id} made, flags ${Flags.names(d.flags)}${if (d.destroysContent) "" else " (does NOT destroy content on removal)"}")
                 display = d
                 keyboard = Tasks.hideKeyboardOn(d.id)
                 return describe(ScreenProtocol.ok())
@@ -245,10 +276,13 @@ object HelperMain {
             }
             "is_blocked" -> { val p = q.optString("pkg"); return ScreenProtocol.ok().put("why", whyBlocked(p) ?: "") }
             "release" -> {
-                val back = q.optJSONArray("move_back"); release((0 until (back?.length() ?: 0)).map { back!!.getString(it) }.toSet())
+                var back = (0 until (q.optJSONArray("move_back")?.length() ?: 0)).map { q.optJSONArray("move_back")!!.getString(it) }.toSet()
+                // Only keep_app may hand an app to the person's screen on release; anything else is closed.
+                if (back.isNotEmpty() && !ScreenRelease.mayMoveToMain(q.optString("why"))) { log("release asked to keep apps without a reason, closing them instead"); back = emptySet() }
+                release(back, "release")
                 return ScreenProtocol.ok()
             }
-            "exit" -> { release(emptySet()); return ScreenProtocol.ok() }
+            "exit" -> { release(emptySet(), "exit"); return ScreenProtocol.ok() }
             "tasks" -> return ScreenProtocol.ok().put("tasks", tasksJson())
             "start" -> {
                 val d = need(); val a = q.optJSONArray("args") ?: return ScreenProtocol.fail("start needs args")
@@ -274,6 +308,8 @@ object HelperMain {
                 val p = row.top?.packageName.orEmpty()
                 if (to != 0 && whyBlocked(p) != null) return blockedReply(p)
                 // What the person has in front is never taken from them.
+                if (to == 0 && !ScreenRelease.mayMoveToMain(q.optString("why"))) { log("refused a move of task $task to the person's screen: no take-over reason given"); return ScreenProtocol.fail("Nothing is moved onto the user's screen except when they take over.") }
+                if (to == 0) log("MOVED TO THE PERSON'S SCREEN: task $task ($p) because: ${q.optString("why")}")
                 if (to != 0 && row.displayId == 0 && row.visible) return ScreenProtocol.fail("${label(p).ifBlank { p }} is open on the user's own screen right now, so it was left alone.").put("in_front", true)
                 Tasks.move(task, to)
                 return ScreenProtocol.ok()
@@ -289,6 +325,8 @@ object HelperMain {
                 if (!main && whyBlocked(p) != null) return blockedReply(p)
                 val before = landing()
                 if (!main) inFront(before, p)?.let { return it }
+                if (main && !ScreenRelease.mayMoveToMain(q.optString("why"))) { log("refused to open $p on the person's screen: no take-over reason given"); return ScreenProtocol.fail("Nothing is opened on the user's screen except when they take over.") }
+                if (main) log("OPENED ON THE PERSON'S SCREEN: $p because: ${q.optString("why")}")
                 val r = Sys.exec("am", "start", "--display", if (main) "0" else d.id.toString(), "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER", "-p", p, timeoutMs = 20_000)
                 val bad = r.code != 0 || r.out.contains("Error:") || r.out.contains("Exception")
                 val moved = !main && keepOffTheirScreen(before, p, d.id)

@@ -83,11 +83,15 @@ internal class SendFlow(
         /** Pictures and files go up before the message: several on mobile data can take a while. */
         const val PREPARE_WAIT_MS = 90_000L
         const val LINK_WAIT_MS = 8_000L
-        /** Every brain may be away for a moment; his words stay in the box after this. */
-        const val GIVE_UP_MS = 120_000L
+        /**
+         * Every brain may be away for a while (the computer updating or restarting, the server's plan signed out): his
+         * words are held and sent, once, as soon as a brain that can answer is back. They stay in the box after this.
+         * (12 Nov 2026: 2 minutes was shorter than a computer's restart, and the phone showed an error each time.)
+         */
+        const val GIVE_UP_MS = 600_000L
         /** A brain that didn't answer a message isn't tried again for this long. */
         const val SKIP_MS = 30_000L
-        const val NO_BRAIN = "None of your computers answered for 2 minutes"
+        const val NO_BRAIN = "None of your computers answered for 10 minutes"
         const val NOT_HANDED_OVER = "The link to your computer dropped before that message went."
     }
 }

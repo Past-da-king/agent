@@ -33,7 +33,7 @@ class FilesPickTool(private val context: Context) : Tool {
         val a = ctx.ask("Pick ${input.optString("reason")} for me?", listOf("Choose files", "Not now"))
         if (a != "Choose files") return "The user didn't pick any files."
         val r = FilePickBroker.Request(arrayOf("*/*")); FilePickBroker.pending.value = r
-        ctx.notify("Pick a file", "Open the app to choose ${input.optString("reason")}")
+        ctx.notify(context.getString(com.past9.phoneaos.R.string.svc_pick_file), context.getString(com.past9.phoneaos.R.string.svc_pick_file_body, input.optString("reason")))
         val uris = withTimeoutOrNull(300_000) { r.result.await() }.orEmpty()
         if (uris.isEmpty()) return "No files picked."
         return withContext(Dispatchers.IO) { uris.map { read(it) }.map { ocrPages(it) }.joinToString("\n\n") }.also { ctx.activity("Read ${uris.size} file${if (uris.size > 1) "s" else ""} you picked", JSONObject().put("tool", "files")) }

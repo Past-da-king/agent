@@ -36,6 +36,8 @@ class Graph(context: Context) {
     }
     init {
         com.past9.phoneaos.triggers.Routines.appContext = app
+        // A paired Wear OS watch (only once it has said hello): keep its picture current. docs/wear.md.
+        runCatching { com.past9.phoneaos.wear.WatchRelay.attach(this) }
         scope.launch { runCatching { com.past9.phoneaos.triggers.Overnight.ensureRoutine(this@Graph) } }
         // Important dates (People): one exact alarm per date, planned from the dates themselves on every start.
         scope.launch { runCatching { com.past9.phoneaos.people.PersonReminders.syncAll(app) } }
@@ -151,6 +153,8 @@ class Graph(context: Context) {
 
 class App : Application(), coil.ImageLoaderFactory {
     val graph by lazy { Graph(this) }
+
+    override fun attachBaseContext(base: Context) = super.attachBaseContext(com.past9.phoneaos.system.AppLocale.wrap(base))
 
     override fun onCreate() {
         super.onCreate()
