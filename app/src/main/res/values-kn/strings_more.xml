@@ -743,4 +743,11 @@
     <string name="rt_not_downloaded">%1$s ರನ್‌ಟೈಮ್ ಇನ್ನೂ ಡೌನ್‌ಲೋಡ್ ಆಗಿಲ್ಲ.</string>
     <string name="live_sees_screen">Live ನಿಮ್ಮ ಪರದೆಯನ್ನು ನೋಡಬಹುದು</string>
     <string name="live_screen_private">ಖಾಸಗಿ ಪರದೆ: Live ಅದನ್ನು ನೋಡಲಾರದು</string>
+    <string name="routing_title">ಮಾಡೆಲ್ ರೂಟಿಂಗ್</string>
+    <string name="routing_sub">ಚಾಟ್, ರೂಟೀನ್‌ಗಳು ಮತ್ತು ವಾಚರ್‌ಗಳನ್ನು ಬೇರೆ ಬೇರೆ ಮಾಡೆಲ್‌ಗಳಲ್ಲಿ ಚಲಾಯಿಸಿ. ಏಜೆಂಟ್ API ಕೀಲಿಯಿಂದ ಚಲಿಸುವಾಗ ಇದು ಅನ್ವಯಿಸುತ್ತದೆ.</string>
+    <string name="routing_watchers">ವಾಚರ್‌ಗಳು</string>
+    <string name="routing_default">ಡೀಫಾಲ್ಟ್‌ನಂತೆಯೇ</string>
+    <string name="routing_sheet_line">ಈ ಕೆಲಸಕ್ಕೆ ಖಾತೆ ಮತ್ತು ಮಾಡೆಲ್ ಆರಿಸಿ. ಸಹಾಯಕರು ತಮ್ಮದನ್ನು ತಾವೇ ಆರಿಸುತ್ತಾರೆ.</string>
+    <string name="routing_reset">ಡೀಫಾಲ್ಟ್ ಬಳಸಿ</string>
+    <string name="routing_no_accounts">ಮೊದಲು ಒಂದು ಪೂರೈಕೆದಾರರ API ಕೀಲಿಯನ್ನು ಉಳಿಸಿ, ನಂತರ ಅದು ಇಲ್ಲಿ ಕಾಣಿಸುತ್ತದೆ.</string>
 </resources>

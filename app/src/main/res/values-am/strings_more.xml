@@ -743,4 +743,11 @@
     <string name="rt_not_downloaded">የ%1$s የሩጫ አካባቢ ገና አልወረደም።</string>
     <string name="live_sees_screen">Live ማያ ገጽዎን ማየት ይችላል</string>
     <string name="live_screen_private">የግል ማያ ገጽ፦ Live ሊያየው አይችልም</string>
+    <string name="routing_title">የሞዴል አቅጣጫ</string>
+    <string name="routing_sub">ውይይት፣ ተግባራት እና ተቆጣጣሪዎችን በተለያዩ ሞዴሎች ያሂዱ። ወኪሉ በ API ቁልፍ ሲሰራ ይሠራል።</string>
+    <string name="routing_watchers">ተቆጣጣሪዎች</string>
+    <string name="routing_default">እንደ ነባሪው</string>
+    <string name="routing_sheet_line">ለዚህ ሥራ መለያውንና ሞዴሉን ይምረጡ። ረዳቶች የራሳቸውን መምረጣቸውን ይቀጥላሉ።</string>
+    <string name="routing_reset">ነባሪውን ተጠቀም</string>
+    <string name="routing_no_accounts">መጀመሪያ ለአቅራቢ የ API ቁልፍ ያስቀምጡ፣ ከዚያ እዚህ ይታያል።</string>
 </resources>

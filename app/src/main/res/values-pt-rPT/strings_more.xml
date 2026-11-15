@@ -753,4 +753,11 @@
     <string name="rt_not_downloaded">O ambiente de execução %1$s ainda não foi transferido.</string>
     <string name="live_sees_screen">O Live pode ver o seu ecrã</string>
     <string name="live_screen_private">Ecrã privada: o Live não pode vê-la</string>
+    <string name="routing_title">Encaminhamento de modelos</string>
+    <string name="routing_sub">Execute a conversa, as rotinas e os vigias em modelos diferentes. Aplica-se quando o agente funciona com uma chave de API.</string>
+    <string name="routing_watchers">Vigias</string>
+    <string name="routing_default">Igual ao predefinido</string>
+    <string name="routing_sheet_line">Escolha a conta e o modelo para este trabalho. Os ajudantes continuam a escolher o seu.</string>
+    <string name="routing_reset">Usar o predefinido</string>
+    <string name="routing_no_accounts">Guarde primeiro uma chave de API de um fornecedor e ela aparecerá aqui.</string>
 </resources>

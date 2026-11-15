@@ -743,4 +743,11 @@
     <string name="rt_not_downloaded">%1$s റൺടൈം ഇതുവരെ ഡൗൺലോഡ് ചെയ്തിട്ടില്ല.</string>
     <string name="live_sees_screen">Live-ന് നിങ്ങളുടെ സ്ക്രീൻ കാണാൻ കഴിയും</string>
     <string name="live_screen_private">സ്വകാര്യ സ്ക്രീൻ: Live-ന് ഇത് കാണാനാവില്ല</string>
+    <string name="routing_title">മോഡൽ റൂട്ടിംഗ്</string>
+    <string name="routing_sub">ചാറ്റ്, റൂട്ടീനുകൾ, വാച്ചറുകൾ എന്നിവ വ്യത്യസ്ത മോഡലുകളിൽ പ്രവർത്തിപ്പിക്കുക. ഏജന്റ് API കീ ഉപയോഗിച്ച് പ്രവർത്തിക്കുമ്പോൾ ഇത് ബാധകമാണ്.</string>
+    <string name="routing_watchers">വാച്ചറുകൾ</string>
+    <string name="routing_default">ഡിഫോൾട്ട് പോലെ തന്നെ</string>
+    <string name="routing_sheet_line">ഈ ജോലിക്കുള്ള അക്കൗണ്ടും മോഡലും തിരഞ്ഞെടുക്കുക. സഹായികൾ സ്വന്തം മോഡൽ തന്നെ തിരഞ്ഞെടുക്കും.</string>
+    <string name="routing_reset">ഡിഫോൾട്ട് ഉപയോഗിക്കുക</string>
+    <string name="routing_no_accounts">ആദ്യം ഒരു ദാതാവിന്റെ API കീ സംരക്ഷിക്കുക, എന്നിട്ട് അത് ഇവിടെ കാണാം.</string>
 </resources>

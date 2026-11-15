@@ -733,4 +733,11 @@
     <string name="rt_not_downloaded">A kò tíì gba ìgbà ṣíṣiṣẹ́ %1$s.</string>
     <string name="live_sees_screen">Live lè rí ojú-ìwé rẹ</string>
     <string name="live_screen_private">Ojú-ìwé àṣírí: Live kò lè rí i</string>
+    <string name="routing_title">Ìtọ́sọ́nà àwòṣe</string>
+    <string name="routing_sub">Ṣe ìjíròrò, àwọn iṣẹ́ àtìgbàdégbà àti àwọn olùṣọ́ lórí àwọn àwòṣe yàtọ̀. A máa lò ó nígbà tí aṣojú bá ń ṣiṣẹ́ pẹ̀lú kọ́kọ́rọ́ API.</string>
+    <string name="routing_watchers">Àwọn olùṣọ́</string>
+    <string name="routing_default">Bí ti àtìbẹ̀rẹ̀</string>
+    <string name="routing_sheet_line">Yan àkáǹtì àti àwòṣe fún iṣẹ́ yìí. Àwọn olùrànlọ́wọ́ yóò máa yan tiwọn.</string>
+    <string name="routing_reset">Lo ti àtìbẹ̀rẹ̀</string>
+    <string name="routing_no_accounts">Kọ́kọ́ fi kọ́kọ́rọ́ API olùpèsè pamọ́, nígbà náà yóò hàn níbí.</string>
 </resources>

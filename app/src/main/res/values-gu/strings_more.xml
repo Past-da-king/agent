@@ -743,4 +743,11 @@
     <string name="rt_not_downloaded">%1$s રનટાઇમ હજી ડાઉનલોડ થયો નથી.</string>
     <string name="live_sees_screen">લાઇવ તમારી સ્ક્રીન જોઈ શકે છે</string>
     <string name="live_screen_private">ખાનગી સ્ક્રીન: લાઇવ તેને જોઈ શકતું નથી</string>
+    <string name="routing_title">મોડેલ રૂટિંગ</string>
+    <string name="routing_sub">ચેટ, રૂટિન અને વોચરને અલગ મોડેલ પર ચલાવો. એજન્ટ API કી પર ચાલે ત્યારે લાગુ પડે છે.</string>
+    <string name="routing_watchers">વોચર</string>
+    <string name="routing_default">ડિફોલ્ટ જેવું</string>
+    <string name="routing_sheet_line">આ કામ માટે ખાતું અને મોડેલ પસંદ કરો. સહાયકો પોતાનું મોડેલ પસંદ કરતા રહે છે.</string>
+    <string name="routing_reset">ડિફોલ્ટ વાપરો</string>
+    <string name="routing_no_accounts">પહેલા પ્રદાતા માટે API કી સાચવો, પછી તે અહીં દેખાશે.</string>
 </resources>

@@ -753,4 +753,11 @@
     <string name="rt_not_downloaded">El entorno de %1$s aún no se ha descargado.</string>
     <string name="live_sees_screen">Live puede ver tu pantalla</string>
     <string name="live_screen_private">Pantalla privada: Live no puede verla</string>
+    <string name="routing_title">Enrutamiento de modelos</string>
+    <string name="routing_sub">Ejecuta el chat, las rutinas y los vigilantes con modelos distintos. Se usa cuando el agente funciona con una clave de API.</string>
+    <string name="routing_watchers">Vigilantes</string>
+    <string name="routing_default">Igual que el predeterminado</string>
+    <string name="routing_sheet_line">Elige la cuenta y el modelo para este trabajo. Los ayudantes siguen eligiendo el suyo.</string>
+    <string name="routing_reset">Usar el predeterminado</string>
+    <string name="routing_no_accounts">Guarda primero una clave de API de un proveedor y aparecerá aquí.</string>
 </resources>

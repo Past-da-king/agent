@@ -753,4 +753,11 @@
     <string name="rt_not_downloaded">Il runtime di %1$s non è ancora stato scaricato.</string>
     <string name="live_sees_screen">Live può vedere il tuo schermo</string>
     <string name="live_screen_private">Schermata privata: Live non può vederla</string>
+    <string name="routing_title">Instradamento dei modelli</string>
+    <string name="routing_sub">Esegui la chat, le routine e gli osservatori su modelli diversi. Vale quando l\'agente funziona con una chiave API.</string>
+    <string name="routing_watchers">Osservatori</string>
+    <string name="routing_default">Come il predefinito</string>
+    <string name="routing_sheet_line">Scegli account e modello per questo lavoro. Gli assistenti continuano a scegliere il proprio.</string>
+    <string name="routing_reset">Usa il predefinito</string>
+    <string name="routing_no_accounts">Salva prima una chiave API per un provider, poi comparirà qui.</string>
 </resources>

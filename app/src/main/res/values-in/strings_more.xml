@@ -733,4 +733,11 @@
     <string name="rt_not_downloaded">Runtime %1$s belum diunduh.</string>
     <string name="live_sees_screen">Live dapat melihat layar Anda</string>
     <string name="live_screen_private">Layar privat: Live tidak dapat melihatnya</string>
+    <string name="routing_title">Perutean model</string>
+    <string name="routing_sub">Jalankan obrolan, rutinitas, dan pengawas pada model yang berbeda. Berlaku saat agen berjalan dengan kunci API.</string>
+    <string name="routing_watchers">Pengawas</string>
+    <string name="routing_default">Sama seperti default</string>
+    <string name="routing_sheet_line">Pilih akun dan model untuk tugas ini. Pembantu tetap memilih model mereka sendiri.</string>
+    <string name="routing_reset">Gunakan default</string>
+    <string name="routing_no_accounts">Simpan dulu kunci API untuk penyedia, lalu akan muncul di sini.</string>
 </resources>

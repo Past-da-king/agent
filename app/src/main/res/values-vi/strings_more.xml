@@ -733,4 +733,11 @@
     <string name="rt_not_downloaded">Môi trường chạy %1$s chưa được tải về.</string>
     <string name="live_sees_screen">Trực tiếp thấy được màn hình của bạn</string>
     <string name="live_screen_private">Màn hình riêng tư: Trực tiếp không thấy được</string>
+    <string name="routing_title">Định tuyến mô hình</string>
+    <string name="routing_sub">Chạy trò chuyện, tác vụ định kỳ và trình theo dõi trên các mô hình khác nhau. Áp dụng khi tác nhân chạy bằng khóa API.</string>
+    <string name="routing_watchers">Trình theo dõi</string>
+    <string name="routing_default">Giống mặc định</string>
+    <string name="routing_sheet_line">Chọn tài khoản và mô hình cho việc này. Trợ lý vẫn tự chọn mô hình của mình.</string>
+    <string name="routing_reset">Dùng mặc định</string>
+    <string name="routing_no_accounts">Hãy lưu khóa API của một nhà cung cấp trước, rồi nó sẽ hiện ở đây.</string>
 </resources>

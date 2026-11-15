@@ -733,4 +733,11 @@
     <string name="rt_not_downloaded">Ebughị oge ịrụ ọrụ %1$s.</string>
     <string name="live_sees_screen">Live nwere ike ịhụ ihuenyo gị</string>
     <string name="live_screen_private">Ihuenyo nzuzo: Live enweghị ike ịhụ ya</string>
+    <string name="routing_title">Ntụziaka ụdị</string>
+    <string name="routing_sub">Gbaa mkparịta ụka, ihe a na-eme mgbe niile na ndị nche n\'ụdị dị iche iche. A na-eji ya mgbe onye nnọchite na-eji igodo API.</string>
+    <string name="routing_watchers">Ndị nche</string>
+    <string name="routing_default">Dị ka nke ndabara</string>
+    <string name="routing_sheet_line">Họrọ akaụntụ na ụdị maka ọrụ a. Ndị enyemaka ga-aga n\'ihu ịhọrọ nke ha.</string>
+    <string name="routing_reset">Jiri nke ndabara</string>
+    <string name="routing_no_accounts">Buru ụzọ chekwaa igodo API maka onye na-enye ya, mgbe ahụ ọ ga-apụta ebe a.</string>
 </resources>

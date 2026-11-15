@@ -743,4 +743,11 @@
     <string name="rt_not_downloaded">محیط اجرای %1$s هنوز دانلود نشده.</string>
     <string name="live_sees_screen">Live می‌تواند صفحه شما را ببیند</string>
     <string name="live_screen_private">صفحه خصوصی: Live نمی‌تواند آن را ببیند</string>
+    <string name="routing_title">مسیریابی مدل</string>
+    <string name="routing_sub">گفتگو، روال‌ها و دیده‌بان‌ها را روی مدل‌های متفاوت اجرا کنید. وقتی عامل با کلید API کار می‌کند اعمال می‌شود.</string>
+    <string name="routing_watchers">دیده‌بان‌ها</string>
+    <string name="routing_default">مثل پیش‌فرض</string>
+    <string name="routing_sheet_line">حساب و مدل این کار را انتخاب کنید. دستیارها همچنان مدل خودشان را انتخاب می‌کنند.</string>
+    <string name="routing_reset">استفاده از پیش‌فرض</string>
+    <string name="routing_no_accounts">ابتدا کلید API یک ارائه‌دهنده را ذخیره کنید، سپس اینجا نمایش داده می‌شود.</string>
 </resources>

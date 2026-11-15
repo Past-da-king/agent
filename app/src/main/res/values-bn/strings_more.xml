@@ -743,4 +743,11 @@
     <string name="rt_not_downloaded">%1$s রানটাইম এখনও ডাউনলোড হয়নি।</string>
     <string name="live_sees_screen">Live আপনার স্ক্রিন দেখতে পারে</string>
     <string name="live_screen_private">ব্যক্তিগত স্ক্রিন: Live এটি দেখতে পারে না</string>
+    <string name="routing_title">মডেল রাউটিং</string>
+    <string name="routing_sub">চ্যাট, রুটিন ও ওয়াচার আলাদা মডেলে চালান। এজেন্ট API কী দিয়ে চললে এটি কাজ করে।</string>
+    <string name="routing_watchers">ওয়াচার</string>
+    <string name="routing_default">ডিফল্টের মতোই</string>
+    <string name="routing_sheet_line">এই কাজের জন্য অ্যাকাউন্ট ও মডেল বেছে নিন। সহকারীরা নিজেদের মডেল নিজেরাই বাছে।</string>
+    <string name="routing_reset">ডিফল্ট ব্যবহার করুন</string>
+    <string name="routing_no_accounts">আগে একটি প্রদানকারীর জন্য API কী সংরক্ষণ করুন, তারপর এখানে দেখা যাবে।</string>
 </resources>

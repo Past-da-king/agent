@@ -763,4 +763,11 @@
     <string name="rt_not_downloaded">Prostředí %1$s ještě není staženo.</string>
     <string name="live_sees_screen">Live vidí vaši obrazovku</string>
     <string name="live_screen_private">Soukromá obrazovka: Live ji nevidí</string>
+    <string name="routing_title">Směrování modelů</string>
+    <string name="routing_sub">Spouštějte chat, rutiny a hlídače na různých modelech. Platí, když agent běží s klíčem API.</string>
+    <string name="routing_watchers">Hlídači</string>
+    <string name="routing_default">Stejné jako výchozí</string>
+    <string name="routing_sheet_line">Vyberte účet a model pro tuto práci. Pomocníci si dál vybírají vlastní.</string>
+    <string name="routing_reset">Použít výchozí</string>
+    <string name="routing_no_accounts">Nejdřív uložte klíč API poskytovatele, pak se zde objeví.</string>
 </resources>

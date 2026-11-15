@@ -763,4 +763,11 @@
     <string name="rt_not_downloaded">Середовище виконання %1$s ще не завантажено.</string>
     <string name="live_sees_screen">Live бачить ваш екран</string>
     <string name="live_screen_private">Приватний екран: Live його не бачить</string>
+    <string name="routing_title">Маршрутизація моделей</string>
+    <string name="routing_sub">Запускайте чат, рутини та спостерігачі на різних моделях. Діє, коли агент працює з ключем API.</string>
+    <string name="routing_watchers">Спостерігачі</string>
+    <string name="routing_default">Як за замовчуванням</string>
+    <string name="routing_sheet_line">Виберіть обліковий запис і модель для цього завдання. Помічники й далі вибирають власну.</string>
+    <string name="routing_reset">Використати за замовчуванням</string>
+    <string name="routing_no_accounts">Спершу збережіть ключ API провайдера, і він з’явиться тут.</string>
 </resources>

@@ -743,4 +743,11 @@
     <string name="rt_not_downloaded">%1$s రన్‌టైమ్ ఇంకా డౌన్‌లోడ్ కాలేదు.</string>
     <string name="live_sees_screen">Live మీ స్క్రీన్‌ను చూడగలదు</string>
     <string name="live_screen_private">ప్రైవేట్ స్క్రీన్: Live దాన్ని చూడలేదు</string>
+    <string name="routing_title">మోడల్ రూటింగ్</string>
+    <string name="routing_sub">చాట్, రొటీన్లు, వాచర్లను వేర్వేరు మోడల్స్‌పై నడపండి. ఏజెంట్ API కీతో నడుస్తున్నప్పుడు ఇది వర్తిస్తుంది.</string>
+    <string name="routing_watchers">వాచర్లు</string>
+    <string name="routing_default">డిఫాల్ట్ లాగే</string>
+    <string name="routing_sheet_line">ఈ పనికి ఖాతా, మోడల్‌ను ఎంచుకోండి. సహాయకులు తమ సొంతదాన్నే ఎంచుకుంటారు.</string>
+    <string name="routing_reset">డిఫాల్ట్ వాడండి</string>
+    <string name="routing_no_accounts">ముందుగా ఒక ప్రొవైడర్ API కీని సేవ్ చేయండి, అప్పుడు అది ఇక్కడ కనిపిస్తుంది.</string>
 </resources>

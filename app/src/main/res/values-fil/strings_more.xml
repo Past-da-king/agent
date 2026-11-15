@@ -743,4 +743,11 @@
     <string name="rt_not_downloaded">Hindi pa na-download ang runtime ng %1$s.</string>
     <string name="live_sees_screen">Nakikita ng Live ang screen mo</string>
     <string name="live_screen_private">Pribadong screen: hindi ito nakikita ng Live</string>
+    <string name="routing_title">Pagruruta ng model</string>
+    <string name="routing_sub">Patakbuhin ang chat, mga routine at mga tagabantay sa magkakaibang model. Ginagamit kapag tumatakbo ang agent sa API key.</string>
+    <string name="routing_watchers">Mga tagabantay</string>
+    <string name="routing_default">Kapareho ng default</string>
+    <string name="routing_sheet_line">Piliin ang account at model para sa gawaing ito. Pipili pa rin ng sarili nila ang mga katulong.</string>
+    <string name="routing_reset">Gamitin ang default</string>
+    <string name="routing_no_accounts">Mag-save muna ng API key para sa isang provider, saka ito lalabas dito.</string>
 </resources>

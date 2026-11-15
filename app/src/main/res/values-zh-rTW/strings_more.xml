@@ -733,4 +733,11 @@
     <string name="rt_not_downloaded">%1$s 執行環境尚未下載。</string>
     <string name="live_sees_screen">實時語音可以看到你的螢幕</string>
     <string name="live_screen_private">隱私螢幕：實時語音看不到</string>
+    <string name="routing_title">模型路由</string>
+    <string name="routing_sub">讓聊天、例行工作和監看器使用不同的模型。當代理程式使用 API 金鑰執行時生效。</string>
+    <string name="routing_watchers">監看器</string>
+    <string name="routing_default">與預設相同</string>
+    <string name="routing_sheet_line">為這項工作選擇帳戶和模型。助理仍會自行選擇模型。</string>
+    <string name="routing_reset">使用預設值</string>
+    <string name="routing_no_accounts">請先儲存某個供應商的 API 金鑰，它就會顯示在這裡。</string>
 </resources>

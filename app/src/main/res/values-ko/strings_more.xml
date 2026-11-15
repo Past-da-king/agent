@@ -733,4 +733,11 @@
     <string name="rt_not_downloaded">%1$s 런타임을 아직 다운로드하지 않았습니다.</string>
     <string name="live_sees_screen">Live가 내 화면을 볼 수 있음</string>
     <string name="live_screen_private">비공개 화면: Live가 볼 수 없음</string>
+    <string name="routing_title">모델 라우팅</string>
+    <string name="routing_sub">채팅, 루틴, 감시 작업을 서로 다른 모델로 실행합니다. 에이전트가 API 키로 실행될 때 적용됩니다.</string>
+    <string name="routing_watchers">감시 작업</string>
+    <string name="routing_default">기본값과 동일</string>
+    <string name="routing_sheet_line">이 작업에 사용할 계정과 모델을 선택하세요. 도우미는 계속 자신의 모델을 직접 고릅니다.</string>
+    <string name="routing_reset">기본값 사용</string>
+    <string name="routing_no_accounts">먼저 제공업체의 API 키를 저장하면 여기에 표시됩니다.</string>
 </resources>

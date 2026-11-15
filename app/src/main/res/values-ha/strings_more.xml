@@ -742,4 +742,11 @@
     <string name="rt_not_downloaded">Ba a sauke muhallin gudanarwa na %1$s ba tukuna.</string>
     <string name="live_sees_screen">Live yana iya ganin allonka</string>
     <string name="live_screen_private">Allo na sirri: Live ba zai iya ganinsa ba</string>
+    <string name="routing_title">Tura samfura</string>
+    <string name="routing_sub">Gudanar da hira, ayyukan yau da kullum da masu sa ido a kan samfura daban-daban. Ana amfani da shi idan wakili yana aiki da maɓallin API.</string>
+    <string name="routing_watchers">Masu sa ido</string>
+    <string name="routing_default">Kamar na asali</string>
+    <string name="routing_sheet_line">Zaɓi asusu da samfurin wannan aiki. Mataimaka za su ci gaba da zaɓar nasu.</string>
+    <string name="routing_reset">Yi amfani da na asali</string>
+    <string name="routing_no_accounts">Fara adana maɓallin API na mai bayarwa, sannan zai bayyana a nan.</string>
 </resources>

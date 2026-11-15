@@ -733,4 +733,11 @@
     <string name="rt_not_downloaded">Runtime %1$s belum dimuat turun.</string>
     <string name="live_sees_screen">Live dapat melihat skrin anda</string>
     <string name="live_screen_private">Skrin peribadi: Live tidak dapat melihatnya</string>
+    <string name="routing_title">Penghalaan model</string>
+    <string name="routing_sub">Jalankan sembang, rutin dan pemerhati pada model yang berbeza. Digunakan apabila ejen berjalan dengan kunci API.</string>
+    <string name="routing_watchers">Pemerhati</string>
+    <string name="routing_default">Sama seperti lalai</string>
+    <string name="routing_sheet_line">Pilih akaun dan model untuk tugas ini. Pembantu terus memilih model mereka sendiri.</string>
+    <string name="routing_reset">Guna lalai</string>
+    <string name="routing_no_accounts">Simpan kunci API untuk pembekal dahulu, kemudian ia muncul di sini.</string>
 </resources>
