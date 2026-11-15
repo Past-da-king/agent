@@ -47,6 +47,8 @@ data class Approval(
     val answer: String,
     /** The last decision did not reach the computer: the buttons stay and the card says so. */
     val failed: Boolean,
+    /** The computer refused this answer because the card was already decided: its words, shown on the card. */
+    val note: String = "",
 ) {
     val pending get() = answer.isEmpty()
     val approved get() = answer == "Approve"
@@ -57,6 +59,8 @@ data class Approval(
         const val FAILED = "That did not go through. Try again."
         /** Meta key the session sets when a decision could not be delivered. */
         const val FAILED_KEY = "decideFailed"
+        /** Meta key for the computer's "already decided / already answered" sentence. */
+        const val NOTE_KEY = "decideNote"
 
         fun isApproval(item: ChatItem) = item.kind == "approval" || item.text.startsWith("APPROVAL|")
 
@@ -78,7 +82,7 @@ data class Approval(
             // What it acts on, when the row says: a named target, else where it runs (the computer's scope).
             val target = listOf("target", "account", "app", "device").firstNotNullOfOrNull { k -> m.optString(k).takeIf { it.isNotBlank() } }
                 ?: when (val scope = m.optString("scope")) { "" -> ""; "computer" -> "your computer"; "phone" -> "this phone"; else -> scope }
-            return Approval(item.id, summary, details, target, askedBy, why, m.optString("answer"), m.optBoolean(FAILED_KEY))
+            return Approval(item.id, summary, details, target, askedBy, why, m.optString("answer"), m.optBoolean(FAILED_KEY), m.optString(NOTE_KEY))
         }
     }
 }
@@ -108,6 +112,7 @@ fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
             Icon(com.past9.phoneaos.ui.ChevronEnd, stringResource(R.string.chat_show_what_was, decidedLabel(a).lowercase()), tint = cs.onSurfaceVariant)
         }
         }
+        if (a.note.isNotBlank()) Text(a.note, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 38.dp, bottom = 4.dp))
     } else AppCard(container = cs.tertiaryContainer, onClick = { open = true }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(if (a.isCommand) Icons.Rounded.Terminal else Icons.Rounded.Shield, null, tint = cs.onTertiaryContainer, modifier = Modifier.size(18.dp))
@@ -119,7 +124,8 @@ fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
         Spacer(Modifier.height(4.dp))
         Text(stringResource(R.string.chat_asked_by, shown(a.askedBy)) + if (a.target.isNotBlank()) stringResource(R.string.chat_on_target, shown(a.target)) else "", style = MaterialTheme.typography.bodySmall, color = cs.onTertiaryContainer.copy(alpha = 0.8f))
         if (a.details.isNotBlank()) { Spacer(Modifier.height(12.dp)); ApprovalBody(a.details, full = false) }
-        if (a.failed) { Spacer(Modifier.height(10.dp)); Text(stringResource(R.string.chat_approval_failed), style = MaterialTheme.typography.bodyMedium, color = cs.error) }
+        if (a.note.isNotBlank()) { Spacer(Modifier.height(10.dp)); Text(a.note, style = MaterialTheme.typography.bodyMedium, color = cs.onTertiaryContainer) }
+        else if (a.failed) { Spacer(Modifier.height(10.dp)); Text(stringResource(R.string.chat_approval_failed), style = MaterialTheme.typography.bodyMedium, color = cs.error) }
         Spacer(Modifier.height(14.dp))
         Button(onClick = { open = true }, modifier = Modifier.fillMaxWidth().height(52.dp), shapes = ButtonDefaults.shapes()) {
             Text(stringResource(R.string.chat_review), style = MaterialTheme.typography.titleMedium)
@@ -163,7 +169,8 @@ fun ApprovalSheet(a: Approval, onDecide: (String) -> Unit, onDismiss: () -> Unit
             HorizontalDivider(color = cs.outlineVariant.copy(alpha = 0.5f))
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 12.dp, bottom = 20.dp).navigationBarsPadding()) {
                 if (a.pending) {
-                    if (a.failed) { Text(stringResource(R.string.chat_approval_failed), style = MaterialTheme.typography.bodyMedium, color = cs.error); Spacer(Modifier.height(10.dp)) }
+                    if (a.note.isNotBlank()) { Text(a.note, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface); Spacer(Modifier.height(10.dp)) }
+                    else if (a.failed) { Text(stringResource(R.string.chat_approval_failed), style = MaterialTheme.typography.bodyMedium, color = cs.error); Spacer(Modifier.height(10.dp)) }
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         OutlinedButton(onClick = { onDecide("Decline") }, modifier = Modifier.weight(1f).height(56.dp), shapes = ButtonDefaults.shapes()) {
                             Text(stringResource(R.string.chat_decline), style = MaterialTheme.typography.titleMedium)
@@ -239,3 +246,35 @@ fun ApprovalBody(details: String, full: Boolean) {
 /** The start of markdown as plain words for the card (no stars, hashes or backticks, no empty lines); the sheet draws it properly. */
 internal fun plainStart(details: String): String =
     details.lineSequence().map { it.trim().replace(Regex("^#{1,6}\\s+"), "").replace("**", "").replace("__", "").replace("`", "") }.filter { it.isNotBlank() }.take(12).joinToString("\n")
+
+/**
+ * The computer decides each card once (first answer wins). A second, different answer is refused with
+ * "already decided: approve by Pixel 9" or "already answered: ...": not a failure. The card takes the winning answer
+ * and says the sentence inline; the computer's own row then replaces it on the next refresh.
+ */
+object CardConflict {
+    data class Found(val text: String, val answer: String)
+
+    // Starts with it, or only an RPC wrapper ("Error invoking remote method '...': Error: ") sits in front.
+    private val RE = Regex("""(?i)^\s*(?:error invoking remote method.*?'\s*:\s*)?(?:error:\s*)?(already (decided|answered))\b(?::\s*([^\n]*))?""")
+
+    fun parse(e: Throwable): Found? {
+        val m = RE.find(e.message ?: return null) ?: return null
+        val word = m.groupValues[1].replaceFirstChar { it.uppercase() }
+        val rest = m.groupValues[3].trim().trimEnd('.')
+        val text = if (rest.isEmpty()) "$word." else "$word: $rest."
+        val answer = rest.substringBefore(" by ").trim().let { w ->
+            when (w.lowercase()) { "approve", "approved" -> "Approve"; "decline", "declined" -> "Decline"; else -> w }
+        }
+        return Found(text, answer)
+    }
+
+    /** Fold a refused answer into the card's meta. False when the error is something else (the caller treats it as a failure). */
+    fun applyTo(meta: JSONObject, e: Throwable): Boolean {
+        val f = parse(e) ?: return false
+        meta.remove(Approval.FAILED_KEY)
+        if (f.answer.isNotBlank()) meta.put("answer", f.answer) else meta.remove("answer")
+        meta.put(Approval.NOTE_KEY, f.text)
+        return true
+    }
+}
