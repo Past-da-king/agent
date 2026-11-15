@@ -88,7 +88,9 @@ class RoutineToolsTest {
         val routine = servedRoutineTools(rt)
 
         assertEquals("the routine set is the helper set plus exactly these",
-            setOf("task_add", "task_delete", "memory_save", "wake_schedule", "wake_list", "wake_cancel"), routine - helper)
+            setOf("task_add", "task_delete", "memory_save", "wake_schedule", "wake_list", "wake_cancel",
+                // People (issue #13): a routine keeps the user's own people data; a helper does not.
+                "person_add", "person_log", "person_list", "person_get", "person_date_add", "gift_add"), routine - helper)
         assertEquals("and nothing is taken away from helpers", emptySet<String>(), helper - routine)
     }
 

@@ -87,6 +87,9 @@ class AgentRuntime(
     /** Overridable for tests: build the provider a route runs on (provider, key, address, allow plain http, session id). */
     private val routeProviderFactory: (Provider, String, String, Boolean, () -> String) -> LlmProvider = { p, k, b, h, s -> providerFor(p, k, b, h, s) },
 ) {
+    /** People (the personal CRM, issue #13). One repository: the screens and the tools read and write the same rows. */
+    val people = com.past9.phoneaos.people.PeopleRepository(db.people())
+
     /**
      * The route's account and model, or null to run on the default power source exactly as before. A route that cannot be
      * used throws a [RouteFailure] that names it; it never falls back to the default.
@@ -384,6 +387,9 @@ class AgentRuntime(
             AgentsPinnedTool { pinnedReport() },
             com.past9.phoneaos.tools.ProfileCreateTool(profiles) { slugs -> appAccounts(slugs) },
             com.past9.phoneaos.cards.CardListTool(cards), com.past9.phoneaos.cards.CardShowTool(cards, db.chat()), com.past9.phoneaos.cards.CardPinTool(cards),
+            com.past9.phoneaos.tools.PersonAddTool(people), com.past9.phoneaos.tools.PersonLogTool(people),
+            com.past9.phoneaos.tools.PersonListTool(people), com.past9.phoneaos.tools.PersonGetTool(people),
+            com.past9.phoneaos.tools.PersonDateAddTool(people) { peopleChanged() }, com.past9.phoneaos.tools.GiftAddTool(people),
         )
         // Small jobs (a page, a quick lookup) it may do itself, within the step budget. Routines and watchers stay with helpers.
         val mine = own.map { it.spec.name }.toSet() + setOf("report", "routine_create", "routine_update", "routine_delete", "watcher_save", "skill_save", "skill_find",
@@ -408,7 +414,14 @@ class AgentRuntime(
      */
     private fun routineTools(): List<Tool> = tools(forHelper = true) + Gated(TaskAddTool(db.tasks(), skipDuplicates = true)) + Gated(TaskDeleteTool(db.tasks())) +
         Gated(MemorySaveTool(db.memory())) +
+        // People: a routine keeps the user's own people data (a helper does not, it only reads what it is given).
+        Gated(com.past9.phoneaos.tools.PersonAddTool(people)) + Gated(com.past9.phoneaos.tools.PersonLogTool(people)) +
+        Gated(com.past9.phoneaos.tools.PersonListTool(people)) + Gated(com.past9.phoneaos.tools.PersonGetTool(people)) +
+        Gated(com.past9.phoneaos.tools.PersonDateAddTool(people) { peopleChanged() }) + Gated(com.past9.phoneaos.tools.GiftAddTool(people)) +
         com.past9.phoneaos.tools.WakeScheduleTool(context) + com.past9.phoneaos.tools.WakeListTool(context) + com.past9.phoneaos.tools.WakeCancelTool(context)
+
+    /** A date, a person or a gift changed: arm or drop the reminders at once (the phone's own alarms, no routine). */
+    suspend fun peopleChanged() { runCatching { com.past9.phoneaos.people.PersonReminders.syncAll(context) } }
 
     /** Everything that acts: what helpers and routines work with. */
     private fun workerTools(): List<Tool> {
