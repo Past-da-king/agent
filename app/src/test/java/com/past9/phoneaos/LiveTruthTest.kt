@@ -1,0 +1,97 @@
+package com.past9.phoneaos
+
+import com.past9.phoneaos.assist.LiveAssistCore
+import com.past9.phoneaos.assist.LivePhase
+import com.past9.phoneaos.assist.LiveTruth
+import com.past9.phoneaos.data.ChatItem
+import com.past9.phoneaos.voice.SpokenResult
+import org.json.JSONObject
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/** The 17 Nov 2026 call: Live invented outcomes, said a canned Done, and dropped the agent's later replies. */
+class LiveTruthTest {
+    private fun row(id: Long, kind: String, text: String, meta: JSONObject = JSONObject()) = ChatItem(id = id, kind = kind, text = text, meta = meta.toString())
+    private var now = 1_000L
+    private fun core() = LiveAssistCore { now }.also { it.connected() }
+
+    // 1. RETURN PATH: the main agent says it started a helper, the helper's result comes minutes later in the same chat.
+    @Test fun aLaterHelperResultRelayedByTheMainAgentIsSpokenAsWritten() {
+        val c = core(); c.handOff("Did we upload the PDF to NSFAS?", 5)
+        val first = c.rows(listOf(row(5, "user", "x"), row(6, "agent", "I have started a helper to check the NSFAS upload.")), false)
+        assertEquals(1, first.size); assertTrue(first[0].contains("started a helper"))
+        // Minutes later: the helper works (activity rows, agent working), then the main agent relays its result.
+        assertTrue(c.rows(listOf(row(6, "agent", "I have started a helper to check the NSFAS upload."), row(9, "helper", "x")), true).isEmpty())
+        val later = c.rows(listOf(row(6, "agent", "I have started a helper to check the NSFAS upload."), row(9, "helper", "x"), row(12, "agent", "Done. Uploaded, status Verification.")), false)
+        assertEquals(1, later.size)
+        assertTrue(later[0].startsWith(SpokenResult.HEAD)); assertTrue(later[0].contains("Uploaded, status Verification."))
+        // and once only
+        assertTrue(c.rows(listOf(row(12, "agent", "Done. Uploaded, status Verification.")), false).isEmpty())
+    }
+
+    // 4a. A second request while the first is out: both replies are read, not just the first.
+    @Test fun aSecondHandOffWhileTheFirstIsOutGetsItsOwnReplyToo() {
+        val c = core(); c.handOff("first", 5); c.handOff("upload the form", 5)
+        val a = c.rows(listOf(row(6, "agent", "First is done.")), false)
+        val b = c.rows(listOf(row(6, "agent", "First is done."), row(8, "agent", "The form is uploaded.")), false)
+        assertEquals(1, a.size); assertEquals(1, b.size); assertTrue(b[0].contains("The form is uploaded."))
+    }
+
+    // 2 and 4b. The sheet's canned "Done." / "On it. The rest is in the chat." (agent stopped without a word) is NOT an agent result.
+    @Test fun theSheetsCannedDoneIsNeverReadAsTheAgentsResult() {
+        val c = core(); c.handOff("upload the form", 5)
+        c.rows(listOf(row(5, "user", "x"), row(6, "activity", "Uploading")), true)
+        val told = c.rows(listOf(row(5, "user", "x"), row(6, "activity", "Uploading")), false)
+        assertTrue(told.joinToString(), told.none { it.contains("Done.") || it.contains("The rest is in the chat") || it.startsWith(SpokenResult.HEAD) })
+        assertTrue("the job is still out", c.handOffOpen)
+        assertEquals(LivePhase.WORKING, c.current.phase)
+    }
+    @Test fun aSilentFinishWithNoActivityIsNotADoneEither() {
+        val c = core(); c.handOff("x", 5)
+        c.rows(listOf(row(5, "user", "x")), true)
+        val told = c.rows(listOf(row(5, "user", "x")), false)
+        assertTrue(told.joinToString(), told.none { it.contains("Done.") || it.startsWith(SpokenResult.HEAD) })
+    }
+
+    // 3. Live must not claim an outcome of its own while no agent reply backs it.
+    @Test fun liveClaimingUploadedBeforeAnyReplyIsCaught() {
+        val c = core(); c.handOff("upload the PDF", 5)
+        assertTrue(c.outstanding)
+        assertTrue(c.claimWithoutResult("The PDF has been successfully uploaded to the NSF system."))
+        assertTrue(c.claimWithoutResult("On it. Done."))
+        assertFalse(c.claimWithoutResult("On it."))
+        assertFalse(c.claimWithoutResult("It is still working, I will read it out when it arrives."))
+    }
+    @Test fun aClaimIsFineOnceTheAgentHasReplied() {
+        val c = core(); c.handOff("upload the PDF", 5)
+        c.rows(listOf(row(6, "agent", "Uploaded, status Verification.")), false)
+        assertFalse(c.claimWithoutResult("Uploaded, status Verification."))
+    }
+    @Test fun theToolAnswerTellsTheModelTheJobIsNotDone() {
+        val n = LiveTruth.ack(true, "")
+        assertTrue(n, n.contains("NOT done")); assertTrue(n, n.contains("holding line"))
+        assertTrue(LiveTruth.ack(false, "the payroll helper").contains("NOT done"))
+    }
+
+    // 4c. No silent gap.
+    @Test fun aLateReplyIsAnnouncedOnceAndNeverMute() {
+        val c = core(); c.handOff("upload the PDF", 5)
+        now += 5_000; assertFalse(c.lateDue())
+        now += LiveTruth.LATE_MS; assertTrue(c.lateDue())
+        assertFalse("only once", c.lateDue())
+        assertTrue(LiveTruth.lateLine().contains("no result"))
+    }
+    @Test fun theSessionDoesNotEndWhileAJobIsOut() {
+        val c = core(); c.handOff("x", 5); now += 10 * 60_000L
+        assertFalse(c.idle())
+    }
+
+    // Ended call: what the agent said while the call was over is spoken at the start of the next one.
+    @Test fun whatArrivedAfterTheCallEndedIsSpokenAtTheNextCall() {
+        val rows = listOf(row(6, "agent", "Started a helper."), row(12, "agent", "Done. Uploaded, status Verification."), row(13, "activity", "x"))
+        val m = LiveTruth.missed(rows, after = 6, told = setOf(6))
+        assertEquals(listOf(12L), m.map { it.id })
+    }
+}

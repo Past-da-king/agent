@@ -179,6 +179,13 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
         return request.trim()
     }
 
+    /** STUB: a job is out with no reply of its own yet. */
+    val outstanding: Boolean get() = false
+    /** STUB: true once when the reply is late. */
+    fun lateDue(): Boolean = false
+    /** STUB: the voice's own words claim an outcome no agent reply backs. */
+    fun claimWithoutResult(said: String): Boolean = false
+
     /** The send did not go: nothing is out. */
     fun handOffFailed() { hand = null; publish { it.copy(label = "") } }
 
