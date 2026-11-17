@@ -96,4 +96,38 @@ class LiveTruthTest {
         val m = LiveTruth.missed(rows, after = 6, told = setOf(6))
         assertEquals(listOf(12L), m.map { it.id })
     }
+
+    // Every turn goes to the main chat as it finalises; a re-send only updates.
+    @Test fun turnsAreHandedOnAsTheyFinaliseAndOnlyWhenTheyChange() {
+        val c = core()
+        c.caption("in", "Did we upload "); c.caption("in", "Thuli's PDF?")
+        assertTrue("the line still growing is not final", c.drainFinal(false).isEmpty())
+        c.caption("out", "On it.")
+        val a = c.drainFinal(false)
+        assertEquals(listOf(0), a.map { it.first }); assertEquals("Did we upload Thuli's PDF?", a[0].second.text)
+        assertTrue(c.drainFinal(false).isEmpty())
+        val b = c.drainFinal(true)
+        assertEquals(listOf(1), b.map { it.first })
+        c.caption("out", " One moment.")
+        assertEquals(listOf(1), c.drainFinal(true).map { it.first })
+    }
+    @Test fun theNextCallOpensWithThePreviousCallsWordsNewestFirstAndBounded() {
+        val lines = (1..100).map { com.past9.phoneaos.assist.LiveLine(if (it % 2 == 0) "out" else "in", "line number $it " + "x".repeat(300), it.toLong()) }
+        val p = LiveTruth.previousCall(lines)
+        assertTrue(p.indexOf("line number 100") in 1 until p.indexOf("line number 99"))
+        assertTrue(p.length < LiveTruth.PREVIOUS_CHARS + 600); assertFalse(p.contains("line number 1 "))
+        assertEquals("", LiveTruth.previousCall(emptyList()))
+        val sys = LiveAssistCore.systemPrompt("Hina", "Ayanda", true, null, LiveTruth.previousCall(lines.take(2)))
+        assertTrue(sys.contains("previous live call")); assertTrue(sys.contains("line number 2"))
+    }
+    @Test fun theHandOffCarriesHisExactWordsAtTopLevelAndInTheNote() {
+        val m = LiveAssistCore.handoffMeta("Did we upload the toolseller's PDF to NSFs?", "Yo, my guy, did we upload Thuli's PDF to NSFAS?", false, "live-abc")
+        assertEquals("Yo, my guy, did we upload Thuli's PDF to NSFAS?", m.getString("spoken")); assertEquals("live-abc", m.getString("session")); assertEquals("live_voice", m.getString("origin"))
+        val note = LiveAssistCore.liveNote("Yo, my guy, did we upload Thuli's PDF to NSFAS?")
+        assertTrue(note.contains("Thuli's PDF to NSFAS"))
+        // His words survive even when no finished line of his exists yet (the transcript was still growing).
+        val c = core(); c.caption("in", "did we upload Thuli's PDF")
+        assertEquals("did we upload Thuli's PDF", c.spokenNow())
+        assertTrue(LiveAssistCore.systemPrompt("Hina", "A", true).contains("never turn a word you are unsure of into a name"))
+    }
 }

@@ -52,4 +52,23 @@ object LiveTruth {
     /** What the next call opens with: the replies that came while nobody was on the line, in order, each framed to be read as written. */
     fun whileAway(rows: List<ChatItem>): List<String> =
         rows.map { "[While the call was closed the agent replied. This is its real answer; read it as written, once.]\n" + com.past9.phoneaos.voice.SpokenResult.frame(it.text) }
+
+    /** How many lines of the last call the next call is given, and how many characters at most. */
+    const val PREVIOUS_LINES = 30
+    const val PREVIOUS_CHARS = 3_500
+
+    /**
+     * The previous call as background for the next one, newest line first and bounded. Empty when there was none. It is
+     * context only: the voice does not read it out and never treats an old job as still pending unless the agent says so.
+     */
+    fun previousCall(lines: List<LiveLine>): String {
+        if (lines.isEmpty()) return ""
+        val out = StringBuilder()
+        for (l in lines.asReversed().take(PREVIOUS_LINES)) {
+            val row = (if (l.who == "in") "User: " else "You: ") + l.text.replace(Regex("\\s+"), " ").trim().take(400) + "\n"
+            if (out.length + row.length > PREVIOUS_CHARS) break
+            out.append(row)
+        }
+        return "\n\nTheir previous live call with you, newest line first (background only: do not read it out; use it when they refer to it, and never treat an old job in it as done or still running unless the agent told you):\n" + out.toString().trimEnd()
+    }
 }

@@ -115,6 +115,20 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
     val transcript: List<LiveLine> get() = lines.toList()
     val handOffs: List<LiveHandoff> get() = handoffs.toList()
 
+    private val sentLen = HashMap<Int, Int>()
+
+    /**
+     * The lines that are final (every one but the one still growing, or all of them at the end of a turn) and have changed since
+     * they were last passed on: they are written into the main chat as they happen, keyed by index, so a re-send only updates.
+     */
+    fun drainFinal(all: Boolean): List<Pair<Int, LiveLine>> {
+        val out = ArrayList<Pair<Int, LiveLine>>()
+        lines.forEachIndexed { i, l ->
+            if ((all || i < lines.size - 1) && sentLen[i] != l.text.length) { sentLen[i] = l.text.length; out += i to l }
+        }
+        return out
+    }
+
     /** What the user said most recently: the words that led to a hand-off. Empty when they have said nothing yet. */
     fun spokenNow(): String = (lines.lastOrNull { it.who == "in" }?.text ?: lastIn).trim().take(600)
 
@@ -334,7 +348,7 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
         const val MEDIA_CONTROL = "media_control"
 
         /** Live's instructions. The name comes from settings; nothing here is about one person. */
-        fun systemPrompt(agentName: String, userName: String, linked: Boolean, context: AssistContext? = null): String {
+        fun systemPrompt(agentName: String, userName: String, linked: Boolean, context: AssistContext? = null, previousCall: String = ""): String {
             val who = userName.ifBlank { "the user" }
             val where = if (linked) "on their computer, with everything you have there" else "on this phone"
             return """
@@ -349,7 +363,7 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
                 When the agent needs something from them, ask it out loud in one short line. If it needs their OK, say what it wants to do and tell them the approve button is on the screen and they hold it to approve. Never approve for them and never say it is approved. If they answer a question, hand their answer to the agent with hand_to_agent.
                 Wait until they have clearly finished before you answer. People pause mid-sentence, think aloud and mix languages in one sentence: a pause is not the end of their turn. Never fill a silence with a guess; if they trail off, wait, or ask them to go on.
                 When they say thanks, that's all, or goodbye, say one short friendly goodbye and stop.
-            """.trimIndent() + contextBlock(context, linked)
+            """.trimIndent() + contextBlock(context, linked) + previousCall
         }
 
         /**
