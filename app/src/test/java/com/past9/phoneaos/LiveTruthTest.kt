@@ -130,4 +130,17 @@ class LiveTruthTest {
         assertEquals("did we upload Thuli's PDF", c.spokenNow())
         assertTrue(LiveAssistCore.systemPrompt("Hina", "A", true).contains("never turn a word you are unsure of into a name"))
     }
+
+    /** Writes exactly what the real session sends (instructions, tools, the tool answer, framed replies) so a scripted call can run against the real model. */
+    @Test fun dumpWhatTheRealSessionSendsForTheScriptedCall() {
+        val j = JSONObject()
+            .put("system", LiveAssistCore.systemPrompt("Hina", "Ayanda", true, null))
+            .put("tools", LiveAssistCore.tools())
+            .put("ack", LiveTruth.ack(true, ""))
+            .put("late", LiveTruth.lateLine())
+            .put("frame1", SpokenResult.frame("I have started a helper to check the NSFAS upload for Thuli."))
+            .put("frame2", SpokenResult.frame("Done. Thuli's form is uploaded to NSFAS. The status is Verification."))
+        java.io.File(System.getProperty("java.io.tmpdir"), "live-prompt-dump.json").writeText(j.toString())
+        assertTrue(j.getString("system").contains("NOT done"))
+    }
 }
