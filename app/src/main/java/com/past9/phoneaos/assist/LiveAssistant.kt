@@ -283,9 +283,7 @@ class LiveAssistant(
             LivePending.clear(context)
             val missed = LiveTruth.missed(all, pending.base, pending.told)
             Log.i(TAG, "replies while away: ${missed.size}")
-            if (missed.isNotEmpty()) tell(LiveTruth.whileAway(missed).joinToString("
-
-"))
+            if (missed.isNotEmpty()) tell(LiveTruth.whileAway(missed).joinToString("\n\n"))
         }
     }
 
