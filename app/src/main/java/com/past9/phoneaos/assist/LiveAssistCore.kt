@@ -62,11 +62,22 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
     private var lastActive = clock()
     private var live = false
     private var failed = false
+    /** Hand-offs not yet answered by a real reply of the agent's own. */
+    private var jobs = 0
+    private var sentAt = 0L
+    private var lateTold = false
+    /** A real agent reply has been delivered since the last hand-off: only then may an outcome be spoken. */
+    private var replyDelivered = false
+    /** Chat rows up to this id are accounted for; every later agent row of the call's chat is the agent talking to Live. */
+    var base = Long.MIN_VALUE
+        private set
 
     val current: LiveView get() = view
     /** A hand-off is out and its outcome has not come back yet. */
-    val handOffOpen: Boolean get() = hand != null
+    val handOffOpen: Boolean get() = jobs > 0
     val ending: Boolean get() = endPending
+    /** The rows this call already read out. */
+    val toldIds: Set<Long> get() = told.toSet()
 
     private fun touch() { lastActive = clock() }
 
@@ -75,7 +86,7 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
         !live -> LivePhase.CONNECTING
         v.card != null -> LivePhase.NEEDS_YOU
         speaking -> LivePhase.SPEAKING
-        hand != null -> LivePhase.WORKING
+        jobs > 0 -> LivePhase.WORKING
         else -> LivePhase.LISTENING
     }
 
@@ -105,7 +116,7 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
     val handOffs: List<LiveHandoff> get() = handoffs.toList()
 
     /** What the user said most recently: the words that led to a hand-off. Empty when they have said nothing yet. */
-    fun spokenNow(): String = lines.lastOrNull { it.who == "in" }?.text?.trim().orEmpty().take(600)
+    fun spokenNow(): String = (lines.lastOrNull { it.who == "in" }?.text ?: lastIn).trim().take(600)
 
     /**
      * The session as the call record the app already keeps for voice calls (voice.callSave on a linked computer, call
@@ -157,7 +168,7 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
 
     /** True when it has been quiet for [IDLE_MS]: nobody speaking, nothing out with the agent, nothing waiting on him. */
     fun idle(minimised: Boolean = false): Boolean =
-        live && !speaking && hand == null && view.card == null && clock() - lastActive >= if (minimised) IDLE_MINIMISED_MS else IDLE_MS
+        live && !speaking && (jobs == 0 || clock() - sentAt >= OUTSTANDING_CAP_MS) && view.card == null && clock() - lastActive >= if (minimised) IDLE_MINIMISED_MS else IDLE_MS
 
     /** The user said goodbye by tool-free means (a tap is handled by the caller). */
     fun goodbye() { endPending = true }
@@ -172,27 +183,38 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
         touch()
         handoffs += LiveHandoff(clock(), request.trim(), spokenNow(), includeScreen)
         // A job aimed at a helper or a project's chat does not come back through the main chat: its outcome arrives as a context update.
-        if (track && hand == null) {
-            hand = AssistCore().also { it.listen(); it.finished(request); it.sent(lastIdBefore) }
+        if (track) {
+            jobs++; sentAt = clock(); lateTold = false; replyDelivered = false
+            if (hand == null) { base = lastIdBefore; arm(lastIdBefore) }
         }
         publish { it.copy(label = "") } // the sheet shows its own "Working on it" for a blank label
         return request.trim()
     }
 
-    /** STUB: a job is out with no reply of its own yet. */
-    val outstanding: Boolean get() = false
-    /** STUB: true once when the reply is late. */
-    fun lateDue(): Boolean = false
-    /** STUB: the voice's own words claim an outcome no agent reply backs. */
-    fun claimWithoutResult(said: String): Boolean = false
+    /** A job is out and the agent has not answered it in words yet. */
+    val outstanding: Boolean get() = jobs > 0
 
     /** The send did not go: nothing is out. */
-    fun handOffFailed() { hand = null; publish { it.copy(label = "") } }
+    fun handOffFailed() { jobs = maxOf(0, jobs - 1); publish { it.copy(label = "") } }
+
+    /** The tracker follows the chat from row [after] on, for the whole call: a later reply or a helper's result is still the answer. */
+    private fun arm(after: Long) { hand = AssistCore().also { it.listen(); it.finished("job"); it.sent(after) } }
+
+    private fun isCallRow(i: ChatItem) = runCatching { JSONObject(i.meta) }.getOrNull()?.let { it.optBoolean("call") || it.optBoolean("live") } ?: false
+
+    /** True once, when the agent has not said anything for [LiveTruth.LATE_MS] after a hand-off: the voice says so once and keeps listening. */
+    fun lateDue(): Boolean {
+        if (jobs == 0 || lateTold || clock() - sentAt < LiveTruth.LATE_MS) return false
+        lateTold = true; return true
+    }
+
+    /** The voice's own words claim an outcome (done, uploaded, sent...) while the agent has said nothing: it must be corrected. */
+    fun claimWithoutResult(said: String): Boolean = jobs > 0 && !replyDelivered && LiveTruth.claimsOutcome(said)
 
     /** The chat rows changed (or the agent's working flag): what Live should now be told, in order. */
     fun rows(rows: List<ChatItem>, working: Boolean): List<String> {
         val h = hand ?: return emptyList()
-        val v = h.view(rows, working)
+        val v = h.view(rows.filter { !isCallRow(it) }, working)
         val out = ArrayList<String>()
         when (v.phase) {
             AssistPhase.APPROVAL, AssistPhase.ASKING -> {
@@ -204,16 +226,23 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
                 }
             }
             AssistPhase.ANSWERING -> {
-                val id = v.answerId ?: -1L - rows.size
-                hand = null
+                // Only the agent's own words are a result. The sheet's canned "Done." / "On it. The rest is in the chat." (the agent
+                // stopped without a word) has no row of its own (answerId null): it is never read out as an outcome.
+                if (v.answerId == null) return out
+                val fresh = rows.filter { it.kind == "agent" && it.text.isNotBlank() && it.id > base && !isCallRow(it) && it.id !in told }
+                if (fresh.isEmpty()) return out
                 touch()
-                if (told.add(id)) out += com.past9.phoneaos.voice.SpokenResult.frame(v.answer)
+                fresh.forEach { told += it.id; out += com.past9.phoneaos.voice.SpokenResult.frame(it.text) }
+                jobs = maxOf(0, jobs - 1); replyDelivered = true; sentAt = clock(); lateTold = false
+                base = fresh.last().id; arm(base)
                 publish { it.copy(card = null, label = "") }
                 return out
             }
             AssistPhase.ERROR -> {
-                hand = null; touch()
+                touch()
                 out += "[The agent could not do it: ${v.problem.take(300)}. Tell the user in one short line.]"
+                jobs = maxOf(0, jobs - 1); replyDelivered = true
+                base = rows.maxOfOrNull { it.id } ?: base; arm(base)
                 publish { it.copy(card = null, label = "") }
                 return out
             }
@@ -289,6 +318,8 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
         const val IDLE_MS = 45_000L
         /** Minimised to a bubble he is busy in another app, so it waits longer before letting go. */
         const val IDLE_MINIMISED_MS = 180_000L
+        /** A job out this long with no reply no longer holds the session open. */
+        const val OUTSTANDING_CAP_MS = 600_000L
 
         const val TOOL = "hand_to_agent"
         /** Answers a question an agent is waiting on (see [AssistRouter]). */
@@ -312,9 +343,9 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
                 To play music or a video, call play_media straight away; to pause, play, skip or say what is playing, call media_control. Those two run on the phone and answer in a moment, so do not hand them to the agent. play_media is the ONLY way to play: it works on the phone's background screen and never touches what they are looking at. Never ask the agent to open an app, a link or a search for playing, and never say you will. If play_media says it failed, tell them it failed and why in a few words; do not try another way. Say what it answers, in a few words.
                 You can SEE their screen: pictures of it arrive about once a second while this session is open. When they ask what is on their screen, say "look at this", or mean "this", "that" or "here", answer yourself from the latest picture, at once and briefly: read it, describe it, explain it, translate it, summarise it. Do not hand that to the agent.
                 If a note says the screen is private, say you cannot see it right now and do not guess. If no picture has arrived (the setting may be off in the assistant's settings), say you cannot see the screen right now and do not make anything up.
-                For real work, call hand_to_agent with the full request and every detail they gave (names, who to, what to say, when): anything to be done or found beyond answering from what you see, such as sending, changing, opening, searching, remembering, their messages, mail, calendar, files, apps, contacts, the web, or anything on their computer. The same agent they type to does it, $where. Say a very short "on it" and carry on talking if they do. The words on their screen go along with a hand-off; set include_screen to true only when the agent itself must see the picture to do the job.
+                For real work, call hand_to_agent with the full request and every detail they gave (names, who to, what to say, when): anything to be done or found beyond answering from what you see, such as sending, changing, opening, searching, remembering, their messages, mail, calendar, files, apps, contacts, the web, or anything on their computer. The same agent they type to does it, $where. Say ONE very short "on it" and nothing more: the job is NOT done at that point, so never say done, uploaded, sent, confirmed or any result yourself, and never guess one. Only the agent's own reply tells the outcome, and you read it out as written when it arrives (it can take minutes, and later messages from the agent about the same job are read out too). If they ask meanwhile what happened, say there is no result yet. Pass their words on faithfully: keep what they said, never turn a word you are unsure of into a name, a person or a place (leave it as you heard it; the agent knows who and what they mean). The words on their screen go along with a hand-off; set include_screen to true only when the agent itself must see the picture to do the job.
                 NEVER say you can't do something or that they must do it themselves: hand it to the agent.
-                ${com.past9.phoneaos.voice.SpokenResult.RULE} Never invent a result; if you do not know yet, say it is still in progress.
+                ${com.past9.phoneaos.voice.SpokenResult.RULE} Never invent a result; if no agent reply has reached you, say there is no result yet.
                 When the agent needs something from them, ask it out loud in one short line. If it needs their OK, say what it wants to do and tell them the approve button is on the screen and they hold it to approve. Never approve for them and never say it is approved. If they answer a question, hand their answer to the agent with hand_to_agent.
                 Wait until they have clearly finished before you answer. People pause mid-sentence, think aloud and mix languages in one sentence: a pause is not the end of their turn. Never fill a silence with a guess; if they trail off, wait, or ask them to go on.
                 When they say thanks, that's all, or goodbye, say one short friendly goodbye and stop.
@@ -340,7 +371,7 @@ class LiveAssistCore(private val clock: () -> Long = { System.currentTimeMillis(
             .put(JSONObject().put("name", TOOL)
                 .put("description", "Give a job to the user's main agent: the same one they type to, with all its tools and apps. Use it for real work: anything that needs doing or looking up, anything about their own things, and for passing on an answer they gave to a question. Do NOT use it just to describe or read what is on their screen: you can see it yourself. The words on their screen go along with it. Then say a short \"on it\" and carry on; the reply comes back to you.")
                 .put("parameters", JSONObject().put("type", "OBJECT").put("properties", JSONObject()
-                    .put("request", JSONObject().put("type", "STRING").put("description", "The job, clearly, with every detail the user gave (who, what, where, wording, when)"))
+                    .put("request", JSONObject().put("type", "STRING").put("description", "The job in the user's OWN words, with every detail they gave (who, what, where, wording, when). Never replace a word you are unsure of with a name or a guess: keep it as heard."))
                     .put("include_screen", JSONObject().put("type", "BOOLEAN").put("description", "True only when the agent must see a picture of the screen to do the job. Default false."))
                     .put("context", JSONObject().put("type", "STRING").put("description", "Anything else from the conversation the agent needs, or empty"))
                     .put("target", JSONObject().put("type", "STRING").put("description", "Only when they aim it at a named project, project chat or helper from the list you were given: its name as they said it. Leave out for the main chat.")))

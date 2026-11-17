@@ -19,6 +19,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
@@ -72,6 +73,7 @@ class LiveAssistant(
     private var startedAt = 0L
     private var frames: LiveFrames? = null
     @Volatile private var lastLoud = 0L
+    private var lastChecked = ""
 
     val active: Boolean get() = !ended && (session != null || starting)
 
@@ -121,7 +123,14 @@ class LiveAssistant(
             live.connectTo(auth.url, auth.model.ifBlank { DEFAULT_MODEL }, if (phoneVoice == null) auth.voice else "")
         }
         // Nothing heard, nothing said and nothing out for a while: let go.
-        watch = scope.launch { while (!ended) { delay(2_000); if (core.idle(minimised())) { Log.i(TAG, "idle, ending"); end("") } } }
+        watch = scope.launch {
+            while (!ended) {
+                delay(2_000)
+                if (core.idle(minimised())) { Log.i(TAG, "idle, ending"); end("") }
+                // No silent gap: a reply that is late is said so, once, and the line stays open.
+                else if (core.lateDue()) tell(LiveTruth.lateLine())
+            }
+        }
         // Never stuck connecting: the microphone being up does not mean the connection is.
         scope.launch { delay(CallCore.CONNECT_TIMEOUT_MS); if (!ended && !setupDone) fail(CallCore.TIMED_OUT) }
     }
@@ -243,6 +252,7 @@ class LiveAssistant(
             }
             is LiveSession.Event.SetupComplete -> {
                 setupDone = true
+                readAwayReplies()
                 // Live can see the screen from now on (when the switches allow it).
                 if (frames == null) frames = LiveFrames(context, scope, { session }, { s -> core.seeing(s); push() }, { tell(it) }, clock).also { it.start() }
             }
@@ -250,6 +260,11 @@ class LiveAssistant(
             is LiveSession.Event.Transcript -> { core.caption(e.who, e.text); push() }
             is LiveSession.Event.Speaking -> {
                 if (!e.on) Log.i(TAG, "turn: you=\"${core.current.you.take(160)}\" agent=\"${core.current.agent.take(160)}\"")
+                // The voice must never state an outcome the agent did not report: caught here, corrected out loud.
+                if (!e.on) core.current.agent.takeIf { it.isNotBlank() && it != lastChecked }?.let { said ->
+                    lastChecked = said
+                    if (core.claimWithoutResult(said)) { Log.w(TAG, "claim without a result: ${said.take(160)}"); tell(LiveTruth.correctionLine(said)) }
+                }
                 if (core.speaking(e.on)) scope.launch { delay(400); end("") }
                 push()
             }
@@ -257,6 +272,20 @@ class LiveAssistant(
             is LiveSession.Event.Failed -> fail(CallCore.plainError(e.error).ifBlank { "Live voice stopped." })
             is LiveSession.Event.Closed -> end("")
             else -> {}
+        }
+    }
+
+    /** The agent's replies that came while no call was open (a helper that finished later): said once, as written, when this call opens. */
+    private fun readAwayReplies() {
+        val pending = LivePending.peek(context, clock()) ?: return
+        scope.launch {
+            val all = runCatching { (RemoteHub.session.value?.db ?: g.db).chat().all().first() }.getOrNull().orEmpty()
+            LivePending.clear(context)
+            val missed = LiveTruth.missed(all, pending.base, pending.told)
+            Log.i(TAG, "replies while away: ${missed.size}")
+            if (missed.isNotEmpty()) tell(LiveTruth.whileAway(missed).joinToString("
+
+"))
         }
     }
 
@@ -295,8 +324,8 @@ class LiveAssistant(
             core.handOff(request, lastId, wantPicture && jpeg != null, track = target == null)
             push()
             val sent = runCatching { deliver(text, request, spoken, jpeg, target ?: "main") }
-            sent.onSuccess { where -> result(e, JSONObject().put("status", "sent").put("sent_to", where.ifBlank { "your main chat" })
-                .put("note", if (target == null) "The agent has it. Say a very short 'on it' (a few words). Its reply comes to you as an update." else "Sent to ${where.ifBlank { target }}. Say where in a few words. If it matters, you are told when it finishes.")) }
+            sent.onSuccess { where -> result(e, JSONObject().put("status", "sent_not_done").put("done", false).put("sent_to", where.ifBlank { "your main chat" })
+                .put("note", LiveTruth.ack(target == null, where.ifBlank { target.orEmpty() }))) }
                 .onFailure { err ->
                     core.handOffFailed(); push()
                     if (err is WhichOne) { result(e, JSONObject().put("status", "which_one").put("options", JSONArray(err.names)).put("note", "Not sent: ask the user out loud which one they mean (${err.names.joinToString(" or ")}), then call hand_to_agent again with that exact name as target.")); return@onFailure }
@@ -373,6 +402,8 @@ class LiveAssistant(
         frames?.stop(); frames = null
         runCatching { session?.stop() }
         session = null
+        // A hand-off may still be out: its later reply is notified and read at the start of the next call.
+        runCatching { LivePending.save(context, core.base, core.toldIds, clock()) }
         runCatching { saveCall() }
         onEnded(reason)
     }

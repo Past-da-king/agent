@@ -32,6 +32,7 @@ object LiveHost {
     @Volatile private var assistant: LiveAssistant? = null
     private var follow: Job? = null
     private var contextJob: Job? = null
+    private var away: Job? = null
 
     private val _view = MutableStateFlow(LiveView())
     /** What the sheet and the bubble draw. */
@@ -55,6 +56,7 @@ object LiveHost {
         if (active) return
         val app = context.applicationContext
         val g = App.graph(app)
+        away?.cancel(); away = null
         source = from
         _view.value = LiveView()
         _minimised.value = false
@@ -74,8 +76,28 @@ object LiveHost {
         a.start()
     }
 
+    /** After the call: the agent's late replies are notified (the next call reads them out). */
+    private fun watchAway(app: Context) {
+        away?.cancel()
+        val g = App.graph(app)
+        away = scope.launch {
+            val notified = HashSet<Long>()
+            val rows = RemoteHub.session.flatMapLatest { (it?.db ?: g.db).chat().all() }
+            rows.collect { r ->
+                if (active) return@collect
+                val p = LivePending.peek(app, System.currentTimeMillis()) ?: return@collect
+                LiveTruth.missed(r, p.base, p.told + notified).forEach { row ->
+                    notified += row.id
+                    val name = g.settings.state.value.agentName.takeIf { it.isNotBlank() && it != "Your agent" } ?: "Your agent"
+                    runCatching { g.phone.notify("$name replied", row.text.take(300)) }
+                }
+            }
+        }
+    }
+
     private fun finished(app: Context, why: String) {
         Log.i(TAG, "ended ${why.take(80)}")
+        watchAway(app)
         assistant = null
         follow?.cancel(); follow = null
         contextJob?.cancel(); contextJob = null
