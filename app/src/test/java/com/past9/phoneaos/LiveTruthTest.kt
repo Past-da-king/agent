@@ -84,8 +84,10 @@ class LiveTruthTest {
         assertTrue(LiveTruth.lateLine().contains("no result"))
     }
     @Test fun theSessionDoesNotEndWhileAJobIsOut() {
-        val c = core(); c.handOff("x", 5); now += 10 * 60_000L
+        val c = core(); c.handOff("x", 5); now += 5 * 60_000L
         assertFalse(c.idle())
+        now += 6 * 60_000L
+        assertTrue("a job nobody answers for ten minutes no longer holds the line", c.idle())
     }
 
     // Ended call: what the agent said while the call was over is spoken at the start of the next one.
