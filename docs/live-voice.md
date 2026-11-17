@@ -101,3 +101,18 @@ If the server refuses a tuned field (close code 1007 before setup completes) the
 **Nothing is sent to the model while he talks or while it is mid-answer.** `TurnHold` keeps announcements and [Context update] notes until he has been quiet for 1.8 s and the model has finished (Google: a clientContent message interrupts current generation; on gemini-3.8-live a note sent mid-speech derailed the answer).
 
 **Answers are read as written.** A finished answer reaches Live as `[Agent result, speak as written] ... [End of agent result]` (markdown removed, up to 4000 characters, then "(The rest is in the chat.)"). Live's instruction says to read it as written and never summarise a summary. The hand-off to the agent says its reply is read aloud, so it writes the spoken version.
+
+## Live never invents an outcome; replies and follow-ups come back (17 Nov 2026)
+
+A call on 17 Nov 2026: Live said "On it. Done." before the agent had answered, invented "the PDF has been successfully uploaded" when nothing had been, then said "still in progress" after the agent had replied and after the upload finished. Causes and fixes (all in code, not only in wording):
+
+- **Canned "Done." read as a result.** The sheet's state machine ends a hand-off with "Done." or "On it. The rest is in the chat." when the agent stopped without a word (no chat row). `LiveAssistCore.rows` framed that as `[Agent result, speak as written]`. Now a result needs a real agent row; the canned text is never spoken.
+- **Tracker closed after the first reply.** `hand = null` on the first answer, so a second reply, a second hand-off's reply and a helper's result relayed minutes later were dropped. The tracker now follows the main chat for the whole call (`base` advances with each reply; every later agent row is read once, as written). `jobs` counts hand-offs not yet answered in words.
+- **Tool answer.** `hand_to_agent` answers `sent_not_done` with `LiveTruth.ack`: the job is NOT done, say one holding line, never an outcome.
+- **Claim guard.** At the end of each of its turns, `LiveTruth.claimsOutcome` checks what the voice said; with a job out and no agent reply delivered, a correction is announced (`correctionLine`).
+- **No silent gap.** `lateDue` fires once after `LiveTruth.LATE_MS` (20 s): the voice says it is still working and keeps listening. The session does not idle-end while a job is out (cap 10 min).
+- **After the call.** `LivePending` keeps where the call stopped following. `LiveHost.watchAway` notifies when the agent replies later; the next call opens by reading those replies as written.
+- **His words.** The hand-off carries `spoken` top-level and in the note (falls back to the growing transcript); the instructions and the `request` field forbid turning an unsure word into a name.
+- **Turns into the main chat as they happen.** `voice.callTurn` {session, startedAt, index, who, text, at} per finalised turn (computer: one `call` row per session, collapsed, never a user bubble; the final `voice.callSave` finishes the same row). On this phone the same turns are call rows. The previous call's words (newest first, bounded) go into the next call's instructions (`LiveHistory`, `LiveTruth.previousCall`).
+
+Proof: `scripts/live-proof.mjs` runs the exact instructions, tool answer and framed replies against the real Gemini Live model (gemini-3.1-flash-live-preview and gemini-3.8-live): holding line only, "no result yet" when asked, late line once, each agent reply and the later helper result read as written. Tests: `LiveTruthTest`.

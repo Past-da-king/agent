@@ -19,6 +19,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
@@ -72,6 +73,7 @@ class LiveAssistant(
     private var startedAt = 0L
     private var frames: LiveFrames? = null
     @Volatile private var lastLoud = 0L
+    private var lastChecked = ""
 
     val active: Boolean get() = !ended && (session != null || starting)
 
@@ -99,11 +101,12 @@ class LiveAssistant(
         val st = g.settings.state.value
         val name = st.agentName.takeIf { it.isNotBlank() && it != "Your agent" } ?: "your agent"
         val phoneVoice = st.ttsVoice.takeIf { st.ttsProvider == "gemini" && it.isNotBlank() }
-        val live = LiveSession("", DEFAULT_MODEL, phoneVoice ?: "Kore", LiveAssistCore.systemPrompt(name, st.userName, linked(), null), tools = LiveAssistCore.tools(),
+        val live = LiveSession("", DEFAULT_MODEL, phoneVoice ?: "Kore", LiveAssistCore.systemPrompt(name, st.userName, linked(), null, LiveTruth.previousCall(LiveHistory.load(context))), tools = LiveAssistCore.tools(),
             tuning = AssistPrefs.liveTuning(context, listOf(name, st.userName)),
             renew = { kotlinx.coroutines.runBlocking { LiveToken.mint(context) as? LiveAuth.Token.Ok }?.url }) { e -> if (!ended) onEvent(e) }
         // Every setup (the first, and a fresh reconnect) is built from what is true then.
-        live.systemFrom { LiveAssistCore.systemPrompt(name, g.settings.state.value.userName, linked(), core.context) }
+        val previous = LiveTruth.previousCall(LiveHistory.load(context))
+        live.systemFrom { LiveAssistCore.systemPrompt(name, g.settings.state.value.userName, linked(), core.context, previous) }
         session = live
         core.manual(live.tune.waitForMe)
         // The microphone and speaker open now, in parallel with the token: nothing he says is lost.
@@ -121,7 +124,14 @@ class LiveAssistant(
             live.connectTo(auth.url, auth.model.ifBlank { DEFAULT_MODEL }, if (phoneVoice == null) auth.voice else "")
         }
         // Nothing heard, nothing said and nothing out for a while: let go.
-        watch = scope.launch { while (!ended) { delay(2_000); if (core.idle(minimised())) { Log.i(TAG, "idle, ending"); end("") } } }
+        watch = scope.launch {
+            while (!ended) {
+                delay(2_000)
+                if (core.idle(minimised())) { Log.i(TAG, "idle, ending"); end("") }
+                // No silent gap: a reply that is late is said so, once, and the line stays open.
+                else if (core.lateDue()) tell(LiveTruth.lateLine())
+            }
+        }
         // Never stuck connecting: the microphone being up does not mean the connection is.
         scope.launch { delay(CallCore.CONNECT_TIMEOUT_MS); if (!ended && !setupDone) fail(CallCore.TIMED_OUT) }
     }
@@ -243,13 +253,20 @@ class LiveAssistant(
             }
             is LiveSession.Event.SetupComplete -> {
                 setupDone = true
+                readAwayReplies()
                 // Live can see the screen from now on (when the switches allow it).
                 if (frames == null) frames = LiveFrames(context, scope, { session }, { s -> core.seeing(s); push() }, { tell(it) }, clock).also { it.start() }
             }
             is LiveSession.Event.Level -> if (e.mine) userLevel(e.value) else if (core.level(e.value)) push()
-            is LiveSession.Event.Transcript -> { core.caption(e.who, e.text); push() }
+            is LiveSession.Event.Transcript -> { core.caption(e.who, e.text); streamTurns(false); push() }
             is LiveSession.Event.Speaking -> {
+                if (!e.on) streamTurns(true)
                 if (!e.on) Log.i(TAG, "turn: you=\"${core.current.you.take(160)}\" agent=\"${core.current.agent.take(160)}\"")
+                // The voice must never state an outcome the agent did not report: caught here, corrected out loud.
+                if (!e.on) core.current.agent.takeIf { it.isNotBlank() && it != lastChecked }?.let { said ->
+                    lastChecked = said
+                    if (core.claimWithoutResult(said)) { Log.w(TAG, "claim without a result: ${said.take(160)}"); tell(LiveTruth.correctionLine(said)) }
+                }
                 if (core.speaking(e.on)) scope.launch { delay(400); end("") }
                 push()
             }
@@ -257,6 +274,45 @@ class LiveAssistant(
             is LiveSession.Event.Failed -> fail(CallCore.plainError(e.error).ifBlank { "Live voice stopped." })
             is LiveSession.Event.Closed -> end("")
             else -> {}
+        }
+    }
+
+    /** The agent's replies that came while no call was open (a helper that finished later): said once, as written, when this call opens. */
+    private fun readAwayReplies() {
+        val pending = LivePending.peek(context, clock()) ?: return
+        scope.launch {
+            val all = runCatching { (RemoteHub.session.value?.db ?: g.db).chat().all().first() }.getOrNull().orEmpty()
+            LivePending.clear(context)
+            val missed = LiveTruth.missed(all, pending.base, pending.told)
+            Log.i(TAG, "replies while away: ${missed.size}")
+            if (missed.isNotEmpty()) tell(LiveTruth.whileAway(missed).joinToString("\n\n"))
+        }
+    }
+
+    private val localRows = HashMap<Int, Long>()
+    private val turnLock = Any()
+
+    /**
+     * Every turn goes into the main chat AS IT HAPPENS, marked as this live call (the call block folds them): over the link as
+     * voice.callTurn keyed by session and index, so the main agent has the real words and not only the hand-off's paraphrase, and
+     * on this phone as call rows the phone's own agent reads. voice.callSave at the end updates the same lines, never adds them.
+     */
+    private fun streamTurns(all: Boolean) {
+        val batch = synchronized(turnLock) { core.drainFinal(all) }
+        if (batch.isEmpty()) return
+        val r = RemoteHub.session.value
+        scope.launch {
+            batch.forEach { (i, l) ->
+                if (r != null) {
+                    runCatching { r.call("voice.callTurn", listOf(JSONObject().put("session", core.sessionId).put("startedAt", startedAt).put("index", i).put("who", if (l.who == "in") "you" else "agent").put("text", l.text).put("at", l.at)), 10_000) }
+                        .onFailure { Log.i(TAG, "callTurn not taken: ${it.message?.take(80)}") }
+                } else runCatching {
+                    val meta = JSONObject().put("call", true).put("live", true).put("session", core.sessionId).put("turn", i).toString()
+                    val have = localRows[i]
+                    if (have == null) localRows[i] = g.db.chat().insert(ChatItem(kind = if (l.who == "in") "user" else "agent", text = l.text, meta = meta, createdAt = l.at))
+                    else g.db.chat().get(have)?.let { g.db.chat().update(it.copy(text = l.text)) }
+                }
+            }
         }
     }
 
@@ -295,8 +351,8 @@ class LiveAssistant(
             core.handOff(request, lastId, wantPicture && jpeg != null, track = target == null)
             push()
             val sent = runCatching { deliver(text, request, spoken, jpeg, target ?: "main") }
-            sent.onSuccess { where -> result(e, JSONObject().put("status", "sent").put("sent_to", where.ifBlank { "your main chat" })
-                .put("note", if (target == null) "The agent has it. Say a very short 'on it' (a few words). Its reply comes to you as an update." else "Sent to ${where.ifBlank { target }}. Say where in a few words. If it matters, you are told when it finishes.")) }
+            sent.onSuccess { where -> result(e, JSONObject().put("status", "sent_not_done").put("done", false).put("sent_to", where.ifBlank { "your main chat" })
+                .put("note", LiveTruth.ack(target == null, where.ifBlank { target.orEmpty() }))) }
                 .onFailure { err ->
                     core.handOffFailed(); push()
                     if (err is WhichOne) { result(e, JSONObject().put("status", "which_one").put("options", JSONArray(err.names)).put("note", "Not sent: ask the user out loud which one they mean (${err.names.joinToString(" or ")}), then call hand_to_agent again with that exact name as target.")); return@onFailure }
@@ -373,6 +429,8 @@ class LiveAssistant(
         frames?.stop(); frames = null
         runCatching { session?.stop() }
         session = null
+        // A hand-off may still be out: its later reply is notified and read at the start of the next call.
+        runCatching { LivePending.save(context, core.base, core.toldIds, clock()) }
         runCatching { saveCall() }
         onEnded(reason)
     }
@@ -385,10 +443,13 @@ class LiveAssistant(
         val lines = core.transcript; val hands = core.handOffs
         if (lines.isEmpty() && hands.isEmpty()) return
         val record = core.record(startedAt, clock())
+        runCatching { LiveHistory.save(context, lines) }
         val r = RemoteHub.session.value
         if (r != null) { scope.launch { runCatching { r.call("voice.callSave", listOf(record), 30_000) } }; return }
         scope.launch {
-            val entries = (lines.map { Triple(it.at, it.who, it.text) to null } + hands.map { Triple(it.at, "hand", it.request) to it }).sortedBy { it.first.first }
+            // The turns were written as they happened: finish them (the last words), and add only what is not there yet (the hand-offs).
+            lines.forEachIndexed { i, l -> localRows[i]?.let { id -> runCatching { g.db.chat().get(id)?.let { row -> if (row.text != l.text) g.db.chat().update(row.copy(text = l.text)) } } } }
+            val entries = (lines.mapIndexedNotNull { i, l -> if (localRows.containsKey(i)) null else Triple(l.at, l.who, l.text) to null } + hands.map { Triple(it.at, "hand", it.request) to it }).sortedBy { it.first.first }
             entries.forEach { (e, h) ->
                 val meta = JSONObject().put("call", true).put("live", true).put("session", core.sessionId)
                 if (h != null) meta.put("handoff", true).put("spoken", h.spoken).put("include_screen", h.includeScreen)
