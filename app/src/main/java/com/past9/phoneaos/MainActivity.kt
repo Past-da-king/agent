@@ -461,6 +461,9 @@ class MainActivity : ComponentActivity() {
                 override fun listening(box: com.past9.phoneaos.ui.ComposerBox): Boolean =
                     (dictating && (dictBox ?: mainBox) === box) || (hubUi?.view?.ended == false && hubUi?.owner == (if (box === mainBox) "main" else box))
                 override fun recordings(box: com.past9.phoneaos.ui.ComposerBox) { nav.navigate("recordings?box=" + Uri.encode(box.key)) }
+                override suspend fun settleDictation(box: com.past9.phoneaos.ui.ComposerBox): com.past9.phoneaos.voice.Settled =
+                    com.past9.phoneaos.voice.settleDictation(com.past9.phoneaos.voice.DictationHub.ui, if (box === mainBox) "main" else box,
+                        stop = { com.past9.phoneaos.voice.DictationHub.stop() }, retry = { com.past9.phoneaos.voice.DictationHub.retry() })
             }
         }
         fun refreshConnections() = scope.launch {
@@ -605,7 +608,7 @@ class MainActivity : ComponentActivity() {
                         readMark = { g.settings.extra("chatRead")?.toLongOrNull() ?: Long.MAX_VALUE },
                         onRead = { id -> if (id > (g.settings.extra("chatRead")?.toLongOrNull() ?: 0L)) g.settings.setExtra("chatRead", id.toString()) },
                         actions = ChatActions(
-                            composerSend = mainActs.onSend, composerVoice = mainActs.onSendVoice, sending = { mainBox.sending }, onRecordings = mainActs.onRecordings,
+                            composerSend = mainActs.onSend, composerVoice = mainActs.onSendVoice, sending = { mainBox.sending }, waiting = { mainBox.finishing }, onRecordings = mainActs.onRecordings,
                             composerFailed = mainBox.failed, onComposerRetry = mainBox.retry,
                             onCard = { openCard = it },
                             onAct = { g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity); g.runtime.sendQuiet(it) },

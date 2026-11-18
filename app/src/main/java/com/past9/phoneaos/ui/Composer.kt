@@ -27,6 +27,8 @@ class ComposerBox(val state: MutableState<String>, val key: String = "") {
      * and blocks me from sending").
      */
     val sending: Boolean get() = flying > 0
+    /** A send is waiting for the dictation to be written down from the saved audio: the Send button says so. */
+    var finishing by mutableStateOf(false)
     /** The last send that did not get through, with its words still in the box, for the Retry line under it. */
     var failed by mutableStateOf<String?>(null)
     var retry: (() -> Unit)? = null
@@ -130,6 +132,11 @@ interface ComposerTools {
     fun listening(box: ComposerBox): Boolean
     /** The saved dictations; Insert goes into [box]. */
     fun recordings(box: ComposerBox)
+    /**
+     * Called before the words of [box] are sent: ends a dictation still writing into it and waits for the whole-take text
+     * to replace the live caption. Returns how it stood (voice/DictationSettle.kt).
+     */
+    suspend fun settleDictation(box: ComposerBox): com.past9.phoneaos.voice.Settled = com.past9.phoneaos.voice.Settled.NOT_DICTATING
 }
 
 val LocalComposerTools = staticCompositionLocalOf<ComposerTools?> { null }
@@ -157,20 +164,38 @@ fun composerActionsFor(box: ComposerBox, tools: ComposerTools?, working: Boolean
         if (onItsWay == key) return
         onItsWay = key
         val kept = if (words.isBlank()) "Your photos and files are still here." else "Your words are still here."
+        // Words that are the box's own (not a suggestion chip's) may still be a live caption: see below.
+        val fromBox = words.trim() == box.draft.trim()
         box.beganSending()
         scope.launch {
+            // What goes out: his words as pressed, or the whole-take text that replaced the caption while the send waited.
+            var said = words
             try {
+                var textNow = text
+                if (fromBox && tools != null) {
+                    // A dictation still writing into this box: the live caption is only a preview. Wait for the whole take
+                    // written down from the saved audio and send THAT, never the caption (18 Nov 2026).
+                    box.finishing = true
+                    val s = try { tools.settleDictation(box) } finally { box.finishing = false }
+                    if (s == com.past9.phoneaos.voice.Settled.NO_FINAL) {
+                        box.failed = "Your whole take could not be written down yet, so nothing was sent. $kept Tap Send to try again."
+                        box.retry = { go(said, via) }
+                        onFailed(box.failed.orEmpty())
+                        return@launch
+                    }
+                    if (s == com.past9.phoneaos.voice.Settled.FINAL) { said = box.draft; textNow = said + box.docText() }
+                }
                 // Every send ends SENT or FAILED with Retry within this; the uploads get their own, longer, time inside.
-                kotlinx.coroutines.withTimeout(BOX_GIVE_UP_MS) { via(text, pics, docs) }
-                box.accepted(words, pics)
+                kotlinx.coroutines.withTimeout(BOX_GIVE_UP_MS) { via(textNow, pics, docs) }
+                box.accepted(said, pics)
             } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
                 box.failed = "That took too long to send. $kept"
-                box.retry = { go(words, via) }
+                box.retry = { go(said, via) }
                 onFailed(box.failed.orEmpty())
             } catch (e: kotlinx.coroutines.CancellationException) { throw e
             } catch (e: Exception) {
                 box.failed = e.message.orEmpty().ifBlank { "That didn't send." }
-                box.retry = { go(words, via) }
+                box.retry = { go(said, via) }
                 onFailed(box.failed.orEmpty())
             } finally { if (onItsWay == key) onItsWay = null; box.endedSending() }
         }

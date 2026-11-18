@@ -155,7 +155,7 @@ fun ProjectChatScreen(chat: String, name: String, onBack: () -> Unit,
                     scope.launch { delay(120); list.animateScrollToItem(list.layoutInfo.totalItemsCount.coerceAtLeast(1) - 1) }
                 })
             }
-            MessageComposer(box.draft, { box.draft = it }, working, acts, box.attachments, box.docs.keys.toList(), tools?.listening(box) == true, placeholder = stringResource(R.string.proj_message_to, name), dictationOwner = box, sending = box.sending,
+            MessageComposer(box.draft, { box.draft = it }, working, acts, box.attachments, box.docs.keys.toList(), tools?.listening(box) == true, placeholder = stringResource(R.string.proj_message_to, name), dictationOwner = box, sending = box.sending, waiting = box.finishing,
                 failed = box.failed, onRetry = box.retry)
             }
         },
