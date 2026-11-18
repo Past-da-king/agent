@@ -112,6 +112,8 @@ data class ChatActions(
     val composerSend: ((String) -> Unit)? = null,
     val composerVoice: ((String) -> Unit)? = null,
     val sending: () -> Boolean = { false },
+    /** The send is waiting for the dictation to be written down from the saved audio (ui/Composer.kt). */
+    val waiting: () -> Boolean = { false },
     /** The last send that did not get through, shown above the box with Retry beside it (its words are still there). */
     val composerFailed: String? = null,
     val onComposerRetry: (() -> Unit)? = null,
@@ -340,7 +342,7 @@ fun ChatScreen(
                 })
             }
             MessageComposer(draft, onDraft, status.working, actions.composer(), attachments, docs, listening, dictationOwner = "main",
-                sending = actions.sending(), failed = actions.composerFailed, onRetry = actions.onComposerRetry) } } },
+                sending = actions.sending(), waiting = actions.waiting(), failed = actions.composerFailed, onRetry = actions.onComposerRetry) } } },
     ) { pad ->
         if (items.isEmpty() || morning != null) Welcome(userName, Modifier.padding(pad), actions.onSend, morning, hasChat = items.isNotEmpty())
         else LazyColumn(
@@ -1140,7 +1142,7 @@ fun MentionReplyCard(item: ChatItem, reply: com.past9.phoneaos.remote.MentionRep
                     drafts.sent(draftKey)
                 }, onFailed = { problem = ctx.getString(R.string.chat_send_failed, it) })
                 MessageComposer(box.draft, { box.draft = it }, false, acts, box.attachments, box.docs.keys.toList(), tools?.listening(box) == true,
-                    placeholder = stringResource(R.string.chat_reply_to, reply.name), inset = false, dictationOwner = box, sending = box.sending,
+                    placeholder = stringResource(R.string.chat_reply_to, reply.name), inset = false, dictationOwner = box, sending = box.sending, waiting = box.finishing,
                     failed = box.failed, onRetry = box.retry)
             }
             if (problem.isNotEmpty()) Text(problem, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
@@ -1221,7 +1223,7 @@ private fun WorkingRow(status: AgentStatus) {
  */
 @Composable
 fun MessageComposer(draft: String, onDraft: (String) -> Unit, working: Boolean, actions: com.past9.phoneaos.ui.ComposerActions, attachments: List<String>, docs: List<String> = emptyList(),
-                    listening: Boolean = false, placeholder: String? = null, inset: Boolean = true, dictationOwner: Any? = null, sending: Boolean = false,
+                    listening: Boolean = false, placeholder: String? = null, inset: Boolean = true, dictationOwner: Any? = null, sending: Boolean = false, waiting: Boolean = false,
                     failed: String? = null, onRetry: (() -> Unit)? = null) {
     var attachMenu by remember { mutableStateOf(false) }
     if (attachMenu) com.past9.phoneaos.ui.ChoiceSheet(Icons.Rounded.AttachFile, stringResource(R.string.chat_attach_title), stringResource(R.string.chat_attach_sub), listOfNotNull(
@@ -1314,7 +1316,8 @@ fun MessageComposer(draft: String, onDraft: (String) -> Unit, working: Boolean, 
                         }
                         Box(Modifier.fillMaxWidth()) {
                             if (draft.isEmpty()) Text(placeholder ?: if (session != null) stringResource(R.string.chat_ask_or_mention) else stringResource(R.string.chat_ask_for_anything), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            BasicTextField(shown, onField, textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                            // While the mic is on, what is in the box is only the live caption: faint and slanted until the whole take replaces it.
+                            BasicTextField(shown, onField, textStyle = MaterialTheme.typography.bodyLarge.copy(color = if (listening) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface, fontStyle = if (listening) androidx.compose.ui.text.font.FontStyle.Italic else androidx.compose.ui.text.font.FontStyle.Normal),
                                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), maxLines = 6, modifier = Modifier.fillMaxWidth())
                         }
                     }
@@ -1362,6 +1365,8 @@ fun MessageComposer(draft: String, onDraft: (String) -> Unit, working: Boolean, 
                     when {
                         voiceMode -> Icon(Icons.Rounded.Headphones, stringResource(R.string.chat_send_voice), tint = tint)
                         // Words in the box: Send, always, even while the agent is busy or another message is on its way.
+                        // His words are being written down from the whole recording: the message goes the moment they are.
+                        waiting -> androidx.compose.material3.CircularProgressIndicator(Modifier.size(22.dp), color = tint, strokeWidth = 2.dp)
                         canSend -> Icon(Icons.AutoMirrored.Rounded.ArrowForward, stringResource(R.string.chat_send), tint = tint)
                         // Nothing to send: a send still on its way shows here, and Stop while the agent works.
                         sending -> androidx.compose.material3.CircularProgressIndicator(Modifier.size(22.dp), color = tint, strokeWidth = 2.dp)
