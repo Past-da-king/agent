@@ -367,7 +367,7 @@ class DictationEngine(
         if (phase == DictationView.Phase.DONE || phase == DictationView.Phase.KEPT || phase == DictationView.Phase.CANCELLED) return
         if (segs.any { it.state == State.MISSED || it.state == State.FIXING }) return
         // The whole take is being written down once more: wait for it, it is the text he gets.
-        if (polishJob?.isActive == true) return
+        if (polishJob?.isActive == true && !polishSettling) return
         phase = if (segs.any { it.state == State.LOST } || polishLost) DictationView.Phase.KEPT else DictationView.Phase.DONE
         runCatching { tape.seal() }
         log("ended: $phase")
@@ -415,6 +415,9 @@ class DictationEngine(
      * it only ever replaces the caption with more words than he can already see (Words.less). A piece that cannot be
      * written down twice leaves the caption exactly as it was, so a lost connection never costs him his words.
      */
+    /** True while the whole-take job itself asks to settle: it is the one thing settle() otherwise waits for. */
+    private var polishSettling = false
+
     private fun polishFromTape() {
         val t = transcribe ?: return
         val whole = transcribeWhole ?: t
@@ -438,7 +441,9 @@ class DictationEngine(
             if (text == null) {
                 log("polish gave up: the live words stay"); polishLost = true
                 segs.filter { it.state == State.MISSED || it.state == State.FIXING }.forEach { it.state = State.LOST }
-                settle(); show(); return@launch
+                polishSettling = true
+                try { settle() } finally { polishSettling = false }
+                show(); return@launch
             }
             val live = text()
             when {
@@ -448,7 +453,8 @@ class DictationEngine(
             }
             if (polished != null) segs.filter { it.state == State.MISSED || it.state == State.FIXING }.forEach { it.state = State.FIXED }
             else if (segs.any { it.state == State.MISSED }) { pump(); show(); return@launch }
-            settle()
+            polishSettling = true
+            try { settle() } finally { polishSettling = false }
             show()
         }
     }
