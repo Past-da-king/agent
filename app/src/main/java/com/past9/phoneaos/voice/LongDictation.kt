@@ -253,7 +253,7 @@ object PieceTranscriber {
             return o.optString("text")
         }
         val key = com.past9.phoneaos.App.graph(context).settings.voiceKey("gemini") ?: throw IOException("Not linked to a computer, and no Gemini key on this phone.")
-        return withContext(Dispatchers.IO) { SpeechModel.transcribe(key, pcm, ownNames(context), model = com.past9.phoneaos.App.graph(context).settings.extra(SpeechModel.SETTING_KEY)?.trim().takeIf { !it.isNullOrEmpty() } ?: SpeechModel.MODEL) }
+        return withContext(Dispatchers.IO) { SpeechModel.transcribe(key, pcm, ownNames(context), model = Takes.model(context)) }
     }
 }
 

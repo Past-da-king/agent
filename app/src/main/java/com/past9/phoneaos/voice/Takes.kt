@@ -18,7 +18,7 @@ import java.io.File
  * loses nothing, and every step is keyed by the recording id so nothing is sent or replaced twice.
  *
  * Two ways a take is finished:
- * - linked: the audio goes to the computer that owns the chat (`dictation.take`), which runs ONE pass over the whole audio,
+ * - linked: the audio goes to the computer that owns the chat (`voice.takeAudio`), which runs ONE pass over the whole audio,
  *   replaces the message in place and holds the agent's turn until then (docs/dictation-whole-audio.md);
  * - not linked, with this phone's own key: the phone runs the pass itself, edits its own message and releases its agent.
  */
