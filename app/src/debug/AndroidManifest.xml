@@ -8,5 +8,7 @@
         <receiver android:name="com.past9.phoneaos.assist.AssistProbe" android:exported="true" />
         <!-- The emulator wake word probe (wakeword/WakeProbe.kt): plays a WAV into the listener in place of the microphone. -->
         <receiver android:name="com.past9.phoneaos.wakeword.WakeProbe" android:exported="true" />
+        <!-- The dictation probe (voice/DictationProbe.kt): plays a take into the dictation flow in place of the microphone. -->
+        <receiver android:name="com.past9.phoneaos.voice.DictationProbe" android:exported="true" />
     </application>
 </manifest>

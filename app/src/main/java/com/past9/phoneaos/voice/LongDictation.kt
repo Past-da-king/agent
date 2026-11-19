@@ -158,7 +158,7 @@ class MicCapture(
     private val context: Context,
     private val onPcm: (ByteArray, Int) -> Unit,
     private val onSilenced: (Boolean) -> Unit,
-) {
+) : DictationSeam.Mic {
     private val running = AtomicBoolean(false)
     @Volatile private var rec: AudioRecord? = null
     private val am = context.getSystemService(AudioManager::class.java)
@@ -173,7 +173,7 @@ class MicCapture(
         }
     } else null
 
-    fun start() {
+    override fun start() {
         if (running.getAndSet(true)) return
         val cb = callback; if (Build.VERSION.SDK_INT >= 29 && cb != null) runCatching { am.registerAudioRecordingCallback(cb, main) }
         thread(name = "aos-dictation-mic", isDaemon = true) {
@@ -205,7 +205,7 @@ class MicCapture(
         r
     }.getOrNull()
 
-    fun stop() {
+    override fun stop() {
         running.set(false)
         val cb = callback; if (Build.VERSION.SDK_INT >= 29 && cb != null) runCatching { am.unregisterAudioRecordingCallback(cb) }
     }
@@ -269,7 +269,7 @@ object DictationHub {
 
     private var scope: CoroutineScope? = null
     private var engine: DictationEngine? = null
-    private var mic: MicCapture? = null
+    private var mic: DictationSeam.Mic? = null
     private var recogniser: RecognizerLive? = null
     private var netCallback: ConnectivityManager.NetworkCallback? = null
     private var appContext: Context? = null
@@ -323,8 +323,9 @@ object DictationHub {
         val s = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         scope = s
         val names = PieceTranscriber.ownNames(ctx)
-        val live = if (Build.VERSION.SDK_INT >= 33 && SystemDictation.available(ctx)) RecognizerLive(ctx, names) else null
-        recogniser = live
+        val seam = DictationSeam.source
+        val live: LiveWords? = if (seam != null) seam.live() else if (Build.VERSION.SDK_INT >= 33 && SystemDictation.available(ctx)) RecognizerLive(ctx, names) else null
+        recogniser = live as? RecognizerLive
         val transcribe: (suspend (ByteArray) -> String)? = if (PieceTranscriber.available(ctx))
             ({ pcm: ByteArray -> PieceTranscriber.transcribe(ctx, pcm) }) else null
         val transcribeWhole: (suspend (ByteArray) -> String)? = if (transcribe != null) ({ pcm: ByteArray -> PieceTranscriber.transcribe(ctx, pcm, whole = true) }) else null
@@ -336,7 +337,8 @@ object DictationHub {
             },
             log = { Log.i(TAG, it) }, transcribeWhole = transcribeWhole, fixPreview = { NameFix.respell(it, names) })
         engine = e
-        mic = MicCapture(ctx, onPcm = { b, n -> tape.append(b, n); main.post { engine?.audio(b) } }, onSilenced = { on -> main.post { engine?.micSilenced(on) } }).also { it.start() }
+        val onPcm: (ByteArray, Int) -> Unit = { b, n -> tape.append(b, n); main.post { engine?.audio(b) } }
+        mic = (seam?.mic(onPcm) ?: MicCapture(ctx, onPcm = onPcm, onSilenced = { on -> main.post { engine?.micSilenced(on) } })).also { it.start() }
         val cm = ctx.getSystemService(ConnectivityManager::class.java)
         netCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
