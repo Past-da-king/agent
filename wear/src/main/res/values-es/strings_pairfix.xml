@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Pairing, robust and observable (docs/wear.md): the notice under the code and the notification that keeps the pairing state one tap away. -->
+    <string name="pair_battery_low">Batería baja: la vinculación puede ir lenta. Mantén el reloj activo en esta pantalla</string>
+    <string name="launch_power_save">El ahorro de batería está limitando Agent. Carga el reloj o desactiva el ahorro de batería.</string>
+    <string name="launch_very_low">La batería está muy baja y puede que Agent no se abra. Carga el reloj.</string>
+    <string name="pair_channel">Vinculación</string>
+    <string name="pair_notice_title">Vinculando con tu móvil</string>
+    <string name="pair_notice_text">Toca para ver el código</string>
+</resources>

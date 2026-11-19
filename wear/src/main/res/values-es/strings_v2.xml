@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The Material 3 Expressive screens (docs/wear.md, "Look"): words the new screens add. -->
+    <string name="hold">Mantén</string>
+    <string name="not_now">Ahora no</string>
+    <string name="settings_title">Ajustes</string>
+    <string name="settings_gestures_sub">Gestos de muñeca y alertas</string>
+    <string name="settings_home_sub">Usa el agente como inicio</string>
+    <string name="call_sound_title">Sonido de la llamada</string>
+    <string name="call_route_watch">En el reloj</string>
+    <string name="call_route_phone">En el móvil</string>
+    <string name="home_no_recent">Aún no has abierto nada desde aquí</string>
+    <string name="home_card_agent">Inicio del agente</string>
+    <string name="home_card_agent_sub">Primero se abre el agente. Las apps están a un gesto.</string>
+    <string name="home_card_standard">Inicio estándar</string>
+    <string name="home_card_standard_sub">Tu reloj tal como venía</string>
+    <string name="home_optional">Opcional. Puedes cambiarlo cuando quieras.</string>
+    <string name="home_choose_title">¿Usar el agente como inicio del reloj?</string>
+    <string name="home_choose_body">Las apps, tarjetas y notificaciones funcionan igual. Puedes volver con un toque.</string>
+    <string name="home_back_title">¿Volver al inicio estándar?</string>
+    <string name="home_back_body">El agente sigue en tu reloj como una app normal.</string>
+    <string name="home_keep">Seguir con el agente</string>
+    <string name="pair_hint">Móvil: Agent, Watch, Escanear</string>
+    <string name="pair_pairing">Vinculando</string>
+    <string name="pair_paired">Vinculado</string>
+    <string name="pair_ready">Listo en tu muñeca</string>
+    <string name="pair_start">Empezar</string>
+    <string name="pair_step_paired">Vinculado con tu móvil</string>
+    <string name="pair_step_look">Recibiendo el nombre y el aspecto</string>
+    <string name="pair_step_sync">Sincronizando tus pendientes</string>
+    <string name="home_use_short">Usar el agente</string>
+    <string name="home_back_short">Volver</string>
+    <string name="call_use_phone_short">Sonido del móvil</string>
+    <string name="face_mascot_label">El agente</string>
+</resources>
