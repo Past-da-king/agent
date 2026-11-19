@@ -4,16 +4,8 @@ import androidx.compose.runtime.mutableStateOf
 import com.past9.phoneaos.ui.ComposerBox
 import com.past9.phoneaos.ui.ComposerTools
 import com.past9.phoneaos.ui.composerActionsFor
-import com.past9.phoneaos.voice.DictationHub
-import com.past9.phoneaos.voice.DictationView
-import com.past9.phoneaos.voice.DictationView.Phase
-import com.past9.phoneaos.voice.Settled
-import com.past9.phoneaos.voice.settleDictation
-import kotlinx.coroutines.CompletableDeferred
+import com.past9.phoneaos.voice.TakeContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -26,132 +18,65 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 /**
- * 18 Nov 2026: a 188 s dictation went to the chat as the Android live caption ("constration head ... the the the") while
- * the whole-take text, written down from the saved audio a moment later, was clean. The message left the box while the
- * whole-take pass was still running. A send now waits for that text and sends THAT.
+ * Instant send (19 Nov 2026, replaces the 0.15.74 wait): a dictated message goes into the chat AT ONCE with its live
+ * caption, carrying the id of its take; the whole take is written down behind it and replaces the message in place.
+ * 18 Nov: a send used to go out as the caption while the clean text arrived after it; 0.15.74 made Send wait; now he never waits.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 class DictationSendTest {
     private val caption = "for example constration head but some other companies the the the start agentility"
-    private val whole = "for example, the letterhead? Because Stratage has its own letterhead"
 
     private fun box(t: String) = ComposerBox(mutableStateOf(t))
-    private class Tools(val settle: suspend (ComposerBox) -> Settled) : ComposerTools {
+    private class Tools(val take: (ComposerBox) -> String?) : ComposerTools {
         override fun pickPhotos(box: ComposerBox) {}
         override fun pickDocs(box: ComposerBox) {}
         override fun camera(box: ComposerBox, origin: androidx.compose.ui.geometry.Rect) {}
         override fun mic(box: ComposerBox) {}
         override fun listening(box: ComposerBox) = false
         override fun recordings(box: ComposerBox) {}
-        override suspend fun settleDictation(box: ComposerBox) = settle(box)
+        override fun instantTake(box: ComposerBox) = take(box)
     }
 
-    @Test fun aSendWhileTheWholeTakePassRunsWaitsAndSendsTheWholeTakeNotTheCaption() = runTest {
+    @Test fun aDictatedMessageGoesAtOnceWithItsCaptionAndItsTakeId() = runTest {
         val b = box(caption)
-        val gate = CompletableDeferred<Unit>()
-        val sent = ArrayList<String>()
-        val tools = Tools { gate.await(); b.draft = whole; Settled.FINAL }
-        val acts = composerActionsFor(b, tools, false, backgroundScope, send = { t, _, _ -> sent += t })
+        val sent = ArrayList<String>(); val ids = ArrayList<String?>()
+        val acts = composerActionsFor(b, Tools { "20261119-212407" }, false, backgroundScope, send = { t, _, _ -> sent += t; ids += kotlin.coroutines.coroutineContext[TakeContext]?.id })
         acts.onSend(b.draft); runCurrent()
-        assertTrue("nothing leaves while the pass runs", sent.isEmpty())
-        assertTrue("the Send button shows it is finishing", b.finishing)
-        assertEquals("the caption stays in the box meanwhile", caption, b.draft)
-        gate.complete(Unit); runCurrent()
-        assertEquals(listOf(whole), sent)
-        assertFalse(b.finishing)
+        assertEquals("the caption goes now, nothing waits for the pass", listOf(caption), sent)
+        assertEquals(listOf<String?>("20261119-212407"), ids)
+        assertFalse(b.finishing); assertEquals("", b.draft); assertNull(b.failed)
+    }
+
+    @Test fun aSendThatFailsRetriesWithTheSameTake() = runTest {
+        val b = box(caption)
+        var asked = 0
+        val ids = ArrayList<String?>(); var fail = true
+        val acts = composerActionsFor(b, Tools { asked++; "t1" }, false, backgroundScope, send = { _, _, _ -> ids += kotlin.coroutines.coroutineContext[TakeContext]?.id; if (fail) throw java.io.IOException("Not connected") })
+        acts.onSend(b.draft); runCurrent()
+        assertNotNull(b.retry); assertEquals(caption, b.draft)
+        fail = false
+        b.retry!!.invoke(); runCurrent()
+        assertEquals("the take is handed off once, the retry reuses it", 1, asked)
+        assertEquals(listOf<String?>("t1", "t1"), ids)
         assertEquals("", b.draft)
     }
 
-    @Test fun whenTheWholeTakeNeverComesNothingIsSentAndRetryIsOffered() = runTest {
-        val b = box(caption)
-        var result = Settled.NO_FINAL
-        val sent = ArrayList<String>()
-        var told = ""
-        val tools = Tools { if (result == Settled.FINAL) b.draft = whole; result }
-        val acts = composerActionsFor(b, tools, false, backgroundScope, send = { t, _, _ -> sent += t }, onFailed = { told = it })
-        acts.onSend(b.draft); runCurrent()
-        assertTrue("the caption is not sent", sent.isEmpty())
-        assertEquals("his words stay in the box", caption, b.draft)
-        assertNotNull(b.failed); assertTrue(told.isNotBlank()); assertNotNull(b.retry)
-        assertFalse(b.finishing); assertFalse(b.sending)
-        result = Settled.FINAL
-        b.retry!!.invoke(); runCurrent()
-        assertEquals(listOf(whole), sent)
-    }
-
-    @Test fun aSendThatFailsAfterTheWholeTakeCameRetriesWithTheWholeTakeNotTheCaption() = runTest {
-        val b = box(caption)
-        val tools = Tools { b.draft = whole; Settled.FINAL }
-        val sent = ArrayList<String>(); var fail = true
-        val acts = composerActionsFor(b, tools, false, backgroundScope, send = { t, _, _ -> if (fail) throw java.io.IOException("Not connected"); sent += t })
-        acts.onSend(b.draft); runCurrent()
-        assertEquals(whole, b.draft)
-        fail = false
-        b.retry!!.invoke(); runCurrent()
-        assertEquals(listOf(whole), sent)
-    }
-
-    @Test fun wordsThatAreHisOwnGoAsTheyAre() = runTest {
+    @Test fun wordsThatAreHisOwnGoAsTheyAreWithNoTake() = runTest {
         val b = box("typed by hand")
-        val sent = ArrayList<String>()
-        val acts = composerActionsFor(b, Tools { Settled.NOT_DICTATING }, false, backgroundScope, send = { t, _, _ -> sent += t })
+        val ids = ArrayList<String?>(); val sent = ArrayList<String>()
+        val acts = composerActionsFor(b, Tools { null }, false, backgroundScope, send = { t, _, _ -> sent += t; ids += kotlin.coroutines.coroutineContext[TakeContext]?.id })
         acts.onSend(b.draft); runCurrent()
-        assertEquals(listOf("typed by hand"), sent)
+        assertEquals(listOf("typed by hand"), sent); assertEquals(listOf<String?>(null), ids)
     }
 
-    @Test fun aSuggestionChipIsNeverReplacedByTheBoxWords() = runTest {
+    @Test fun aSuggestionChipNeverGetsATake() = runTest {
         val b = box(caption)
+        var asked = 0
         val sent = ArrayList<String>()
-        val acts = composerActionsFor(b, Tools { b.draft = whole; Settled.FINAL }, false, backgroundScope, send = { t, _, _ -> sent += t })
+        val acts = composerActionsFor(b, Tools { asked++; "t1" }, false, backgroundScope, send = { t, _, _ -> sent += t })
         acts.onSend("What can you do?"); runCurrent()
-        assertEquals(listOf("What can you do?"), sent)
+        assertEquals(listOf("What can you do?"), sent); assertEquals(0, asked)
+        assertTrue(b.draft.isNotEmpty())
     }
-
-    // ---- settleDictation ----
-    private fun ui(owner: Any?, p: Phase, text: String = "") = DictationHub.Ui(owner, DictationView(text, p, final = p == Phase.DONE))
-
-    @Test fun settleStopsAListeningDictationAndWaitsForDone() = runTest {
-        val f = MutableStateFlow<DictationHub.Ui?>(ui("main", Phase.LISTENING, caption))
-        var stops = 0; var out: Settled? = null
-        backgroundScope.launch2 { out = settleDictation(f, "main", stop = { stops++; f.value = ui("main", Phase.FINISHING, caption) }, retry = {}) }
-        runCurrent()
-        assertEquals(1, stops); assertNull("still waiting", out)
-        f.value = ui("main", Phase.DONE, whole); runCurrent()
-        assertEquals(Settled.FINAL, out)
-    }
-
-    @Test fun settleWaitsOutAFinishingDictationWithoutStoppingItAgain() = runTest {
-        val f = MutableStateFlow<DictationHub.Ui?>(ui("main", Phase.FINISHING, caption))
-        var stops = 0; var out: Settled? = null
-        backgroundScope.launch2 { out = settleDictation(f, "main", stop = { stops++ }, retry = {}) }
-        runCurrent(); assertEquals(0, stops); assertNull(out)
-        f.value = ui("main", Phase.DONE, whole); runCurrent()
-        assertEquals(Settled.FINAL, out)
-    }
-
-    @Test fun aKeptTakeIsRetriedAndOneThatStaysKeptIsNoFinal() = runTest {
-        val f = MutableStateFlow<DictationHub.Ui?>(ui("main", Phase.KEPT, caption))
-        var retries = 0; var out: Settled? = null
-        backgroundScope.launch2 { out = settleDictation(f, "main", stop = {}, retry = { retries++; f.value = ui("main", Phase.FINISHING, caption) }) }
-        runCurrent(); assertEquals(1, retries); assertNull(out)
-        f.value = ui("main", Phase.KEPT, caption); runCurrent()
-        assertEquals(Settled.NO_FINAL, out)
-    }
-
-    @Test fun settleGivesUpAtTheLimitAsNoFinal() = runTest {
-        val f = MutableStateFlow<DictationHub.Ui?>(ui("main", Phase.FINISHING, caption))
-        var out: Settled? = null
-        backgroundScope.launch2 { out = settleDictation(f, "main", stop = {}, retry = {}, limitMs = 5_000) }
-        runCurrent(); advanceTimeBy(5_001); runCurrent()
-        assertEquals(Settled.NO_FINAL, out)
-    }
-
-    @Test fun anotherBoxesDictationOrNoneMeansNotDictating() = runTest {
-        assertEquals(Settled.NOT_DICTATING, settleDictation(MutableStateFlow(null), "main", {}, {}))
-        assertEquals(Settled.NOT_DICTATING, settleDictation(MutableStateFlow(ui("other", Phase.LISTENING)), "main", {}, {}))
-        assertEquals(Settled.NOT_DICTATING, settleDictation(MutableStateFlow(ui("main", Phase.CANCELLED)), "main", {}, {}))
-    }
-
-    private fun kotlinx.coroutines.CoroutineScope.launch2(block: suspend () -> Unit) { this.launch { block() } }
 }

@@ -619,6 +619,45 @@ private fun UserBubble(item: ChatItem) {
                 color = if (sender == null) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
         }
     }
+    TakeMarkRow(item)
+}
+
+/**
+ * A dictated message whose whole take is still being written down says so ("Refining", instant send, 19 Nov 2026) and, when
+ * that failed, offers Retry. A small line under the bubble in the app's own tokens; nothing pops up.
+ */
+@Composable
+private fun TakeMarkRow(item: ChatItem) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val flow = remember { com.past9.phoneaos.voice.Takes.of(ctx) }
+    val takes by flow.states.collectAsStateWithLifecycle()
+    var mark = com.past9.phoneaos.voice.TakeMark.of(item.meta, item.text, takes, System.currentTimeMillis())
+    // Only a message that is still being refined needs a clock: a marker for a take nobody answers goes away by itself.
+    if (mark.kind == com.past9.phoneaos.voice.TakeMark.Kind.REFINING) {
+        val now by produceState(System.currentTimeMillis()) { while (true) { kotlinx.coroutines.delay(5_000); value = System.currentTimeMillis() } }
+        mark = com.past9.phoneaos.voice.TakeMark.of(item.meta, item.text, takes, now)
+    }
+    val scope = rememberCoroutineScope()
+    TakeMarkLine(mark.kind) { scope.launch { flow.retry(mark.id) } }
+}
+
+/** The marker under a dictated message: "Refining" while its whole take is being written down, "Couldn't refine" with Retry when it failed. */
+@Composable
+internal fun TakeMarkLine(kind: com.past9.phoneaos.voice.TakeMark.Kind, onRetry: () -> Unit) {
+    when (kind) {
+        com.past9.phoneaos.voice.TakeMark.Kind.NONE -> {}
+        com.past9.phoneaos.voice.TakeMark.Kind.REFINING -> Row(Modifier.fillMaxWidth().padding(top = 4.dp, end = 6.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 1.5.dp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.width(6.dp))
+            Text("Refining", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        com.past9.phoneaos.voice.TakeMark.Kind.FAILED -> Row(Modifier.fillMaxWidth().padding(top = 2.dp, end = 2.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            Text("Couldn't refine this one", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+            TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp), modifier = Modifier.heightIn(min = 32.dp)) {
+                Text("Retry", style = MaterialTheme.typography.labelMedium)
+            }
+        }
+    }
 }
 
 private fun senderIcon(s: com.past9.phoneaos.remote.Sender): ImageVector = when (s.from) {

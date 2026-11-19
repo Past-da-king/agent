@@ -528,6 +528,10 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     private suspend fun deliverNow(words: String, images: List<String>, chat: String?, replyIn: String?, files: List<String> = emptyList()) {
         val sendId = java.util.UUID.randomUUID().toString()
         val sentAt = System.currentTimeMillis()
+        // Instant send: a dictated message goes now with its live caption; its whole take is uploaded beside it (voice/Takes.kt)
+        // and the computer replaces the message in place and holds the agent's turn for the clean text.
+        val takeId = kotlin.coroutines.coroutineContext[com.past9.phoneaos.voice.TakeContext]?.id
+        if (takeId != null) runCatching { com.past9.phoneaos.voice.Takes.of(app).submit(takeId, chat) }
         var attachments = JSONArray()
         var uploadedTo: String? = null
         // The same pictures and files go up once per brain, however many times the send has to be tried.
@@ -544,6 +548,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
                 val body = JSONObject().put("sendId", sendId).put("sentAt", sentAt).put("fresh", fresh).put("text", words).put("attachments", attachments)
                 if (chat != null) body.put("chat", chat)
                 if (replyIn != null) body.put("replyIn", replyIn)
+                if (takeId != null) body.put("dictation", JSONObject().put("id", takeId))
                 call("chat.sendOnce", listOf(body), SendFlow.ACK_WAIT_MS + 1_000) as? JSONObject
             },
             socketOpen = { rpc?.isOpen == true },

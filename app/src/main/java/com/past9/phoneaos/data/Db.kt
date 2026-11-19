@@ -121,6 +121,8 @@ interface ChatDao {
     @Insert suspend fun insert(item: ChatItem): Long
     @Update suspend fun update(item: ChatItem)
     @Query("SELECT * FROM chat_items WHERE id = :id") suspend fun get(id: Long): ChatItem?
+    /** The newest user message whose meta matches [like] (an instant-send take's message, found by its recording id). */
+    @Query("SELECT * FROM chat_items WHERE kind = 'user' AND meta LIKE :like ORDER BY id DESC LIMIT 1") suspend fun byMeta(like: String): ChatItem?
     @Query("DELETE FROM chat_items") suspend fun clear()
     /** How many messages the user sent at or after [since] (a share waits for its message to be stored). */
     @Query("SELECT COUNT(*) FROM chat_items WHERE kind = 'user' AND createdAt >= :since") suspend fun userSince(since: Long): Int
