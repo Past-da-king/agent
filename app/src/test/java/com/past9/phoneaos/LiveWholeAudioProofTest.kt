@@ -16,6 +16,7 @@ import java.io.File
  */
 @RunWith(RobolectricTestRunner::class)
 class LiveWholeAudioProofTest {
+    private val langs = listOf("en-ZA", "zu-ZA", "af-ZA", "st-ZA", "xh-ZA", "tn-ZA")
     private val names = listOf("Strat Edge", "SEI", "Strat CMS", "Strat Edge ID", "LondaCorp", "Mthashana", "Meqry", "Impetix", "Sinqobile Shoba", "Phumzile Motau", "Nkululeko", "Bongani", "Guavas", "Ben van Rooyen", "Creek", "GrowOS", "Cosmiprint", "Hina", "Ayanda")
 
     @Test fun oldPiecesAgainstOneWholePass() {
@@ -24,7 +25,7 @@ class LiveWholeAudioProofTest {
         dir!!
         val key = File(dir, "key").readText().trim()
         val tape = DictationTape(File(dir, "proof-tape.wav"))
-        val order = System.getenv("WA_CLIPS")?.split(",") ?: listOf("take188", "msg2128", "zulu", "take188", "zulu", "msg2128", "take188")
+        val order = System.getenv("WA_CLIPS")?.split(",") ?: listOf("take188", "msg2128", "zulu", "long1", "long2")
         val gap = ByteArray(DictationTape.BYTES_PER_SECOND.toInt() * 3 / 2)
         for (c in order) {
             val b = File(dir, "$c.wav").readBytes()
@@ -34,8 +35,8 @@ class LiveWholeAudioProofTest {
         }
         val seconds = DictationTape.ms(tape.bytes) / 1000
         val pieces = Quiet.split(tape.levels(), 0, tape.bytes, maxMs = 120_000L)
-        val before = pieces.joinToString(" ") { p -> SpeechModel.transcribe(key, tape.read(p.first, p.last + 1), names) }.trim()
-        val after = SpeechModel.transcribe(key, tape.read(0, tape.bytes), names)
+        val before = pieces.joinToString(" ") { p -> SpeechModel.transcribe(key, tape.read(p.first, p.last + 1), names, langs) }.trim()
+        val after = SpeechModel.transcribe(key, tape.read(0, tape.bytes), names, langs)
         File(dir, "proof-before.txt").writeText("seconds=$seconds pieces=${pieces.size}\n$before\n")
         File(dir, "proof-after.txt").writeText("seconds=$seconds requests=1\n$after\n")
     }
