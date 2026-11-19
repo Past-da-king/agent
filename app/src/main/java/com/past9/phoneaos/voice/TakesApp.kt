@@ -31,23 +31,18 @@ object Takes {
         val g = App.graph(context)
         g.scope.launch {
             RemoteHub.session.collect { s ->
-                if (s != null) {
-                    f.resume()
-                    // The computer's choice of speech model, so this phone uses the same one when it writes a take itself.
-                    runCatching { (s.call("dictation.model", emptyList(), 10_000) as? JSONObject)?.optString("model")?.takeIf { it.isNotBlank() } }
-                        .getOrNull()?.let { m -> g.settings.setExtra(PC_MODEL_KEY, m) }
-                }
+                if (s != null) f.resume()
             }
         }
     }
 
-    /** The speech model for a pass written on this phone: its own setting, else the computer's choice, else the default. */
-    fun model(context: Context): String {
-        val s = App.graph(context).settings
-        return s.extra(SpeechModel.SETTING_KEY)?.trim().takeIf { !it.isNullOrEmpty() } ?: s.extra(PC_MODEL_KEY)?.trim().takeIf { !it.isNullOrEmpty() } ?: SpeechModel.MODEL
-    }
+    /**
+     * The speech model for a pass written on this phone: its own setting (Settings extra [SpeechModel.SETTING_KEY]), else the
+     * default, the same one the computer starts with. When linked the computer runs the pass with its own setting.
+     */
+    fun model(context: Context): String =
+        App.graph(context).settings.extra(SpeechModel.SETTING_KEY)?.trim().takeIf { !it.isNullOrEmpty() } ?: SpeechModel.DEFAULT_MODEL
 
-    const val PC_MODEL_KEY = "dictation_model_pc"
     private const val LINK_WAIT_MS = 8_000L
 
     private fun build(ctx: Context): TakeFlow {
@@ -57,11 +52,13 @@ object Takes {
 
             override suspend fun handOver(take: Take, pcm: ByteArray): Boolean {
                 val s = RemoteHub.session.value ?: withTimeoutOrNull(LINK_WAIT_MS) { RemoteHub.session.filterNotNull().first() } ?: return false
-                val body = JSONObject().put("id", take.id).put("live", take.live).put("audio", JSONObject().put("\$b64", Base64.encodeToString(pcm, Base64.NO_WRAP)))
+                // voice.takeAudio (agent-desktop-app docs/dictation-whole-audio.md): the whole take for this recording id; the computer
+                // runs ONE pass, replaces the message in place and releases the agent's turn. Idempotent by id.
+                val body = JSONObject().put("id", take.id).put("caption", take.live).put("audio", JSONObject().put("\$b64", Base64.encodeToString(pcm, Base64.NO_WRAP)))
                     .put("names", JSONArray(PieceTranscriber.ownNames(ctx))).put("languages", JSONArray(SpeechModel.languages()))
                 take.chat?.let { body.put("chat", it) }
-                val r = s.call("dictation.take", listOf(body), 120_000) as? JSONObject ?: throw IOException("Your computer didn't answer.")
-                if (r.optBoolean("ok", true) && (r.optBoolean("accepted", true))) return true
+                val r = s.call("voice.takeAudio", listOf(body), 120_000) as? JSONObject ?: throw IOException("Your computer didn't answer.")
+                if (r.optBoolean("ok")) return true
                 throw IOException(r.optString("error").ifBlank { "Your computer couldn't take that." })
             }
 
@@ -81,8 +78,8 @@ object Takes {
 
             override suspend fun retryRemote(id: String): Boolean {
                 val s = RemoteHub.session.value ?: return false
-                val r = s.call("dictation.retry", listOf(id), 15_000) as? JSONObject
-                return r?.optBoolean("ok", true) == true
+                val r = s.call("voice.takeAudio", listOf(JSONObject().put("id", id).put("retry", true)), 30_000) as? JSONObject
+                return r?.optBoolean("ok") == true
             }
         }
         return TakeFlow(TakeQueue(File(ctx.filesDir, "takes")), g.scope, env)

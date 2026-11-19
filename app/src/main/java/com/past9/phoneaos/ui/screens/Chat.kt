@@ -652,7 +652,7 @@ internal fun TakeMarkLine(kind: com.past9.phoneaos.voice.TakeMark.Kind, onRetry:
             Text("Refining", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         com.past9.phoneaos.voice.TakeMark.Kind.FAILED -> Row(Modifier.fillMaxWidth().padding(top = 2.dp, end = 2.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-            Text("Couldn't refine this one", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+            Text("Sent as heard", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
             TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp), modifier = Modifier.heightIn(min = 32.dp)) {
                 Text("Retry", style = MaterialTheme.typography.labelMedium)
             }

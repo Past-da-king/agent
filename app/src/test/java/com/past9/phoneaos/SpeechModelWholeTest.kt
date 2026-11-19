@@ -42,7 +42,7 @@ class SpeechModelWholeTest {
     @Test fun aThreeMinuteTakeIsOneRequestWithTheWholeAudioAndHisNames() {
         val pcm = ByteArray(188 * DictationTape.BYTES_PER_SECOND.toInt()) { (it % 50).toByte() }
         val calls = ArrayList<Call>()
-        val text = SpeechModel.transcribe("k", pcm, names, langs, fake(calls))
+        val text = SpeechModel.transcribe("k", pcm, names, langs, fake(calls), model = SpeechModel.MODEL)
         assertEquals("The final words.", text)
         assertEquals("exactly one request", 1, calls.size)
         assertTrue(calls[0].url.endsWith("/v1beta/interactions"))
@@ -59,7 +59,7 @@ class SpeechModelWholeTest {
     @Test fun aTakeTooBigToSendInlineIsUploadedOnceAndAskedAboutOnce() {
         val pcm = ByteArray(SpeechModel.INLINE_MAX_BYTES + 1000)
         val calls = ArrayList<Call>()
-        SpeechModel.transcribe("k", pcm, names, langs, fake(calls))
+        SpeechModel.transcribe("k", pcm, names, langs, fake(calls), model = SpeechModel.MODEL)
         assertEquals(listOf("start", "upload, finalize"), calls.filter { it.url.contains("/upload/") }.map { it.headers.entries.first { e -> e.key.equals("X-Goog-Upload-Command", true) }.value })
         val asks = calls.filter { it.url.endsWith("/v1beta/interactions") }
         assertEquals(1, asks.size)
@@ -72,7 +72,7 @@ class SpeechModelWholeTest {
         val pcm = ByteArray(10 * DictationTape.BYTES_PER_SECOND.toInt())
         val calls = ArrayList<Call>()
         val client = fake(calls, """{"output_text":"","candidates":[{"content":{"parts":[{"text":"Letterhead for Strat Edge ID."}]}}]}""")
-        assertEquals("Letterhead for Strat Edge ID.", SpeechModel.transcribe("k", pcm, names, langs, client))
+        assertEquals("Letterhead for Strat Edge ID.", SpeechModel.transcribe("k", pcm, names, langs, client, model = SpeechModel.MODEL))
         assertEquals(2, calls.size)
         val gen = JSONObject(calls[1].body)
         val prompt = gen.getJSONArray("contents").getJSONObject(0).getJSONArray("parts").getJSONObject(0).getString("text")
@@ -87,5 +87,19 @@ class SpeechModelWholeTest {
         assertEquals("Strat Edge ID.", SpeechModel.transcribe("k", pcm, names, langs, client, model = "gemini-3.5-flash-lite"))
         assertEquals(1, calls.size)
         assertTrue(calls[0].url.contains("/models/gemini-3.5-flash-lite:generateContent"))
+    }
+
+    @Test fun theDefaultIsTheCheapModelThatKeptHisIsiZuluAndTheSpeechModelCatchesItsFailure() {
+        assertEquals("gemini-3.1-flash-lite", SpeechModel.DEFAULT_MODEL)
+        val pcm = ByteArray(5 * DictationTape.BYTES_PER_SECOND.toInt())
+        val calls = ArrayList<Call>()
+        val client = fake(calls, """{"output_text":"From the speech model.","candidates":[{"content":{"parts":[{"text":"Sawubona, Strat Edge ID."}]}}]}""")
+        assertEquals("Sawubona, Strat Edge ID.", SpeechModel.transcribe("k", pcm, names, langs, client))
+        assertEquals(1, calls.size); assertTrue(calls[0].url.contains("/models/gemini-3.1-flash-lite:generateContent"))
+        // The chosen model answers nothing: the speech model gets the same audio.
+        val calls2 = ArrayList<Call>()
+        val client2 = fake(calls2, """{"output_text":"From the speech model.","candidates":[{"content":{"parts":[{"text":""}]}}]}""")
+        assertEquals("From the speech model.", SpeechModel.transcribe("k", pcm, names, langs, client2))
+        assertEquals(2, calls2.size); assertTrue(calls2[1].url.endsWith("/v1beta/interactions"))
     }
 }

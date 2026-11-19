@@ -37,29 +37,25 @@ preview only.
 - Reply unchanged: `{ok: true, text}` or `{ok: false, error}`. Without the second argument the call is a piece, as before.
 
 ## Instant send (phone 0.15.76; the design change of 19 Nov 21:30)
-Send never waits. The 0.15.74 blocking wait (`settleDictation`, the Send spinner, "nothing was sent") is removed.
+Send never waits. The 0.15.74 blocking wait (`settleDictation`, the Send spinner, "nothing was sent") is removed. The wire is
+the computer's FINAL contract (agent-desktop-app docs/dictation-whole-audio.md, 19 Nov 2026, desktop 0.2.137):
 
-Phone, when Send is pressed while a dictation is still being written down (or KEPT, or DONE without a whole-take text):
-1. The mic stops, the engine hands off (`DictationEngine.handOff()`: no pass on the phone, tape sealed) and the whole take
-   is written to disk as a take (`filesDir/takes/<recording id>.json` + `.pcm`, `voice/Takes.kt`) BEFORE anything is sent.
-2. The message goes at once with the live caption. Wire (additive, old computers ignore the extra field):
-   `chat.sendOnce({sendId, sentAt, fresh, text: <caption>, attachments, chat?, replyIn?, dictation: {id: <recording id>}})`.
-3. In parallel the take is handed over: `dictation.take({id, chat?, live: <caption>, audio: {"$b64": <whole take PCM16 16 kHz mono>}, names: [...], languages: [...]})`
-   answered `{ok: true, accepted: true, duplicate?: bool}` (`PendingTakes.accept`). Idempotent by id; the phone retries
-   2 s, 5 s, 10 s, then shows Retry; if the link is down the take stays queued and carries on when it is back and on every
-   app start (`Takes.start`).
-4. The computer runs ONE pass over the whole audio, replaces the message in place (`replace`) and releases the agent's turn
-   (`settled(id)`, cap 30 s + 0.5 s per second said, max 100 s; then the caption plus the note
-   "dictated; clean transcript failed, this is the live caption"). It must hold the turn for a message that carries
-   `dictation.id` even if the take has not arrived yet (message and upload run side by side, either may land first).
-5. What the phone reads back, for the "Refining" marker and Retry: the message row's `meta.dictation = {id, state}` with
-   state `refining` | `done` | `failed` (the phone sets `refining` in its own rows). Without it the phone falls back to its own
-   take queue (marker while its words equal the caption, gone after the take's cap). Retry on a failed message calls
-   `dictation.retry(id)` (`PendingTakes.retry`) and answers `{ok: true}`.
-6. `dictation.model()` answers `{model: "<id>"}`, the computer's speech model; the phone stores it and uses it when it
-   writes a take itself (own setting `dictation_model` wins, then the computer's, then the default).
+1. Send while a dictation is still being written down (or KEPT, or DONE without a whole-take text): the mic stops,
+   `DictationEngine.handOff()` runs no pass on the phone, and the whole take is written to disk as a take
+   (`filesDir/takes/<recording id>.json` + `.pcm`, `voice/Takes.kt`) BEFORE anything is sent.
+2. `chat.sendOnce({sendId, sentAt, fresh, text: <caption>, attachments, chat?, replyIn?, dictation: {id, pending: true, caption}})`.
+   The row appears at once with `meta.dictation = {id, pending: true}`: "Refining". The agent's turn does not start.
+3. In parallel, `voice.takeAudio({id, audio: {"$b64": <whole take PCM16 16 kHz>}, chat?, caption, names, languages})`, answered
+   `{ok: true, state, duplicate?}`. Idempotent by id. The phone retries 2 s, 5 s, 10 s, then keeps the take; a link that is down
+   keeps it queued, and every app start and every link-up resumes the queue.
+4. The computer runs ONE pass, replaces the row in place (`meta.dictation = {id, pending: false, final: true}`) and then starts the
+   agent's turn. On failure or timeout the agent gets the caption plus "dictated; clean transcript failed, this is the live
+   caption" and the row becomes `{id, pending: false, failed: true}`: the phone draws "Sent as heard" and Retry.
+5. Retry: `voice.takeAudio({id, retry: true})` (no audio).
 
-No computer linked, own Gemini key on the phone: the same queue runs the ONE pass on the phone
-(`SpeechModel.transcribe`, whole file), edits its own message in place (`meta.dictation.state = done`) and only then is
-the agent's turn started; a pass that fails or runs past the cap gives the agent the caption plus the note.
-Takes older than a day and their audio are tidied; the audio goes as soon as a take is handed over or done.
+No computer linked, own Gemini key on the phone: the same queue runs the ONE pass on the phone (`SpeechModel.transcribe`, whole file),
+edits its own message in place and only then starts the agent's turn (cap 30 s + 0.5 s per second said, max 100 s, then the caption
+plus the note). Takes older than a day are tidied; the audio goes as soon as a take is handed over or done.
+
+Model: setting `dictation_model` (Settings extra), default `gemini-3.1-flash-lite` (the computer's default). A `*transcribe*` model
+uses the Interactions API; any other reads the file with the prompt, and if it fails the speech model gets the same audio.

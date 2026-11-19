@@ -110,6 +110,13 @@ class TakesTest {
         assertTrue(f.retry("t1")); assertEquals(listOf("t1"), env.retried)
     }
 
+    @Test fun theComputersOwnRowMetaDrivesTheMarker() {
+        val none = emptyMap<String, Take>()
+        assertEquals(TakeMark.Kind.REFINING, TakeMark.of("""{"dictation":{"id":"t1","pending":true}}""", "caption", none, 0).kind)
+        assertEquals(TakeMark.Kind.NONE, TakeMark.of("""{"dictation":{"id":"t1","pending":false,"final":true}}""", "Clean.", none, 0).kind)
+        assertEquals("Sent as heard with Retry", TakeMark.Kind.FAILED, TakeMark.of("""{"dictation":{"id":"t1","pending":false,"failed":true}}""", "caption", none, 0).kind)
+    }
+
     @Test fun theMarkerSaysRefiningThenGoesWhenTheWordsChange() {
         val take = Take("t1", null, "caption", "handed", 10, acceptedAt = 1_000)
         val meta = """{"dictation":{"id":"t1","state":"refining"}}"""

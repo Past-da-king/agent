@@ -548,7 +548,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
                 val body = JSONObject().put("sendId", sendId).put("sentAt", sentAt).put("fresh", fresh).put("text", words).put("attachments", attachments)
                 if (chat != null) body.put("chat", chat)
                 if (replyIn != null) body.put("replyIn", replyIn)
-                if (takeId != null) body.put("dictation", JSONObject().put("id", takeId))
+                if (takeId != null) body.put("dictation", JSONObject().put("id", takeId).put("pending", true).put("caption", words))
                 call("chat.sendOnce", listOf(body), SendFlow.ACK_WAIT_MS + 1_000) as? JSONObject
             },
             socketOpen = { rpc?.isOpen == true },

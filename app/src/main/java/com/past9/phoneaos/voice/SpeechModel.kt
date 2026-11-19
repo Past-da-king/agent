@@ -24,10 +24,13 @@ import java.util.concurrent.TimeUnit
 object SpeechModel {
     private const val TAG = "AosSpeech"
 
-    /** Settings extra key that picks the model (default [MODEL]). A transcribe model, or any Gemini model that reads audio. */
+    /** Settings extra key that picks the model (default [DEFAULT_MODEL]). A transcribe model, or any Gemini model that reads audio. */
     const val SETTING_KEY = "dictation_model"
 
-    /** The model made for this. Its own endpoint: the Interactions API, where the transcription settings live. */
+    /** The default speech model on this phone and on the computer: measured 19 Nov 2026 on his mixed English and isiZulu, it kept every isiZulu line, names 10 of 11, and kept a quoted mistake as said. */
+    const val DEFAULT_MODEL = "gemini-3.1-flash-lite"
+
+    /** The speech model made for this. Its own endpoint: the Interactions API, where the transcription settings live. Tried when the chosen general model fails. */
     const val MODEL = "gemini-3.5-transcribe"
     private const val INTERACTIONS = "https://generativelanguage.googleapis.com/v1beta/interactions"
     private const val GENERATE = "https://generativelanguage.googleapis.com/v1beta/models/"
@@ -133,7 +136,7 @@ object SpeechModel {
         vocabulary: List<String> = emptyList(),
         languages: List<String> = languages(),
         client: OkHttpClient = http,
-        model: String = MODEL,
+        model: String = DEFAULT_MODEL,
     ): String {
         val wav = DictationTape.header(pcm.size.toLong()) + pcm
         var fileUri: String? = null
@@ -142,28 +145,34 @@ object SpeechModel {
         var last: Exception? = null
         Log.i(TAG, "whole take: ${wav.size} bytes, ${if (fileUri != null) "uploaded" else "inline"}, ${vocabulary.size} names, languages $languages, model $model")
         val transcribeModel = model.contains("transcribe")
-        // 1. The speech model.
-        if (transcribeModel) try {
-            val reply = post(client, INTERACTIONS, key, body(model, base64, vocabulary, languages, fileUri = fileUri))
-            val text = textOf(reply)
-            if (text.isNotEmpty()) return text
-            Log.i(TAG, "speech model answered no words")
-        } catch (e: IOException) {
-            last = e
-            Log.i(TAG, "speech model: ${e.message}")
-        }
-        // 2. A general model reading the same whole file, told the same names and languages (the Settings pick first when it is one).
         val hint = prompt(vocabulary, languages)
-        for (general in (if (transcribeModel) FALLBACKS else listOf(model) + FALLBACKS.filter { it != model })) {
+        fun general(m: String): String {
+            val audio = if (fileUri != null) JSONObject().put("file_data", JSONObject().put("mime_type", "audio/wav").put("file_uri", fileUri))
+            else JSONObject().put("inline_data", JSONObject().put("mime_type", "audio/wav").put("data", base64))
+            val body = JSONObject().put("contents", JSONArray().put(JSONObject().put("parts", JSONArray()
+                .put(JSONObject().put("text", hint)).put(audio))))
+                .put("generationConfig", JSONObject().put("temperature", 0))
+            return generateTextOf(post(client, GENERATE + m + ":generateContent", key, body))
+        }
+        fun speech(m: String): String {
+            val reply = post(client, INTERACTIONS, key, body(m, base64, vocabulary, languages, fileUri = fileUri))
+            return textOf(reply)
+        }
+        // The order: the chosen model, then the speech model (when a general model was chosen), then strong general models.
+        val steps = ArrayList<Pair<String, () -> String>>()
+        if (transcribeModel) steps.add(model to { speech(model) }) else {
+            steps.add(model to { general(model) })
+            steps.add(MODEL to { speech(MODEL) })
+        }
+        for (m in FALLBACKS) if (m != model) steps.add(m to { general(m) })
+        for ((name, run) in steps) {
             try {
-                val audio = if (fileUri != null) JSONObject().put("file_data", JSONObject().put("mime_type", "audio/wav").put("file_uri", fileUri))
-                else JSONObject().put("inline_data", JSONObject().put("mime_type", "audio/wav").put("data", base64))
-                val body = JSONObject().put("contents", JSONArray().put(JSONObject().put("parts", JSONArray()
-                    .put(JSONObject().put("text", hint)).put(audio))))
-                    .put("generationConfig", JSONObject().put("temperature", 0))
-                return generateTextOf(post(client, GENERATE + general + ":generateContent", key, body))
+                val text = run()
+                if (text.isNotEmpty()) return text
+                Log.i(TAG, "$name answered no words")
             } catch (e: IOException) {
                 last = e
+                Log.i(TAG, "$name: ${e.message}")
             }
         }
         throw last ?: IOException("Gemini couldn't write that down.")

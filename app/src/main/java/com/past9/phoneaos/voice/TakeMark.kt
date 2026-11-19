@@ -16,13 +16,18 @@ object TakeMark {
     fun of(meta: String, text: String, takes: Map<String, Take>, now: Long): Mark {
         val d = runCatching { JSONObject(meta.ifBlank { "{}" }).optJSONObject("dictation") }.getOrNull()
         val state = d?.optString("state").orEmpty()
+        // The computer's row: {id, pending: true} while refining, {id, pending: false, final: true} when replaced,
+        // {id, pending: false, failed: true} when the pass failed. This phone's own rows say it with state.
+        val failedRow = d?.optBoolean("failed") == true || state == "failed"
+        val doneRow = d?.optBoolean("final") == true || state == "done"
+        val pendingRow = d?.optBoolean("pending", state == "refining") == true
         val id = d?.optString("id")?.takeIf { it.isNotBlank() }
             ?: takes.values.lastOrNull { it.state != "done" && it.live == text && text.isNotBlank() }?.id
             ?: return NONE
-        if (state == "done") return NONE
+        if (doneRow) return NONE
         val t = takes[id]
-        if (state == "failed" || t?.state == "failed") return Mark(Kind.FAILED, id)
-        if (t == null) return if (state == "refining") Mark(Kind.REFINING, id) else NONE
+        if (failedRow || t?.state == "failed") return Mark(Kind.FAILED, id)
+        if (t == null) return if (pendingRow) Mark(Kind.REFINING, id) else NONE
         return when (t.state) {
             "queued", "running" -> Mark(Kind.REFINING, id)
             // The computer has it: it replaces the message when the pass is done. A message whose words changed is done; one that
