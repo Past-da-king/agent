@@ -24,6 +24,9 @@ import java.util.concurrent.TimeUnit
 object SpeechModel {
     private const val TAG = "AosSpeech"
 
+    /** Settings extra key that picks the model (default [MODEL]). A transcribe model, or any Gemini model that reads audio. */
+    const val SETTING_KEY = "dictation_model"
+
     /** The model made for this. Its own endpoint: the Interactions API, where the transcription settings live. */
     const val MODEL = "gemini-3.5-transcribe"
     private const val INTERACTIONS = "https://generativelanguage.googleapis.com/v1beta/interactions"
@@ -54,7 +57,7 @@ object SpeechModel {
     }
 
     /** The request body for the speech model, with the settings that make the difference. */
-    fun body(model: String, wavBase64: String, vocabulary: List<String>, languages: List<String>, mode: String = "verbatim"): JSONObject {
+    fun body(model: String, wavBase64: String, vocabulary: List<String>, languages: List<String>, mode: String = "verbatim", fileUri: String? = null): JSONObject {
         val config = JSONObject().put("mode", mode)
         val codes = languages.filter { it.isNotBlank() }
         if (codes.isNotEmpty()) config.put("language_codes", JSONArray(codes))
@@ -66,7 +69,7 @@ object SpeechModel {
                 .put("type", "user_input")
                 .put("content", JSONArray().put(JSONObject()
                     .put("type", "audio")
-                    .put("data", wavBase64)
+                    .apply { if (fileUri != null) put("uri", fileUri) else put("data", wavBase64) }
                     .put("mime_type", "audio/wav")))))
             .put("generation_config", JSONObject().put("transcription_config", config))
     }
@@ -102,9 +105,27 @@ object SpeechModel {
         return out.toString().trim()
     }
 
+    /** The most audio sent inline in one request (WAV bytes). Over it the take is uploaded once to the Files API and referenced. Gemini's inline request limit is 20 MB with the base64 and the words. */
+    const val INLINE_MAX_BYTES = 12_000_000
+
+    /** What to tell a general model that has no transcription settings: exactly what was said, in the language said, names spelled from the list. */
+    fun prompt(vocabulary: List<String>, languages: List<String>): String {
+        val names = vocabulary.map { it.trim() }.filter { it.length in 2..60 }.distinctBy { it.lowercase() }.take(100)
+        return buildString {
+            append("Write down exactly what was said in this recording, in the language it was said. ")
+            append("Do not translate and do not summarise. Add normal punctuation and capital letters. ")
+            append("Reply with the transcript only. If nobody speaks, reply with nothing.")
+            if (languages.isNotEmpty()) append(" The speaker uses ${languages.joinToString(", ")}, often mixing two languages inside one sentence.")
+            if (names.isNotEmpty()) append(" Names the speaker may say, spelled as they should be written: ${names.joinToString(", ")}. Only spell a name that is clearly said.")
+        }
+    }
+
     /**
-     * One piece of saved audio as words, 16 kHz mono PCM16 in. Throws when nothing could be reached: the caller keeps
-     * the audio and retries. [vocabulary] is his names (the linked computer adds its own from memory).
+     * A whole take as words, 16 kHz mono PCM16 in: ONE pass over the whole audio (19 Nov 2026). The caller never cuts a
+     * take into pieces: one request carries the entire file (inline, or uploaded once to the Files API when it is too big
+     * for a request) so the model hears everything at once and can use the later words to settle the earlier ones.
+     * Throws when nothing could be reached: the caller keeps the audio and retries. [vocabulary] is his names, best first.
+     * [model] is the Settings pick: a transcribe model uses the Interactions API, any other reads the file with a prompt.
      */
     fun transcribe(
         key: String,
@@ -112,13 +133,18 @@ object SpeechModel {
         vocabulary: List<String> = emptyList(),
         languages: List<String> = languages(),
         client: OkHttpClient = http,
+        model: String = MODEL,
     ): String {
         val wav = DictationTape.header(pcm.size.toLong()) + pcm
-        val base64 = Base64.encodeToString(wav, Base64.NO_WRAP)
+        var fileUri: String? = null
+        var base64 = ""
+        if (wav.size > INLINE_MAX_BYTES) fileUri = FilesApi.upload(client, key, wav, "audio/wav") else base64 = Base64.encodeToString(wav, Base64.NO_WRAP)
         var last: Exception? = null
+        Log.i(TAG, "whole take: ${wav.size} bytes, ${if (fileUri != null) "uploaded" else "inline"}, ${vocabulary.size} names, languages $languages, model $model")
+        val transcribeModel = model.contains("transcribe")
         // 1. The speech model.
-        try {
-            val reply = post(client, INTERACTIONS, key, body(MODEL, base64, vocabulary, languages))
+        if (transcribeModel) try {
+            val reply = post(client, INTERACTIONS, key, body(model, base64, vocabulary, languages, fileUri = fileUri))
             val text = textOf(reply)
             if (text.isNotEmpty()) return text
             Log.i(TAG, "speech model answered no words")
@@ -126,27 +152,57 @@ object SpeechModel {
             last = e
             Log.i(TAG, "speech model: ${e.message}")
         }
-        // 2. A strong general model reading the audio, told the same names and languages.
-        val names = vocabulary.map { it.trim() }.filter { it.length in 2..60 }.distinctBy { it.lowercase() }.take(100)
-        val hint = buildString {
-            append("Transcribe this recording exactly as spoken. Add normal punctuation and capital letters. ")
-            append("Reply with the transcript only. If nobody speaks, reply with nothing.")
-            if (names.isNotEmpty()) append(" Names the speaker may say, spelled as they should be written: ${names.joinToString(", ")}. Only spell a name that is clearly said.")
-            if (languages.isNotEmpty()) append(" He speaks ${languages.joinToString(" and ")}, often mixing them inside one sentence.")
-        }
-        for (model in FALLBACKS) {
+        // 2. A general model reading the same whole file, told the same names and languages (the Settings pick first when it is one).
+        val hint = prompt(vocabulary, languages)
+        for (general in (if (transcribeModel) FALLBACKS else listOf(model) + FALLBACKS.filter { it != model })) {
             try {
+                val audio = if (fileUri != null) JSONObject().put("file_data", JSONObject().put("mime_type", "audio/wav").put("file_uri", fileUri))
+                else JSONObject().put("inline_data", JSONObject().put("mime_type", "audio/wav").put("data", base64))
                 val body = JSONObject().put("contents", JSONArray().put(JSONObject().put("parts", JSONArray()
-                    .put(JSONObject().put("text", hint))
-                    .put(JSONObject().put("inline_data", JSONObject()
-                        .put("mime_type", "audio/wav").put("data", base64))))))
+                    .put(JSONObject().put("text", hint)).put(audio))))
                     .put("generationConfig", JSONObject().put("temperature", 0))
-                return generateTextOf(post(client, GENERATE + model + ":generateContent", key, body))
+                return generateTextOf(post(client, GENERATE + general + ":generateContent", key, body))
             } catch (e: IOException) {
                 last = e
             }
         }
         throw last ?: IOException("Gemini couldn't write that down.")
+    }
+
+    /** The Gemini Files API: one resumable upload of a take too big to send inline. */
+    internal object FilesApi {
+        private const val UPLOAD = "https://generativelanguage.googleapis.com/upload/v1beta/files"
+        private const val FILES = "https://generativelanguage.googleapis.com/v1beta/"
+
+        fun upload(client: OkHttpClient, key: String, bytes: ByteArray, mime: String): String {
+            val start = Request.Builder().url(UPLOAD).header("x-goog-api-key", key)
+                .header("X-Goog-Upload-Protocol", "resumable").header("X-Goog-Upload-Command", "start")
+                .header("X-Goog-Upload-Header-Content-Length", bytes.size.toString()).header("X-Goog-Upload-Header-Content-Type", mime)
+                .post(JSONObject().put("file", JSONObject().put("display_name", "dictation-take")).toString().toRequestBody("application/json".toMediaType())).build()
+            val target = client.newCall(start).execute().use { r ->
+                if (!r.isSuccessful) throw IOException("Gemini upload ${r.code}")
+                r.header("x-goog-upload-url") ?: throw IOException("Gemini upload gave no address")
+            }
+            val send = Request.Builder().url(target).header("x-goog-api-key", key)
+                .header("X-Goog-Upload-Offset", "0").header("X-Goog-Upload-Command", "upload, finalize")
+                .post(bytes.toRequestBody(mime.toMediaType())).build()
+            val file = client.newCall(send).execute().use { r ->
+                val text = r.body?.string().orEmpty()
+                if (!r.isSuccessful) throw IOException("Gemini upload ${r.code}")
+                runCatching { JSONObject(text).getJSONObject("file") }.getOrElse { throw IOException("Gemini upload answered something unreadable") }
+            }
+            val uri = file.optString("uri").ifBlank { throw IOException("Gemini upload gave no file") }
+            // Audio is usually ACTIVE at once; wait a little if it is still PROCESSING.
+            var state = file.optString("state")
+            var tries = 0
+            while (state == "PROCESSING" && tries++ < 20) {
+                Thread.sleep(1_000)
+                val get = Request.Builder().url(FILES + file.optString("name")).header("x-goog-api-key", key).build()
+                state = client.newCall(get).execute().use { r -> if (r.isSuccessful) runCatching { JSONObject(r.body?.string().orEmpty()).optString("state") }.getOrDefault("") else "" }
+            }
+            if (state == "FAILED") throw IOException("Gemini could not read the upload")
+            return uri
+        }
     }
 
     private fun post(client: OkHttpClient, url: String, key: String, body: JSONObject): JSONObject {
