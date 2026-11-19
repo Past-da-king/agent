@@ -133,10 +133,12 @@ interface ComposerTools {
     /** The saved dictations; Insert goes into [box]. */
     fun recordings(box: ComposerBox)
     /**
-     * Called before the words of [box] are sent: ends a dictation still writing into it and waits for the whole-take text
-     * to replace the live caption. Returns how it stood (voice/DictationSettle.kt).
+     * Called as the words of [box] are sent (instant send, 19 Nov 2026): when a dictation is still writing into it, it
+     * stops at once and its whole take is kept on disk for ONE pass in the background; returns the take's recording id
+     * (the message goes now, with the live caption, and is replaced in place by the clean text). Null: nothing to hand
+     * off, the words go as they are.
      */
-    suspend fun settleDictation(box: ComposerBox): com.past9.phoneaos.voice.Settled = com.past9.phoneaos.voice.Settled.NOT_DICTATING
+    fun instantTake(box: ComposerBox): String? = null
 }
 
 val LocalComposerTools = staticCompositionLocalOf<ComposerTools?> { null }
@@ -153,7 +155,7 @@ fun composerActionsFor(box: ComposerBox, tools: ComposerTools?, working: Boolean
                        stop: () -> Unit = {}, sendVoice: (suspend (String, List<String>, List<String>) -> Unit)? = null, onFailed: (String) -> Unit = {}): ComposerActions {
     /** The message on its way now (its words and its pictures), so a second tap on the SAME message doesn't send it twice. */
     var onItsWay: String? = null
-    fun go(words: String, via: suspend (String, List<String>, List<String>) -> Unit) {
+    fun go(words: String, via: suspend (String, List<String>, List<String>) -> Unit, again: String? = null) {
         // His words as they are. With photos or documents and no words, the text stays empty: nothing is written for him.
         val text = words + box.docText(); val pics = box.images()
         // The documents travel as files of their own, so the computer can open the PDF or the Word file itself.
@@ -164,38 +166,27 @@ fun composerActionsFor(box: ComposerBox, tools: ComposerTools?, working: Boolean
         if (onItsWay == key) return
         onItsWay = key
         val kept = if (words.isBlank()) "Your photos and files are still here." else "Your words are still here."
-        // Words that are the box's own (not a suggestion chip's) may still be a live caption: see below.
+        // Words that are the box's own (not a suggestion chip's) may still be a live caption: the whole take is written down
+        // behind the message and replaces it in place. He never waits for it (19 Nov 2026).
         val fromBox = words.trim() == box.draft.trim()
+        val take = again ?: if (fromBox) tools?.instantTake(box) else null
         box.beganSending()
         scope.launch {
-            // What goes out: his words as pressed, or the whole-take text that replaced the caption while the send waited.
-            var said = words
+            val said = words
             try {
-                var textNow = text
-                if (fromBox && tools != null) {
-                    // A dictation still writing into this box: the live caption is only a preview. Wait for the whole take
-                    // written down from the saved audio and send THAT, never the caption (18 Nov 2026).
-                    box.finishing = true
-                    val s = try { tools.settleDictation(box) } finally { box.finishing = false }
-                    if (s == com.past9.phoneaos.voice.Settled.NO_FINAL) {
-                        box.failed = "Your whole take could not be written down yet, so nothing was sent. $kept Tap Send to try again."
-                        box.retry = { go(said, via) }
-                        onFailed(box.failed.orEmpty())
-                        return@launch
-                    }
-                    if (s == com.past9.phoneaos.voice.Settled.FINAL) { said = box.draft; textNow = said + box.docText() }
-                }
                 // Every send ends SENT or FAILED with Retry within this; the uploads get their own, longer, time inside.
-                kotlinx.coroutines.withTimeout(BOX_GIVE_UP_MS) { via(textNow, pics, docs) }
+                kotlinx.coroutines.withTimeout(BOX_GIVE_UP_MS) {
+                    if (take != null) kotlinx.coroutines.withContext(com.past9.phoneaos.voice.TakeContext(take)) { via(text, pics, docs) } else via(text, pics, docs)
+                }
                 box.accepted(said, pics)
             } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
                 box.failed = "That took too long to send. $kept"
-                box.retry = { go(said, via) }
+                box.retry = { go(said, via, take) }
                 onFailed(box.failed.orEmpty())
             } catch (e: kotlinx.coroutines.CancellationException) { throw e
             } catch (e: Exception) {
                 box.failed = e.message.orEmpty().ifBlank { "That didn't send." }
-                box.retry = { go(said, via) }
+                box.retry = { go(said, via, take) }
                 onFailed(box.failed.orEmpty())
             } finally { if (onItsWay == key) onItsWay = null; box.endedSending() }
         }

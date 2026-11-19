@@ -329,6 +329,22 @@ class DictationEngine(
         show()
     }
 
+    /**
+     * Send was pressed while the take was still being written down (instant send, 19 Nov 2026): stop at once, write no
+     * pass here (the whole take leaves as a take and ONE pass is run elsewhere), keep the tape. The caption he sees is what goes.
+     */
+    fun handOff() {
+        if (phase == DictationView.Phase.DONE || phase == DictationView.Phase.CANCELLED) return
+        finishing = true; if (stoppedAt == 0L) stoppedAt = clock()
+        restartJob?.cancel(); queueJob?.cancel(); polishJob?.cancel()
+        runCatching { live?.cancel() }; live = null; curEvents = null; cur = null
+        segs.filter { it.state == State.MISSED || it.state == State.FIXING }.forEach { it.state = State.FIXED }
+        phase = DictationView.Phase.DONE
+        runCatching { tape.seal() }
+        log("handed off: the whole take leaves as a take")
+        show()
+    }
+
     private fun finishLiveDone() {
         if (cursor < tape.bytes) {
             val seg = Seg(cursor, tape.bytes, "", if (Quiet.hasSpeech(tape.levels(), cursor, tape.bytes)) State.MISSED else State.SILENT)

@@ -162,6 +162,8 @@ class App : Application(), coil.ImageLoaderFactory {
         // What is in the message boxes, and any dictation the last run was cut off in.
         com.past9.phoneaos.data.DraftStore.init(java.io.File(filesDir, "drafts"))
         com.past9.phoneaos.voice.DictationHub.onProcessStart(this)
+        // Dictated messages that were sent at once and still wait for their whole take to be written down carry on.
+        kotlin.concurrent.thread(name = "aos-takes") { runCatching { com.past9.phoneaos.voice.Takes.start(this) } }
         // A project's answer to an @-mention is told in a notification while he is away (remote/Mentions.kt).
         com.past9.phoneaos.remote.MentionReplies.start(this)
     }

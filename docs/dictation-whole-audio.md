@@ -36,28 +36,30 @@ preview only.
   own memory names; use `languages` if it has no better list.
 - Reply unchanged: `{ok: true, text}` or `{ok: false, error}`. Without the second argument the call is a piece, as before.
 
-## Not in this PR (design change of 19 Nov 21:30, instant send)
-Send waits for the whole-take text in 0.15.74 (spinner, Retry). The new design (send at once with the live caption marked
-Refining, upload the audio in the background, the computer runs the one pass, replaces the message in place and holds the
-agent's turn, durable queue keyed by recording id) needs a computer side that does not exist yet. Proposed contract:
-- phone: `chat.send` with `meta.dictation = {id: <recording id>, pending: true, caption: <live text>}` at once;
-  then `voice.takeAudio({id, $b64, whole: true, names, languages})` in the background (retried from an on-disk queue
-  until acknowledged, idempotent on `id`).
-- computer: holds the agent's turn for that message until the pass is done or `30 s + 0.5 s per second of audio` (max 100 s)
-  has passed, runs the one pass, edits the row in place (`meta.dictation.pending=false, final=true`) or on failure
-  appends the note "dictated; clean transcript failed, this is the live caption" and sets `meta.dictation.failed=true`
-  so the phone shows Retry; `voice.takeAudio` again with the same `id` retries.
+## Instant send (phone 0.15.76; the design change of 19 Nov 21:30)
+Send never waits. The 0.15.74 blocking wait (`settleDictation`, the Send spinner, "nothing was sent") is removed.
 
-## Cost and model evidence (19 Nov 2026, Google pricing page https://aistudio.google.com/docs/pricing)
-Audio is 25 tokens per second on the transcribe model (1,500 per minute). Per minute of speech, paid tier:
-| model | audio in | text out | about per minute |
-|---|---|---|---|
-| gemini-3.5-transcribe (default) | $2.00 / 1M | $12.00 / 1M | $0.0054 |
-| gemini-3.1-flash-lite | $0.50 / 1M | $1.50 / 1M | $0.0011 |
-| gemini-3.5-flash-lite | $0.30 / 1M | $2.50 / 1M | $0.0010 |
-| gemini-3.6-flash (the old fallback; thinking tokens billed as output) | $0.75 / 1M until 31 Dec 2026, $1.50 after | $3.75 / 1M, $7.50 after | $0.008 (measured 1.3k thinking tokens on a 50 s clip) |
+Phone, when Send is pressed while a dictation is still being written down (or KEPT, or DONE without a whole-take text):
+1. The mic stops, the engine hands off (`DictationEngine.handOff()`: no pass on the phone, tape sealed) and the whole take
+   is written to disk as a take (`filesDir/takes/<recording id>.json` + `.pcm`, `voice/Takes.kt`) BEFORE anything is sent.
+2. The message goes at once with the live caption. Wire (additive, old computers ignore the extra field):
+   `chat.sendOnce({sendId, sentAt, fresh, text: <caption>, attachments, chat?, replyIn?, dictation: {id: <recording id>}})`.
+3. In parallel the take is handed over: `dictation.take({id, chat?, live: <caption>, audio: {"$b64": <whole take PCM16 16 kHz mono>}, names: [...], languages: [...]})`
+   answered `{ok: true, accepted: true, duplicate?: bool}` (`PendingTakes.accept`). Idempotent by id; the phone retries
+   2 s, 5 s, 10 s, then shows Retry; if the link is down the take stays queued and carries on when it is back and on every
+   app start (`Takes.start`).
+4. The computer runs ONE pass over the whole audio, replaces the message in place (`replace`) and releases the agent's turn
+   (`settled(id)`, cap 30 s + 0.5 s per second said, max 100 s; then the caption plus the note
+   "dictated; clean transcript failed, this is the live caption"). It must hold the turn for a message that carries
+   `dictation.id` even if the take has not arrived yet (message and upload run side by side, either may land first).
+5. What the phone reads back, for the "Refining" marker and Retry: the message row's `meta.dictation = {id, state}` with
+   state `refining` | `done` | `failed` (the phone sets `refining` in its own rows). Without it the phone falls back to its own
+   take queue (marker while its words equal the caption, gone after the take's cap). Retry on a failed message calls
+   `dictation.retry(id)` (`PendingTakes.retry`) and answers `{ok: true}`.
+6. `dictation.model()` answers `{model: "<id>"}`, the computer's speech model; the phone stores it and uses it when it
+   writes a take itself (own setting `dictation_model` wins, then the computer's, then the default).
 
-A 3 minute take costs about 1.6 cents on the default. Quality on a 176 s mixed English/isiZulu take (Gemini TTS clips of
-real wording and his names; real recordings were not available on the server): see the PR description. Set another model
-with the `dictation_model` setting; a transcribe model uses the Interactions API, any other model reads the file with the
-prompt.
+No computer linked, own Gemini key on the phone: the same queue runs the ONE pass on the phone
+(`SpeechModel.transcribe`, whole file), edits its own message in place (`meta.dictation.state = done`) and only then is
+the agent's turn started; a pass that fails or runs past the cap gives the agent the caption plus the note.
+Takes older than a day and their audio are tidied; the audio goes as soon as a take is handed over or done.

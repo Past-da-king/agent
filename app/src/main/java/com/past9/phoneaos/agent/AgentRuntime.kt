@@ -632,13 +632,14 @@ class AgentRuntime(
     fun sendQuiet(text: String) = send(text, quiet = true)
 
     /** Like [send], and returns only once the message was accepted; throws when it was not (the message box keeps its words). */
-    suspend fun sendAccepted(text: String, images: List<String> = emptyList(), files: List<String> = emptyList(), voiceReply: Boolean = false) {
+    suspend fun sendAccepted(text: String, images: List<String> = emptyList(), files: List<String> = emptyList(), voiceReply: Boolean = false, dictation: String? = null) {
         val r = remote
         if (r != null) r.sendAccepted(text, images, files)
-        else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { send(text, images, files, voiceReply) }
+        else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { send(text, images, files, voiceReply, dictation = dictation) }
     }
 
-    fun send(text: String, images: List<String> = emptyList(), files: List<String> = emptyList(), voiceReply: Boolean = false, fromCall: String? = null, quiet: Boolean = false) {
+    /** [dictation]: the recording id of a take still being written down; the message goes now with its caption and is replaced in place (voice/Takes.kt). */
+    fun send(text: String, images: List<String> = emptyList(), files: List<String> = emptyList(), voiceReply: Boolean = false, fromCall: String? = null, quiet: Boolean = false, dictation: String? = null) {
         remote?.let { it.send(text, images, files, quiet); return }
         val clean = com.past9.phoneaos.remote.Outgoing.words(text, images, files) ?: return
         // A question card is waiting and the user typed instead of tapping: the typed words ARE the answer.
@@ -646,6 +647,7 @@ class AgentRuntime(
         if (fromCall == null && !quiet && images.isEmpty() && files.isEmpty() && mainQuestions.isNotEmpty()) {
             val id = mainQuestions.maxOrNull()
             if (id != null) {
+                dictation?.let { com.past9.phoneaos.voice.Takes.of(context).discard(it) }
                 scope.launch { db.chat().insert(ChatItem(kind = "user", text = clean)) }
                 answer(id, clean)
                 return
@@ -653,20 +655,40 @@ class AgentRuntime(
         }
         // Messages are admitted one at a time, in the order sent: each decides against the newest line of work, so rapid ones chain.
         var prev: Job? = null
-        val j = scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) { prev?.join(); admit(clean, images, files, voiceReply, fromCall, quiet) }
+        val j = scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) { prev?.join(); admit(clean, images, files, voiceReply, fromCall, quiet, dictation) }
         prev = admitTail.getAndSet(j)
         turnJobs += j; j.invokeOnCompletion { turnJobs.remove(j) }
         j.start()
     }
 
     /** Put the user's message in the chat, then either run it as a turn, or (work is already running) fork a branch for it. */
-    private suspend fun admit(clean: String, images: List<String>, files: List<String>, voiceReply: Boolean, fromCall: String?, quiet: Boolean = false) {
+    private suspend fun admit(caption: String, images: List<String>, files: List<String>, voiceReply: Boolean, fromCall: String?, quiet: Boolean = false, dictation: String? = null) {
+        var clean = caption
+        // Instant send: the caption is in the chat now; the whole take is written down here (own key) and replaces it in place
+        // BEFORE the agent reads the message (it waits at most the take's cap), never the other way round.
+        var dictRow = 0L
+        var dictNote = ""
+        if (dictation != null && fromCall == null && !quiet) {
+            val takes = com.past9.phoneaos.voice.Takes.of(context)
+            dictRow = db.chat().insert(ChatItem(kind = "user", text = caption, meta = JSONObject().put("images", org.json.JSONArray(images.filter { !it.contains("/pdf-") }))
+                .put("files", org.json.JSONArray(files)).put("voiceReply", voiceReply).put("dictation", JSONObject().put("id", dictation).put("state", "refining")).toString()))
+            takes.submit(dictation)
+            val got = takes.settled(dictation)
+            if (got != null) {
+                clean = got.text
+                if (!got.clean) {
+                    dictNote = "\n\n(" + com.past9.phoneaos.voice.TakeFlow.FAILED_NOTE + ")"
+                    db.chat().get(dictRow)?.let { row -> val m = JSONObject(row.meta); m.optJSONObject("dictation")?.put("state", "failed"); db.chat().update(row.copy(meta = m.toString())) }
+                }
+            }
+        }
         val target = if (fromCall == null) activeLines.values.maxByOrNull { it.seq } else null
         // Photos or files with no words: the chat keeps his message empty. Only the model gets a note to go on.
-        val heard = com.past9.phoneaos.remote.Outgoing.forModel(clean)
+        val heard = com.past9.phoneaos.remote.Outgoing.forModel(clean) + dictNote
         val rel = target?.let { branchPolicy.classify(heard, it.userText) }
         val origin = if (fromCall != null) { db.chat().insert(ChatItem(kind = "activity", text = "On it: $fromCall", meta = JSONObject().put("tool", "call").toString())); null }
         else if (quiet) null // a button tap: the agent hears it, the chat shows nothing as the user's
+        else if (dictRow > 0) dictRow
         else db.chat().insert(ChatItem(kind = "user", text = clean, meta = JSONObject().put("images", org.json.JSONArray(images.filter { !it.contains("/pdf-") }))
             .put("files", org.json.JSONArray(files)).put("voiceReply", voiceReply).toString()))
         val forModel = if (voiceReply) "$heard\n\n(The user is on the move: answer with a voice_note, then at most one short line of text. Don't repeat the voice note as text.)"

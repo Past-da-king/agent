@@ -465,6 +465,21 @@ class DictationEngineTest {
         assertEquals("Okay, it said started edge letterhead is wrong.", e.text())
     }
 
+    @Test fun handingOffAtSendKeepsTheWholeTapeAndRunsNoPassHere() = runTest {
+        val live = HandLive()
+        val pc = FakePc()
+        val r = engine(live, pc)
+        speak(r, 0, 60, talk = 8, pause = 3)
+        live.ev!!.partial("some caption words")
+        val bytes = r.tape.bytes
+        r.engine.handOff(); runCurrent()
+        assertEquals("no pass runs on the phone: the take leaves whole", 0, pc.calls)
+        assertEquals(DictationView.Phase.DONE, r.engine.view().phase)
+        assertEquals("the tape is complete", bytes, r.tape.bytes)
+        advanceTimeBy(300_000); runCurrent()
+        assertEquals(0, pc.calls)
+    }
+
     @Test fun tapeIsAValidWavWhileRecording() {
         val tape = DictationTape(File(dir, "w.wav"))
         repeat(25) { tape.append(block(it / 10, it % 10, true)) }

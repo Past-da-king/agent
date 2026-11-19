@@ -279,6 +279,7 @@ object DictationHub {
     private var currentId: String? = null
     private var currentStarted = 0L
     private var currentChat = ""
+    private var tape: DictationTape? = null
     private val interrupted = AtomicBoolean(false)
 
     private fun noteState(v: DictationView): String = when (v.phase) {
@@ -314,6 +315,7 @@ object DictationHub {
         saved.prune()
         val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US).format(java.util.Date())
         val tape = runCatching { DictationTape(File(dir, "$stamp.wav")) }.getOrNull() ?: return false
+        this.tape = tape
         // The words beside the audio, as they arrive (voice/Recordings.kt).
         val id = tape.file.name.removeSuffix(".wav"); val startedAt = System.currentTimeMillis()
         saved.note(id, startedAt, 0, "", "recording", chat)
@@ -351,6 +353,31 @@ object DictationHub {
 
     /** He tapped stop. */
     fun stop() { mic?.stop(); mic = null; engine?.finish() }
+
+    /**
+     * Send was pressed in [owner]'s box while the take was not yet written down (instant send): the take stops now and
+     * leaves as a take on disk (audio and caption), keyed by its recording id, for ONE pass over the whole audio. Returns
+     * its id, or null when there is nothing to hand off (no dictation for this box, it already ended with its whole-take
+     * text, nothing was said, or there is no way to write it down), in which case the words go as they are.
+     * Main thread.
+     */
+    fun handOff(owner: Any?, caption: String): String? {
+        val ui = _ui.value ?: return null
+        if (ui.owner != owner) return null
+        val v = ui.view
+        if (v.phase == DictationView.Phase.CANCELLED || (v.phase == DictationView.Phase.DONE && v.final)) return null
+        val ctx = appContext ?: return null
+        val id = currentId ?: return null
+        val t = tape ?: return null
+        mic?.stop(); mic = null
+        val said = Quiet.hasSpeech(t.levels(), 0, t.bytes)
+        if (!said || !PieceTranscriber.available(ctx)) { engine?.finish(); return null }
+        onText = null
+        engine?.handOff()
+        val pcm = t.read(0, t.bytes)
+        val ok = runCatching { Takes.of(ctx).enqueue(id, null, caption, pcm) }.getOrDefault(false)
+        return if (ok || Takes.of(ctx).states.value.containsKey(id)) id else null
+    }
 
     /** Throw it away. */
     fun cancel() {

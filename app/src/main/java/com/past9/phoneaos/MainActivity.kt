@@ -461,9 +461,8 @@ class MainActivity : ComponentActivity() {
                 override fun listening(box: com.past9.phoneaos.ui.ComposerBox): Boolean =
                     (dictating && (dictBox ?: mainBox) === box) || (hubUi?.view?.ended == false && hubUi?.owner == (if (box === mainBox) "main" else box))
                 override fun recordings(box: com.past9.phoneaos.ui.ComposerBox) { nav.navigate("recordings?box=" + Uri.encode(box.key)) }
-                override suspend fun settleDictation(box: com.past9.phoneaos.ui.ComposerBox): com.past9.phoneaos.voice.Settled =
-                    com.past9.phoneaos.voice.settleDictation(com.past9.phoneaos.voice.DictationHub.ui, if (box === mainBox) "main" else box,
-                        stop = { com.past9.phoneaos.voice.DictationHub.stop() }, retry = { com.past9.phoneaos.voice.DictationHub.retry() })
+                override fun instantTake(box: com.past9.phoneaos.ui.ComposerBox): String? =
+                    com.past9.phoneaos.voice.DictationHub.handOff(if (box === mainBox) "main" else box, box.draft)
             }
         }
         fun refreshConnections() = scope.launch {
@@ -598,10 +597,10 @@ class MainActivity : ComponentActivity() {
                     suspend fun beforeSend() = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { g.stopSpeaking(); com.past9.phoneaos.triggers.Overnight.dismissMorning(this@MainActivity) }
                     val mainActs = com.past9.phoneaos.ui.composerActionsFor(mainBox, composerTools, status.working, g.scope, send = { text, pics, files ->
                         beforeSend()
-                        g.runtime.sendAccepted(text, pics, files)
+                        g.runtime.sendAccepted(text, pics, files, dictation = kotlin.coroutines.coroutineContext[com.past9.phoneaos.voice.TakeContext]?.id)
                     }, stop = { g.runtime.stop() }, sendVoice = { text, pics, files ->
                         beforeSend()
-                        g.runtime.sendAccepted(text, pics, files, voiceReply = true)
+                        g.runtime.sendAccepted(text, pics, files, voiceReply = true, dictation = kotlin.coroutines.coroutineContext[com.past9.phoneaos.voice.TakeContext]?.id)
                     })
                     ChatScreen(items, status, settings.agentName, settings.userName, browserLive, draft, { draft = it },
                         listening = composerTools.listening(mainBox), live = liveUi,
