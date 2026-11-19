@@ -47,3 +47,17 @@ agent's turn, durable queue keyed by recording id) needs a computer side that do
   has passed, runs the one pass, edits the row in place (`meta.dictation.pending=false, final=true`) or on failure
   appends the note "dictated; clean transcript failed, this is the live caption" and sets `meta.dictation.failed=true`
   so the phone shows Retry; `voice.takeAudio` again with the same `id` retries.
+
+## Cost and model evidence (19 Nov 2026, Google pricing page https://aistudio.google.com/docs/pricing)
+Audio is 25 tokens per second on the transcribe model (1,500 per minute). Per minute of speech, paid tier:
+| model | audio in | text out | about per minute |
+|---|---|---|---|
+| gemini-3.5-transcribe (default) | $2.00 / 1M | $12.00 / 1M | $0.0054 |
+| gemini-3.1-flash-lite | $0.50 / 1M | $1.50 / 1M | $0.0011 |
+| gemini-3.5-flash-lite | $0.30 / 1M | $2.50 / 1M | $0.0010 |
+| gemini-3.6-flash (the old fallback; thinking tokens billed as output) | $0.75 / 1M until 31 Dec 2026, $1.50 after | $3.75 / 1M, $7.50 after | $0.008 (measured 1.3k thinking tokens on a 50 s clip) |
+
+A 3 minute take costs about 1.6 cents on the default. Quality on a 176 s mixed English/isiZulu take (Gemini TTS clips of
+real wording and his names; real recordings were not available on the server): see the PR description. Set another model
+with the `dictation_model` setting; a transcribe model uses the Interactions API, any other model reads the file with the
+prompt.
