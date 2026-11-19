@@ -80,6 +80,10 @@ class DictationEngine(
     private val transcribe: (suspend (ByteArray) -> String)?,
     private val onView: (DictationView) -> Unit,
     private val log: (String) -> Unit = {},
+    /** The same write-down, told the audio is the WHOLE take (the linked computer then runs one pass). Defaults to [transcribe]. */
+    private val transcribeWhole: (suspend (ByteArray) -> String)? = null,
+    /** Sound-alike names put back in the live preview (NameFix). Never applied to the whole-take text. */
+    private val fixPreview: ((String) -> String)? = null,
 ) {
     enum class State { LIVE, HEARD, MISSED, FIXING, FIXED, LOST, SILENT }
     class Seg(val start: Long, var end: Long, var text: String, var state: State)
@@ -336,7 +340,7 @@ class DictationEngine(
         val missedMs = segs.filter { it.state == State.MISSED || it.state == State.FIXING }.sumOf { DictationTape.ms(it.end - it.start) }
         // The whole-take pass has its own limit per piece (20 s plus half the audio): the finish limit must not cut it
         // short, or a long take over a slow link loses its better words (12 Nov 2026).
-        val polishMs = if (transcribe != null && Quiet.hasSpeech(tape.levels(), 0, tape.bytes)) pieceLimitMs(minOf(tape.bytes, DictationTape.bytesFor(PIECE_MS))) else 0L
+        val polishMs = if (transcribe != null && Quiet.hasSpeech(tape.levels(), 0, tape.bytes)) 2 * pieceLimitMs(tape.bytes) else 0L
         val limit = minOf(FINISH_MAX_MS, FINISH_BASE_MS + missedMs / 2 + polishMs)
         scope.launch {
             delay(limit)
@@ -352,7 +356,10 @@ class DictationEngine(
         // The whole-take pass starts BEFORE anything can settle: settle() waits for an active pass, and with nothing
         // pending (the recogniser had already closed its stretch) it ended DONE at once and the pass never ran.
         polishFromTape()
-        if (segs.any { it.state == State.MISSED }) pump() else if (queueJob?.isActive != true) settle()
+        // The whole-take pass hears everything, so the stretches the caption missed are not written down one by one
+        // beside it: it settles them itself (and falls back to pieces only if it fails twice).
+        if (polishJob?.isActive == true) Unit
+        else if (segs.any { it.state == State.MISSED }) pump() else if (queueJob?.isActive != true) settle()
         show()
     }
 
@@ -360,7 +367,7 @@ class DictationEngine(
         if (phase == DictationView.Phase.DONE || phase == DictationView.Phase.KEPT || phase == DictationView.Phase.CANCELLED) return
         if (segs.any { it.state == State.MISSED || it.state == State.FIXING }) return
         // The whole take is being written down once more: wait for it, it is the text he gets.
-        if (polishJob?.isActive == true) return
+        if (polishJob?.isActive == true && !polishSettling) return
         phase = if (segs.any { it.state == State.LOST } || polishLost) DictationView.Phase.KEPT else DictationView.Phase.DONE
         runCatching { tape.seal() }
         log("ended: $phase")
@@ -383,7 +390,7 @@ class DictationEngine(
         if (polishLost) { polishLost = false; polishJob = null }
         phase = DictationView.Phase.FINISHING
         val missedMs = segs.filter { it.state == State.MISSED }.sumOf { DictationTape.ms(it.end - it.start) }
-        val limit = minOf(FINISH_MAX_MS, FINISH_BASE_MS + missedMs / 2 + pieceLimitMs(minOf(tape.bytes, DictationTape.bytesFor(PIECE_MS))))
+        val limit = minOf(FINISH_MAX_MS, FINISH_BASE_MS + missedMs / 2 + 2 * pieceLimitMs(tape.bytes))
         scope.launch {
             delay(limit)
             if (phase == DictationView.Phase.FINISHING) { polishJob?.cancel(); queueJob?.cancel(); segs.filter { it.state == State.MISSED || it.state == State.FIXING }.forEach { it.state = State.LOST }; phase = DictationView.Phase.KEPT; show() }
@@ -391,7 +398,7 @@ class DictationEngine(
         queueJob = scope.launch {
             // The whole-take pass first, so the settling at the end of drain() waits for it.
             polishFromTape()
-            drain()
+            if (polishJob?.isActive != true) drain()
             if (polishJob?.isActive == true) polishJob?.join()
             if (phase == DictationView.Phase.FINISHING) { phase = if (segs.any { it.state == State.LOST } || polishLost) DictationView.Phase.KEPT else DictationView.Phase.DONE; show() }
         }
@@ -404,40 +411,72 @@ class DictationEngine(
      * The whole recording, written down from the tape by the speech model (11 Nov 2026).
      *
      * The live caption is the phone's own recogniser, stretch by stretch, and it is only what he watches while he
-     * speaks: this is the text he gets. It runs when he stops, in pieces of at most [PIECE_MS] cut at quiet moments, and
+     * speaks: this is the text he gets. It runs when he stops, as ONE request over the whole tape (pieces only if that fails twice), and
      * it only ever replaces the caption with more words than he can already see (Words.less). A piece that cannot be
      * written down twice leaves the caption exactly as it was, so a lost connection never costs him his words.
      */
+    /** True while the whole-take job itself asks to settle: it is the one thing settle() otherwise waits for. */
+    private var polishSettling = false
+
     private fun polishFromTape() {
         val t = transcribe ?: return
+        val whole = transcribeWhole ?: t
         if (polished != null || polishJob?.isActive == true) return
         if (!Quiet.hasSpeech(tape.levels(), 0, tape.bytes)) return
         polishJob = scope.launch {
-            val pieces = Quiet.split(tape.levels(), 0, tape.bytes, maxMs = PIECE_MS)
-            val texts = arrayOfNulls<String>(pieces.size)
-            for ((index, piece) in pieces.withIndex()) {
-                if (!Quiet.hasSpeech(tape.levels(), piece.first, piece.last + 1)) { texts[index] = ""; continue }
-                val audio = tape.read(piece.first, piece.last + 1)
-                var text: String? = null
-                for (attempt in 0 until 2) {
-                    val r = withTimeoutOrNull(pieceLimitMs(audio.size.toLong())) {
-                        try { t(audio) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { log("polish piece failed: ${e.message}"); null }
-                    }
-                    if (r != null) { text = r; break }
+            // ONE pass over the whole recording (19 Nov 2026): the model hears everything at once and settles early words
+            // from later ones. Pieces only when the single pass has failed twice, and that is logged.
+            val everything = tape.read(0, tape.bytes)
+            var text: String? = null
+            for (attempt in 0 until 2) {
+                val r = withTimeoutOrNull(pieceLimitMs(everything.size.toLong())) {
+                    try { whole(everything) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { log("polish whole take failed: ${e.message}"); null }
                 }
-                if (text == null) { log("polish gave up: the live words stay"); polishLost = true; settle(); show(); return@launch }
-                texts[index] = text
+                if (r != null) { text = r; break }
             }
-            val whole = texts.filterNotNull().filter { it.isNotBlank() }.joinToString(" ").trim()
+            if (text == null) {
+                log("polish: the whole-take pass failed twice, falling back to pieces")
+                text = writeInPieces(t)
+            }
+            if (text == null) {
+                log("polish gave up: the live words stay"); polishLost = true
+                segs.filter { it.state == State.MISSED || it.state == State.FIXING }.forEach { it.state = State.LOST }
+                polishSettling = true
+                try { settle() } finally { polishSettling = false }
+                show(); return@launch
+            }
             val live = text()
             when {
-                whole.isBlank() -> log("polish answered nothing: the live words stay")
-                tooLittle(live, whole) -> log("polish ignored: ${whole.length} of ${live.length} chars")
-                else -> { polished = whole; log("polished the whole take: ${live.length} to ${whole.length} chars") }
+                text.isBlank() -> log("polish answered nothing: the live words stay")
+                tooLittle(live, text) -> log("polish ignored: ${text.length} of ${live.length} chars")
+                else -> { polished = text.trim(); log("polished the whole take: ${live.length} to ${text.trim().length} chars") }
             }
-            settle()
+            if (polished != null) segs.filter { it.state == State.MISSED || it.state == State.FIXING }.forEach { it.state = State.FIXED }
+            else if (segs.any { it.state == State.MISSED }) { pump(); show(); return@launch }
+            polishSettling = true
+            try { settle() } finally { polishSettling = false }
             show()
         }
+    }
+
+    /** The fallback: the take in pieces of at most [PIECE_MS] cut at quiet moments, texts joined. Null when a piece cannot be written down twice. */
+    private suspend fun writeInPieces(t: suspend (ByteArray) -> String): String? {
+        val pieces = Quiet.split(tape.levels(), 0, tape.bytes, maxMs = PIECE_MS)
+        val texts = arrayOfNulls<String>(pieces.size)
+        for ((index, piece) in pieces.withIndex()) {
+            if (!Quiet.hasSpeech(tape.levels(), piece.first, piece.last + 1)) { texts[index] = ""; continue }
+            val audio = tape.read(piece.first, piece.last + 1)
+            var text: String? = null
+            for (attempt in 0 until 2) {
+                val r = withTimeoutOrNull(pieceLimitMs(audio.size.toLong())) {
+                    try { t(audio) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { log("polish piece failed: ${e.message}"); null }
+                }
+                if (r != null) { text = r; break }
+            }
+            if (text == null) return null
+            texts[index] = text
+        }
+        return texts.filterNotNull().filter { it.isNotBlank() }.joinToString(" ").trim()
     }
 
     /**
@@ -453,7 +492,7 @@ class DictationEngine(
 
     // ---- what he sees ----
 
-    fun text(): String = polished ?: segs.sortedBy { it.start }.map { it.text.trim() }.filter { it.isNotEmpty() }.joinToString(" ")
+    fun text(): String = polished ?: segs.sortedBy { it.start }.map { it.text.trim() }.filter { it.isNotEmpty() }.joinToString(" ").let { c -> fixPreview?.let { f -> runCatching { f(c) }.getOrDefault(c) } ?: c }
 
     fun view(): DictationView {
         val pending = segs.filter { it.state == State.MISSED || it.state == State.FIXING }.sumOf { DictationTape.ms(it.end - it.start) }
@@ -479,7 +518,7 @@ class DictationEngine(
         const val FINISH_BASE_MS = 30_000L
         /** A piece of the whole-take write-down: two minutes, cut at a quiet moment (four times fewer cuts than 30 s). */
         const val PIECE_MS = 120_000L
-        const val FINISH_MAX_MS = 120_000L
+        const val FINISH_MAX_MS = 300_000L
         /** One piece's limit: 20 s, plus one for every two said. */
         fun pieceLimitMs(bytes: Long): Long = 20_000L + DictationTape.ms(bytes) / 2
     }

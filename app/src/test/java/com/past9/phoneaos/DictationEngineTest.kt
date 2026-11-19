@@ -417,6 +417,54 @@ class DictationEngineTest {
         assertEquals("Sawubona my friend, ngiyaphila, and now back in English.", r.engine.text())
     }
 
+    // ---- one pass over the whole take (19 Nov 2026) ----
+
+    @Test fun aThreeMinuteTakeIsOneRequestWithTheWholeAudioAndTheSentTextIsThatResult() = runTest {
+        // His 188 s take went out in two pieces cut at a quiet moment and the texts were joined. Now: exactly one request.
+        val live = HandLive()
+        val sizes = ArrayList<Int>()
+        val seen = ArrayList<List<String>>()
+        val pc = FakePc().apply { answer = { pcm -> sizes.add(pcm.size); seen.add(words(pcm)); "Final text of the whole take, with Strat Edge ID and the letterhead." } }
+        val r = engine(live, pc)
+        speak(r, 0, 188, talk = 8, pause = 3)
+        live.ev!!.partial("constration head the the the")
+        r.engine.finish(); untilEnded(r, 300_000)
+        assertEquals("one request for the whole take", 1, pc.calls)
+        assertEquals("the whole audio, not a piece", r.tape.bytes.toInt(), sizes.single())
+        assertEquals("every spoken second was in that one request", expected(188), seen.single())
+        assertEquals("Final text of the whole take, with Strat Edge ID and the letterhead.", r.engine.text())
+        assertEquals(DictationView.Phase.DONE, r.engine.view().phase)
+    }
+
+    @Test fun aWholePassThatFailsTwiceFallsBackToPiecesAndSaysSo() = runTest {
+        val live = HandLive()
+        val sizes = ArrayList<Int>()
+        val pc = FakePc().apply { answer = { pcm -> sizes.add(pcm.size); if (pcm.size > DictationTape.bytesFor(DictationEngine.PIECE_MS).toInt()) throw java.io.IOException("too long") else words(pcm).joinToString(" ") } }
+        val r = engine(live, pc)
+        speak(r, 0, 188, talk = 8, pause = 3)
+        live.ev!!.partial("a few words")
+        r.engine.finish(); untilEnded(r, 600_000)
+        assertEquals("two tries on the whole take, then the pieces", 2, sizes.count { it == r.tape.bytes.toInt() })
+        assertTrue("it says it fell back", log.any { it.contains("falling back to pieces") })
+        assertEquals(expected(188), boxWords(r))
+    }
+
+    @Test fun thePreviewGetsItsNamesRightButTheWholeTakeTextIsNeverTouched() = runTest {
+        val live = HandLive()
+        val tape = DictationTape(File(dir, "t-${System.nanoTime()}.wav"))
+        val views = ArrayList<DictationView>()
+        val pc = FakePc().apply { answer = { "Okay, it said started edge letterhead is wrong." } }
+        val e = DictationEngine(backgroundScope, { testScheduler.currentTime }, tape, live, pc.transcribe, { views.add(it) }, { log.add(it) },
+            fixPreview = { com.past9.phoneaos.voice.NameFix.respell(it, listOf("Strat Edge")) })
+        e.start()
+        val r = Run(e, tape, views)
+        speak(r, 0, 20, talk = 20, pause = 1)
+        live.ev!!.partial("the started edge letterhead")
+        assertEquals("the Strat Edge letterhead", e.text())
+        e.finish(); untilEnded(r)
+        assertEquals("Okay, it said started edge letterhead is wrong.", e.text())
+    }
+
     @Test fun tapeIsAValidWavWhileRecording() {
         val tape = DictationTape(File(dir, "w.wav"))
         repeat(25) { tape.append(block(it / 10, it % 10, true)) }

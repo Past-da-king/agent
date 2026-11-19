@@ -47,7 +47,7 @@ private const val TAG = "AosDictation"
  * (RecognizerIntent.EXTRA_AUDIO_SOURCE, Android 13+) instead of opening the mic itself. So a stretch it drops never
  * loses audio: the engine has every byte on the tape. Main thread only (SpeechRecognizer requires it).
  */
-class RecognizerLive(private val context: Context) : LiveWords {
+class RecognizerLive(private val context: Context, private val biasNames: List<String> = emptyList()) : LiveWords {
     private var sr: SpeechRecognizer? = null
     private var feeder: Feeder? = null
     private var readEnd: ParcelFileDescriptor? = null
@@ -70,6 +70,8 @@ class RecognizerLive(private val context: Context) : LiveWords {
             putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1)
             putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
             putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, DictationTape.RATE)
+            // The names list leans the caption toward his names (Android 13+), first names first.
+            if (biasNames.isNotEmpty()) putExtra(RecognizerIntent.EXTRA_BIASING_STRINGS, ArrayList(biasNames.take(BIAS_MAX)))
         }
         return runCatching { r.startListening(intent) }.onFailure { Log.w(TAG, "startListening: ${it.message}") }.isSuccess
     }
@@ -136,6 +138,7 @@ class RecognizerLive(private val context: Context) : LiveWords {
     }
 
     companion object {
+        const val BIAS_MAX = 30
         fun kind(error: Int): LiveError = when (error) {
             SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> LiveError.NO_SPEECH
             SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT, SpeechRecognizer.ERROR_SERVER,
@@ -222,32 +225,35 @@ object PieceTranscriber {
     fun available(context: Context): Boolean =
         com.past9.phoneaos.remote.RemoteHub.session.value != null || com.past9.phoneaos.remote.RemoteHub.link.value?.on == true || runCatching { com.past9.phoneaos.App.graph(context).settings.voiceKey("gemini") }.getOrNull() != null
 
-    /** The names this phone knows without the computer: his own and the agent's, from Settings > Voice. */
-    private fun ownNames(context: Context): List<String> {
-        val names = ArrayList<String>()
-        runCatching {
-            val settings = com.past9.phoneaos.App.graph(context).settings
-            val state = settings.state.value
-            if (state.userName.isNotBlank()) names.add(state.userName.trim())
-            if (state.agentName.isNotBlank() && state.agentName != "Your agent") names.add(state.agentName.trim())
-        }
-        return names
+    /** The names this phone knows without the computer: his always-spell list, the computer's project names it keeps for @-mentions, then his and the agent's name. */
+    fun ownNames(context: Context): List<String> {
+        val settings = runCatching { com.past9.phoneaos.App.graph(context).settings }.getOrNull() ?: return emptyList()
+        val state = settings.state.value
+        val projects = runCatching { com.past9.phoneaos.remote.Mentions.projectsOf(JSONArray(settings.extra(com.past9.phoneaos.remote.MentionCache.KEY_LIST) ?: "[]")) }.getOrDefault(emptyList())
+        return DictationNames.build(state.userName, state.agentName, projects, DictationNames.alwaysOf(settings.extra(DictationNames.ALWAYS_KEY)))
     }
 
-    suspend fun transcribe(context: Context, pcm: ByteArray): String {
+    /**
+     * What a linked computer is sent beside the audio (19 Nov 2026). One call, one take: `voice.transcribe([{"$b64": whole take PCM16 16 kHz}, {"whole": true, "names": [...], "languages": [...]}])`.
+     * `whole` says the audio is the entire take and must be written down in ONE pass, never cut into pieces; `names` are the phone's own names, best first (the computer adds its memory's), `languages` the phone's hint list.
+     */
+    fun wholeOptions(names: List<String>, languages: List<String>): JSONObject =
+        JSONObject().put("whole", true).put("names", JSONArray(names)).put("languages", JSONArray(languages))
+
+    suspend fun transcribe(context: Context, pcm: ByteArray, whole: Boolean = false): String {
         var linked = com.past9.phoneaos.remote.RemoteHub.session.value
         // The link to the computer drops often; a take that starts or ends in the gap must still be written down.
         if (linked == null && com.past9.phoneaos.remote.RemoteHub.link.value?.on == true)
             linked = kotlinx.coroutines.withTimeoutOrNull(LINK_WAIT_MS) { com.past9.phoneaos.remote.RemoteHub.session.filterNotNull().first() }
         if (linked != null) {
-            val r = linked.call("voice.transcribe", listOf(JSONObject().put("\$b64", Base64.encodeToString(pcm, Base64.NO_WRAP))),
+            val r = linked.call("voice.transcribe", listOf(JSONObject().put("\$b64", Base64.encodeToString(pcm, Base64.NO_WRAP))).let { if (whole) it + wholeOptions(ownNames(context), SpeechModel.languages()) else it },
                 DictationEngine.pieceLimitMs(pcm.size.toLong()))
             val o = r as? JSONObject ?: throw IOException("Your computer didn't answer.")
             if (!o.optBoolean("ok")) throw IOException(o.optString("error").ifBlank { "Your computer couldn't write that down." })
             return o.optString("text")
         }
         val key = com.past9.phoneaos.App.graph(context).settings.voiceKey("gemini") ?: throw IOException("Not linked to a computer, and no Gemini key on this phone.")
-        return withContext(Dispatchers.IO) { SpeechModel.transcribe(key, pcm, ownNames(context)) }
+        return withContext(Dispatchers.IO) { SpeechModel.transcribe(key, pcm, ownNames(context), model = com.past9.phoneaos.App.graph(context).settings.extra(SpeechModel.SETTING_KEY)?.trim().takeIf { !it.isNullOrEmpty() } ?: SpeechModel.MODEL) }
     }
 }
 
@@ -314,17 +320,19 @@ object DictationHub {
         currentId = id; currentStarted = startedAt; currentChat = chat
         val s = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         scope = s
-        val live = if (Build.VERSION.SDK_INT >= 33 && SystemDictation.available(ctx)) RecognizerLive(ctx) else null
+        val names = PieceTranscriber.ownNames(ctx)
+        val live = if (Build.VERSION.SDK_INT >= 33 && SystemDictation.available(ctx)) RecognizerLive(ctx, names) else null
         recogniser = live
         val transcribe: (suspend (ByteArray) -> String)? = if (PieceTranscriber.available(ctx))
             ({ pcm: ByteArray -> PieceTranscriber.transcribe(ctx, pcm) }) else null
+        val transcribeWhole: (suspend (ByteArray) -> String)? = if (transcribe != null) ({ pcm: ByteArray -> PieceTranscriber.transcribe(ctx, pcm, whole = true) }) else null
         val e = DictationEngine(s, { android.os.SystemClock.elapsedRealtime() }, tape, live, transcribe,
             onView = { v ->
                 _ui.value = Ui(this.owner, v); this.onText?.invoke(v.text, v.final)
                 saved.note(id, startedAt, v.elapsedMs, v.text, noteState(v), chat, flush = v.ended, final = v.final)
                 if (v.ended) ended(v)
             },
-            log = { Log.i(TAG, it) })
+            log = { Log.i(TAG, it) }, transcribeWhole = transcribeWhole, fixPreview = { NameFix.respell(it, names) })
         engine = e
         mic = MicCapture(ctx, onPcm = { b, n -> tape.append(b, n); main.post { engine?.audio(b) } }, onSilenced = { on -> main.post { engine?.micSilenced(on) } }).also { it.start() }
         val cm = ctx.getSystemService(ConnectivityManager::class.java)
