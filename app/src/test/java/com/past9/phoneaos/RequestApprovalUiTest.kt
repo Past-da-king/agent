@@ -4,10 +4,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.past9.phoneaos.data.ChatItem
+import com.past9.phoneaos.ui.screens.AnsweredForYou
 import com.past9.phoneaos.ui.screens.Approval
 import com.past9.phoneaos.ui.screens.ApprovalCard
 import com.past9.phoneaos.ui.theme.AppTheme
@@ -53,4 +57,21 @@ class RequestApprovalUiTest(private val dark: Boolean) {
         File(path).mkdirs()
         rule.onRoot().captureRoboImage("$path/request-${if (dark) "dark" else "light"}.png")
     }
+    @Test fun historyShowsRequestAndUndoFailure() {
+        RuntimeEnvironment.setQualifiers("w390dp-h844dp-xxhdpi")
+        val original = card(true)
+        val meta = JSONObject(original.meta).put("rid", "server-card-1").put("autoAnswer", JSONObject().put("at", 1795605660000L).put("asker", "Project assistant").put("summary", "Read the requested folder").put("decision", "decline").put("reason", "The request needs a narrower scope.").put("undo", "retry").put("undone", 0L))
+        val answered = original.copy(meta = meta.toString())
+        rule.setContent { AppTheme(dark = dark) { Surface { AnsweredForYou(listOf(answered), "Nova") } } }
+        rule.onNodeWithText("Answered for you").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("You asked for this at", substring = true).assertIsDisplayed()
+        val path = System.getProperty("request.ui.proof", "/tmp/request-phone-proof")
+        File(path).mkdirs()
+        rule.onRoot().captureRoboImage("$path/history-${if (dark) "dark" else "light"}.png")
+        rule.onNodeWithText("Undo", useUnmergedTree = true).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Not connected to a computer right now.").assertIsDisplayed()
+    }
+
 }
