@@ -355,6 +355,7 @@ fun LinkedDevicesScreen(onBack: () -> Unit) {
                 }
             }
             SectionHeader(stringResource(R.string.link_computers), stringResource(R.string.link_computers_sub), Modifier.padding(start = 4.dp, top = 8.dp))
+            if (l.on) Text(BrainChooser.answeringLine(l.brains, (state as? LinkState.Connected)?.brain?.id, health.filterValues { it?.ready == true }.keys), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 BrainChooser.ordered(l.brains).forEachIndexed { i, b ->
                     val h = health[b.id]

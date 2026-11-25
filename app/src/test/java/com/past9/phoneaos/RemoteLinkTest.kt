@@ -25,6 +25,7 @@ import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
 import org.json.JSONObject
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -146,6 +147,24 @@ class RemoteLinkTest {
     private val server = BrainRef("srv", "Server", listOf("https://srv:7787"), fp, 1)
     private val laptop = BrainRef("lap", "Laptop", listOf("https://lap:7787"), fp, 2)
     private val all = listOf(laptop, server, desk)
+
+    @Test fun tiesFollowTheDisplayedPairingOrderRatherThanDeviceNames() {
+        val pc = desk.copy(name = "Zulu", priority = 0, pairedAt = 1L)
+        val srv = server.copy(name = "Alpha", priority = 0, pairedAt = 2L)
+        assertEquals(listOf(pc, srv), BrainChooser.ordered(listOf(srv, pc)))
+    }
+
+    @Test fun nextMessageRechecksAStandInAndStatusExplainsTheOrder() {
+        assertEquals(setOf(desk.id), BrainChooser.skipForProbe(all, server.id, setOf(desk.id), false))
+        assertEquals(emptySet<String>(), BrainChooser.skipForProbe(all, server.id, setOf(desk.id), true))
+        assertEquals(setOf(server.id), BrainChooser.skipForProbe(all, desk.id, setOf(server.id), true))
+        assertTrue(BrainChooser.hasPreferred(all, server.id))
+        assertFalse(BrainChooser.hasPreferred(all, desk.id))
+        assertEquals("Desk is answering: first in order.", BrainChooser.answeringLine(all, desk.id))
+        assertTrue(BrainChooser.answeringLine(listOf(desk, server.copy(priority = 0)), server.id).contains("tied positions"))
+        assertTrue(BrainChooser.answeringLine(all, server.id).contains("Desk"))
+        assertEquals("No device is answering.", BrainChooser.answeringLine(all, null))
+    }
 
     @Test fun brainsAreTriedByPriority() {
         assertEquals(listOf("desk", "srv", "lap"), BrainChooser.ordered(all).map { it.id })
