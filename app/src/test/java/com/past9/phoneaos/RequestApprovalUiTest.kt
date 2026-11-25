@@ -2,6 +2,8 @@ package com.past9.phoneaos
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
+import androidx.compose.runtime.CompositionLocalProvider
+import com.past9.phoneaos.ui.LocalSheetPreview
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -62,7 +64,7 @@ class RequestApprovalUiTest(private val dark: Boolean) {
         val original = card(true)
         val meta = JSONObject(original.meta).put("rid", "server-card-1").put("autoAnswer", JSONObject().put("at", 1795605660000L).put("asker", "Project assistant").put("summary", "Read the requested folder").put("decision", "decline").put("reason", "The request needs a narrower scope.").put("undo", "retry").put("undone", 0L))
         val answered = original.copy(meta = meta.toString())
-        rule.setContent { AppTheme(dark = dark) { Surface { AnsweredForYou(listOf(answered), "Nova") } } }
+        rule.setContent { CompositionLocalProvider(LocalSheetPreview provides true) { AppTheme(dark = dark) { Surface { AnsweredForYou(listOf(answered), "Nova") } } } }
         rule.onNodeWithText("Answered for you").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("You asked for this at", substring = true).assertIsDisplayed()

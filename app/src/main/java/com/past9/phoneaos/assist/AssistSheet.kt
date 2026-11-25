@@ -249,7 +249,10 @@ private fun ListeningBars() {
  * The same row and the same answer as the card in the chat; "Read all of it" opens the full approval sheet.
  */
 @Composable
-fun ApprovalInSheet(item: ChatItem, onAnswer: (Long, String) -> Unit, agentName: String = "Your agent") {
+fun ApprovalInSheet(item: ChatItem, onAnswer: (Long, String) -> Unit) { ApprovalInSheet(item, onAnswer, "Your agent") }
+
+@Composable
+fun ApprovalInSheet(item: ChatItem, onAnswer: (Long, String) -> Unit, agentName: String) {
     val a = remember(item.id, item.text, item.meta) { Approval.of(item) }
     val cs = MaterialTheme.colorScheme
     var open by remember(item.id) { mutableStateOf(false) }

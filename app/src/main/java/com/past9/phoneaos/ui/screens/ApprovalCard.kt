@@ -101,7 +101,10 @@ data class Approval(
  * Once decided it folds to one line that says what was decided; a tap still opens the details.
  */
 @Composable
-fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit, agentName: String = "Your agent") {
+fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit) { ApprovalCard(item, onAnswer, "Your agent") }
+
+@Composable
+fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit, agentName: String) {
     val a = remember(item.id, item.text, item.meta) { Approval.of(item) }
     var open by remember(item.id) { mutableStateOf(false) }
     var sent by remember(item.id) { mutableStateOf(false) }
@@ -145,7 +148,10 @@ fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit, agentName: St
 
 /** The sheet for a chat row, for screens that draw their own card (Home, a call). */
 @Composable
-fun ApprovalSheet(item: ChatItem, onAnswer: (Long, String) -> Unit, onDismiss: () -> Unit, agentName: String = "Your agent") {
+fun ApprovalSheet(item: ChatItem, onAnswer: (Long, String) -> Unit, onDismiss: () -> Unit) { ApprovalSheet(item, onAnswer, onDismiss, "Your agent") }
+
+@Composable
+fun ApprovalSheet(item: ChatItem, onAnswer: (Long, String) -> Unit, onDismiss: () -> Unit, agentName: String) {
     val a = remember(item.id, item.text, item.meta) { Approval.of(item) }
     var sent by remember(item.id) { mutableStateOf(false) }
     LaunchedEffect(a.answer) { if (sent && !a.pending) onDismiss() }
@@ -158,7 +164,10 @@ fun ApprovalSheet(item: ChatItem, onAnswer: (Long, String) -> Unit, onDismiss: (
  * shows the same content with what was decided.
  */
 @Composable
-fun ApprovalSheet(a: Approval, onDecide: (String) -> Unit, onDismiss: () -> Unit, agentName: String = "Your agent") {
+fun ApprovalSheet(a: Approval, onDecide: (String) -> Unit, onDismiss: () -> Unit) { ApprovalSheet(a, onDecide, onDismiss, "Your agent") }
+
+@Composable
+fun ApprovalSheet(a: Approval, onDecide: (String) -> Unit, onDismiss: () -> Unit, agentName: String) {
     val cs = MaterialTheme.colorScheme
     AgentSheet(onDismiss) {
         Column(Modifier.fillMaxWidth()) {
