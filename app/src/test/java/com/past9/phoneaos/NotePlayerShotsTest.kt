@@ -69,11 +69,11 @@ open class NotePlayerShotsTest(private val dark: Boolean) {
         var seek = -1
         bubble(true, 42000, true) { seek = it }
         val waveform = rule.onNodeWithContentDescription("Voice note position")
-        waveform.performTouchInput { down(center); moveTo(androidx.compose.ui.geometry.Offset(width * 0.75f, centerY)) }
+        waveform.performTouchInput { down(center); moveTo(androidx.compose.ui.geometry.Offset(this.width * 0.75f, centerY)) }
         assertEquals(-1, seek)
         shot("dragging")
         waveform.performTouchInput { up() }
-        rule.runOnIdle { org.junit.Assert.assertTrue(seek in 88000..89000) }
+        rule.runOnIdle { org.junit.Assert.assertTrue("Expected three-quarter seek, got $seek", seek in 88000..89000) }
     }
     @Test fun talkbackCanSeek() {
         var seek = -1

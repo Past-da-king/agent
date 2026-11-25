@@ -516,6 +516,7 @@ private fun VoiceBubble(item: ChatItem) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val meta = JSONObject(item.meta)
     val playback = remember(item.id) { com.past9.phoneaos.voice.NotePlayback(ctx) }
+    val playerScope = rememberCoroutineScope()
     val playing = playback.playing
     var playError by remember { mutableStateOf<String?>(null) }
     // A note from the computer is read LIVE from the link (on its way, here, on the computer, failed), never from the
@@ -538,8 +539,10 @@ private fun VoiceBubble(item: ChatItem) {
     val canGet = rs != null && (onComputer || failedWhy != null)
     fun play() {
         playError = null
-        runCatching { playback.play() }
-            .onFailure { playError = ctx.getString(R.string.chat_audio_cant_play) }
+        playerScope.launch {
+            runCatching { if (playback.error) playback.prepare(path); playback.play() }
+                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; playError = ctx.getString(R.string.chat_audio_cant_play) }
+        }
     }
     DisposableEffect(playback) { onDispose { playback.close() } }
     LaunchedEffect(playback, path) {

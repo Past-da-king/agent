@@ -106,11 +106,12 @@ class NotePlayback(context: Context) {
     var position by mutableStateOf(0); private set
     var started by mutableStateOf(false); private set
     var error by mutableStateOf(false); private set
+    private var seeking = false
     private var ready = false
     private var pendingPlay = false
     private var player: MediaPlayer? = null
     private val focus = NoteFocus(AndroidNoteFocus(context), ::pauseForFocus, {
-        player?.start(); playing = true
+        runCatching { player?.start(); playing = true }.onFailure { fail() }
     }, { level -> runCatching { player?.setVolume(level, level) }; Unit })
 
     suspend fun prepare(path: String) {
@@ -127,23 +128,33 @@ class NotePlayback(context: Context) {
             next.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
             next.setDataSource(path)
+            next.setOnSeekCompleteListener {
+                if (player === it) { seeking = false; position = it.currentPosition }
+            }
             next.setOnPreparedListener {
+                if (player !== it) return@setOnPreparedListener
                 ready = true; duration = it.duration
-                if (position > 0) it.seekTo(position)
+                if (position > 0) { seeking = true; it.seekTo(position) }
                 if (pendingPlay) { pendingPlay = false; runCatching { play() }.onFailure { error = true } }
             }
             next.setOnErrorListener { _, _, _ ->
-                error = true; playing = false; pendingPlay = false; focus.stop()
-                coordinator.release(this)
+                if (player === next) fail()
                 true
             }
             next.setOnCompletionListener {
+                if (player !== it) return@setOnCompletionListener
                 playing = false; position = duration; focus.stop()
                 coordinator.release(this)
             }
             player = next
             next.prepareAsync()
         } catch (e: Exception) { player = null; ready = false; next.release(); error = true; throw e }
+    }
+    private fun fail() {
+        playing = false; pendingPlay = false; ready = false; error = true
+        focus.stop()
+        player?.release(); player = null
+        coordinator.release(this)
     }
     fun play() {
         coordinator.claim(this, ::pause)
@@ -153,23 +164,23 @@ class NotePlayback(context: Context) {
         if (!focus.play()) { coordinator.release(this); error = true; return }
         if (position >= duration) seek(0)
         try { p.start(); playing = true; started = true }
-        catch (e: Exception) { focus.stop(); coordinator.release(this); throw e }
+        catch (e: Exception) { fail(); throw e }
     }
     private fun pauseForFocus() {
         pendingPlay = false
-        if (ready && !error) player?.let { if (it.isPlaying) it.pause(); position = it.currentPosition }
+        if (ready && !error) player?.let { if (it.isPlaying) it.pause(); if (!seeking) position = it.currentPosition }
         playing = false
     }
     fun pause() { pauseForFocus(); focus.stop(); coordinator.release(this) }
     fun seek(ms: Int) {
         position = ms.coerceIn(0, duration)
         started = true
-        if (ready) player?.seekTo(position)
+        if (ready) { seeking = true; player?.seekTo(position) }
     }
-    fun tick() { if (playing) position = player?.currentPosition ?: position }
+    fun tick() { if (playing && !seeking) position = player?.currentPosition ?: position }
     fun close() {
         pause()
         player?.release(); player = null
-        position = 0; duration = 0; started = false; ready = false; error = false
+        position = 0; duration = 0; started = false; ready = false; seeking = false; error = false
     }
 }
