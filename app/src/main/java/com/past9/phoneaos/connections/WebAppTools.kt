@@ -142,7 +142,9 @@ object WebAppRun {
         if (app.isScreen) return runner.runScreen(app, t, input, ctx)
         if (!t.readOnly && !app.trusted) {
             val what = if (input.length() == 0) "No inputs." else input.keys().asSequence().joinToString("\n") { "${it}: ${input.opt(it).toString().take(600)}" }
-            when (ctx.ask("APPROVAL|${app.name}: ${t.description.take(90)}|$what", listOf("Approve", "Decline"))) {
+            when (ctx.askWithOrigin("APPROVAL|${app.name}: ${t.description.take(90)}|$what", listOf("Approve", "Decline"),
+                JSONObject().put("tool", "webapp_run").put("input", JSONObject().put("app", app.name).put("tool", t.name).put("description", t.description).put("args", input)
+                    .put("sends", Regex("chat\\.postMessage|sendMessage|sendMail|/messages|createPost|/tweets|publish", RegexOption.IGNORE_CASE).containsMatchIn(t.js))))) {
                 "Approve" -> {}
                 null -> return "No answer (background run). Do NOT do it; leave it for the user."
                 else -> return "DECLINED. Do not do it."

@@ -18,6 +18,8 @@ interface ToolContext {
     suspend fun updateActivity(id: Long, text: String, meta: JSONObject = JSONObject())
     /** Ask the user and wait for the answer. Null when nobody can answer (a background run). */
     suspend fun ask(question: String, options: List<String>): String?
+    /** App-stamped inner tool call, independent of the model arguments. */
+    suspend fun askWithOrigin(question: String, options: List<String>, origin: JSONObject): String? = ask(question, options)
     /** Post a phone notification. */
     suspend fun notify(title: String, body: String)
     /** Same, callable from non-suspending callbacks. */
