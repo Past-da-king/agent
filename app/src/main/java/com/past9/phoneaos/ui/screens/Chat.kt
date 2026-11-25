@@ -350,6 +350,7 @@ fun ChatScreen(
             contentPadding = PaddingValues(start = com.past9.phoneaos.ui.sidePad(16.dp, com.past9.phoneaos.ui.Readable.CHAT), end = com.past9.phoneaos.ui.sidePad(16.dp, com.past9.phoneaos.ui.Readable.CHAT), top = 8.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            item(key = "answered-for-you") { AnsweredForYou(items, agentName) }
             if (earlierMore) item(key = "remote-earlier") {
                 TextButton(onClick = { rs?.loadEarlier() }, enabled = !earlierLoading, modifier = Modifier.fillMaxWidth()) { Text(if (earlierLoading) stringResource(R.string.chat_loading) else stringResource(R.string.chat_load_earlier)) }
             }
@@ -365,7 +366,7 @@ fun ChatScreen(
                         "report" -> { val path = JSONObject(r.item.meta).optString("path")
                             Column { quotedFor(r.item, items, byId)?.let { ReplyQuote(it) { jumpTo(it.id) }; Spacer(Modifier.height(8.dp)) }; ReportCard(r.item) { actions.onReport(path) } } }
                         "question" -> when {
-                            r.item.text.startsWith("APPROVAL|") -> ApprovalCard(r.item, actions.onAnswer)
+                            r.item.text.startsWith("APPROVAL|") -> ApprovalCard(r.item, actions.onAnswer, agentName)
                             r.item.text.startsWith(com.past9.phoneaos.tools.ConnectRequest.PREFIX) -> ConnectCard(r.item, actions.onAnswer)
                             else -> QuestionCard(r.item, actions.onAnswer, actions.onBrowser)
                         }
