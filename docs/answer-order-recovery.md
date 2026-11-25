@@ -1,13 +1,33 @@
 # Preferred brain recovery
 
-Phone 0.15.77, 25 November 2026. Companion desktop/node release 0.2.145.
+Candidate reviewed on 25 November 2026. Companion desktop/node release 0.2.146.
+The release owner sets the combined phone version separately.
 
-The old chooser sorted a tied priority by display name while desktop Settings sorted it by pairing time. `BrainRef` now carries optional pairing time, persisted in the link and received from newer nodes. The chooser and both device screens use priority, pairing time, then id. Status explicitly flags a remaining tie.
+Tied answer priorities use pairing time, then device id. Unknown pairing times sort after known times. Older links remain readable. A tied order previously sorted by name, so an upgrade can change the selected brain once, between turns.
 
-An open socket on mobile data previously skipped probes even after a turn-finished kick. The phone now rechecks a higher-ranked brain on the next idle message, a device health event and the existing between-turn kick. Selection and message delivery are serialized. An in-flight send or main turn stays on its current brain.
+Both main-chat entry points, project messages, device events and the between-turn loop can recheck a preferred brain before starting new work. A ready health check never clears the 30-second cooldown after a message was not acknowledged. Selection and send reservation share a short lock; delivery waits happen outside it, so one waiting chat cannot block another.
 
-A deliberate preferred-brain recheck probes it despite the old unanswered-message cooldown. A positive ready response clears that cooldown; a negative probe retains it. Ordinary failover retries still honor the cooldown. Message ids, durable acknowledgement and duplicate suppression are unchanged.
+Turns, sends, lent commands through result delivery, and RPCs including pending device.ask approvals and voice.noteAudio keep their origin socket. Command events reserve their busy count before their coroutine is dispatched. A command or RPC beginning during a health probe is counted again at the final selection decision.
 
-Connections > Your machines and Settings > Linked devices show the connected brain and why it is answering. Disk warnings from the current node are included in Connections. An older node without pairing time remains readable and is ordered deterministically by id when all supplied ranks/times tie.
+On mobile data with an open stand-in socket, recovery probes check only higher-ranked brains and run at most once per minute. They do not run the background all-brain status sweep.
 
-Proof: the pairing-order regression failed with the old name-based comparator. Final RemoteLinkTest and SendFlowTest passed 39/39. The desktop/node companion also proved handback between two isolated nodes after suspending and resuming only the preferred node; no real device order or leases were edited for that test. APK installation is a separate approved action and was not performed.
+Connections and Linked devices use translatable resource strings and the actual active-turn state. Optional node status is cached for a minute, including transient failures; unsupported methods are remembered per brain for the session. Current nodes expose drive warnings only in the answering text, so the compatibility matcher accepts drive/free-space wording without requiring the word disk.
+
+Proof is recorded in the PR comment after the quiet window. PreferredBrainSessionTest drives the real send/sendAccepted/project/RPC/event paths over loopback HTTP and WebSockets; RemoteLinkTest covers cooldown and tie rules, and AnswerOrderStatusTest covers resources and status compatibility.
+
+## Shared in-flight API for other PRs
+
+File: app/src/main/java/com/past9/phoneaos/remote/InFlight.kt
+Class: com.past9.phoneaos.remote.InFlight
+
+RemoteSession exposes val inFlight: InFlight. All sends, RPC calls and dispatched commands use this same counter. DeviceCommands keeps its job lease until its result has been delivered.
+
+- val count: Int and val isBusy: Boolean
+- fun acquire(): InFlight.Lease
+- suspend fun <T> during(block: suspend () -> T): T
+- fun <T> guarded(block: () -> T): T
+- Lease implements AutoCloseable: close() is idempotent; release(): Boolean returns true only on the first release.
+
+For a suspend operation: session.inFlight.during { downloadOrAsk() }.
+For a dispatched coroutine: acquire before dispatch, then close the lease in invokeOnCompletion, so cancellation before the coroutine starts also releases it.
+Use guarded only for short non-suspending selection/reservation decisions. Its lock is shared with acquire/release, preventing new work from starting halfway through a socket replacement.

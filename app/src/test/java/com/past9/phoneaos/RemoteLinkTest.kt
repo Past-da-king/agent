@@ -25,7 +25,6 @@ import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
 import org.json.JSONObject
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -154,16 +153,8 @@ class RemoteLinkTest {
         assertEquals(listOf(pc, srv), BrainChooser.ordered(listOf(srv, pc)))
     }
 
-    @Test fun nextMessageRechecksAStandInAndStatusExplainsTheOrder() {
-        assertEquals(setOf(desk.id), BrainChooser.skipForProbe(all, server.id, setOf(desk.id), false))
-        assertEquals(emptySet<String>(), BrainChooser.skipForProbe(all, server.id, setOf(desk.id), true))
-        assertEquals(setOf(server.id), BrainChooser.skipForProbe(all, desk.id, setOf(server.id), true))
-        assertTrue(BrainChooser.hasPreferred(all, server.id))
-        assertFalse(BrainChooser.hasPreferred(all, desk.id))
-        assertEquals("Desk is answering: first in order.", BrainChooser.answeringLine(all, desk.id))
-        assertTrue(BrainChooser.answeringLine(listOf(desk, server.copy(priority = 0)), server.id).contains("tied positions"))
-        assertTrue(BrainChooser.answeringLine(all, server.id).contains("Desk"))
-        assertEquals("No device is answering.", BrainChooser.answeringLine(all, null))
+    @Test fun unknownPairingTimeSortsAfterKnownTimes() {
+        assertEquals(listOf(server.id, desk.id), BrainChooser.ordered(listOf(desk.copy(priority = 0), server.copy(priority = 0, pairedAt = 5))).map { it.id })
     }
 
     @Test fun brainsAreTriedByPriority() {

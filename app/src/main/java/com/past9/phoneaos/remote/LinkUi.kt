@@ -341,6 +341,7 @@ fun LinkedDevicesScreen(onBack: () -> Unit) {
     if (l == null || adding) { LinkScreen(onBack = { if (adding) adding = false else onBack() }, onLinked = { adding = false }); return }
     val health by (session?.health ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyMap<String, Health?>()) }).collectAsStateWithLifecycle()
     val state by (session?.state ?: remember { kotlinx.coroutines.flow.MutableStateFlow<LinkState>(LinkState.Paused) }).collectAsStateWithLifecycle()
+    val runStatus by (session?.status ?: remember { kotlinx.coroutines.flow.MutableStateFlow(com.past9.phoneaos.agent.AgentStatus()) }).collectAsStateWithLifecycle()
     var confirmUnlink by remember { mutableStateOf(false) }
     SubScreen(stringResource(R.string.settings_linked), l.nodeName.ifBlank { null }, onBack) { pad ->
         Column(Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 48.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -355,7 +356,7 @@ fun LinkedDevicesScreen(onBack: () -> Unit) {
                 }
             }
             SectionHeader(stringResource(R.string.link_computers), stringResource(R.string.link_computers_sub), Modifier.padding(start = 4.dp, top = 8.dp))
-            if (l.on) Text(BrainChooser.answeringLine(l.brains, (state as? LinkState.Connected)?.brain?.id, health.filterValues { it?.ready == true }.keys), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp))
+            if (l.on) Text(BrainChooser.answeringLine(context, l.brains, (state as? LinkState.Connected)?.brain?.id, health.filterValues { it?.ready == true }.keys, runStatus.working), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp))
             AppCard(padding = PaddingValues(vertical = 4.dp)) {
                 BrainChooser.ordered(l.brains).forEachIndexed { i, b ->
                     val h = health[b.id]

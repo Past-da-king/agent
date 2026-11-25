@@ -189,27 +189,9 @@ data class Pick(val brain: BrainRef, val url: String)
  * once; a higher brain that comes back is moved to only between turns, so a reply is never cut in half.
  */
 object BrainChooser {
-    fun skipForProbe(brains: List<BrainRef>, currentId: String?, blocked: Set<String>, recheckPreferred: Boolean): Set<String> {
-        if (!recheckPreferred || currentId == null) return blocked
-        val rank = ordered(brains).map { it.id }
-        val current = rank.indexOf(currentId)
-        return blocked.filter { id -> val at = rank.indexOf(id); at < 0 || current < 0 || at >= current }.toSet()
-    }
-
     fun hasPreferred(brains: List<BrainRef>, currentId: String?): Boolean =
         currentId != null && ordered(brains).firstOrNull()?.id != currentId
 
-    fun answeringLine(brains: List<BrainRef>, currentId: String?, ready: Set<String> = emptySet(), turnRunning: Boolean = false): String {
-        val current = brains.firstOrNull { it.id == currentId } ?: return "No device is answering."
-        val first = ordered(brains).firstOrNull()
-        val why = when {
-            first?.id == current.id -> "first in order"
-            first?.id in ready -> if (turnRunning) "finishing this turn before handing back to ${first?.name}" else "${first?.name} is ready; handing back in answer order"
-            else -> "${first?.name ?: "Preferred device"} has not answered this phone's latest check; using the next device"
-        }
-        val tie = if (brains.groupBy { it.priority }.any { it.value.size > 1 }) " Order has tied positions; using pairing order, then device id." else ""
-        return "${current.name} is answering: $why.$tie"
-    }
 
     sealed interface Move {
         data object Stay : Move
@@ -218,7 +200,7 @@ object BrainChooser {
     }
 
     fun ordered(brains: List<BrainRef>): List<BrainRef> =
-        brains.sortedWith(compareBy<BrainRef>({ it.priority }, { it.pairedAt }, { it.id }))
+        brains.sortedWith(compareBy<BrainRef>({ it.priority }, { it.pairedAt.takeIf { time -> time > 0L } ?: Long.MAX_VALUE }, { it.id }))
 
     /** How long one address gets before the next one is tried beside it. */
     private const val ADDRESS_HEAD_START_MS = 500L
