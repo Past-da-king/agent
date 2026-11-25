@@ -42,7 +42,7 @@ class AndroidNoteFocus(context: Context) : NoteFocusPort {
         abandon()
         val ownGeneration = generation
         val next = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
-            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
+            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANT)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
             .setOnAudioFocusChangeListener { if (generation == ownGeneration) listener(it) }.build()
         request = next
@@ -241,7 +241,7 @@ class NotePlayback(context: Context) {
             val next = MediaPlayer()
             player = next
             next.setWakeMode(app, android.os.PowerManager.PARTIAL_WAKE_LOCK)
-            next.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
+            next.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANT)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
             next.setDataSource(path)
             next.setOnSeekCompleteListener { if (player === it) completeSeek() }

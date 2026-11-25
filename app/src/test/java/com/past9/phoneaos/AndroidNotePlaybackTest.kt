@@ -119,6 +119,26 @@ class AndroidNotePlaybackTest {
         note.play()
         assertTrue(note.playing)
     }
+    @Test fun assistantFocusUsesStrongDuckAndRestoresOnPauseAndCompletion() {
+        val note = prepared()
+        val manager = shadowOf(context.getSystemService(AudioManager::class.java))
+        note.play()
+        val first = manager.lastAudioFocusRequest.audioFocusRequest
+        assertEquals(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK, first.focusGain)
+        assertEquals(android.media.AudioAttributes.USAGE_ASSISTANT, first.audioAttributes.usage)
+        assertEquals(android.media.AudioAttributes.CONTENT_TYPE_SPEECH, first.audioAttributes.contentType)
+        repeat(5) { note.play() }
+        assertSame(first, manager.lastAudioFocusRequest.audioFocusRequest)
+        note.pause()
+        assertSame(first, manager.lastAbandonedAudioFocusRequest)
+        note.play()
+        val second = manager.lastAudioFocusRequest.audioFocusRequest
+        assertNotSame(first, second)
+        assertEquals(android.media.AudioAttributes.USAGE_ASSISTANT, second.audioAttributes.usage)
+        shadowOf(player(note)).invokeCompletionListener()
+        assertSame(second, manager.lastAbandonedAudioFocusRequest)
+        assertFalse(note.playing)
+    }
     @Test fun durationKnownBeforePlay() {
         val note = prepared()
         assertEquals(118000, note.duration)
