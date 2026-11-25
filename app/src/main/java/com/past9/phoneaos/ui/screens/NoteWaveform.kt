@@ -52,7 +52,7 @@ internal fun NoteWaveform(duration: Int, position: () -> Int, started: Boolean, 
     val spokenPosition = if (duration > 0) stringResource(R.string.note_progress, spokenCurrent, spokenTotal)
         else if (failed) "" else stringResource(R.string.chat_getting_audio)
     Column(modifier) {
-        Canvas(Modifier.fillMaxWidth().heightIn(min = 48.dp)
+        Canvas(Modifier.fillMaxWidth().height(48.dp)
             .semantics {
                 contentDescription = positionLabel
                 stateDescription = spokenPosition

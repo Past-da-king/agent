@@ -69,6 +69,7 @@ open class NotePlayerShotsTest(private val dark: Boolean) {
         var seek = -1
         bubble(true, 42000, true) { seek = it }
         val waveform = rule.onNodeWithContentDescription("Voice note position")
+        waveform.assertHeightIsAtLeast(48.dp)
         // At 360 dp the waveform is narrow: moving from its centre to 75% can be
         // inside Android's touch slop. Start at 5% so this is a real drag at both widths.
         waveform.performTouchInput {
@@ -138,6 +139,7 @@ open class NotePlayerShotsTest(private val dark: Boolean) {
             }
         }
         val waveform = rule.onNodeWithContentDescription("Voice note position")
+        waveform.assertHeightIsAtLeast(48.dp)
         waveform.performTouchInput {
             down(androidx.compose.ui.geometry.Offset(this.width * 0.05f, centerY))
             moveTo(androidx.compose.ui.geometry.Offset(this.width * 0.75f, centerY))
