@@ -34,7 +34,6 @@ class PreferredBrainSessionTest {
         @Volatile var ready = true
         @Volatile var probes = 0
         @Volatile var probeGate: java.util.concurrent.CountDownLatch? = null
-        @Volatile var probeGate: java.util.concurrent.CountDownLatch? = null
         val messages = CopyOnWriteArrayList<String>()
         val waiting = ConcurrentHashMap<String, Pair<WebSocket, JSONObject>>()
         val sockets = CopyOnWriteArrayList<WebSocket>()
@@ -176,25 +175,6 @@ class PreferredBrainSessionTest {
         assertSame(origin, field("rpc").get(session))
         assertEquals(0, pc.probes)
         server.release("device.ack", JSONObject())
-    }
-
-    @Test fun commandArrivingDuringTheHealthProbePreventsSocketReplacement() = runBlocking {
-        val gate = java.util.concurrent.CountDownLatch(1)
-        pc.probeGate = gate
-        val sending = async(Dispatchers.IO) { session.sendTo("project", "probe race") }
-        try {
-            until("health probe started") { pc.probes > 0 }
-            event(RemoteSession.EVT_COMMAND, JSONObject().put("id", "command-race").put("kind", "unknown"))
-            until("command result is in flight") { server.waiting.containsKey("device.ack") }
-            gate.countDown()
-            sending.await()
-            assertTrue(pc.messages.isEmpty())
-            assertEquals(listOf("probe race"), server.messages.toList())
-        } finally {
-            gate.countDown()
-            if (server.waiting.containsKey("device.ack")) server.release("device.ack", JSONObject())
-            sending.cancelAndJoin()
-        }
     }
 
     @Test fun commandArrivingDuringTheHealthProbePreventsSocketReplacement() = runBlocking {
