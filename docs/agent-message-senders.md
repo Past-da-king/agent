@@ -1,0 +1,9 @@
+# Agent message sender cards
+
+Desktop companion contract: chat_item kind remains user; meta.via holds from/name/chat/title plus optional id/icon. Updated phone uses Sender.of(meta, text) for metadata or anchored historical app envelopes, with Sender.isHis as its own-message predicate. No migration, account setting or environment change.
+
+UserBubble now renders non-person rows with AgentSenderCard on the left, using theme surfaces/type/radius and ProjectIconTile when a project glyph/colour is known. The person's own text keeps its right primary-container bubble. Attachment text and metadata remain intact; malformed old meta does not crash sender rendering. Assist, watch and voice context use the same legacy-aware sender reading.
+
+Old desktop + new phone works through existing via and legacy fallback. New desktop + old phone retains old known sender kinds, so the old phone shows its neutral sender-labelled right bubble. Unknown metadata fields are ignored. Headerless historical rows cannot be distinguished safely from genuine user text and are not guessed.
+
+Tests added: AgentSenderTest (legacy envelopes, real user prose, malformed meta and future kinds); AgentSenderShotsTest (actual UserBubble, helper left card vs user right bubble, 390 light/dark). Screenshot outputs are outside the repository at /tmp/agent-sender-phone-shots. Execution, old-head red proof, full baseline comparison and screenshot inspection remain pending server build capacity. PR stays draft. No APK was built, installed or released.

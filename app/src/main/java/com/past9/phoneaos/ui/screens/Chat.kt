@@ -45,6 +45,7 @@ import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -587,20 +588,20 @@ private fun VoiceBubble(item: ChatItem) {
 }
 
 @Composable
-private fun UserBubble(item: ChatItem) {
+internal fun UserBubble(item: ChatItem) {
     val text = item.text
     // Not his: a project, the main agent, a call or a helper wrote it (meta.via, as the computer marks it). It says who,
     // in a neutral bubble, never his own colour (22 Oct 2026: other agents' messages showed as if he sent them).
-    val sender = com.past9.phoneaos.remote.Sender.of(item.meta)
-    if (sender != null) Row(Modifier.fillMaxWidth().padding(start = 48.dp, bottom = 4.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-        Icon(senderIcon(sender), null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant); Spacer(Modifier.width(6.dp))
-        Text(sender.line, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    val sender = com.past9.phoneaos.remote.Sender.of(item.meta, item.text)
+    if (sender != null) {
+        AgentSenderCard(sender, com.past9.phoneaos.remote.Sender.body(text))
     }
-    val images = JSONObject(item.meta).optJSONArray("images")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
+    val rowMeta = runCatching { JSONObject(item.meta) }.getOrDefault(JSONObject())
+    val images = rowMeta.optJSONArray("images")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
     if (images.isNotEmpty()) Box(Modifier.fillMaxWidth().padding(start = 64.dp, bottom = 6.dp), contentAlignment = Alignment.CenterEnd) {
         com.past9.phoneaos.ui.ImageStrip(images.map { com.past9.phoneaos.ui.ChatImage(java.io.File(it).toURI().toString(), stringResource(R.string.chat_your_photo)) })
     }
-    val files = JSONObject(item.meta).optJSONArray("files")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
+    val files = rowMeta.optJSONArray("files")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
     if (files.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(start = 48.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
         files.forEach { f ->
             Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
@@ -611,15 +612,37 @@ private fun UserBubble(item: ChatItem) {
             }
         }
     }
+    if (sender != null) return
     // Photos or files sent with no words are the whole message: no bubble, and no words put in his mouth.
     if (text.substringBefore("\n\n[Attached document:").substringBefore("\n\n[Shared with you").substringBefore(com.past9.phoneaos.assist.AssistMessage.MARK).isBlank() && (images.isNotEmpty() || files.isNotEmpty())) return
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-        Surface(color = if (sender == null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg, com.past9.phoneaos.ui.theme.Radius.lg, com.past9.phoneaos.ui.theme.Radius.xs, com.past9.phoneaos.ui.theme.Radius.lg), modifier = Modifier.widthIn(max = 320.dp).padding(start = 48.dp)) {
+        Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg, com.past9.phoneaos.ui.theme.Radius.lg, com.past9.phoneaos.ui.theme.Radius.xs, com.past9.phoneaos.ui.theme.Radius.lg), modifier = Modifier.widthIn(max = 320.dp).padding(start = 48.dp).testTag("own-message-bubble")) {
             Text(text.substringBefore("\n\n[Attached document:").substringBefore("\n\n[Shared with you").substringBefore(com.past9.phoneaos.assist.AssistMessage.MARK).ifBlank { stringResource(R.string.chat_heres_a_document) }, Modifier.padding(horizontal = 16.dp, vertical = 11.dp), style = MaterialTheme.typography.bodyLarge,
-                color = if (sender == null) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
+                color = MaterialTheme.colorScheme.onPrimaryContainer)
         }
     }
     TakeMarkRow(item)
+}
+
+/** Agent-to-agent messages have their own left-aligned card, distinct from the person's bubble. */
+@Composable
+internal fun AgentSenderCard(sender: com.past9.phoneaos.remote.Sender, text: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(end = 16.dp).testTag("agent-sender-card"),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (sender.glyph.isNotBlank()) com.past9.phoneaos.ui.ProjectIconTile(sender.name, sender.glyph, sender.color, "", 22.dp)
+                else Icon(senderIcon(sender), null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.width(6.dp))
+                Text(sender.line, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(text, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+        }
+    }
 }
 
 /**
@@ -696,7 +719,7 @@ fun ReplyQuote(quoted: ChatItem, onClick: () -> Unit) {
             Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.AutoMirrored.Rounded.Reply, null, Modifier.size(14.dp), tint = cs.primary); Spacer(Modifier.width(4.dp))
-                    Text(com.past9.phoneaos.remote.Sender.of(quoted.meta)?.let { stringResource(R.string.chat_replying_to, it.line.removePrefix("From ")) } ?: stringResource(R.string.chat_replying_to_you), style = MaterialTheme.typography.labelMedium, color = cs.primary)
+                    Text(com.past9.phoneaos.remote.Sender.of(quoted.meta, quoted.text)?.let { stringResource(R.string.chat_replying_to, it.line.removePrefix("From ")) } ?: stringResource(R.string.chat_replying_to_you), style = MaterialTheme.typography.labelMedium, color = cs.primary)
                 }
                 Text(quoted.text.substringBefore("\n\n[Attached document:").trim().ifBlank { stringResource(R.string.chat_photo_or_document) }, style = MaterialTheme.typography.bodySmall,
                     color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
