@@ -145,11 +145,11 @@ fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit, agentName: St
 
 /** The sheet for a chat row, for screens that draw their own card (Home, a call). */
 @Composable
-fun ApprovalSheet(item: ChatItem, onAnswer: (Long, String) -> Unit, onDismiss: () -> Unit) {
+fun ApprovalSheet(item: ChatItem, onAnswer: (Long, String) -> Unit, onDismiss: () -> Unit, agentName: String = "Your agent") {
     val a = remember(item.id, item.text, item.meta) { Approval.of(item) }
     var sent by remember(item.id) { mutableStateOf(false) }
     LaunchedEffect(a.answer) { if (sent && !a.pending) onDismiss() }
-    ApprovalSheet(a, onDecide = { sent = true; onAnswer(item.id, it) }, onDismiss = onDismiss)
+    ApprovalSheet(a, onDecide = { sent = true; onAnswer(item.id, it) }, onDismiss = onDismiss, agentName = agentName)
 }
 
 /**
