@@ -3,8 +3,8 @@ package com.past9.phoneaos.ui.screens
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -39,23 +39,27 @@ internal fun NoteWaveform(duration: Int, position: Int, started: Boolean, onSeek
                 }
             }
             .pointerInput(duration, rtl) {
-                awaitEachGesture {
-                    val down = awaitFirstDown()
-                    if (duration <= 0) return@awaitEachGesture
-                    preview = noteSeek(down.position.x, size.width.toFloat(), duration, rtl)
-                    down.consume()
-                    var released = false
-                    try {
-                        do {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            preview = noteSeek(change.position.x, size.width.toFloat(), duration, rtl)
-                            change.consume()
-                            if (!change.pressed) { released = true; break }
-                        } while (true)
-                        if (released) latestSeek(preview ?: position)
-                    } finally { preview = null }
+                if (duration <= 0) return@pointerInput
+                detectTapGestures { point ->
+                    latestSeek(noteSeek(point.x, size.width.toFloat(), duration, rtl))
                 }
+            }
+            .pointerInput(duration, rtl) {
+                if (duration <= 0) return@pointerInput
+                detectDragGestures(
+                    onDragStart = { point ->
+                        preview = noteSeek(point.x, size.width.toFloat(), duration, rtl)
+                    },
+                    onDrag = { change, _ ->
+                        change.consume()
+                        preview = noteSeek(change.position.x, size.width.toFloat(), duration, rtl)
+                    },
+                    onDragEnd = {
+                        preview?.let { latestSeek(it) }
+                        preview = null
+                    },
+                    onDragCancel = { preview = null }
+                )
             }) {
             val count = 28
             val fraction = if (duration > 0) shown.toFloat() / duration else 0f

@@ -73,6 +73,8 @@ open class NotePlayerShotsTest(private val dark: Boolean) {
         assertEquals(-1, seek)
         rule.mainClock.advanceTimeByFrame()
         rule.waitForIdle()
+        val preview = waveform.fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.ProgressBarRangeInfo].current
+        org.junit.Assert.assertTrue("Preview should be near 88500 ms, got $preview. " + rule.onRoot().printToString(), preview in 88000f..89000f)
         rule.onNodeWithText("1:28 / 1:58").assertIsDisplayed()
         shot("dragging")
         waveform.performTouchInput { up() }
