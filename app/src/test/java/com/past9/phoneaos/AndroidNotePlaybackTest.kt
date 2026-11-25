@@ -44,6 +44,22 @@ class AndroidNotePlaybackTest {
         field.isAccessible = true
         return field.get(note) as MediaPlayer
     }
+    @Test fun metadataFailureCanBeRetried() {
+        val note = NotePlayback(context)
+        notes += note
+        val broken = "/tmp/voice-note-broken.wav"
+        ShadowMediaMetadataRetriever.addException(DataSource.toDataSource(broken), IllegalArgumentException("Unreadable audio"))
+        val result = runCatching { runBlocking { note.prepare(broken) } }
+        assertTrue(result.isFailure)
+        assertTrue(note.error)
+        assertFalse(note.playing)
+        runBlocking { note.prepare(path) }
+        shadowOf(Looper.getMainLooper()).idle()
+        assertFalse(note.error)
+        assertEquals(118000, note.duration)
+        note.play()
+        assertTrue(note.playing)
+    }
     @Test fun durationKnownBeforePlay() {
         val note = prepared()
         assertEquals(118000, note.duration)
