@@ -241,7 +241,7 @@ class DeviceCommands(private val context: Context, private val session: RemoteSe
             CommandLedger.Verdict.RUN -> {}
         }
         // While it runs the link is kept up and the Wi-Fi and wake locks are held.
-        session.jobStarted()
+        val lease = session.jobStarted()
         try {
             val kind = c.optString("kind")
             if (kind == "tool") {
@@ -251,8 +251,8 @@ class DeviceCommands(private val context: Context, private val session: RemoteSe
                 val (ok, note) = runCatching { act(c) }.getOrElse { false to (it.message ?: "failed") }
                 ledger.finish(id, kind.ifBlank { "command" }, ok, note)
             }
-        } finally { session.jobEnded() }
-        deliver(id)
+            deliver(id)
+        } finally { session.jobEnded(lease) }
     }
 
     /** Give the computer the answer; if the link is down it waits in the ledger and goes with the next link. */

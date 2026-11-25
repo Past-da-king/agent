@@ -19,8 +19,8 @@ import java.util.Base64
  */
 
 /** A computer or server that can run the agent. Lower [priority] is tried first. */
-data class BrainRef(val id: String, val name: String, val urls: List<String>, val fp: String, val priority: Int) {
-    fun toJson(): JSONObject = JSONObject().put("id", id).put("name", name).put("urls", JSONArray(urls)).put("fp", fp).put("priority", priority)
+data class BrainRef(val id: String, val name: String, val urls: List<String>, val fp: String, val priority: Int, val pairedAt: Long = 0L) {
+    fun toJson(): JSONObject = JSONObject().put("id", id).put("name", name).put("urls", JSONArray(urls)).put("fp", fp).put("priority", priority).put("pairedAt", pairedAt)
 
     companion object {
         fun from(o: JSONObject?): BrainRef? {
@@ -28,7 +28,7 @@ data class BrainRef(val id: String, val name: String, val urls: List<String>, va
             val id = o.optString("id").trim()
             val urls = o.optJSONArray("urls").strings().mapNotNull(Pairing::cleanUrl).distinct()
             if (id.isEmpty() || urls.isEmpty()) return null
-            return BrainRef(id, o.optString("name").trim().ifEmpty { "Computer" }, urls, o.optString("fp").trim(), o.optInt("priority", 0))
+            return BrainRef(id, o.optString("name").trim().ifEmpty { "Computer" }, urls, o.optString("fp").trim(), o.optInt("priority", 0), o.optLong("pairedAt", 0L))
         }
     }
 }
@@ -189,6 +189,10 @@ data class Pick(val brain: BrainRef, val url: String)
  * once; a higher brain that comes back is moved to only between turns, so a reply is never cut in half.
  */
 object BrainChooser {
+    fun hasPreferred(brains: List<BrainRef>, currentId: String?): Boolean =
+        currentId != null && ordered(brains).firstOrNull()?.id != currentId
+
+
     sealed interface Move {
         data object Stay : Move
         data class To(val pick: Pick) : Move
@@ -196,7 +200,7 @@ object BrainChooser {
     }
 
     fun ordered(brains: List<BrainRef>): List<BrainRef> =
-        brains.sortedWith(compareBy<BrainRef>({ it.priority }, { it.name.lowercase() }, { it.id }))
+        brains.sortedWith(compareBy<BrainRef>({ it.priority }, { it.pairedAt.takeIf { time -> time > 0L } ?: Long.MAX_VALUE }, { it.id }))
 
     /** How long one address gets before the next one is tried beside it. */
     private const val ADDRESS_HEAD_START_MS = 500L

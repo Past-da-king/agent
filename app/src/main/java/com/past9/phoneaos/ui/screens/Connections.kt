@@ -508,6 +508,9 @@ internal fun LinkedMachines(devices: List<com.past9.phoneaos.remote.MeshDevice>,
     val cs = MaterialTheme.colorScheme
     Column {
         SectionHeader(stringResource(R.string.machines_your), if (devices.isEmpty()) stringResource(R.string.conn_machines_reading) else stringResource(R.string.conn_machines_linked), Modifier.padding(start = 4.dp, top = 16.dp, bottom = 8.dp))
+        devices.firstOrNull { it.state == com.past9.phoneaos.remote.MeshDevice.State.ANSWERING }?.let { answering ->
+            Text(answering.line, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp))
+        }
         AppCard(padding = PaddingValues(vertical = 4.dp)) {
             devices.forEach { d ->
                 Row(Modifier.fillMaxWidth().clickable(onClick = onDevices).heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -517,7 +520,7 @@ internal fun LinkedMachines(devices: List<com.past9.phoneaos.remote.MeshDevice>,
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
                         Text(d.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(d.line, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (d.state != com.past9.phoneaos.remote.MeshDevice.State.ANSWERING) Text(d.line, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     val extra = LocalExtra.current
                     when (d.state) {
