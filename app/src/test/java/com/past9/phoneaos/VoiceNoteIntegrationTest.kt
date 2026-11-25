@@ -34,6 +34,30 @@ class VoiceNoteIntegrationTest {
     private val file = File.createTempFile("voice-note-ui-", ".wav")
     @After fun cleanup() { com.past9.phoneaos.voice.NotePlayback.pauseAll(); file.delete() }
 
+    @Test fun bubbleLeavingCompositionDoesNotStopPlayback() {
+        val path = file.path
+        ShadowMediaPlayer.addMediaInfo(DataSource.toDataSource(path), ShadowMediaPlayer.MediaInfo(118000, 0))
+        ShadowMediaMetadataRetriever.addMetadata(path, MediaMetadataRetriever.METADATA_KEY_DURATION, "118000")
+        val visible = androidx.compose.runtime.mutableStateOf(true)
+        val holder = App.graph(context).voiceNotes
+        rule.setContent {
+            AppTheme(dark = false) {
+                if (visible.value) VoiceBubble(ChatItem(id = 903, kind = "voice",
+                    text = "Scroll lifecycle proof", meta = JSONObject().put("path", path).toString()))
+            }
+        }
+        rule.waitUntil(15000) { holder.get(903).duration > 0 && !holder.get(903).preparing }
+        rule.onNodeWithContentDescription("Play voice note").performClick()
+        rule.waitUntil(15000) { holder.get(903).playing }
+        val note = holder.get(903)
+        rule.runOnIdle { visible.value = false }
+        rule.waitForIdle()
+        rule.runOnIdle { assertTrue(note.playing); visible.value = true }
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription("Pause voice note").assertIsDisplayed()
+        rule.runOnIdle { assertSame(note, holder.get(903)); assertTrue(note.playing); holder.stopAll() }
+    }
+
     @Test fun bubbleRetriesMetadataFailureThroughItsPlayButton() {
         val path = file.path
         ShadowMediaPlayer.addMediaInfo(DataSource.toDataSource(path), ShadowMediaPlayer.MediaInfo(118000, 0))

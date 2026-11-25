@@ -63,10 +63,22 @@ class NotePlaybackTest {
     }
     private class Fake : NoteFocusPort {
         var grant = true
+        var requests = 0
         var abandoned = 0
         lateinit var listener: (Int) -> Unit
-        override fun request(listener: (Int) -> Unit): Boolean { this.listener = listener; return grant }
+        override fun request(listener: (Int) -> Unit): Boolean { requests++; this.listener = listener; return grant }
         override fun abandon() { abandoned++ }
+    }
+    @Test fun repeatedPlayRequestsFocusOnlyOnceUntilPause() {
+        val fake = Fake()
+        val focus = NoteFocus(fake, {}, {}, {})
+        repeat(10) { assertTrue(focus.play()) }
+        assertEquals(1, fake.requests)
+        assertEquals(0, fake.abandoned)
+        focus.stop()
+        assertTrue(focus.play())
+        assertEquals(2, fake.requests)
+        assertEquals(1, fake.abandoned)
     }
     @Test fun transientLossResumesOnlyPreviouslyPlaying() {
         val fake = Fake(); var pauses = 0; var resumes = 0

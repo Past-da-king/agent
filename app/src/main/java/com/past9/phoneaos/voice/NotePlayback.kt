@@ -14,6 +14,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 
 /** Physical waveform coordinates to milliseconds, including mirrored layouts. */
 fun noteSeek(x: Float, width: Float, duration: Int, rtl: Boolean): Int {
@@ -59,6 +61,7 @@ class NoteFocus(private val port: NoteFocusPort, private val pause: () -> Unit,
     private var active = false
     private var resumeOnGain = false
     fun play(): Boolean {
+        if (active) return true
         resumeOnGain = false
         active = port.request(::changed)
         return active
@@ -107,7 +110,9 @@ class NotePlaybackCoordinator {
 /** One shared note instance for autoplay and its chat bubble; detached notes keep their place. */
 class NotePlayers(context: Context) {
     private val app = context.applicationContext
-    private data class Entry(val player: NotePlayback, var attached: Int = 0)
+    private val preparationScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main.immediate)
+    private data class Entry(val player: NotePlayback, var attached: Int = 0,
+        var path: String = "", var preparation: kotlinx.coroutines.Deferred<Boolean>? = null)
     private val entries = LinkedHashMap<Long, Entry>(16, 0.75f, true)
     fun get(id: Long): NotePlayback {
         val entry = entries.getOrPut(id) { Entry(NotePlayback(app)) }
@@ -122,11 +127,29 @@ class NotePlayers(context: Context) {
         }
         return entry.player
     }
+    suspend fun prepare(id: Long, path: String): Boolean {
+        get(id)
+        val entry = entries.getValue(id)
+        val current = entry.preparation
+        val work = if (entry.path == path && current != null && !current.isCompleted) current else {
+            entry.preparation?.cancel()
+            entry.path = path
+            preparationScope.async { entry.player.prepare(path) }.also { entry.preparation = it }
+        }
+        return work.await()
+    }
+    fun play(id: Long, path: String, failed: (Throwable) -> Unit) {
+        preparationScope.launch {
+            try { if (prepare(id, path)) get(id).play() }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { failed(e) }
+        }
+    }
     fun attach(id: Long) { get(id); entries.getValue(id).attached++ }
     fun detach(id: Long, changingConfigurations: Boolean = false, interactive: Boolean = true) {
         entries[id]?.let { entry ->
             entry.attached = (entry.attached - 1).coerceAtLeast(0)
-            if (entry.attached == 0 && shouldPauseNotesOnStop(changingConfigurations, interactive)) entry.player.release()
+            // View recycling does not own playback. Activity stop and explicit actions do.
         }
     }
     fun stopAll() {
@@ -134,11 +157,11 @@ class NotePlayers(context: Context) {
             Handler(Looper.getMainLooper()).post { stopAll() }; return
         }
         NotePlayback.pauseAll()
-        entries.values.forEach { if (it.player.preparing) it.player.release() else it.player.pause() }
+        entries.values.forEach { it.preparation?.cancel(); if (it.player.preparing) it.player.release() else it.player.pause() }
     }
     suspend fun autoPlay(id: Long, path: String): NotePlayback {
         val note = get(id)
-        if (note.prepare(path)) note.play()
+        if (prepare(id, path)) note.play()
         return note
     }
 }
@@ -166,6 +189,14 @@ class NotePlayback(context: Context) {
     private var seekTarget: Int? = null
     private var inFlightSeek: Int? = null
     private var player: MediaPlayer? = null
+    private val progressHandler = Handler(Looper.getMainLooper())
+    private val progress = object : Runnable {
+        override fun run() {
+            if (!playing) return
+            tick()
+            if (playing) progressHandler.postDelayed(this, 100)
+        }
+    }
     private var noisyRegistered = false
     private val noisy = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -227,6 +258,7 @@ class NotePlayback(context: Context) {
             next.setOnErrorListener { _, _, _ -> if (player === next) fail(); true }
             next.setOnCompletionListener {
                 if (player !== it) return@setOnCompletionListener
+                progressHandler.removeCallbacks(progress)
                 playing = false; position = duration.coerceAtLeast(0)
                 inFlightSeek = null; seekTarget = null
                 unwatchNoisy(); controls.hide(); focus.stop(); coordinator.release(this)
@@ -246,10 +278,13 @@ class NotePlayback(context: Context) {
         if (!ready) return
         player?.start()
         playing = true; started = true; focusBlocked = false
+        progressHandler.removeCallbacks(progress)
+        progressHandler.postDelayed(progress, 100)
         watchNoisy()
         controls.show(position, duration)
     }
     fun play() {
+        if (playing) return
         if (!ready && !preparing) return
         coordinator.claim(this, ::pause)
         Tts.stop()
@@ -264,6 +299,7 @@ class NotePlayback(context: Context) {
     }
     private fun pauseForFocus() {
         pendingPlay = false
+        progressHandler.removeCallbacks(progress)
         if (ready && !error && playing) player?.let {
             runCatching {
                 if (it.isPlaying) it.pause()

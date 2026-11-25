@@ -8,6 +8,8 @@ import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import com.past9.phoneaos.voice.NotePlayback
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -32,6 +34,14 @@ class AndroidNotePlaybackTest {
         shadowOf(context.getSystemService(AudioManager::class.java)).setNextFocusRequestResponse(AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
     }
     @After fun close() { notes.forEach { it.close() } }
+    private fun <T> awaitOwned(block: suspend () -> T): T = runBlocking {
+        val work = async { block() }
+        while (!work.isCompleted) {
+            shadowOf(Looper.getMainLooper()).idle()
+            delay(1)
+        }
+        work.await()
+    }
     private fun prepared(): NotePlayback {
         val note = NotePlayback(context)
         notes += note
@@ -62,6 +72,8 @@ class AndroidNotePlaybackTest {
         assertTrue(note.playing)
         holder.attach(9001)
         holder.detach(9001)
+        assertTrue(note.playing)
+        holder.stopAll()
         assertFalse(note.playing)
     }
     @Test fun seekingToStartBeforePreparationDoesNotFreezeElapsedTime() {
@@ -181,26 +193,36 @@ class AndroidNotePlaybackTest {
         assertSame(nativePlayer, player(note))
         assertEquals(42000, note.position); assertTrue(note.playing)
     }
-    @Test fun recycledBubbleKeepsItsPositionAndDuration() {
+    @Test fun scrollAwayAndBackKeepsPlayingTheSameNativePlayer() {
         val registry = com.past9.phoneaos.voice.NotePlayers(context)
         registry.attach(1)
         val first = registry.get(1); notes += first
         runBlocking { first.prepare(path) }; shadowOf(Looper.getMainLooper()).idle()
         first.play(); first.seek(42000); shadowOf(Looper.getMainLooper()).idle()
+        val native = player(first)
+        val manager = shadowOf(context.getSystemService(AudioManager::class.java))
+        val focus = manager.lastAudioFocusRequest
         registry.detach(1)
-        assertFalse(first.playing); assertEquals(42000, first.position)
+        assertTrue(first.playing)
+        assertNull(manager.lastAbandonedAudioFocusRequest)
+        shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(1000))
+        assertTrue("Progress continues while no bubble is attached", first.position > 42000)
         registry.attach(1)
         val restored = registry.get(1)
         assertSame(first, restored)
         runBlocking { restored.prepare(path) }; shadowOf(Looper.getMainLooper()).idle()
-        assertEquals(118000, restored.duration); assertEquals(42000, restored.position)
-        restored.play(); assertEquals(42000, restored.position)
+        assertEquals(118000, restored.duration)
+        assertSame(native, player(restored))
+        assertTrue(restored.playing)
+        repeat(10) { restored.play() }
+        assertSame(focus, manager.lastAudioFocusRequest)
+        assertNull(manager.lastAbandonedAudioFocusRequest)
         registry.detach(1)
     }
     @Test fun autoplayAndBubbleShareOneNativePlayer() {
         val registry = com.past9.phoneaos.voice.NotePlayers(context)
         registry.attach(2)
-        val autoplay = runBlocking { registry.autoPlay(2, path) }; notes += autoplay
+        val autoplay = awaitOwned { registry.autoPlay(2, path) }; notes += autoplay
         shadowOf(Looper.getMainLooper()).idle()
         assertTrue(autoplay.playing)
         val bubble = registry.get(2)

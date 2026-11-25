@@ -517,7 +517,6 @@ internal fun VoiceBubble(item: ChatItem) {
     val meta = remember(item.meta) { JSONObject(item.meta) }
     val notes = remember(ctx) { com.past9.phoneaos.App.graph(ctx).voiceNotes }
     val playback = remember(item.id) { notes.get(item.id) }
-    val playerScope = rememberCoroutineScope()
     val playing = playback.playing
     var playError by remember { mutableStateOf<String?>(null) }
     // A note from the computer is read LIVE from the link (on its way, here, on the computer, failed), never from the
@@ -540,27 +539,15 @@ internal fun VoiceBubble(item: ChatItem) {
     val canGet = rs != null && (onComputer || failedWhy != null)
     fun play() {
         playError = null
-        playerScope.launch {
-            runCatching { if (playback.prepare(path)) playback.play() }
-                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; playError = ctx.getString(R.string.chat_audio_cant_play) }
-        }
+        notes.play(item.id, path) { playError = ctx.getString(R.string.chat_audio_cant_play) }
     }
     DisposableEffect(playback) {
         notes.attach(item.id)
-        onDispose {
-            var owner = ctx
-            while (owner is android.content.ContextWrapper && owner !is android.app.Activity) owner = owner.baseContext
-            notes.detach(item.id, (owner as? android.app.Activity)?.isChangingConfigurations == true,
-                ctx.getSystemService(android.os.PowerManager::class.java).isInteractive)
-        }
+        onDispose { notes.detach(item.id) }
     }
     LaunchedEffect(playback, path, hasAudio) {
-        if (!hasAudio) playback.release()
-        else runCatching { playback.prepare(path) }
+        if (hasAudio) runCatching { notes.prepare(item.id, path) }
             .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; playError = ctx.getString(R.string.chat_audio_cant_play) }
-    }
-    LaunchedEffect(playback, playing) {
-        while (playing) { playback.tick(); kotlinx.coroutines.delay(100) }
     }
     LaunchedEffect(hasAudio, wantPlay) { if (hasAudio && wantPlay) { wantPlay = false; play() } }
     LaunchedEffect(failedWhy) { if (failedWhy != null) wantPlay = false }
