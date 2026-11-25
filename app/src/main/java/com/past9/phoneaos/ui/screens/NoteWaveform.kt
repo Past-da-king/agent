@@ -103,8 +103,7 @@ internal fun VoiceNoteControls(
     onPlay: () -> Unit, onSeek: (Int) -> Unit, onRead: () -> Unit, failed: Boolean = false
 ) {
     val cs = MaterialTheme.colorScheme
-    val action = stringResource(if (playing) R.string.chat_pause else R.string.chat_play)
-    val description = stringResource(R.string.note_action, action, stringResource(R.string.note_voice_name))
+    val description = stringResource(if (playing) R.string.note_pause else R.string.note_play)
     androidx.compose.material3.Surface(
         shape = androidx.compose.foundation.shape.RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg),
         color = cs.primaryContainer

@@ -54,6 +54,29 @@ class VoiceNoteIntegrationTest {
         rule.onNodeWithText(error).assertDoesNotExist()
     }
 
+    @Test fun completeLocalePhrasesDescribePositionAndProgress() {
+        val locales = mapOf(
+            "zu" to "Indawo yokudlala enothini lezwi",
+            "xh" to "Indawo yokudlala kwinowuthi yelizwi",
+            "st" to "Sebaka sa ho bapala molaetseng oa lentsoe",
+            "tn" to "Lefelo la go tshameka mo molaetseng wa lentswe",
+            "de" to "Position in der Sprachnachricht",
+            "ja" to "ボイスメモの再生位置"
+        )
+        locales.forEach { (tag, expected) ->
+            val configuration = Configuration(context.resources.configuration).apply { setLocale(Locale.forLanguageTag(tag)) }
+            val resources = context.createConfigurationContext(configuration)
+            assertEquals(tag, expected, resources.getString(R.string.note_position))
+            val action = resources.getString(R.string.note_play)
+            if (action.lowercase(Locale.forLanguageTag(tag)) != action.uppercase(Locale.forLanguageTag(tag))) {
+                assertNotEquals(tag, action, action.uppercase(Locale.forLanguageTag(tag)))
+            }
+            val progress = resources.getString(R.string.note_progress, "42", "118")
+            assertTrue(tag, progress.contains("42") && progress.contains("118"))
+            assertFalse(tag, progress.contains("/"))
+        }
+    }
+
     @Test fun spokenTimesUseLocalePluralRulesAndLabelsReuseTranslations() {
         assertEquals("1 second", noteSpokenTime(1000, Locale.ENGLISH))
         assertEquals("2 seconds", noteSpokenTime(2000, Locale.ENGLISH))
@@ -61,7 +84,7 @@ class VoiceNoteIntegrationTest {
         assertTrue(french, french.contains("minute") && french.contains("secondes"))
         val configuration = Configuration(context.resources.configuration).apply { setLocale(Locale.forLanguageTag("zu")) }
         val zulu = context.createConfigurationContext(configuration)
-        val label = zulu.getString(R.string.note_action, zulu.getString(R.string.chat_play), zulu.getString(R.string.note_voice_name))
+        val label = zulu.getString(R.string.note_play)
         assertFalse(label, label.contains("Play") || label.contains("voice note"))
         assertNotEquals(noteSpokenTime(42000, Locale.ENGLISH), noteSpokenTime(42000, Locale.FRENCH))
     }

@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Action and voice-note name reuse the existing translations. Units use Android ICU plural rules. -->
-    <string name="note_action">%2$s %1$s</string>
-    <string name="note_voice_name">ভয়েস নোট</string>
-    <string name="note_position">ভয়েস নোট</string>
-    <string name="note_progress">%1$s / %2$s</string>
+    <string name="note_play">ভয়েস নোট চালান</string>
+    <string name="note_pause">ভয়েস নোট বিরতি দিন</string>
+    <string name="note_position">ভয়েস নোটের অবস্থান</string>
+    <string name="note_progress">%2$s এর মধ্যে %1$s</string>
 </resources>

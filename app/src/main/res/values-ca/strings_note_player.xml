@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Action and voice-note name reuse the existing translations. Units use Android ICU plural rules. -->
-    <string name="note_action">%1$s %2$s</string>
-    <string name="note_voice_name">NOTA DE VEU</string>
-    <string name="note_position">NOTA DE VEU</string>
-    <string name="note_progress">%1$s / %2$s</string>
+    <string name="note_play">Reprodueix la nota de veu</string>
+    <string name="note_pause">Pausa la nota de veu</string>
+    <string name="note_position">Posició de la nota de veu</string>
+    <string name="note_progress">%1$s de %2$s</string>
 </resources>

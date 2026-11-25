@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Action and voice-note name reuse the existing translations. Units use Android ICU plural rules. -->
-    <string name="note_action">%1$s %2$s</string>
-    <string name="note_voice_name">ΦΩΝΗΤΙΚΟ ΜΗΝΥΜΑ</string>
-    <string name="note_position">ΦΩΝΗΤΙΚΟ ΜΗΝΥΜΑ</string>
-    <string name="note_progress">%1$s / %2$s</string>
+    <string name="note_play">Αναπαραγωγή φωνητικού μηνύματος</string>
+    <string name="note_pause">Παύση φωνητικού μηνύματος</string>
+    <string name="note_position">Θέση φωνητικού μηνύματος</string>
+    <string name="note_progress">%1$s από %2$s</string>
 </resources>

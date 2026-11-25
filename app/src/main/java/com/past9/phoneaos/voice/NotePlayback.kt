@@ -25,6 +25,8 @@ fun noteSeek(x: Float, width: Float, duration: Int, rtl: Boolean): Int {
 fun noteTime(ms: Int): String = "%d:%02d".format(java.util.Locale.ROOT, ms.coerceAtLeast(0) / 60000, ms.coerceAtLeast(0) / 1000 % 60)
 fun noteTimeParts(ms: Int): Pair<Int, Int> = (ms.coerceAtLeast(0) / 60000) to (ms.coerceAtLeast(0) / 1000 % 60)
 
+fun shouldPauseNotesOnStop(changingConfigurations: Boolean, interactive: Boolean): Boolean = !changingConfigurations && interactive
+
 interface NoteFocusPort {
     fun request(listener: (Int) -> Unit): Boolean
     fun abandon()
@@ -121,10 +123,10 @@ class NotePlayers(context: Context) {
         return entry.player
     }
     fun attach(id: Long) { get(id); entries.getValue(id).attached++ }
-    fun detach(id: Long) {
+    fun detach(id: Long, changingConfigurations: Boolean = false, interactive: Boolean = true) {
         entries[id]?.let { entry ->
             entry.attached = (entry.attached - 1).coerceAtLeast(0)
-            if (entry.attached == 0) entry.player.release()
+            if (entry.attached == 0 && shouldPauseNotesOnStop(changingConfigurations, interactive)) entry.player.release()
         }
     }
     fun stopAll() {
@@ -179,6 +181,7 @@ class NotePlayback(context: Context) {
     private fun unwatchNoisy() {
         if (noisyRegistered) { app.unregisterReceiver(noisy); noisyRegistered = false }
     }
+    private val controls = NoteMediaControls(app, ::pause)
     private val focus = NoteFocus(AndroidNoteFocus(app), ::pauseForFocus, {
         runCatching { startReadyPlayer() }.onFailure { fail() }
     }, { level -> runCatching { player?.setVolume(level, level) }; Unit })
@@ -206,6 +209,7 @@ class NotePlayback(context: Context) {
             if (duration > 0) position = position.coerceIn(0, duration)
             val next = MediaPlayer()
             player = next
+            next.setWakeMode(app, android.os.PowerManager.PARTIAL_WAKE_LOCK)
             next.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
             next.setDataSource(path)
@@ -214,7 +218,10 @@ class NotePlayback(context: Context) {
                 if (player !== it) return@setOnPreparedListener
                 ready = true; preparing = false
                 duration = it.duration.takeIf { value -> value > 0 } ?: duration
-                if (position > 0 && position < duration) seek(position)
+                val pendingSeek = seekTarget
+                if (pendingSeek != null) {
+                    if (pendingSeek in 1 until duration) issueSeek(pendingSeek) else seekTarget = null
+                } else if (position > 0 && position < duration) seek(position)
                 if (pendingPlay) { pendingPlay = false; runCatching { play() }.onFailure { fail() } }
             }
             next.setOnErrorListener { _, _, _ -> if (player === next) fail(); true }
@@ -222,7 +229,7 @@ class NotePlayback(context: Context) {
                 if (player !== it) return@setOnCompletionListener
                 playing = false; position = duration.coerceAtLeast(0)
                 inFlightSeek = null; seekTarget = null
-                unwatchNoisy(); focus.stop(); coordinator.release(this)
+                unwatchNoisy(); controls.hide(); focus.stop(); coordinator.release(this)
             }
             next.prepareAsync()
             return true
@@ -240,6 +247,7 @@ class NotePlayback(context: Context) {
         player?.start()
         playing = true; started = true; focusBlocked = false
         watchNoisy()
+        controls.show(position, duration)
     }
     fun play() {
         if (!ready && !preparing) return
@@ -262,7 +270,7 @@ class NotePlayback(context: Context) {
                 if (inFlightSeek == null && seekTarget == null) position = it.currentPosition.coerceAtLeast(0)
             }
         }
-        playing = false; unwatchNoisy()
+        playing = false; unwatchNoisy(); controls.hide()
     }
     fun pause() { pauseForFocus(); focus.stop(); coordinator.release(this) }
     fun seek(ms: Int) {

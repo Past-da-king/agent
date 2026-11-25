@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Action and voice-note name reuse the existing translations. Units use Android ICU plural rules. -->
-    <string name="note_action">%1$s %2$s</string>
-    <string name="note_voice_name">INOTHI LEZWI</string>
-    <string name="note_position">INOTHI LEZWI</string>
-    <string name="note_progress">%1$s / %2$s</string>
+    <string name="note_play">Dlala inothi lezwi</string>
+    <string name="note_pause">Misa kancane inothi lezwi</string>
+    <string name="note_position">Indawo yokudlala enothini lezwi</string>
+    <string name="note_progress">%1$s kwengu-%2$s</string>
 </resources>

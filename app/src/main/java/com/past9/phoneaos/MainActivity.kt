@@ -125,7 +125,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
-        App.graph(this).voiceNotes.stopAll()
+        if (com.past9.phoneaos.voice.shouldPauseNotesOnStop(isChangingConfigurations,
+                getSystemService(android.os.PowerManager::class.java).isInteractive)) {
+            App.graph(this).voiceNotes.stopAll()
+        }
         com.past9.phoneaos.handoff.Handoffs.offScreen()
         com.past9.phoneaos.remote.RemoteHub.onBackground()
         // Swap the home-screen icon to the user's character only once they've left the app.

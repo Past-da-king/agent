@@ -44,6 +44,53 @@ class AndroidNotePlaybackTest {
         field.isAccessible = true
         return field.get(note) as MediaPlayer
     }
+    @Test fun screenOffAndConfigurationChangesDoNotPauseNotes() {
+        assertFalse(com.past9.phoneaos.voice.shouldPauseNotesOnStop(true, true))
+        assertFalse(com.past9.phoneaos.voice.shouldPauseNotesOnStop(false, false))
+        assertTrue(com.past9.phoneaos.voice.shouldPauseNotesOnStop(false, true))
+        val holder = com.past9.phoneaos.voice.NotePlayers(context)
+        val note = holder.get(9001)
+        notes += note
+        holder.attach(9001)
+        runBlocking { note.prepare(path) }
+        shadowOf(Looper.getMainLooper()).idle()
+        note.play()
+        holder.detach(9001, changingConfigurations = true)
+        assertTrue(note.playing)
+        holder.attach(9001)
+        holder.detach(9001, interactive = false)
+        assertTrue(note.playing)
+        holder.attach(9001)
+        holder.detach(9001)
+        assertFalse(note.playing)
+    }
+    @Test fun seekingToStartBeforePreparationDoesNotFreezeElapsedTime() {
+        ShadowMediaPlayer.addMediaInfo(DataSource.toDataSource(path), ShadowMediaPlayer.MediaInfo(118000, 500))
+        val note = NotePlayback(context)
+        notes += note
+        runBlocking { note.prepare(path) }
+        note.seek(0)
+        note.play()
+        shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(1500))
+        note.tick()
+        assertTrue(note.playing)
+        assertTrue("Elapsed time advances after a pending seek to zero", note.position > 0)
+    }
+    @Test fun lockScreenPauseActionStopsPlaybackAndRemovesControls() {
+        val note = prepared()
+        note.play()
+        val manager = context.getSystemService(android.app.NotificationManager::class.java)
+        val notification = shadowOf(manager).getNotification(com.past9.phoneaos.voice.NoteMediaControls.NOTIFICATION_ID)
+        assertNotNull("Playing note has lock-screen controls", notification)
+        assertEquals(android.app.Notification.CATEGORY_TRANSPORT, notification.category)
+        assertEquals(android.app.Notification.VISIBILITY_PUBLIC, notification.visibility)
+        assertNotNull(notification.extras.getParcelable<android.media.session.MediaSession.Token>(android.app.Notification.EXTRA_MEDIA_SESSION))
+        assertEquals(context.getString(R.string.chat_pause), notification.actions.single().title.toString())
+        notification.actions.single().actionIntent.send()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertFalse(note.playing)
+        assertNull(shadowOf(manager).getNotification(com.past9.phoneaos.voice.NoteMediaControls.NOTIFICATION_ID))
+    }
     @Test fun metadataFailureCanBeRetried() {
         val note = NotePlayback(context)
         notes += note

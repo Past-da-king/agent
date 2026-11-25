@@ -547,7 +547,12 @@ internal fun VoiceBubble(item: ChatItem) {
     }
     DisposableEffect(playback) {
         notes.attach(item.id)
-        onDispose { notes.detach(item.id) }
+        onDispose {
+            var owner = ctx
+            while (owner is android.content.ContextWrapper && owner !is android.app.Activity) owner = owner.baseContext
+            notes.detach(item.id, (owner as? android.app.Activity)?.isChangingConfigurations == true,
+                ctx.getSystemService(android.os.PowerManager::class.java).isInteractive)
+        }
     }
     LaunchedEffect(playback, path, hasAudio) {
         if (!hasAudio) playback.release()
@@ -577,7 +582,7 @@ internal fun VoiceBubble(item: ChatItem) {
                     if (canGet) { playError = null; wantPlay = true; rs?.getNote(item.id) }
                 }, size = 48.dp, container = if (tappable) cs.primary else cs.surfaceContainerHigh, enabled = tappable && !spinning) {
                     if (spinning) LoadingIndicator(Modifier.size(24.dp))
-                    else Icon(Icons.Rounded.PlayArrow, if (tappable) stringResource(R.string.note_action, stringResource(R.string.chat_play), stringResource(R.string.note_voice_name)) else stringResource(R.string.chat_audio_unavailable), tint = if (tappable) cs.onPrimary else cs.onSurfaceVariant) }
+                    else Icon(Icons.Rounded.PlayArrow, if (tappable) stringResource(R.string.note_play) else stringResource(R.string.chat_audio_unavailable), tint = if (tappable) cs.onPrimary else cs.onSurfaceVariant) }
                 Spacer(Modifier.width(10.dp))
                 if (spinning) Text(stringResource(R.string.chat_getting_audio), style = MaterialTheme.typography.labelLarge, color = cs.onPrimaryContainer)
                 else if (onComputer) Text(com.past9.phoneaos.remote.RemoteRows.noteSizeLabel(meta).let { if (it.isBlank()) stringResource(R.string.chat_tap_to_play) else stringResource(R.string.chat_tap_to_play_size, it) }, style = MaterialTheme.typography.labelLarge, color = cs.onPrimaryContainer)
