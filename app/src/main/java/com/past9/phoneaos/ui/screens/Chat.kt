@@ -546,7 +546,8 @@ private fun VoiceBubble(item: ChatItem) {
     }
     DisposableEffect(playback) { onDispose { playback.close() } }
     LaunchedEffect(playback, path) {
-        if (hasAudio) runCatching { playback.prepare(path) }
+        if (!hasAudio) playback.close()
+        else runCatching { playback.prepare(path) }
             .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; playError = ctx.getString(R.string.chat_audio_cant_play) }
     }
     LaunchedEffect(playback, playing) {

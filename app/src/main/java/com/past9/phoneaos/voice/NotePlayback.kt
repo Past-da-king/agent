@@ -116,12 +116,17 @@ class NotePlayback(context: Context) {
 
     suspend fun prepare(path: String) {
         close()
-        duration = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        duration = try { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             val metadata = android.media.MediaMetadataRetriever()
             try {
                 metadata.setDataSource(path)
                 metadata.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toIntOrNull() ?: 0
             } finally { metadata.release() }
+        } } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            error = true
+            throw e
         }
         val next = MediaPlayer()
         try {
