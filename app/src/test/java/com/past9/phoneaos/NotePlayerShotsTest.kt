@@ -71,6 +71,9 @@ open class NotePlayerShotsTest(private val dark: Boolean) {
         val waveform = rule.onNodeWithContentDescription("Voice note position")
         waveform.performTouchInput { down(center); moveTo(androidx.compose.ui.geometry.Offset(this.width * 0.75f, centerY)) }
         assertEquals(-1, seek)
+        rule.mainClock.advanceTimeByFrame()
+        rule.waitForIdle()
+        rule.onNodeWithText("1:28 / 1:58").assertIsDisplayed()
         shot("dragging")
         waveform.performTouchInput { up() }
         rule.runOnIdle { org.junit.Assert.assertTrue("Expected three-quarter seek, got $seek", seek in 88000..89000) }
