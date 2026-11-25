@@ -511,11 +511,12 @@ private fun Welcome(userName: String, modifier: Modifier, onSend: (String) -> Un
 
 /** A voice note: play it, or tap "Read it" to scan the words instead. */
 @Composable
-private fun VoiceBubble(item: ChatItem) {
+internal fun VoiceBubble(item: ChatItem) {
     val cs = MaterialTheme.colorScheme
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    val meta = JSONObject(item.meta)
-    val playback = remember(item.id) { com.past9.phoneaos.voice.NotePlayback(ctx) }
+    val meta = remember(item.meta) { JSONObject(item.meta) }
+    val notes = remember(ctx) { com.past9.phoneaos.App.graph(ctx).voiceNotes }
+    val playback = remember(item.id) { notes.get(item.id) }
     val playerScope = rememberCoroutineScope()
     val playing = playback.playing
     var playError by remember { mutableStateOf<String?>(null) }
@@ -530,7 +531,7 @@ private fun VoiceBubble(item: ChatItem) {
         null -> meta.optString("path")
         else -> ""
     }
-    val hasAudio = path.isNotBlank() && java.io.File(path).exists()
+    val hasAudio = remember(path, tick, item.meta) { path.isNotBlank() && java.io.File(path).exists() }
     val loading = state is com.past9.phoneaos.remote.RemoteRows.NoteState.Fetching
     val onComputer = state is com.past9.phoneaos.remote.RemoteRows.NoteState.OnComputer
     val failedWhy = (state as? com.past9.phoneaos.remote.RemoteRows.NoteState.Failed)?.why
@@ -540,13 +541,16 @@ private fun VoiceBubble(item: ChatItem) {
     fun play() {
         playError = null
         playerScope.launch {
-            runCatching { if (playback.error) playback.prepare(path); playback.play() }
+            runCatching { if (playback.prepare(path)) playback.play() }
                 .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; playError = ctx.getString(R.string.chat_audio_cant_play) }
         }
     }
-    DisposableEffect(playback) { onDispose { playback.close() } }
-    LaunchedEffect(playback, path) {
-        if (!hasAudio) playback.close()
+    DisposableEffect(playback) {
+        notes.attach(item.id)
+        onDispose { notes.detach(item.id) }
+    }
+    LaunchedEffect(playback, path, hasAudio) {
+        if (!hasAudio) playback.release()
         else runCatching { playback.prepare(path) }
             .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; playError = ctx.getString(R.string.chat_audio_cant_play) }
     }
@@ -555,7 +559,7 @@ private fun VoiceBubble(item: ChatItem) {
     }
     LaunchedEffect(hasAudio, wantPlay) { if (hasAudio && wantPlay) { wantPlay = false; play() } }
     LaunchedEffect(failedWhy) { if (failedWhy != null) wantPlay = false }
-    val why = playError ?: if (playback.error) stringResource(R.string.chat_audio_cant_play) else when {
+    val why = playError ?: if (playback.error || playback.focusBlocked) stringResource(R.string.chat_audio_cant_play) else when {
         hasAudio || loading || onComputer -> null
         failedWhy != null -> failedWhy
         state is com.past9.phoneaos.remote.RemoteRows.NoteState.NoAudio -> state.why
@@ -565,17 +569,15 @@ private fun VoiceBubble(item: ChatItem) {
     val tappable = hasAudio || canGet
     var showText by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().padding(end = 48.dp)) {
-        if (hasAudio) VoiceNoteControls(playing, playback.duration, playback.position, playback.started, showText,
-            onPlay = { if (playing) playback.pause() else play() }, onSeek = playback::seek, onRead = { showText = !showText })
+        if (hasAudio) VoiceNoteControls(playing, playback.duration, { playback.position }, playback.started, showText,
+            onPlay = { if (playing) playback.pause() else play() }, onSeek = playback::seek, onRead = { showText = !showText }, failed = playback.error)
         else Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg), color = cs.primaryContainer) {
             Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 MorphIconButton(onClick = {
-                    if (playing) { playback.pause() }
-                    else if (hasAudio) play()
-                    else if (canGet) { playError = null; wantPlay = true; rs?.getNote(item.id) }
+                    if (canGet) { playError = null; wantPlay = true; rs?.getNote(item.id) }
                 }, size = 48.dp, container = if (tappable) cs.primary else cs.surfaceContainerHigh, enabled = tappable && !spinning) {
                     if (spinning) LoadingIndicator(Modifier.size(24.dp))
-                    else Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing) "Pause voice note" else if (tappable) "Play voice note" else stringResource(R.string.chat_audio_unavailable), tint = if (tappable) cs.onPrimary else cs.onSurfaceVariant) }
+                    else Icon(Icons.Rounded.PlayArrow, if (tappable) stringResource(R.string.note_action, stringResource(R.string.chat_play), stringResource(R.string.note_voice_name)) else stringResource(R.string.chat_audio_unavailable), tint = if (tappable) cs.onPrimary else cs.onSurfaceVariant) }
                 Spacer(Modifier.width(10.dp))
                 if (spinning) Text(stringResource(R.string.chat_getting_audio), style = MaterialTheme.typography.labelLarge, color = cs.onPrimaryContainer)
                 else if (onComputer) Text(com.past9.phoneaos.remote.RemoteRows.noteSizeLabel(meta).let { if (it.isBlank()) stringResource(R.string.chat_tap_to_play) else stringResource(R.string.chat_tap_to_play_size, it) }, style = MaterialTheme.typography.labelLarge, color = cs.onPrimaryContainer)

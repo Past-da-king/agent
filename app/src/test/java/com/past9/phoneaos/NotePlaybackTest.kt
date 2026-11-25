@@ -56,10 +56,10 @@ class NotePlaybackTest {
         assertEquals(0, pauses)
     }
     @Test fun readableAccessibilityTimes() {
-        assertEquals("42 seconds", noteSpokenTime(42000))
-        assertEquals("1 minute 58 seconds", noteSpokenTime(118000))
-        assertEquals("0 seconds", noteSpokenTime(0))
-        assertEquals("1 second", noteSpokenTime(1000))
+        assertEquals(0 to 42, noteTimeParts(42000))
+        assertEquals(1 to 58, noteTimeParts(118000))
+        assertEquals(0 to 0, noteTimeParts(0))
+        assertEquals(0 to 1, noteTimeParts(1000))
     }
     private class Fake : NoteFocusPort {
         var grant = true

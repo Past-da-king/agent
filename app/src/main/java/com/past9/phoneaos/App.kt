@@ -67,6 +67,7 @@ class Graph(context: Context) {
 
     val call by lazy { com.past9.phoneaos.voice.CallController(app, db, settings, runtime, scope) }
 
+    val voiceNotes = com.past9.phoneaos.voice.NotePlayers(app)
     private val systemVoice by lazy { com.past9.phoneaos.system.Speaker(app) }
     fun speakSystem(text: String) {}
 
@@ -87,7 +88,7 @@ class Graph(context: Context) {
         if (id != null && !spoken.add(id)) return
         if (settings.state.value.ttsProvider == "system") return
         stopSpeaking()
-        speakJob = scope.launch {
+        speakJob = scope.launch(kotlinx.coroutines.Dispatchers.Main.immediate) {
             val f = com.past9.phoneaos.voice.Tts.synth(app, settings, text) ?: return@launch
             _speaking.value = true
             com.past9.phoneaos.voice.Tts.play(f) { _speaking.value = false }
@@ -106,11 +107,19 @@ class Graph(context: Context) {
     fun autoPlayVoice(path: String, id: Long) {
         if (!spoken.add(id)) return
         val f = java.io.File(path); if (!f.exists()) return
-        stopSpeaking(); _speaking.value = true
-        com.past9.phoneaos.voice.Tts.play(f) { _speaking.value = false }
+        stopSpeaking()
+        speakJob = scope.launch(kotlinx.coroutines.Dispatchers.Main.immediate) {
+            try {
+                val note = voiceNotes.autoPlay(id, f.path)
+                while (note.playing || note.preparing) {
+                    _speaking.value = true
+                    kotlinx.coroutines.delay(100)
+                }
+            } finally { _speaking.value = false }
+        }
     }
 
-    fun stopSpeaking() { speakJob?.cancel(); com.past9.phoneaos.voice.Tts.stop(); systemVoice.stop(); _speaking.value = false }
+    fun stopSpeaking() { speakJob?.cancel(); voiceNotes.stopAll(); com.past9.phoneaos.voice.Tts.stop(); systemVoice.stop(); _speaking.value = false }
 
     /** The runtime for whichever subscription the user picked (Claude, ChatGPT/Codex, OpenCode). */
     fun subRuntime() = com.past9.phoneaos.runtime.SubscriptionRuntime(app, settings.state.value.subKind)

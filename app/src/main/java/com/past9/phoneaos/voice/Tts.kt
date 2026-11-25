@@ -97,6 +97,7 @@ object Tts {
 
     private var player: MediaPlayer? = null
     fun play(f: File, onDone: () -> Unit = {}) {
+        NotePlayback.pauseAll()
         stop()
         player = MediaPlayer().apply { setDataSource(f.path); setOnCompletionListener { onDone() }; prepare(); start() }
     }

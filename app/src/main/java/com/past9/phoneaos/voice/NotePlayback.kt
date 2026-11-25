@@ -1,13 +1,19 @@
 package com.past9.phoneaos.voice
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.content.ContextCompat
 
 /** Physical waveform coordinates to milliseconds, including mirrored layouts. */
 fun noteSeek(x: Float, width: Float, duration: Int, rtl: Boolean): Int {
@@ -17,14 +23,7 @@ fun noteSeek(x: Float, width: Float, duration: Int, rtl: Boolean): Int {
 }
 
 fun noteTime(ms: Int): String = "%d:%02d".format(java.util.Locale.ROOT, ms.coerceAtLeast(0) / 60000, ms.coerceAtLeast(0) / 1000 % 60)
-
-fun noteSpokenTime(ms: Int): String {
-    val seconds = ms.coerceAtLeast(0) / 1000
-    val minutes = seconds / 60
-    val rest = seconds % 60
-    val secondPart = "$rest " + if (rest == 1) "second" else "seconds"
-    return if (minutes == 0) secondPart else "$minutes " + (if (minutes == 1) "minute" else "minutes") + " $secondPart"
-}
+fun noteTimeParts(ms: Int): Pair<Int, Int> = (ms.coerceAtLeast(0) / 60000) to (ms.coerceAtLeast(0) / 1000 % 60)
 
 interface NoteFocusPort {
     fun request(listener: (Int) -> Unit): Boolean
@@ -85,7 +84,6 @@ class NoteFocus(private val port: NoteFocusPort, private val pause: () -> Unit,
     }
 }
 
-/** A shared coordinator pauses the previous bubble, including one waiting to regain focus. */
 class NotePlaybackCoordinator {
     private var owner: Any? = null
     private var pauseOwner: (() -> Unit)? = null
@@ -97,95 +95,205 @@ class NotePlaybackCoordinator {
     fun release(previous: Any) {
         if (owner === previous) { owner = null; pauseOwner = null }
     }
+    fun pauseAll() {
+        val pause = pauseOwner
+        owner = null; pauseOwner = null
+        pause?.invoke()
+    }
+}
+
+/** One shared note instance for autoplay and its chat bubble; detached notes keep their place. */
+class NotePlayers(context: Context) {
+    private val app = context.applicationContext
+    private data class Entry(val player: NotePlayback, var attached: Int = 0)
+    private val entries = LinkedHashMap<Long, Entry>(16, 0.75f, true)
+    fun get(id: Long): NotePlayback {
+        val entry = entries.getOrPut(id) { Entry(NotePlayback(app)) }
+        if (entries.size > 64) {
+            val iterator = entries.entries.iterator()
+            while (entries.size > 64 && iterator.hasNext()) {
+                val candidate = iterator.next()
+                if (candidate.key != id && candidate.value.attached == 0 && !candidate.value.player.playing && !candidate.value.player.preparing) {
+                    candidate.value.player.close(); iterator.remove()
+                }
+            }
+        }
+        return entry.player
+    }
+    fun attach(id: Long) { get(id); entries.getValue(id).attached++ }
+    fun detach(id: Long) {
+        entries[id]?.let { entry ->
+            entry.attached = (entry.attached - 1).coerceAtLeast(0)
+            if (entry.attached == 0) entry.player.release()
+        }
+    }
+    fun stopAll() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            Handler(Looper.getMainLooper()).post { stopAll() }; return
+        }
+        NotePlayback.pauseAll()
+        entries.values.forEach { if (it.player.preparing) it.player.release() else it.player.pause() }
+    }
+    suspend fun autoPlay(id: Long, path: String): NotePlayback {
+        val note = get(id)
+        if (note.prepare(path)) note.play()
+        return note
+    }
 }
 
 class NotePlayback(context: Context) {
-    companion object { private val coordinator = NotePlaybackCoordinator() }
+    companion object {
+        private val coordinator = NotePlaybackCoordinator()
+        fun pauseAll() {
+            if (Looper.myLooper() == Looper.getMainLooper()) coordinator.pauseAll()
+            else Handler(Looper.getMainLooper()).post { coordinator.pauseAll() }
+        }
+    }
+    private val app = context.applicationContext
     var playing by mutableStateOf(false); private set
     var duration by mutableStateOf(0); private set
     var position by mutableStateOf(0); private set
     var started by mutableStateOf(false); private set
     var error by mutableStateOf(false); private set
-    private var seeking = false
+    var focusBlocked by mutableStateOf(false); private set
+    var preparing by mutableStateOf(false); private set
     private var ready = false
     private var pendingPlay = false
+    private var sourcePath = ""
+    private var generation = 0
+    private var seekTarget: Int? = null
+    private var inFlightSeek: Int? = null
     private var player: MediaPlayer? = null
-    private val focus = NoteFocus(AndroidNoteFocus(context), ::pauseForFocus, {
-        runCatching { player?.start(); playing = true }.onFailure { fail() }
+    private var noisyRegistered = false
+    private val noisy = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) pause()
+        }
+    }
+    private fun watchNoisy() {
+        if (!noisyRegistered) {
+            ContextCompat.registerReceiver(app, noisy, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY), ContextCompat.RECEIVER_NOT_EXPORTED)
+            noisyRegistered = true
+        }
+    }
+    private fun unwatchNoisy() {
+        if (noisyRegistered) { app.unregisterReceiver(noisy); noisyRegistered = false }
+    }
+    private val focus = NoteFocus(AndroidNoteFocus(app), ::pauseForFocus, {
+        runCatching { startReadyPlayer() }.onFailure { fail() }
     }, { level -> runCatching { player?.setVolume(level, level) }; Unit })
 
-    suspend fun prepare(path: String) {
-        close()
-        duration = try { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            val metadata = android.media.MediaMetadataRetriever()
-            try {
-                metadata.setDataSource(path)
-                metadata.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toIntOrNull() ?: 0
-            } finally { metadata.release() }
-        } } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            error = true
-            throw e
-        }
-        val next = MediaPlayer()
+    suspend fun prepare(path: String): Boolean {
+        if (sourcePath == path && (ready || preparing)) return true
+        val same = sourcePath == path
+        val savedPosition = if (same) position else 0
+        val savedDuration = if (same) duration else 0
+        val savedStarted = same && started
+        release()
+        sourcePath = path; position = savedPosition; duration = savedDuration; started = savedStarted
+        error = false; focusBlocked = false; preparing = true
+        val ownGeneration = generation
         try {
+            val metadataDuration = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val metadata = android.media.MediaMetadataRetriever()
+                try {
+                    metadata.setDataSource(path)
+                    metadata.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toIntOrNull() ?: 0
+                } finally { metadata.release() }
+            }
+            if (generation != ownGeneration) return false
+            duration = metadataDuration.takeIf { it > 0 } ?: savedDuration
+            if (duration > 0) position = position.coerceIn(0, duration)
+            val next = MediaPlayer()
+            player = next
             next.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
             next.setDataSource(path)
-            next.setOnSeekCompleteListener {
-                if (player === it) { seeking = false; position = it.currentPosition }
-            }
+            next.setOnSeekCompleteListener { if (player === it) completeSeek() }
             next.setOnPreparedListener {
                 if (player !== it) return@setOnPreparedListener
-                ready = true; duration = it.duration
-                if (position > 0) { seeking = true; it.seekTo(position) }
-                if (pendingPlay) { pendingPlay = false; runCatching { play() }.onFailure { error = true } }
+                ready = true; preparing = false
+                duration = it.duration.takeIf { value -> value > 0 } ?: duration
+                if (position > 0 && position < duration) seek(position)
+                if (pendingPlay) { pendingPlay = false; runCatching { play() }.onFailure { fail() } }
             }
-            next.setOnErrorListener { _, _, _ ->
-                if (player === next) fail()
-                true
-            }
+            next.setOnErrorListener { _, _, _ -> if (player === next) fail(); true }
             next.setOnCompletionListener {
                 if (player !== it) return@setOnCompletionListener
-                playing = false; position = duration; focus.stop()
-                coordinator.release(this)
+                playing = false; position = duration.coerceAtLeast(0)
+                inFlightSeek = null; seekTarget = null
+                unwatchNoisy(); focus.stop(); coordinator.release(this)
             }
-            player = next
             next.prepareAsync()
-        } catch (e: Exception) { player = null; ready = false; next.release(); error = true; throw e }
+            return true
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            if (generation == ownGeneration) release()
+            throw e
+        } catch (e: Exception) {
+            if (generation == ownGeneration) fail()
+            throw e
+        }
     }
-    private fun fail() {
-        playing = false; pendingPlay = false; ready = false; error = true
-        focus.stop()
-        player?.release(); player = null
-        coordinator.release(this)
+    private fun fail() { release(); error = true }
+    private fun startReadyPlayer() {
+        if (!ready) return
+        player?.start()
+        playing = true; started = true; focusBlocked = false
+        watchNoisy()
     }
     fun play() {
+        if (!ready && !preparing) return
         coordinator.claim(this, ::pause)
+        Tts.stop()
         if (!ready) { pendingPlay = true; return }
-        val p = player ?: return
         error = false
-        if (!focus.play()) { coordinator.release(this); error = true; return }
-        if (position >= duration) seek(0)
-        try { p.start(); playing = true; started = true }
-        catch (e: Exception) { fail(); throw e }
+        if (!focus.play()) {
+            focusBlocked = true; focus.stop(); coordinator.release(this)
+            return
+        }
+        if (duration > 0 && position >= duration) seek(0)
+        try { startReadyPlayer() } catch (e: Exception) { fail(); throw e }
     }
     private fun pauseForFocus() {
         pendingPlay = false
-        if (ready && !error) player?.let { if (it.isPlaying) it.pause(); if (!seeking) position = it.currentPosition }
-        playing = false
+        if (ready && !error && playing) player?.let {
+            runCatching {
+                if (it.isPlaying) it.pause()
+                if (inFlightSeek == null && seekTarget == null) position = it.currentPosition.coerceAtLeast(0)
+            }
+        }
+        playing = false; unwatchNoisy()
     }
     fun pause() { pauseForFocus(); focus.stop(); coordinator.release(this) }
     fun seek(ms: Int) {
-        position = ms.coerceIn(0, duration)
-        started = true
-        if (ready) { seeking = true; player?.seekTo(position) }
+        if (duration <= 0) return
+        val target = ms.coerceIn(0, duration)
+        position = target; started = true; seekTarget = target
+        if (ready && inFlightSeek == null) issueSeek(target)
     }
-    fun tick() { if (playing && !seeking) position = player?.currentPosition ?: position }
-    fun close() {
-        pause()
+    private fun issueSeek(target: Int) {
+        inFlightSeek = target
+        player?.seekTo(target)
+    }
+    private fun completeSeek() {
+        val completed = inFlightSeek ?: return
+        val latest = seekTarget ?: completed
+        inFlightSeek = null
+        if (latest != completed) issueSeek(latest)
+        else { seekTarget = null; position = latest }
+    }
+    fun tick() {
+        if (playing && inFlightSeek == null && seekTarget == null)
+            runCatching { position = player?.currentPosition?.coerceAtLeast(0) ?: position }.onFailure { fail() }
+    }
+    /** Release native resources and focus, keeping position for a recycled bubble or rotation. */
+    fun release() {
+        pause(); generation++
         player?.release(); player = null
-        position = 0; duration = 0; started = false; ready = false; seeking = false; error = false
+        ready = false; preparing = false; inFlightSeek = null; seekTarget = null
+    }
+    fun close() {
+        release(); sourcePath = ""; position = 0; duration = 0; started = false
+        error = false; focusBlocked = false
     }
 }

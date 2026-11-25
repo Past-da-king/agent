@@ -41,7 +41,7 @@ open class NotePlayerShotsTest(private val dark: Boolean) {
             AppTheme(dark = dark) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).padding(16.dp)) {
                     Box(Modifier.fillMaxWidth().padding(end = 48.dp)) {
-                        VoiceNoteControls(playing, 118000, position, started, false, {}, onSeek, {})
+                        VoiceNoteControls(playing, 118000, { position }, started, false, {}, onSeek, {})
                     }
                 }
             }
@@ -84,6 +84,71 @@ open class NotePlayerShotsTest(private val dark: Boolean) {
         shot("dragging")
         waveform.performTouchInput { up() }
         rule.runOnIdle { org.junit.Assert.assertTrue("Expected three-quarter seek, got $seek", seek in 88000..89000) }
+    }
+    @Test fun tappingWaveformSeeksImmediately() {
+        var seek = -1
+        bubble(false, 42000, true) { seek = it }
+        rule.onNodeWithContentDescription("Voice note position").performTouchInput {
+            click(androidx.compose.ui.geometry.Offset(this.width * 0.75f, centerY))
+        }
+        rule.runOnIdle { org.junit.Assert.assertTrue("Tap target $seek", seek in 88000..89000) }
+    }
+    @Test fun rtlWaveformMirrorsTapTarget() {
+        var seek = -1
+        rule.setContent {
+            AppTheme(dark = dark) {
+                androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Rtl) {
+                    VoiceNoteControls(false, 118000, { 42000 }, true, false, {}, { seek = it }, {})
+                }
+            }
+        }
+        rule.onNodeWithContentDescription("Voice note position").performTouchInput {
+            click(androidx.compose.ui.geometry.Offset(this.width * 0.25f, centerY))
+        }
+        rule.runOnIdle { org.junit.Assert.assertTrue("RTL tap target $seek", seek in 88000..89000) }
+    }
+    @Test fun verticalSwipeScrollsChatWithoutSeeking() {
+        var seek = -1
+        lateinit var state: androidx.compose.foundation.lazy.LazyListState
+        rule.setContent {
+            AppTheme(dark = dark) {
+                state = androidx.compose.foundation.lazy.rememberLazyListState()
+                androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize(), state = state) {
+                    item { VoiceNoteControls(false, 118000, { 42000 }, true, false, {}, { seek = it }, {}) }
+                    items(30) { androidx.compose.material3.Text("Message $it", Modifier.height(72.dp)) }
+                }
+            }
+        }
+        rule.onNodeWithContentDescription("Voice note position").performTouchInput {
+            down(center)
+            moveTo(androidx.compose.ui.geometry.Offset(centerX, centerY - 300f))
+            up()
+        }
+        rule.runOnIdle {
+            assertEquals(-1, seek)
+            org.junit.Assert.assertTrue("Chat should scroll", state.firstVisibleItemIndex > 0 || state.firstVisibleItemScrollOffset > 0)
+        }
+    }
+    @Test fun durationChangeClearsDragPreviewWithoutSeeking() {
+        var seek = -1
+        val duration = androidx.compose.runtime.mutableIntStateOf(118000)
+        rule.setContent {
+            AppTheme(dark = dark) {
+                VoiceNoteControls(true, duration.intValue, { 42000 }, true, false, {}, { seek = it }, {})
+            }
+        }
+        val waveform = rule.onNodeWithContentDescription("Voice note position")
+        waveform.performTouchInput {
+            down(androidx.compose.ui.geometry.Offset(this.width * 0.05f, centerY))
+            moveTo(androidx.compose.ui.geometry.Offset(this.width * 0.75f, centerY))
+        }
+        rule.mainClock.advanceTimeByFrame(); rule.waitForIdle()
+        rule.runOnIdle { duration.intValue = 120000 }
+        rule.mainClock.advanceTimeByFrame(); rule.waitForIdle()
+        val shown = waveform.fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.ProgressBarRangeInfo].current
+        assertEquals(42000f, shown, 0f)
+        waveform.performTouchInput { up() }
+        rule.runOnIdle { assertEquals(-1, seek) }
     }
     @Test fun talkbackCanSeek() {
         var seek = -1
