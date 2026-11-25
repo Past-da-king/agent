@@ -1,6 +1,8 @@
 package com.past9.phoneaos
 
 import android.app.Application
+import android.content.Context
+import com.past9.phoneaos.agent.ToolContext
 import androidx.test.core.app.ApplicationProvider
 import com.past9.phoneaos.data.AppDb
 import com.past9.phoneaos.remote.*
@@ -33,7 +35,6 @@ class PreferredBrainSessionTest {
         val http = MockWebServer()
         @Volatile var ready = true
         @Volatile var probes = 0
-        @Volatile var probeGate: java.util.concurrent.CountDownLatch? = null
         @Volatile var probeGate: java.util.concurrent.CountDownLatch? = null
         val messages = CopyOnWriteArrayList<String>()
         val waiting = ConcurrentHashMap<String, Pair<WebSocket, JSONObject>>()
@@ -197,22 +198,38 @@ class PreferredBrainSessionTest {
         }
     }
 
-    @Test fun commandArrivingDuringTheHealthProbePreventsSocketReplacement() = runBlocking {
-        val gate = java.util.concurrent.CountDownLatch(1)
-        pc.probeGate = gate
-        val sending = async(Dispatchers.IO) { session.sendTo("project", "probe race") }
+    @Test fun pendingLentApprovalKeepsItsOriginSocketUntilTheVerifiedAnswer() = runBlocking {
+        // Exercise #93's actual lent-tool context, not just a standalone RemoteSession.call.
+        val constructor = Class.forName("com.past9.phoneaos.remote.DeviceTools\$LentContext")
+            .getDeclaredConstructor(Context::class.java, RemoteSession::class.java,
+                JSONObject::class.java, String::class.java, JSONObject::class.java)
+            .apply { isAccessible = true }
+        val context = constructor.newInstance(app, session, JSONObject().put("id", "approval-handback"),
+            "webapp_run", JSONObject().put("tool", "read_requested_folder")) as ToolContext
+        val origin = field("rpc").get(session) as RpcClient
+        val asking = async(Dispatchers.IO) {
+            context.ask("APPROVAL|Read requested folder|Read only", listOf("Approve", "Decline"))
+        }
         try {
-            until("health probe started") { pc.probes > 0 }
-            event(RemoteSession.EVT_COMMAND, JSONObject().put("id", "command-race").put("kind", "unknown"))
-            until("command result is in flight") { server.waiting.containsKey("device.ack") }
-            gate.countDown()
-            sending.await()
-            assertTrue(pc.messages.isEmpty())
-            assertEquals(listOf("probe race"), server.messages.toList())
+            until("approval waits on its originating brain") { server.waiting.containsKey("device.ask") }
+            // The lent approval owns a lease in addition to the generic RPC lease.
+            assertEquals("approval wait has its own shared lease", 2, session.inFlight.count)
+            session.start()
+            event(RemoteSession.EVT_DEVICES)
+            session.sendTo("project", "while lent approval waits")
+            assertSame(origin, field("rpc").get(session))
+            assertTrue("handback must not close a pending approval socket", origin.isOpen)
+            assertEquals(0, pc.probes)
+            server.release("device.ask", JSONObject().put("handled", true).put("answer", "Approve"))
+            assertEquals("Approve", asking.await())
+            until("approval leases released") { !session.inFlight.isBusy }
+            session.sendTo("project", "after lent approval resolves")
+            assertEquals(listOf("after lent approval resolves"), pc.messages.toList())
+            assertNotSame(origin, field("rpc").get(session))
         } finally {
-            gate.countDown()
-            if (server.waiting.containsKey("device.ack")) server.release("device.ack", JSONObject())
-            sending.cancelAndJoin()
+            if (server.waiting.containsKey("device.ask"))
+                server.release("device.ask", JSONObject().put("handled", true).put("answer", "Decline"))
+            asking.cancelAndJoin()
         }
     }
 

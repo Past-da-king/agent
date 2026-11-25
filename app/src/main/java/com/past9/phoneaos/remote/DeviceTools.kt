@@ -151,7 +151,10 @@ object DeviceTools {
     private class LentContext(private val context: Context, private val session: RemoteSession?, command: JSONObject?, name: String, args: JSONObject) : ToolContext {
         private var verifiedRequest: JSONObject? = null
         private val questions = CommandQuestions(command?.optString("id").orEmpty(), JSONObject().put("tool", name).put("input", args),
-            call = { method, values, timeout -> session?.call(method, values, timeout) ?: throw RpcException("Not connected to a computer right now.") },
+            call = { method, values, timeout ->
+                val connected = session ?: throw RpcException("Not connected to a computer right now.")
+                connected.inFlight.during { connected.call(method, values, timeout) }
+            },
             fallback = { question, options -> RemoteAsk.ask(context, question, options, session = session, request = verifiedRequest) },
             verifiedFallbackRequest = { verifiedRequest = it })
         override val agentLabel = "linked computer"
