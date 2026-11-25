@@ -12,10 +12,12 @@ internal class CommandQuestions(
     private val call: suspend (String, List<Any?>, Long) -> Any?,
     private val fallback: suspend (String, List<String>) -> String?,
     private val waitForAbsent: suspend () -> Unit = { delay(15_000) },
+    private val verifiedFallbackRequest: (JSONObject?) -> Unit = {},
 ) {
     private val sequence = AtomicInteger()
 
     suspend fun ask(question: String, options: List<String>, actualOrigin: JSONObject = origin): String? {
+        verifiedFallbackRequest(null)
         if (commandId.isBlank()) return fallback(question, options)
         val request = listOf(commandId, sequence.incrementAndGet(), question, options, actualOrigin)
         val value = try {
@@ -33,7 +35,10 @@ internal class CommandQuestions(
             return fallback(question, options)
         }
         val response = value as? JSONObject ?: throw RpcException("The computer returned an invalid question response.")
-        if (!response.optBoolean("handled")) return fallback(question, options)
+        if (!response.optBoolean("handled")) {
+            verifiedFallbackRequest(response.optJSONObject("request"))
+            return fallback(question, options)
+        }
         return if (response.isNull("answer")) null else response.optString("answer").takeIf { it.isNotBlank() }
     }
 }

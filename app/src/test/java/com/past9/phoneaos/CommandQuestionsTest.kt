@@ -59,4 +59,22 @@ class CommandQuestionsTest {
         val relay = CommandQuestions("cmd", origin, { _, _, _ -> "bad response" }, { _, _ -> fail("Unexpected native card"); null })
         try { relay.ask("Question", emptyList()); fail("Expected failure") } catch (_: RpcException) {}
     }
+    @Test fun fallbackRequestComesOnlyFromVerifiedBrainReply() = runBlocking {
+        val source = JSONObject().put("id", "stored-user").put("at", 1).put("text", "Actual saved request")
+        var quoted: JSONObject? = null
+        val relay = CommandQuestions("cmd", origin,
+            { _, _, _ -> JSONObject().put("handled", false).put("request", source) },
+            { _, _ -> assertEquals("Actual saved request", quoted?.optString("text")); "Decline" },
+            verifiedFallbackRequest = { quoted = it })
+        assertEquals("Decline", relay.ask("Question", emptyList()))
+    }
+    @Test fun unavailableBrainClearsAnyUnverifiedFallbackQuote() = runBlocking {
+        var quoted: JSONObject? = JSONObject().put("text", "FORGED wire request")
+        val relay = CommandQuestions("cmd", origin,
+            { _, _, _ -> throw RpcException("Unknown RPC device.ask") },
+            { _, _ -> assertNull(quoted); "Decline" },
+            verifiedFallbackRequest = { quoted = it })
+        assertEquals("Decline", relay.ask("Question", emptyList()))
+    }
+
 }

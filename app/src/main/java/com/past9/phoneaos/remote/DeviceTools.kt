@@ -149,9 +149,11 @@ object DeviceTools {
 
     /** A lent tool returns questions to its originating brain; unavailable older brains use the phone sheet. */
     private class LentContext(private val context: Context, private val session: RemoteSession?, command: JSONObject?, name: String, args: JSONObject) : ToolContext {
+        private var verifiedRequest: JSONObject? = null
         private val questions = CommandQuestions(command?.optString("id").orEmpty(), JSONObject().put("tool", name).put("input", args),
             call = { method, values, timeout -> session?.call(method, values, timeout) ?: throw RpcException("Not connected to a computer right now.") },
-            fallback = { question, options -> RemoteAsk.ask(context, question, options, session = session, request = command?.optJSONObject("request")) })
+            fallback = { question, options -> RemoteAsk.ask(context, question, options, session = session, request = verifiedRequest) },
+            verifiedFallbackRequest = { verifiedRequest = it })
         override val agentLabel = "linked computer"
         override suspend fun activity(text: String, meta: JSONObject): Long = 0
         override suspend fun updateActivity(id: Long, text: String, meta: JSONObject) {}
