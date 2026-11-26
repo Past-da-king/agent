@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">Sesli notu oynat</string>
+    <string name="note_pause">Sesli notu duraklat</string>
+    <string name="note_position">Sesli not konumu</string>
+    <string name="note_progress">Toplam %2$s sürenin %1$s kadarı</string>
+</resources>

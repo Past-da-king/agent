@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">Afspil talebesked</string>
+    <string name="note_pause">Sæt talebesked på pause</string>
+    <string name="note_position">Position i talebesked</string>
+    <string name="note_progress">%1$s af %2$s</string>
+</resources>

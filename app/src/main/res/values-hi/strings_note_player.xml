@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">वॉइस नोट चलाएँ</string>
+    <string name="note_pause">वॉइस नोट रोकें</string>
+    <string name="note_position">वॉइस नोट में स्थिति</string>
+    <string name="note_progress">%2$s में से %1$s</string>
+</resources>

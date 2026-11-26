@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">Hangüzenet lejátszása</string>
+    <string name="note_pause">Hangüzenet szüneteltetése</string>
+    <string name="note_position">Hangüzenet lejátszási pozíciója</string>
+    <string name="note_progress">%1$s, összesen %2$s</string>
+</resources>

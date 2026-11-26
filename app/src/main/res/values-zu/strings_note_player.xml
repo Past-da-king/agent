@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">Dlala inothi lezwi</string>
+    <string name="note_pause">Misa kancane inothi lezwi</string>
+    <string name="note_position">Indawo yokudlala enothini lezwi</string>
+    <string name="note_progress">%1$s kwengu-%2$s</string>
+</resources>

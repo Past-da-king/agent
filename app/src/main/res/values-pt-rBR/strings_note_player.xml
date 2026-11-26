@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">Reproduzir mensagem de voz</string>
+    <string name="note_pause">Pausar mensagem de voz</string>
+    <string name="note_position">Posição da mensagem de voz</string>
+    <string name="note_progress">%1$s de %2$s</string>
+</resources>

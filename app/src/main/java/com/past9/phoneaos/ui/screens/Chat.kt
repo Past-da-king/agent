@@ -512,11 +512,13 @@ private fun Welcome(userName: String, modifier: Modifier, onSend: (String) -> Un
 
 /** A voice note: play it, or tap "Read it" to scan the words instead. */
 @Composable
-private fun VoiceBubble(item: ChatItem) {
+internal fun VoiceBubble(item: ChatItem) {
     val cs = MaterialTheme.colorScheme
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    val meta = JSONObject(item.meta)
-    var playing by remember { mutableStateOf(false) }
+    val meta = remember(item.meta) { JSONObject(item.meta) }
+    val notes = remember(ctx) { com.past9.phoneaos.App.graph(ctx).voiceNotes }
+    val playback = remember(item.id) { notes.get(item.id) }
+    val playing = playback.playing
     var playError by remember { mutableStateOf<String?>(null) }
     // A note from the computer is read LIVE from the link (on its way, here, on the computer, failed), never from the
     // row's stored "audio": 29 Oct 2026, on mobile data a note stored "loading" spun forever and could not be tapped.
@@ -529,21 +531,28 @@ private fun VoiceBubble(item: ChatItem) {
         null -> meta.optString("path")
         else -> ""
     }
-    val hasAudio = path.isNotBlank() && java.io.File(path).exists()
+    val hasAudio = remember(path, tick, item.meta) { path.isNotBlank() && java.io.File(path).exists() }
     val loading = state is com.past9.phoneaos.remote.RemoteRows.NoteState.Fetching
     val onComputer = state is com.past9.phoneaos.remote.RemoteRows.NoteState.OnComputer
     val failedWhy = (state as? com.past9.phoneaos.remote.RemoteRows.NoteState.Failed)?.why
     // One tap: get it from the computer (Wi-Fi or mobile data), then it plays by itself the moment it lands.
     var wantPlay by remember { mutableStateOf(false) }
     val canGet = rs != null && (onComputer || failedWhy != null)
-    fun play(f: String) {
+    fun play() {
         playError = null
-        runCatching { com.past9.phoneaos.voice.Tts.play(java.io.File(f)) { playing = false } }
-            .onSuccess { playing = true }.onFailure { playError = ctx.getString(R.string.chat_audio_cant_play) }
+        notes.play(item.id, path) { playError = ctx.getString(R.string.chat_audio_cant_play) }
     }
-    LaunchedEffect(hasAudio, wantPlay) { if (hasAudio && wantPlay) { wantPlay = false; play(path) } }
+    DisposableEffect(playback) {
+        notes.attach(item.id)
+        onDispose { notes.detach(item.id) }
+    }
+    LaunchedEffect(playback, path, hasAudio) {
+        if (hasAudio) runCatching { notes.prepare(item.id, path) }
+            .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; playError = ctx.getString(R.string.chat_audio_cant_play) }
+    }
+    LaunchedEffect(hasAudio, wantPlay) { if (hasAudio && wantPlay) { wantPlay = false; play() } }
     LaunchedEffect(failedWhy) { if (failedWhy != null) wantPlay = false }
-    val why = playError ?: when {
+    val why = playError ?: if (playback.error || playback.focusBlocked) stringResource(R.string.chat_audio_cant_play) else when {
         hasAudio || loading || onComputer -> null
         failedWhy != null -> failedWhy
         state is com.past9.phoneaos.remote.RemoteRows.NoteState.NoAudio -> state.why
@@ -552,25 +561,18 @@ private fun VoiceBubble(item: ChatItem) {
     val spinning = !hasAudio && (loading || wantPlay)
     val tappable = hasAudio || canGet
     var showText by remember { mutableStateOf(false) }
-    val t = rememberInfiniteTransition(label = "voice")
-    val wave by t.animateFloat(0f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "wave")
     Column(Modifier.fillMaxWidth().padding(end = 48.dp)) {
-        Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg), color = cs.primaryContainer) {
+        if (hasAudio) VoiceNoteControls(playing, playback.duration, { playback.position }, playback.started, showText,
+            onPlay = { if (playing) playback.pause() else play() }, onSeek = playback::seek, onRead = { showText = !showText }, failed = playback.error)
+        else Surface(shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg), color = cs.primaryContainer) {
             Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 MorphIconButton(onClick = {
-                    if (playing) { com.past9.phoneaos.voice.Tts.stop(); playing = false }
-                    else if (hasAudio) play(path)
-                    else if (canGet) { playError = null; wantPlay = true; rs?.getNote(item.id) }
+                    if (canGet) { playError = null; wantPlay = true; rs?.getNote(item.id) }
                 }, size = 48.dp, container = if (tappable) cs.primary else cs.surfaceContainerHigh, enabled = tappable && !spinning) {
                     if (spinning) LoadingIndicator(Modifier.size(24.dp))
-                    else Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing) stringResource(R.string.chat_pause) else if (tappable) stringResource(R.string.chat_play) else stringResource(R.string.chat_audio_unavailable), tint = if (tappable) cs.onPrimary else cs.onSurfaceVariant) }
+                    else Icon(Icons.Rounded.PlayArrow, if (tappable) stringResource(R.string.note_play) else stringResource(R.string.chat_audio_unavailable), tint = if (tappable) cs.onPrimary else cs.onSurfaceVariant) }
                 Spacer(Modifier.width(10.dp))
-                if (hasAudio) Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-                    repeat(18) { i ->
-                        val h = (8 + ((i * 37) % 17)) * (if (playing) 0.6f + 0.6f * ((wave + i * 0.13f) % 1f) else 1f)
-                        Box(Modifier.width(3.dp).height(h.dp).clip(RoundedCornerShape(50)).background(cs.onPrimaryContainer.copy(alpha = if (playing) 0.9f else 0.5f)))
-                    }
-                } else if (spinning) Text(stringResource(R.string.chat_getting_audio), style = MaterialTheme.typography.labelLarge, color = cs.onPrimaryContainer)
+                if (spinning) Text(stringResource(R.string.chat_getting_audio), style = MaterialTheme.typography.labelLarge, color = cs.onPrimaryContainer)
                 else if (onComputer) Text(com.past9.phoneaos.remote.RemoteRows.noteSizeLabel(meta).let { if (it.isBlank()) stringResource(R.string.chat_tap_to_play) else stringResource(R.string.chat_tap_to_play_size, it) }, style = MaterialTheme.typography.labelLarge, color = cs.onPrimaryContainer)
                 else Text(stringResource(R.string.chat_audio_unavailable), style = MaterialTheme.typography.labelLarge, color = cs.error)
                 Spacer(Modifier.width(10.dp))

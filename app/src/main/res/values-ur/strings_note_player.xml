@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">وائس نوٹ چلائیں</string>
+    <string name="note_pause">وائس نوٹ روکیں</string>
+    <string name="note_position">وائس نوٹ کی پوزیشن</string>
+    <string name="note_progress">%2$s میں سے %1$s</string>
+</resources>

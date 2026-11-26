@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">Αναπαραγωγή φωνητικού μηνύματος</string>
+    <string name="note_pause">Παύση φωνητικού μηνύματος</string>
+    <string name="note_position">Θέση φωνητικού μηνύματος</string>
+    <string name="note_progress">%1$s από %2$s</string>
+</resources>

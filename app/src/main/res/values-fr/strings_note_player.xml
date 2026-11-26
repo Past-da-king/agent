@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">Lire la note vocale</string>
+    <string name="note_pause">Mettre la note vocale en pause</string>
+    <string name="note_position">Position de la note vocale</string>
+    <string name="note_progress">%1$s sur %2$s</string>
+</resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">വോയ്‌സ് നോട്ട് പ്ലേ ചെയ്യുക</string>
+    <string name="note_pause">വോയ്‌സ് നോട്ട് താൽക്കാലികമായി നിർത്തുക</string>
+    <string name="note_position">വോയ്‌സ് നോട്ടിലെ സ്ഥാനം</string>
+    <string name="note_progress">%2$s ൽ %1$s</string>
+</resources>

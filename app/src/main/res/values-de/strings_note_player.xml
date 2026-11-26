@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">Sprachnachricht abspielen</string>
+    <string name="note_pause">Sprachnachricht pausieren</string>
+    <string name="note_position">Position in der Sprachnachricht</string>
+    <string name="note_progress">%1$s von %2$s</string>
+</resources>

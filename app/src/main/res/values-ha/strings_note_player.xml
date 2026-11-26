@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">Kunna saƙon murya</string>
+    <string name="note_pause">Dakatar da saƙon murya na ɗan lokaci</string>
+    <string name="note_position">Matsayin saƙon murya</string>
+    <string name="note_progress">%1$s daga cikin %2$s</string>
+</resources>

@@ -125,6 +125,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        if (com.past9.phoneaos.voice.shouldPauseNotesOnStop(isChangingConfigurations,
+                getSystemService(android.os.PowerManager::class.java).isInteractive)) {
+            App.graph(this).voiceNotes.stopAll()
+        }
         com.past9.phoneaos.handoff.Handoffs.offScreen()
         com.past9.phoneaos.remote.RemoteHub.onBackground()
         // Swap the home-screen icon to the user's character only once they've left the app.
@@ -418,6 +422,7 @@ class MainActivity : ComponentActivity() {
             cm.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
         }.getOrDefault(false)
         fun startDictation() {
+            g.stopSpeaking()
             val box = dictBox ?: mainBox
             // Only ever adds: a shorter result is ignored, and what he typed or sent since is left alone (voice/Words.kt).
             val writer = com.past9.phoneaos.voice.BoxWriter(box.draft) { android.util.Log.i("AosDictation", it) }

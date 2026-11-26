@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">Ṣe ìfiránṣẹ́ ohùn</string>
+    <string name="note_pause">Dá ìfiránṣẹ́ ohùn dúró fún ìgbà díẹ̀</string>
+    <string name="note_position">Ipò ìfiránṣẹ́ ohùn</string>
+    <string name="note_progress">%1$s nínú %2$s</string>
+</resources>

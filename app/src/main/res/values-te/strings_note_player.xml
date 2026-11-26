@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">వాయిస్ నోట్ ప్లే చేయండి</string>
+    <string name="note_pause">వాయిస్ నోట్ పాజ్ చేయండి</string>
+    <string name="note_position">వాయిస్ నోట్‌లో స్థానం</string>
+    <string name="note_progress">%2$s లో %1$s</string>
+</resources>

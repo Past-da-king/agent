@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">વૉઇસ નોટ ચલાવો</string>
+    <string name="note_pause">વૉઇસ નોટ થોભાવો</string>
+    <string name="note_position">વૉઇસ નોટનું સ્થાન</string>
+    <string name="note_progress">%2$s માંથી %1$s</string>
+</resources>
