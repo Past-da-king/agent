@@ -147,6 +147,16 @@ class RemoteLinkTest {
     private val laptop = BrainRef("lap", "Laptop", listOf("https://lap:7787"), fp, 2)
     private val all = listOf(laptop, server, desk)
 
+    @Test fun tiesFollowTheDisplayedPairingOrderRatherThanDeviceNames() {
+        val pc = desk.copy(name = "Zulu", priority = 0, pairedAt = 1L)
+        val srv = server.copy(name = "Alpha", priority = 0, pairedAt = 2L)
+        assertEquals(listOf(pc, srv), BrainChooser.ordered(listOf(srv, pc)))
+    }
+
+    @Test fun unknownPairingTimeSortsAfterKnownTimes() {
+        assertEquals(listOf(server.id, desk.id), BrainChooser.ordered(listOf(desk.copy(priority = 0), server.copy(priority = 0, pairedAt = 5))).map { it.id })
+    }
+
     @Test fun brainsAreTriedByPriority() {
         assertEquals(listOf("desk", "srv", "lap"), BrainChooser.ordered(all).map { it.id })
     }

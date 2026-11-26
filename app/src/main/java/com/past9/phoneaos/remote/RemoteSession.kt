@@ -169,8 +169,14 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     /** Jobs the computer has on this phone right now: the link is kept up, and the Wi-Fi and wake locks are held, while any runs. */
     private val jobsRunning = java.util.concurrent.atomic.AtomicInteger()
     private val jobLocks by lazy { JobLocks(app) }
-    fun jobStarted() { jobsRunning.incrementAndGet(); pauseJob?.cancel(); jobLocks.acquire() }
-    fun jobEnded() { jobLocks.release(); jobsRunning.updateAndGet { maxOf(0, it - 1) } }
+    fun jobStarted(): InFlight.Lease {
+        val lease = inFlight.acquire()
+        jobsRunning.incrementAndGet()
+        return try { pauseJob?.cancel(); jobLocks.acquire(); lease } catch (e: Exception) { jobEnded(lease); throw e }
+    }
+    fun jobEnded(lease: InFlight.Lease) {
+        if (lease.release()) { jobLocks.release(); jobsRunning.updateAndGet { maxOf(0, it - 1) } }
+    }
     private fun mayPause() = mayPauseLink(foreground, turnRunning, jobsRunning.get(), metered)
     private fun readMetered(): Boolean = runCatching { cm?.isActiveNetworkMetered ?: false }.getOrDefault(false)
     init {
@@ -206,6 +212,12 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     /** Brains that left a message unanswered, until when they are passed over. */
     private val notAnswering = ConcurrentHashMap<String, Long>()
     /** Messages on their way to a brain now. */
+    private val chooseMutex = Mutex()
+    val inFlight = InFlight()
+    private var lastPreferredProbe = 0L
+    private fun busy() = turnRunning || inFlight.isBusy
+    private fun shouldRecheck() = !busy() && BrainChooser.hasPreferred(link.brains, current?.brain?.id)
+    private val statusCache = NodeStatusCache()
     private val pendingSends = java.util.concurrent.atomic.AtomicInteger()
     /** The brain the chat was last told is standing in, so it says so once. */
     @Volatile private var standIn: String? = null
@@ -221,7 +233,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
                 // An open socket is its own health check: on mobile data nothing else is asked (each check is a new TLS
                 // handshake and a request). Off mobile data an open link is looked at once a minute, not every 15 s.
                 val open = rpc?.isOpen == true && current != null
-                if (!(open && metered)) runCatching { probeAndMove() }
+                val prefer = shouldRecheck()
+                if (!(open && metered) || prefer) runCatching { probeAndMove(prefer) }
                 withTimeoutOrNull(if (open) (if (metered) 300_000L else 60_000L) else 15_000L) { kick.receive() }
             }
         }
@@ -250,8 +263,17 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     /** Words a person can act on, for the strip and Settings. */
     internal fun reasonFor(problem: LinkProblem, name: String): String = linkReason(problem, name)
 
-    private suspend fun probeAndMove() {
-        val brains = link.brains
+    private suspend fun probeAndMove(recheckPreferred: Boolean = false) = chooseMutex.withLock { probeAndMoveUnlocked(recheckPreferred) }
+
+    private suspend fun probeAndMoveUnlocked(recheckPreferred: Boolean) {
+        val nowProbe = android.os.SystemClock.elapsedRealtime()
+        if (recheckPreferred && metered && rpc?.isOpen == true) {
+            if (nowProbe - lastPreferredProbe < 60_000L && lastPreferredProbe != 0L) return
+            lastPreferredProbe = nowProbe
+        }
+        val brains = if (recheckPreferred && metered && rpc?.isOpen == true) {
+            BrainChooser.ordered(link.brains).takeWhile { it.id != current?.brain?.id }
+        } else link.brains
         val seen = HashMap<String, Health?>()
         val now = System.currentTimeMillis()
         val skip = notAnswering.filterValues { it > now }.keys.toSet()
@@ -265,9 +287,10 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
             h?.let { HelperLive.heardFrom(b.id, b.name) }
             h != null && h.ready && (h.meshId.isBlank() || link.meshId.isBlank() || h.meshId == link.meshId)
         }
+        if (metered) _health.value = _health.value + synchronized(seen) { HashMap(seen) }
         // Brains after the chosen one were not asked this round: ask them too, so Settings shows every brain's state,
         // beside the move and not before it.
-        scope.launch {
+        if (!metered) scope.launch {
             val all = synchronized(seen) { HashMap(seen) }
             for (b in brains) if (!all.containsKey(b.id)) all[b.id] = (if (b.id in skip) null else b.urls.firstNotNullOfOrNull { u -> RemoteApi(clientFor(b.fp)).health(u, 2_000) })
                 ?.also { HelperLive.heardFrom(b.id, b.name) }
@@ -280,22 +303,27 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         if (r != null && !r.isOpen && System.currentTimeMillis() - connectStartedAt < CONNECT_GRACE_MS) return
         // An open socket is the best sign the brain is there: one missed health check does not drop it, a brain
         // that says it is not ready does.
-        val curOk = cur != null && r?.isOpen == true && curSeen?.ready != false
-        when (val m = BrainChooser.decide(brains, cur, curOk, best, turnRunning)) {
-            is BrainChooser.Move.To -> connectTo(m.pick)
-            BrainChooser.Move.NoneAvailable -> {
-                detach(); current = null
-                val certChanged = brains.firstOrNull { trusts[it.fp]?.refused == true }
-                _state.value = when {
-                    certChanged != null -> LinkState.NoAgents(reasonFor(LinkProblem.CertChanged, certChanged.name.ifBlank { nameOf(null) }), rescan = true)
-                    brains.size <= 1 -> LinkState.NoAgents(reasonFor(LinkProblem.Unreachable, brains.firstOrNull()?.name?.ifBlank { null } ?: nameOf(null)))
-                    // A message on its way: he hears that it is safe, and that the computers are the problem (an overloaded server is one).
-                    pendingSends.get() > 0 -> LinkState.NoAgents("None of your computers are answering right now. Still trying; your message is safe.")
-                    else -> LinkState.NoAgents("None of your computers answered. Are the Agent apps open there, with Devices on, on the same network?")
+        inFlight.guarded {
+            val active = busy()
+            // Health can turn unready while a command is waiting for its approval.
+            // Preserve a live origin socket until its work finishes.
+            val curOk = cur != null && r?.isOpen == true && (inFlight.isBusy || curSeen?.ready != false)
+            when (val m = BrainChooser.decide(link.brains, cur, curOk, best, active)) {
+                is BrainChooser.Move.To -> connectTo(m.pick)
+                BrainChooser.Move.NoneAvailable -> {
+                    detach(); current = null
+                    val certChanged = brains.firstOrNull { trusts[it.fp]?.refused == true }
+                    _state.value = when {
+                        certChanged != null -> LinkState.NoAgents(reasonFor(LinkProblem.CertChanged, certChanged.name.ifBlank { nameOf(null) }), rescan = true)
+                        brains.size <= 1 -> LinkState.NoAgents(reasonFor(LinkProblem.Unreachable, brains.firstOrNull()?.name?.ifBlank { null } ?: nameOf(null)))
+                        // A message on its way: he hears that it is safe, and that the computers are the problem (an overloaded server is one).
+                        pendingSends.get() > 0 -> LinkState.NoAgents("None of your computers are answering right now. Still trying; your message is safe.")
+                        else -> LinkState.NoAgents("None of your computers answered. Are the Agent apps open there, with Devices on, on the same network?")
+                    }
+                    _status.value = AgentStatus()
                 }
-                _status.value = AgentStatus()
+                BrainChooser.Move.Stay -> {}
             }
-            BrainChooser.Move.Stay -> {}
         }
     }
 
@@ -328,7 +356,9 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
                 // Answers to the computer's commands that a drop kept from arriving go now.
                 scope.launch { runCatching { commands.resendUndelivered() } }
             }
-            override fun onEvent(rpc: RpcClient, name: String, payload: Any?) { if (this@RemoteSession.rpc === rpc) onEvent(name, payload) }
+            override fun onEvent(rpc: RpcClient, name: String, payload: Any?) {
+                inFlight.guarded { if (this@RemoteSession.rpc === rpc) onEvent(name, payload) }
+            }
             override fun onClosed(rpc: RpcClient, why: String, opened: Boolean, problem: LinkProblem) {
                 if (this@RemoteSession.rpc !== rpc) return
                 this@RemoteSession.rpc = null
@@ -497,15 +527,16 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
 
     // ---- calls --------------------------------------------------------------------------------
 
-    suspend fun call(method: String, args: List<Any?>, timeoutMs: Long = 30_000): Any? {
+    suspend fun call(method: String, args: List<Any?>, timeoutMs: Long = 30_000): Any? = inFlight.during {
         val r = rpc ?: run { kick.trySend(Unit); throw RpcException("Not connected to a computer right now.") }
-        val out = try { r.call(method, args, timeoutMs) } catch (e: RpcException) {
+        try {
+            val out = r.call(method, args, timeoutMs)
+            current?.brain?.let { b -> HelperLive.heardFrom(b.id, b.name) }
+            out
+        } catch (e: RpcException) {
             if (!r.isOpen) kick.trySend(Unit)
             throw e
         }
-        // A computer that just answered is a computer that is there: the helpers it owns may count as working (HelperLive).
-        current?.brain?.let { b -> HelperLive.heardFrom(b.id, b.name) }
-        return out
     }
 
     /** Never a machine name in errors and status: which computer answers lives in Settings > Linked devices. Only a stand-in says its name, once. */
@@ -521,8 +552,17 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
      * computer before 0.2.115 (the old chat.send) means once its turn has ended, as it always did.
      */
     private suspend fun deliver(words: String, images: List<String>, chat: String? = null, replyIn: String? = null, files: List<String> = emptyList()) {
-        pendingSends.incrementAndGet()
-        try { deliverNow(words, images, chat, replyIn, files) } finally { pendingSends.decrementAndGet() }
+        // Only selection and reservation are serialized. A send waiting for an absent brain
+        // cannot hold another chat behind it.
+        val lease = chooseMutex.withLock {
+            if (shouldRecheck()) probeAndMoveUnlocked(true)
+            inFlight.guarded {
+                pendingSends.incrementAndGet()
+                if (chat == null && replyIn == null) { turnRunning = true; publishStatus() }
+                inFlight.acquire()
+            }
+        }
+        try { deliverNow(words, images, chat, replyIn, files) } finally { pendingSends.decrementAndGet(); lease.close() }
     }
 
     private suspend fun deliverNow(words: String, images: List<String>, chat: String?, replyIn: String?, files: List<String> = emptyList()) {
@@ -605,7 +645,6 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         // His words as they are: photos or files with no words go out with empty text.
         val clean = Outgoing.words(text, images, files) ?: return
         try {
-            turnRunning = true; publishStatus()
             deliver(clean, images, null, null, files)
             runCatching { readRunState() }
         } catch (e: kotlinx.coroutines.CancellationException) { throw e
@@ -628,7 +667,6 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         val clean = Outgoing.words(text, images, files) ?: return
         scope.launch {
             try {
-                turnRunning = true; publishStatus()
                 deliver(clean, images, null, null, files)
                 // A message the computer sent on to a project chat ('@Acme ...') starts no run here: read the real state,
                 // or the chat stays on "Working" with a Stop button (29 Oct 2026, seen on his phone).
@@ -1004,8 +1042,14 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
                 runEvent(e.optString("type"))
             }
             EVT_CARDS -> onCards(payload)
-            EVT_DEVICES -> current?.let { p -> scope.launch { runCatching { refreshBrains(p) } } }
-            EVT_COMMAND -> (payload as? JSONObject)?.let { c -> scope.launch { commands.handle(c) } }
+            EVT_DEVICES -> current?.let { p -> scope.launch { runCatching {
+                refreshBrains(p)
+                if (shouldRecheck()) probeAndMove(true)
+            } } }
+            EVT_COMMAND -> (payload as? JSONObject)?.let { c ->
+                val lease = inFlight.acquire()
+                scope.launch { commands.handle(c) }.invokeOnCompletion { lease.close(); kick.trySend(Unit) }
+            }
         }
     }
 
@@ -1117,7 +1161,11 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         val raw = call("devices.list", listOf(), 20_000)
         val answering = (state.value as? LinkState.Connected)?.brain?.id
         val ready = health.value.filterValues { it?.ready == true }.keys
-        val list = MeshDevice.parse(raw, link.deviceId, answering, ready)
+        val line = BrainChooser.answeringLine(app, link.brains, answering, ready, busy())
+        val availability = statusCache.warning(answering.orEmpty()) { call("devices.status", listOf(), 1_500) as? JSONObject }
+        val list = MeshDevice.parse(raw, link.deviceId, answering, ready).map { device ->
+            if (device.state == MeshDevice.State.ANSWERING) device.copy(line = if (availability.isNotBlank()) "$line $availability" else line) else device
+        }
         // What the link says about each device's last sign of life, so HelperLive knows which computers are gone.
         list.forEach { d -> HelperLive.heardFrom(d.id, d.name, if (d.lastSeen > 0) d.lastSeen else 0L) }
         return list

@@ -1,4 +1,11 @@
 <resources>
     <string name="share_label">Send to your agent</string>
     <string name="assist_label">Talk to your agent</string>
+    <string name="answer_order_none">No device is answering.</string>
+    <string name="answer_order_first">first in order</string>
+    <string name="answer_order_finishing">finishing this turn before handing back to %1$s</string>
+    <string name="answer_order_handback">%1$s is ready; handing back in answer order</string>
+    <string name="answer_order_unavailable">%1$s has not answered the latest check from this phone; using the next device</string>
+    <string name="answer_order_answering">%1$s is answering: %2$s.</string>
+    <string name="answer_order_tied">Order has tied positions; using pairing order, then device id.</string>
 </resources>
