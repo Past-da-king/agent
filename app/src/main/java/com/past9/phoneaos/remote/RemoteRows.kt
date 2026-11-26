@@ -97,6 +97,17 @@ object RemoteRows {
     /** The computer's id rides in the row, so a restart can map the phone's number back to it (answering a card). */
     fun withRid(meta: String, rid: String): String = runCatching { JSONObject(meta).put("rid", rid).toString() }.getOrDefault(meta)
 
+    /** The computer names the row of a message it takes after the send's id (desktop runtime/send-once.ts sendRowId). */
+    fun sentRowId(sendId: String): String = "send-$sendId"
+
+    /**
+     * His own message, on screen the moment he sends it (26 Nov 2026: he sent from the phone and saw nothing go out
+     * until a slow or frozen computer answered). It carries the id the computer will give the row, so when the real
+     * row arrives it lands on this one and replaces it: no second copy, no clock deciding where it goes.
+     */
+    fun sentEcho(sendId: String, words: String, at: Long, ids: RemoteIds): ChatItem =
+        ChatItem(ids.local(sentRowId(sendId), at), "user", words, JSONObject().put("pending", true).put("rid", sentRowId(sendId)).toString(), at)
+
     /** How far back a row arriving live can be and still count as new (a sender clock this far off still sorts right). */
     const val LIVE_SKEW_MS = 6L * 3_600_000L
 

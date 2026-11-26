@@ -532,6 +532,8 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         // and the computer replaces the message in place and holds the agent's turn for the clean text.
         val takeId = kotlin.coroutines.coroutineContext[com.past9.phoneaos.voice.TakeContext]?.id
         if (takeId != null) runCatching { com.past9.phoneaos.voice.Takes.of(app).submit(takeId, chat) }
+        // On screen at once, whichever computer is slow (26 Nov 2026): the real row replaces it when a brain takes the message.
+        val echo = if (chat == null && replyIn == null) runCatching { RemoteRows.sentEcho(sendId, words, sentAt, ids).also { putChat(it) } }.getOrNull() else null
         var attachments = JSONArray()
         var uploadedTo: String? = null
         // The same pictures and files go up once per brain, however many times the send has to be tried.
@@ -554,7 +556,13 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
             socketOpen = { rpc?.isOpen == true },
             leave = ::leaveUnanswering,
             legacy = { handOver(words, attachments, chat, replyIn) },
-        ).run()
+        ).let { flow ->
+            try { flow.run() } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) {
+                // Never taken: the words are back in the box, so the echo goes (a second copy would read as sent twice).
+                echo?.let { runCatching { db.chat().delete(it.id) } }
+                throw e
+            }
+        }
         sayWhoIsStandingIn()
     }
 
