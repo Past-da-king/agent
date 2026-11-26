@@ -58,9 +58,9 @@ fun PayPalKeyForm(save: suspend (String, String) -> String?, onSaved: () -> Unit
         Text("In developer.paypal.com open Apps & Credentials, Sandbox, your app. Copy its Client ID and Secret here. " +
             "Switch on Invoicing and Transaction search under the app's Features.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(10.dp))
-        OutlinedTextField(id, { id = it.trim(); error = null }, label = { Text("Client ID") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
+        com.past9.phoneaos.ui.AppTextField(id, { id = it.trim(); error = null }, label = { Text("Client ID") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
         Spacer(Modifier.height(8.dp))
-        OutlinedTextField(secret, { secret = it.trim(); error = null }, label = { Text("Secret") }, singleLine = true, visualTransformation = PasswordVisualTransformation(),
+        com.past9.phoneaos.ui.AppTextField(secret, { secret = it.trim(); error = null }, label = { Text("Secret") }, singleLine = true, visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium, isError = error != null, supportingText = error?.let { { Text(it) } })
         Spacer(Modifier.height(8.dp))
         Button(onClick = { scope.launch { busy = true; error = save(id, secret); busy = false; if (error == null) onSaved() } },
