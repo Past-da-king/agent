@@ -81,7 +81,7 @@ class PreferredBrainSessionTest {
             socket.send(JSONObject().put("type", "result").put("id", frame.getString("id")).put("ok", true).put("value", value).toString())
         }
         fun release(key: String, value: Any) { val (socket, frame) = waiting.remove(key)!!; answer(socket, frame, value) }
-        fun close() { sockets.forEach { it.cancel() }; http.shutdown() }
+        fun close() { sockets.forEach { runCatching { it.close(1000, null) } }; http.shutdown() }
     }
 
     private fun field(name: String) = RemoteSession::class.java.getDeclaredField(name).apply { isAccessible = true }

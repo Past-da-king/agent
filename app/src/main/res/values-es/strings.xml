@@ -1,4 +1,12 @@
 <resources>
+    <string name="answer_order_none">Ningún dispositivo está respondiendo.</string>
+    <string name="answer_order_first">primero en el orden</string>
+    <string name="answer_order_finishing">terminando este turno antes de devolverlo a %1$s</string>
+    <string name="answer_order_handback">%1$s está listo; devolviendo según el orden de respuesta</string>
+    <string name="answer_order_unavailable">%1$s no respondió a la última comprobación de este teléfono; se usa el siguiente dispositivo</string>
+    <string name="answer_order_answering">%1$s está respondiendo: %2$s.</string>
+    <string name="answer_order_tied">El orden tiene posiciones empatadas; se usa el orden de emparejamiento y luego el id del dispositivo.</string>
+
     <string name="share_label">Enviar a tu agente</string>
     <string name="assist_label">Habla con tu agente</string>
 </resources>
