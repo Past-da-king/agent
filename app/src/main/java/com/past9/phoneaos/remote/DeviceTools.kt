@@ -120,10 +120,10 @@ object DeviceTools {
     })
 
     /** Run one lent tool. Returns (ok, value or error); a value with pictures is a list of text and image parts. */
-    suspend fun run(context: Context, name: String, args: JSONObject, deadlineMs: Long, session: RemoteSession? = null): Pair<Boolean, Any> {
+    suspend fun run(context: Context, name: String, args: JSONObject, deadlineMs: Long, session: RemoteSession? = null, command: JSONObject? = null): Pair<Boolean, Any> {
         val (tool, _) = tools(context).firstOrNull { it.first.spec.name == name }
             ?: return false to "This phone doesn't lend $name (it's off in its settings, or it has no such tool)."
-        val out = withTimeoutOrNull(deadlineMs.coerceIn(1_000, 600_000)) { runCatching { tool.run(args, LentContext(context, session)) } }
+        val out = withTimeoutOrNull(deadlineMs.coerceIn(1_000, 600_000)) { runCatching { tool.run(args, LentContext(context, session, command, name, args)) } }
             ?: return false to "The phone didn't finish $name in time."
         return out.fold({ true to withImages(it) }, { false to (it.message ?: it::class.java.simpleName) })
     }
@@ -147,12 +147,21 @@ object DeviceTools {
         return parts
     }
 
-    /** A tool running for the agent on another device: questions come up as a notification with buttons. */
-    private class LentContext(private val context: Context, private val session: RemoteSession?) : ToolContext {
+    /** A lent tool returns questions to its originating brain; unavailable older brains use the phone sheet. */
+    private class LentContext(private val context: Context, private val session: RemoteSession?, command: JSONObject?, name: String, args: JSONObject) : ToolContext {
+        private var verifiedRequest: JSONObject? = null
+        private val questions = CommandQuestions(command?.optString("id").orEmpty(), JSONObject().put("tool", name).put("input", args),
+            call = { method, values, timeout ->
+                val connected = session ?: throw RpcException("Not connected to a computer right now.")
+                connected.inFlight.during { connected.call(method, values, timeout) }
+            },
+            fallback = { question, options -> RemoteAsk.ask(context, question, options, session = session, request = verifiedRequest) },
+            verifiedFallbackRequest = { verifiedRequest = it })
         override val agentLabel = "linked computer"
         override suspend fun activity(text: String, meta: JSONObject): Long = 0
         override suspend fun updateActivity(id: Long, text: String, meta: JSONObject) {}
-        override suspend fun ask(question: String, options: List<String>): String? = RemoteAsk.ask(context, question, options, session = session)
+        override suspend fun ask(question: String, options: List<String>): String? = questions.ask(question, options)
+        override suspend fun askWithOrigin(question: String, options: List<String>, origin: JSONObject): String? = questions.ask(question, options, origin)
         override suspend fun notify(title: String, body: String) = App.graph(context).phone.notify(title, body)
     }
 }
@@ -172,7 +181,7 @@ object RemoteAsk {
         answer(id, option); return true
     }
 
-    suspend fun ask(context: Context, question: String, options: List<String>, timeoutMs: Long = 600_000, session: RemoteSession? = null): String? {
+    suspend fun ask(context: Context, question: String, options: List<String>, timeoutMs: Long = 600_000, session: RemoteSession? = null, request: JSONObject? = null): String? {
         val id = next.incrementAndGet()
         val d = CompletableDeferred<String>()
         waiting[id] = d
@@ -182,7 +191,9 @@ object RemoteAsk {
         if (session != null) runCatching {
             val now = System.currentTimeMillis()
             val item = com.past9.phoneaos.data.ChatItem(session.ids.local("lent-ask-$id-$now", now), "question", question,
-                JSONObject().put("options", JSONArray(opts)).put("whyBy", "Your agent").toString(), now)
+                JSONObject().put("options", JSONArray(opts)).put("whyBy", "Your agent").apply {
+                    if (request != null && request.optString("id").isNotBlank() && request.optLong("at") > 0 && request.optString("text").isNotBlank()) put("request", JSONObject(request.toString()))
+                }.toString(), now)
             session.db.chat().insert(item); row = item.id; rows[item.id] = id
         }
         // request_approval asks "APPROVAL|<action>|<details>".
@@ -237,7 +248,7 @@ class DeviceCommands(private val context: Context, private val session: RemoteSe
         try {
             val kind = c.optString("kind")
             if (kind == "tool") {
-                val (ok, value) = DeviceTools.run(context, c.optString("tool"), c.optJSONObject("args") ?: JSONObject(), c.optLong("deadlineMs", 120_000), session)
+                val (ok, value) = DeviceTools.run(context, c.optString("tool"), c.optJSONObject("args") ?: JSONObject(), c.optLong("deadlineMs", 120_000), session, c)
                 ledger.finish(id, "tool", ok, value)
             } else {
                 val (ok, note) = runCatching { act(c) }.getOrElse { false to (it.message ?: "failed") }

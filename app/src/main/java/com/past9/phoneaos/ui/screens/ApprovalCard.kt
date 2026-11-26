@@ -49,6 +49,8 @@ data class Approval(
     val failed: Boolean,
     /** The computer refused this answer because the card was already decided: its words, shown on the card. */
     val note: String = "",
+    val request: String = "",
+    val recommendation: String = "",
 ) {
     val pending get() = answer.isEmpty()
     val approved get() = answer == "Approve"
@@ -82,7 +84,13 @@ data class Approval(
             // What it acts on, when the row says: a named target, else where it runs (the computer's scope).
             val target = listOf("target", "account", "app", "device").firstNotNullOfOrNull { k -> m.optString(k).takeIf { it.isNotBlank() } }
                 ?: when (val scope = m.optString("scope")) { "" -> ""; "computer" -> "your computer"; "phone" -> "this phone"; else -> scope }
-            return Approval(item.id, summary, details, target, askedBy, why, m.optString("answer"), m.optBoolean(FAILED_KEY), m.optString(NOTE_KEY))
+            val source = m.optJSONObject("request")
+            val at = source?.optLong("at") ?: 0L
+            val request = if (source != null && source.optString("id").isNotBlank() && at > 0L && source.optString("text").isNotBlank()) {
+                val time = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(at))
+                "You asked for this at $time: \"${source.optString("text")}\""
+            } else ""
+            return Approval(item.id, summary, details, target, askedBy, why, m.optString("answer"), m.optBoolean(FAILED_KEY), m.optString(NOTE_KEY), request, m.optString("escalatedWhy"))
         }
     }
 }
@@ -93,7 +101,10 @@ data class Approval(
  * Once decided it folds to one line that says what was decided; a tap still opens the details.
  */
 @Composable
-fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
+fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit) { ApprovalCard(item, onAnswer, "Your agent") }
+
+@Composable
+fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit, agentName: String) {
     val a = remember(item.id, item.text, item.meta) { Approval.of(item) }
     var open by remember(item.id) { mutableStateOf(false) }
     var sent by remember(item.id) { mutableStateOf(false) }
@@ -123,6 +134,7 @@ fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
         Text(a.summary, style = MaterialTheme.typography.titleLarge, color = cs.onTertiaryContainer)
         Spacer(Modifier.height(4.dp))
         Text(stringResource(R.string.chat_asked_by, shown(a.askedBy)) + if (a.target.isNotBlank()) stringResource(R.string.chat_on_target, shown(a.target)) else "", style = MaterialTheme.typography.bodySmall, color = cs.onTertiaryContainer.copy(alpha = 0.8f))
+        RequestContext(a, agentName, full = false)
         if (a.details.isNotBlank()) { Spacer(Modifier.height(12.dp)); ApprovalBody(a.details, full = false) }
         if (a.note.isNotBlank()) { Spacer(Modifier.height(10.dp)); Text(a.note, style = MaterialTheme.typography.bodyMedium, color = cs.onTertiaryContainer) }
         else if (a.failed) { Spacer(Modifier.height(10.dp)); Text(stringResource(R.string.chat_approval_failed), style = MaterialTheme.typography.bodyMedium, color = cs.error) }
@@ -131,16 +143,19 @@ fun ApprovalCard(item: ChatItem, onAnswer: (Long, String) -> Unit) {
             Text(stringResource(R.string.chat_review), style = MaterialTheme.typography.titleMedium)
         }
     }
-    if (open) ApprovalSheet(a, onDecide = { sent = true; onAnswer(item.id, it) }, onDismiss = { open = false })
+    if (open) ApprovalSheet(a, onDecide = { sent = true; onAnswer(item.id, it) }, onDismiss = { open = false }, agentName = agentName)
 }
 
 /** The sheet for a chat row, for screens that draw their own card (Home, a call). */
 @Composable
-fun ApprovalSheet(item: ChatItem, onAnswer: (Long, String) -> Unit, onDismiss: () -> Unit) {
+fun ApprovalSheet(item: ChatItem, onAnswer: (Long, String) -> Unit, onDismiss: () -> Unit) { ApprovalSheet(item, onAnswer, onDismiss, "Your agent") }
+
+@Composable
+fun ApprovalSheet(item: ChatItem, onAnswer: (Long, String) -> Unit, onDismiss: () -> Unit, agentName: String) {
     val a = remember(item.id, item.text, item.meta) { Approval.of(item) }
     var sent by remember(item.id) { mutableStateOf(false) }
     LaunchedEffect(a.answer) { if (sent && !a.pending) onDismiss() }
-    ApprovalSheet(a, onDecide = { sent = true; onAnswer(item.id, it) }, onDismiss = onDismiss)
+    ApprovalSheet(a, onDecide = { sent = true; onAnswer(item.id, it) }, onDismiss = onDismiss, agentName = agentName)
 }
 
 /**
@@ -149,13 +164,17 @@ fun ApprovalSheet(item: ChatItem, onAnswer: (Long, String) -> Unit, onDismiss: (
  * shows the same content with what was decided.
  */
 @Composable
-fun ApprovalSheet(a: Approval, onDecide: (String) -> Unit, onDismiss: () -> Unit) {
+fun ApprovalSheet(a: Approval, onDecide: (String) -> Unit, onDismiss: () -> Unit) { ApprovalSheet(a, onDecide, onDismiss, "Your agent") }
+
+@Composable
+fun ApprovalSheet(a: Approval, onDecide: (String) -> Unit, onDismiss: () -> Unit, agentName: String) {
     val cs = MaterialTheme.colorScheme
     AgentSheet(onDismiss) {
         Column(Modifier.fillMaxWidth()) {
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
                 SheetHead(if (a.isCommand) Icons.Rounded.Terminal else Icons.Rounded.Shield, if (a.pending) stringResource(R.string.chat_approve_before_title) else decidedLabel(a), a.summary)
                 Spacer(Modifier.height(20.dp))
+                RequestContext(a, agentName, full = true)
                 Fact(stringResource(R.string.chat_fact_asked_by), shown(a.askedBy))
                 if (a.why.isNotBlank()) Fact(stringResource(R.string.chat_fact_why), a.why)
                 if (a.target.isNotBlank()) Fact(stringResource(R.string.chat_fact_on), shown(a.target))
@@ -277,4 +296,11 @@ object CardConflict {
         meta.put(Approval.NOTE_KEY, f.text)
         return true
     }
+}
+
+@Composable
+internal fun RequestContext(a: Approval, agentName: String, full: Boolean) {
+    val color = MaterialTheme.colorScheme.onSurfaceVariant
+    if (a.request.isNotBlank()) Text(a.request, style = MaterialTheme.typography.bodySmall, color = color, maxLines = if (full) Int.MAX_VALUE else 2, overflow = TextOverflow.Ellipsis)
+    if (a.recommendation.isNotBlank()) Text("${agentName.ifBlank { "Your agent" }} recommends: ${a.recommendation}", style = MaterialTheme.typography.bodySmall, color = color)
 }

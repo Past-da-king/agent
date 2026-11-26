@@ -163,7 +163,7 @@ fun AssistSheetBody(view: AssistView, agentName: String, screen: ScreenLine?, ac
                     Spacer(Modifier.height(10.dp))
                     Markdown(com.past9.phoneaos.voice.Tts.stripEmoji(view.answer), style = MaterialTheme.typography.bodyLarge)
                 }
-                AssistPhase.APPROVAL -> { Heard(view.heard); Spacer(Modifier.height(10.dp)); view.card?.let { ApprovalInSheet(it, actions.onAnswer) } }
+                AssistPhase.APPROVAL -> { Heard(view.heard); Spacer(Modifier.height(10.dp)); view.card?.let { ApprovalInSheet(it, actions.onAnswer, agentName) } }
                 AssistPhase.ASKING -> { Heard(view.heard); Spacer(Modifier.height(10.dp)); view.card?.let { QuestionCard(it, actions.onAnswer, onBrowser = actions.onOpenApp) } }
                 AssistPhase.ERROR -> {
                     Heard(view.heard)
@@ -249,7 +249,10 @@ private fun ListeningBars() {
  * The same row and the same answer as the card in the chat; "Read all of it" opens the full approval sheet.
  */
 @Composable
-fun ApprovalInSheet(item: ChatItem, onAnswer: (Long, String) -> Unit) {
+fun ApprovalInSheet(item: ChatItem, onAnswer: (Long, String) -> Unit) { ApprovalInSheet(item, onAnswer, "Your agent") }
+
+@Composable
+fun ApprovalInSheet(item: ChatItem, onAnswer: (Long, String) -> Unit, agentName: String) {
     val a = remember(item.id, item.text, item.meta) { Approval.of(item) }
     val cs = MaterialTheme.colorScheme
     var open by remember(item.id) { mutableStateOf(false) }
@@ -263,6 +266,7 @@ fun ApprovalInSheet(item: ChatItem, onAnswer: (Long, String) -> Unit) {
             Spacer(Modifier.height(8.dp))
             Text(a.summary, style = MaterialTheme.typography.titleMedium, color = cs.onTertiaryContainer)
             Text(stringResource(R.string.assist_asked_by, a.askedBy) + if (a.target.isNotBlank()) stringResource(R.string.assist_on_target, a.target) else "", style = MaterialTheme.typography.bodySmall, color = cs.onTertiaryContainer.copy(alpha = 0.8f))
+            com.past9.phoneaos.ui.screens.RequestContext(a, agentName, full = false)
             if (a.details.isNotBlank()) { Spacer(Modifier.height(10.dp)); ApprovalBody(a.details, full = false) }
             if (a.failed) { Spacer(Modifier.height(8.dp)); Text(Approval.FAILED, style = MaterialTheme.typography.bodyMedium, color = cs.error) }
             Spacer(Modifier.height(12.dp))
@@ -273,5 +277,5 @@ fun ApprovalInSheet(item: ChatItem, onAnswer: (Long, String) -> Unit) {
             }
         }
     }
-    if (open) ApprovalSheet(item, onAnswer = onAnswer, onDismiss = { open = false })
+    if (open) ApprovalSheet(item, onAnswer = onAnswer, onDismiss = { open = false }, agentName = agentName)
 }
