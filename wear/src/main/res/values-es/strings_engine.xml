@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Call, ring, gestures, face data sources and the home screen (docs/wear.md). Kept apart from strings.xml so the design pass can restyle without a clash. -->
+<resources>
+    <!-- Call -->
+    <string name="call">Llamar</string>
+    <string name="call_connecting">Conectando</string>
+    <string name="call_listening">Escuchando</string>
+    <string name="call_thinking">Pensando</string>
+    <string name="call_speaking">Hablando</string>
+    <string name="call_reconnecting">Reconectando</string>
+    <string name="call_ended">Llamada finalizada</string>
+    <string name="call_failed">Llamada fallida</string>
+    <string name="call_mute">Silenciar</string>
+    <string name="call_unmute">Activar micro</string>
+    <string name="call_end">Colgar</string>
+    <string name="call_again">Volver a llamar</string>
+    <string name="call_use_phone">Usar el sonido del móvil</string>
+    <string name="call_sound">Micro: %1$s. Sonido: %2$s.</string>
+    <string name="sound_watch">reloj</string>
+    <string name="sound_phone">móvil</string>
+    <string name="call_could_not_start">No se ha podido iniciar la llamada.</string>
+    <string name="call_channel">Llamada</string>
+    <string name="call_ongoing">En una llamada</string>
+
+    <!-- Ring -->
+    <string name="ring_wake">Aviso</string>
+    <string name="ring_on_it">En ello</string>
+    <string name="ring_snooze">Posponer</string>
+    <string name="ring_review">Revisar</string>
+    <string name="ring_dismiss">Ahora no</string>
+    <string name="ring_ch_critical">Avisos críticos</string>
+    <string name="ring_ch_urgent">Avisos urgentes</string>
+    <string name="ring_ch_heads_up">Avisos informativos</string>
+    <string name="ring_ch_approval">Aprobaciones</string>
+    <string name="ring_ch_silent">Sin sonido</string>
+
+    <!-- Gestures and rings -->
+    <string name="gestures_title">Gestos</string>
+    <string name="gestures_channel">Gestos</string>
+    <string name="gestures_on">Gestos activados</string>
+    <string name="g_flick">Golpe de muñeca</string>
+    <string name="g_double_flick">Doble golpe</string>
+    <string name="g_shake">Agitar</string>
+    <string name="g_double_tap">Doble toque en el reloj</string>
+    <string name="g_raise">Levantar para hablar</string>
+    <string name="g_unavailable">No disponible en este reloj</string>
+    <string name="g_recommended">Recomendados</string>
+    <string name="g_always_on">También con la app cerrada</string>
+    <string name="g_battery_note">Los sensores solo funcionan con la app abierta o durante una llamada o una alerta, salvo que actives el interruptor de arriba.</string>
+    <string name="g_system_yes">Este reloj también tiene los gestos del sistema (doble pellizco, giro de muñeca): las pantallas los usan donde encajan.</string>
+    <string name="g_system_no">Los gestos del sistema (doble pellizco, giro de muñeca) necesitan Wear OS 7 o posterior.</string>
+    <string name="act_none">Nada</string>
+    <string name="act_talk">Hablar</string>
+    <string name="act_dismiss">Descartar</string>
+    <string name="act_call">Llamar</string>
+    <string name="act_approve">Aprobar (dos veces)</string>
+    <string name="on">Activado</string>
+    <string name="off">Desactivado</string>
+    <string name="rings_title">Alertas</string>
+    <string name="rings_approvals">Aprobaciones en el reloj</string>
+    <string name="rings_dnd">Permitir alertas en No molestar</string>
+    <string name="mode_off">Desactivado</string>
+    <string name="mode_buzz">Solo vibrar</string>
+    <string name="mode_full">Alerta a pantalla completa</string>
+
+    <!-- Watch face data sources -->
+    <string name="face_title_approvals">Te necesita</string>
+    <string name="face_title_task">Próxima tarea</string>
+    <string name="face_title_status">Agente</string>
+    <string name="face_nothing_waits">Nada pendiente</string>
+    <plurals name="face_waiting">
+        <item quantity="one">%d te necesita</item>
+        <item quantity="many">%d te necesitan</item>
+        <item quantity="other">%d te necesitan</item>
+    </plurals>
+    <string name="face_none">Ninguna</string>
+    <string name="face_no_task">Sin tareas</string>
+    <string name="face_idle_short">Libre</string>
+    <string name="face_idle">En espera</string>
+    <string name="face_working_short">Ocupado</string>
+    <string name="face_working">Trabajando</string>
+    <string name="face_needs_short">Te toca</string>
+    <string name="face_needs">Te necesita</string>
+    <string name="face_call_short">Llamada</string>
+    <string name="face_call">En una llamada</string>
+    <string name="face_offline_short">Sin red</string>
+    <string name="face_offline">Ordenador sin conexión</string>
+    <string name="face_talk_label">Hablar con el agente</string>
+    <string name="face_pending_label">Aprobaciones pendientes</string>
+    <string name="face_task_label">Próxima tarea</string>
+    <string name="face_status_label">Estado del agente</string>
+
+    <!-- Home screen -->
+    <string name="home_label">Inicio del agente</string>
+    <string name="home_open_agent">Abrir el agente</string>
+    <string name="home_recent">Recientes</string>
+    <string name="home_apps">Apps</string>
+    <string name="home_settings">Pantalla de inicio</string>
+    <string name="home_use">Usar como pantalla de inicio</string>
+    <string name="home_back">Volver al inicio original</string>
+    <string name="home_open_system">Abrir el ajuste del sistema</string>
+    <string name="home_state_off">Desactivado. El reloj usa su propia pantalla de inicio.</string>
+    <string name="home_state_asked">Activado aquí. Para terminar, elige el agente en el ajuste de inicio del sistema.</string>
+    <string name="home_state_mine">El agente es tu pantalla de inicio.</string>
+    <string name="home_state_other">Otra app es la pantalla de inicio. Elige el agente en el ajuste de inicio del sistema.</string>
+    <string name="home_no_picker">Este reloj no tiene ajuste de pantalla de inicio. Al desactivarlo, siempre se vuelve al inicio original.</string>
+    <!-- Pairing (docs/wear.md) -->
+    <string name="pair_title">Vincular con tu móvil</string>
+    <string name="pair_how">En la app Agent del móvil: Ajustes, Reloj. Escanea esto o escribe el código.</string>
+    <string name="pair_qr_description">Código QR para escanear con el móvil</string>
+    <string name="pair_making">Creando un código</string>
+    <string name="pair_expired">El código ha caducado.</string>
+    <string name="pair_new_code">Código nuevo</string>
+    <string name="pair_paired_with">Vinculado con %1$s</string>
+    <string name="pair_a_phone">tu móvil</string>
+    <string name="pair_unpair">Desvincular</string>
+</resources>
