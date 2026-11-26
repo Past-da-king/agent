@@ -648,7 +648,7 @@ class AgentRuntime(
             val id = mainQuestions.maxOrNull()
             if (id != null) {
                 dictation?.let { com.past9.phoneaos.voice.Takes.of(context).discard(it) }
-                scope.launch { db.chat().insert(ChatItem(kind = "user", text = clean)) }
+                scope.launch { db.chat().insert(ChatItem(kind = "user", text = clean, meta = """{"own":true}""")) }
                 answer(id, clean)
                 return
             }
@@ -670,7 +670,7 @@ class AgentRuntime(
         var dictNote = ""
         if (dictation != null && fromCall == null && !quiet) {
             val takes = com.past9.phoneaos.voice.Takes.of(context)
-            dictRow = db.chat().insert(ChatItem(kind = "user", text = caption, meta = JSONObject().put("images", org.json.JSONArray(images.filter { !it.contains("/pdf-") }))
+            dictRow = db.chat().insert(ChatItem(kind = "user", text = caption, meta = JSONObject().put("own", true).put("images", org.json.JSONArray(images.filter { !it.contains("/pdf-") }))
                 .put("files", org.json.JSONArray(files)).put("voiceReply", voiceReply).put("dictation", JSONObject().put("id", dictation).put("state", "refining")).toString()))
             takes.submit(dictation)
             val got = takes.settled(dictation)
@@ -689,7 +689,7 @@ class AgentRuntime(
         val origin = if (fromCall != null) { db.chat().insert(ChatItem(kind = "activity", text = "On it: $fromCall", meta = JSONObject().put("tool", "call").toString())); null }
         else if (quiet) null // a button tap: the agent hears it, the chat shows nothing as the user's
         else if (dictRow > 0) dictRow
-        else db.chat().insert(ChatItem(kind = "user", text = clean, meta = JSONObject().put("images", org.json.JSONArray(images.filter { !it.contains("/pdf-") }))
+        else db.chat().insert(ChatItem(kind = "user", text = clean, meta = JSONObject().put("own", true).put("images", org.json.JSONArray(images.filter { !it.contains("/pdf-") }))
             .put("files", org.json.JSONArray(files)).put("voiceReply", voiceReply).toString()))
         val forModel = if (voiceReply) "$heard\n\n(The user is on the move: answer with a voice_note, then at most one short line of text. Don't repeat the voice note as text.)"
             else if (quiet) "[The user tapped a button on a card you drew. They did not type this and it is not in the chat as their message, so don't quote it back as something they said; just act on it.]\n$clean"

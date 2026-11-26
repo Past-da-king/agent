@@ -248,7 +248,7 @@ class CallController(
     private suspend fun begin(g: Int, url: String, renew: (() -> String?)?, base: String, model: String?, voice: String?) {
         val s = settings.state.value
         val recent = db.chat().all().first().filter { it.kind == "user" || it.kind == "agent" }.takeLast(10)
-            .joinToString("\n") { (if (it.kind != "user") "You: " else com.past9.phoneaos.remote.Sender.of(it.meta)?.let { s -> s.line + ": " } ?: "User: ") + it.text.take(400) }
+            .joinToString("\n") { (if (it.kind != "user") "You: " else com.past9.phoneaos.remote.Sender.of(it.meta, it.text)?.let { s -> s.line + ": " } ?: "User: ") + it.text.take(400) }
         val pinned = db.memory().pinned().joinToString("\n") { "- ${it.title}: ${it.body.take(200)}" }
         // Something already waiting on him when the call starts: the voice brings it up.
         val waiting = pendingQuestion()
