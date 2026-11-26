@@ -767,12 +767,13 @@ class MainActivity : ComponentActivity() {
                             onPick = { c -> pendingRemote = null; com.past9.phoneaos.remote.RemoteHub.session.value?.let { rs -> scope.launch { runCatching { rs.connectApp(slug, c.id) }.onSuccess { open(it) }.onFailure { conn = conn.copy(error = getString(R.string.main_remote_signin_failed, it.message)) } } } },
                             onDismiss = { pendingRemote = null }, line = getString(R.string.main_which_profile_line))
                     }
+                    var paypalLabel by remember { mutableStateOf(g.settings.paypal()?.let { "Sandbox · " + it.clientId.take(6) + "…" }) }
                     val machines by g.runtime.machines.store.machines.collectAsStateWithLifecycle()
                     val learnedApps by g.runtime.learned.apps.collectAsStateWithLifecycle()
                     // Re-read on every return to this screen: the user may have just switched All files access on.
                     val resumed = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsStateWithLifecycle().value
                     val phoneFiles = remember(resumed) { com.past9.phoneaos.tools.phoneFilesAllowed() }
-                    ConnectionsScreen(conn.copy(machines = machines, phoneFiles = phoneFiles, profiles = profileList, rules = accountRules, browserProfiles = settings.browserProfiles, learned = if (conn.remote) conn.learned else learnedApps, miniApps = miniApps), bottomPadding = barPad + 24.dp, actions = ConnectionsActions(
+                    ConnectionsScreen(conn.copy(machines = machines, phoneFiles = phoneFiles, profiles = profileList, rules = accountRules, browserProfiles = settings.browserProfiles, learned = if (conn.remote) conn.learned else learnedApps, miniApps = miniApps, paypal = paypalLabel), bottomPadding = barPad + 24.dp, actions = ConnectionsActions(
                         onMiniApps = { nav.navigate("miniapps") { launchSingleTop = true } }, onLinkedDevices = { nav.navigate("linked") { launchSingleTop = true } },
                         profile = profileActions,
                         onTrustLearned = { id, on -> g.runtime.learned.setTrusted(id, on) },
@@ -794,6 +795,13 @@ class MainActivity : ComponentActivity() {
                         onSaveKey = { k -> saveComposio(g, k).also { if (it == null) refreshConnections() } },
                         onRemoveKey = { g.settings.setComposioKey(null); conn = ConnectionsState(hasKey = false) },
                         onLoadCatalog = { com.past9.phoneaos.remote.RemoteHub.session.value?.let { rs -> scope.launch { runCatching { rs.appCatalog() }.onSuccess { c -> conn = conn.copy(consumer = true, toolkits = (c + conn.toolkits).distinctBy { it.slug }) } } } },
+                        onSavePayPal = { id, secret ->
+                            // Prove the pair works (a token call to the sandbox) before keeping it.
+                            val probe = com.past9.phoneaos.paypal.PayPalApi({ com.past9.phoneaos.paypal.PayPalCreds(id, secret) })
+                            val err = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { probe.accessToken() }.exceptionOrNull() }
+                            if (err != null) err.message ?: "PayPal didn't accept those." else { g.settings.setPayPal(id, secret); paypalLabel = "Sandbox · " + id.take(6) + "…"; null }
+                        },
+                        onRemovePayPal = { g.settings.setPayPal(null, null); paypalLabel = null },
                         onConnect = { slug -> scope.launch {
                             val linkedRs = com.past9.phoneaos.remote.RemoteHub.session.value
                             if (linkedRs != null) {

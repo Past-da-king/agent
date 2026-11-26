@@ -422,6 +422,9 @@ class AgentRuntime(
 
     /** A date, a person or a gift changed: arm or drop the reminders at once (the phone's own alarms, no routine). */
     suspend fun peopleChanged() { runCatching { com.past9.phoneaos.people.PersonReminders.syncAll(context) } }
+    /** One PayPal client for the app's life, so its token is reused; it reads the keys fresh on every call. */
+    val paypalApi by lazy { com.past9.phoneaos.paypal.PayPalApi({ settings.paypal() }) }
+    private val paypalLedger by lazy { com.past9.phoneaos.paypal.PayPalLedger(java.io.File(context.filesDir, "paypal/ledger.json")) }
 
     /** Everything that acts: what helpers and routines work with. */
     private fun workerTools(): List<Tool> {
@@ -450,6 +453,8 @@ class AgentRuntime(
             list += GuardedAppsRunTool(AppsRunTool(composio), appGuard)
             list += AppsConnectTool(composio) { _, url -> openSignIn(url) }
         }
+        // PayPal, when the user added their PayPal app: invoices, pay links, collecting and refunds. Money tools stop at an approval card.
+        if (settings.paypal() != null) list += com.past9.phoneaos.paypal.paypalTools(paypalApi, paypalLedger)
         list += AskUserTool(); list += ApprovalTool(); list += NotifyTool()
         list += com.past9.phoneaos.automation.AndroidIntentTool(context, settings.intentSettings); list += com.past9.phoneaos.automation.AndroidAppsTool(context)
         list += com.past9.phoneaos.automation.MacroDroidRunTool(context, settings.macroSettings)
@@ -566,6 +571,7 @@ class AgentRuntime(
             appendLine(com.past9.phoneaos.assist.AssistMessage.PROMPT)
             appendLine("- Files move between the phone, machines and websites: phone_files, machine_run (ls, find), machine_download, browser_upload, machine_upload, send_file (shows one to the user).")
             val ms = machines.store.machines.value
+            settings.paypal()?.let { pp -> appendLine("- PayPal is connected (${pp.label}): paypal_* tools draft and send invoices, make pay links, check who paid, collect payments and refund. Sending, collecting, cancelling and refunding each stop at an approval card built from PayPal's own data, so call them directly: no separate request_approval. PayPal has no rand: use USD unless told otherwise and say the conversion. 'The last order' or 'that invoice' resolves with paypal_recent.") }
             if (ms.isNotEmpty()) appendLine("- The user connected machines to work on over SSH: ${ms.joinToString { it.name + (if (it.about.isNotBlank()) " (" + it.about + ")" else "") }}. Heavy lifting goes there (building, compiling, installing, data crunching, long scripts, big downloads): machine_run for quick commands, machine_job_start for anything long, then machine_job_status. If a machine has a coding agent (claude, codex, opencode) it can run there in a job.")
             else appendLine("- No machines connected. If a task is too heavy for the phone, tell the user they can add any server or computer they can SSH into under Connections > Machines.")
             if (!s.composioEnabled) appendLine("- No apps are connected yet (Gmail, Calendar...). If a task needs one, tell the user they can connect apps in Connections.")

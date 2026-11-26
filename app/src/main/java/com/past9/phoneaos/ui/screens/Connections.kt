@@ -63,6 +63,8 @@ data class ConnectionsState(
     val devices: List<com.past9.phoneaos.remote.MeshDevice> = emptyList(),
     /** His mini-apps (made on the computer), for the Apps line. */
     val miniApps: List<com.past9.phoneaos.miniapps.MiniAppInfo> = emptyList(),
+    /** PayPal: a short label when the user's PayPal app is connected ("Sandbox · AbC1…"), null when not. */
+    val paypal: String? = null,
 )
 
 data class ConnectionsActions(
@@ -96,6 +98,9 @@ data class ConnectionsActions(
     val onMiniApps: () -> Unit = {},
     /** Linked devices: order, roles, add another (Settings > Linked devices). */
     val onLinkedDevices: () -> Unit = {},
+    /** PayPal: check the client ID and secret with a token call, then save; null on success, else what's wrong. */
+    val onSavePayPal: suspend (String, String) -> String? = { _, _ -> null },
+    val onRemovePayPal: () -> Unit = {},
 )
 
 /**
@@ -168,6 +173,7 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                     if (!state.remote) MachinesLine(state.machines) { sheet = "list" }
                     LearnedLine(state.learned, state.remote) { sheet = "learned" }
                     MiniAppsLine(state.miniApps, actions.onMiniApps)
+                    PayPalLine(state.paypal, actions.onSavePayPal, actions.onRemovePayPal)
                 }
             }
             // Linked: his machines are the computers, servers and phones on the link, shown with their state.
