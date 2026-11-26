@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">음성 메모 재생</string>
+    <string name="note_pause">음성 메모 일시중지</string>
+    <string name="note_position">음성 메모 재생 위치</string>
+    <string name="note_progress">전체 %2$s 중 %1$s</string>
+</resources>

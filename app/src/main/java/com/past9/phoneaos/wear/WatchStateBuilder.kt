@@ -66,7 +66,7 @@ object WatchStateBuilder {
         var you: ChatItem? = null
         for (r in rows) {
             when {
-                r.kind == "user" && Sender.isHis(r.kind, r.meta) -> you = r
+                r.kind == "user" && Sender.isHis(r.kind, r.meta, r.text) -> you = r
                 r.kind == "agent" && r.text.isNotBlank() && you != null -> {
                     out += Exchange(you.id, cleanUser(you.text), Limits.clip(r.text.trim(), Limits.RECENT_REPLY_MAX), r.createdAt); you = null
                 }

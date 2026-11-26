@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">Spela upp röstmeddelande</string>
+    <string name="note_pause">Pausa röstmeddelande</string>
+    <string name="note_position">Position i röstmeddelande</string>
+    <string name="note_progress">%1$s av %2$s</string>
+</resources>

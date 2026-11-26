@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">تشغيل الملاحظة الصوتية</string>
+    <string name="note_pause">إيقاف الملاحظة الصوتية مؤقتًا</string>
+    <string name="note_position">موضع الملاحظة الصوتية</string>
+    <string name="note_progress">%1$s من %2$s</string>
+</resources>

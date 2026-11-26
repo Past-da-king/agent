@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">Phát ghi chú thoại</string>
+    <string name="note_pause">Tạm dừng ghi chú thoại</string>
+    <string name="note_position">Vị trí ghi chú thoại</string>
+    <string name="note_progress">%1$s trên %2$s</string>
+</resources>

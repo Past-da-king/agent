@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">Bapala molaetsa oa lentsoe</string>
+    <string name="note_pause">Emisa molaetsa oa lentsoe hanyane</string>
+    <string name="note_position">Sebaka sa ho bapala molaetseng oa lentsoe</string>
+    <string name="note_progress">%1$s ho %2$s</string>
+</resources>

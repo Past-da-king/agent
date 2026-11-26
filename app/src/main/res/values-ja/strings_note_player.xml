@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">ボイスメモを再生</string>
+    <string name="note_pause">ボイスメモを一時停止</string>
+    <string name="note_position">ボイスメモの再生位置</string>
+    <string name="note_progress">全体%2$sのうち%1$s</string>
+</resources>

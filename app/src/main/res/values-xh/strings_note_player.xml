@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">Dlala inowuthi yelizwi</string>
+    <string name="note_pause">Nqumamisa inowuthi yelizwi</string>
+    <string name="note_position">Indawo yokudlala kwinowuthi yelizwi</string>
+    <string name="note_progress">%1$s kweyi-%2$s</string>
+</resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">播放語音訊息</string>
+    <string name="note_pause">暫停語音訊息</string>
+    <string name="note_position">語音訊息播放位置</string>
+    <string name="note_progress">共%2$s，已播放%1$s</string>
+</resources>

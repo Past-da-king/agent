@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">Spraakbericht afspelen</string>
+    <string name="note_pause">Spraakbericht pauzeren</string>
+    <string name="note_position">Positie in spraakbericht</string>
+    <string name="note_progress">%1$s van %2$s</string>
+</resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">Cheza ujumbe wa sauti</string>
+    <string name="note_pause">Sitisha ujumbe wa sauti</string>
+    <string name="note_position">Nafasi katika ujumbe wa sauti</string>
+    <string name="note_progress">%1$s kati ya %2$s</string>
+</resources>

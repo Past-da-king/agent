@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">I-play ang voice note</string>
+    <string name="note_pause">I-pause ang voice note</string>
+    <string name="note_position">Posisyon ng voice note</string>
+    <string name="note_progress">%1$s sa %2$s</string>
+</resources>

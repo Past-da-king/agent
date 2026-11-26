@@ -63,7 +63,8 @@ object DeviceTools {
         "webapp_guide" to "Teaching and saving a web app is done by the agent that owns it.", "webapp_save" to "Teaching and saving a web app is done by the agent that owns it.",
         "webapp_remove" to "Removing a learned app is the person's or the phone agent's call.",
         "watcher_save" to "Watchers run in the phone's own agent.",
-    ) + listOf("delegate", "helpers_status", "helper_steer", "helper_push", "helper_stop", "escalation_triage", "agent_pin", "agent_unpin", "agents_pinned").associateWith { "Runs the phone's own helpers; the computer has its own." } +
+    ) + listOf("paypal_create_invoice", "paypal_send_invoice", "paypal_get_invoice", "paypal_list_invoices", "paypal_cancel_invoice", "paypal_create_order", "paypal_get_order", "paypal_capture_order", "paypal_refund", "paypal_list_transactions", "paypal_recent")
+        .associateWith { "PayPal keys live on the phone and money moves only with an approval in the phone's own chat." } + listOf("delegate", "helpers_status", "helper_steer", "helper_push", "helper_stop", "escalation_triage", "agent_pin", "agent_unpin", "agents_pinned").associateWith { "Runs the phone's own helpers; the computer has its own." } +
         listOf("routine_create", "routine_list", "routine_update", "routine_delete", "wake_schedule", "wake_list", "wake_cancel", "quiet_hours").associateWith { "The phone agent's own routines and wake-ups; the computer has its own." } +
         listOf("memory_search", "memory_save", "memory_get", "memory_update", "skill_save", "skill_find", "goal_create", "goal_update", "goal_delete", "task_add", "task_update", "task_delete", "task_list").associateWith { "The phone agent's own memory and tasks; a linked computer is the one that holds them." } +
         listOf("card_guide", "card_save", "card_update", "card_list", "card_show", "card_pin", "card_delete").associateWith { "Cards in the phone's own chat." } +
@@ -120,10 +121,10 @@ object DeviceTools {
     })
 
     /** Run one lent tool. Returns (ok, value or error); a value with pictures is a list of text and image parts. */
-    suspend fun run(context: Context, name: String, args: JSONObject, deadlineMs: Long, session: RemoteSession? = null): Pair<Boolean, Any> {
+    suspend fun run(context: Context, name: String, args: JSONObject, deadlineMs: Long, session: RemoteSession? = null, command: JSONObject? = null): Pair<Boolean, Any> {
         val (tool, _) = tools(context).firstOrNull { it.first.spec.name == name }
             ?: return false to "This phone doesn't lend $name (it's off in its settings, or it has no such tool)."
-        val out = withTimeoutOrNull(deadlineMs.coerceIn(1_000, 600_000)) { runCatching { tool.run(args, LentContext(context, session)) } }
+        val out = withTimeoutOrNull(deadlineMs.coerceIn(1_000, 600_000)) { runCatching { tool.run(args, LentContext(context, session, command, name, args)) } }
             ?: return false to "The phone didn't finish $name in time."
         return out.fold({ true to withImages(it) }, { false to (it.message ?: it::class.java.simpleName) })
     }
@@ -147,12 +148,21 @@ object DeviceTools {
         return parts
     }
 
-    /** A tool running for the agent on another device: questions come up as a notification with buttons. */
-    private class LentContext(private val context: Context, private val session: RemoteSession?) : ToolContext {
+    /** A lent tool returns questions to its originating brain; unavailable older brains use the phone sheet. */
+    private class LentContext(private val context: Context, private val session: RemoteSession?, command: JSONObject?, name: String, args: JSONObject) : ToolContext {
+        private var verifiedRequest: JSONObject? = null
+        private val questions = CommandQuestions(command?.optString("id").orEmpty(), JSONObject().put("tool", name).put("input", args),
+            call = { method, values, timeout ->
+                val connected = session ?: throw RpcException("Not connected to a computer right now.")
+                connected.inFlight.during { connected.call(method, values, timeout) }
+            },
+            fallback = { question, options -> RemoteAsk.ask(context, question, options, session = session, request = verifiedRequest) },
+            verifiedFallbackRequest = { verifiedRequest = it })
         override val agentLabel = "linked computer"
         override suspend fun activity(text: String, meta: JSONObject): Long = 0
         override suspend fun updateActivity(id: Long, text: String, meta: JSONObject) {}
-        override suspend fun ask(question: String, options: List<String>): String? = RemoteAsk.ask(context, question, options, session = session)
+        override suspend fun ask(question: String, options: List<String>): String? = questions.ask(question, options)
+        override suspend fun askWithOrigin(question: String, options: List<String>, origin: JSONObject): String? = questions.ask(question, options, origin)
         override suspend fun notify(title: String, body: String) = App.graph(context).phone.notify(title, body)
     }
 }
@@ -172,7 +182,7 @@ object RemoteAsk {
         answer(id, option); return true
     }
 
-    suspend fun ask(context: Context, question: String, options: List<String>, timeoutMs: Long = 600_000, session: RemoteSession? = null): String? {
+    suspend fun ask(context: Context, question: String, options: List<String>, timeoutMs: Long = 600_000, session: RemoteSession? = null, request: JSONObject? = null): String? {
         val id = next.incrementAndGet()
         val d = CompletableDeferred<String>()
         waiting[id] = d
@@ -182,7 +192,9 @@ object RemoteAsk {
         if (session != null) runCatching {
             val now = System.currentTimeMillis()
             val item = com.past9.phoneaos.data.ChatItem(session.ids.local("lent-ask-$id-$now", now), "question", question,
-                JSONObject().put("options", JSONArray(opts)).put("whyBy", "Your agent").toString(), now)
+                JSONObject().put("options", JSONArray(opts)).put("whyBy", "Your agent").apply {
+                    if (request != null && request.optString("id").isNotBlank() && request.optLong("at") > 0 && request.optString("text").isNotBlank()) put("request", JSONObject(request.toString()))
+                }.toString(), now)
             session.db.chat().insert(item); row = item.id; rows[item.id] = id
         }
         // request_approval asks "APPROVAL|<action>|<details>".
@@ -233,18 +245,18 @@ class DeviceCommands(private val context: Context, private val session: RemoteSe
             CommandLedger.Verdict.RUN -> {}
         }
         // While it runs the link is kept up and the Wi-Fi and wake locks are held.
-        session.jobStarted()
+        val lease = session.jobStarted()
         try {
             val kind = c.optString("kind")
             if (kind == "tool") {
-                val (ok, value) = DeviceTools.run(context, c.optString("tool"), c.optJSONObject("args") ?: JSONObject(), c.optLong("deadlineMs", 120_000), session)
+                val (ok, value) = DeviceTools.run(context, c.optString("tool"), c.optJSONObject("args") ?: JSONObject(), c.optLong("deadlineMs", 120_000), session, c)
                 ledger.finish(id, "tool", ok, value)
             } else {
                 val (ok, note) = runCatching { act(c) }.getOrElse { false to (it.message ?: "failed") }
                 ledger.finish(id, kind.ifBlank { "command" }, ok, note)
             }
-        } finally { session.jobEnded() }
-        deliver(id)
+            deliver(id)
+        } finally { session.jobEnded(lease) }
     }
 
     /** Give the computer the answer; if the link is down it waits in the ledger and goes with the next link. */

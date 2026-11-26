@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">Redă nota vocală</string>
+    <string name="note_pause">Întrerupe nota vocală</string>
+    <string name="note_position">Poziția în nota vocală</string>
+    <string name="note_progress">%1$s din %2$s</string>
+</resources>

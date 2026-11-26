@@ -422,6 +422,9 @@ class AgentRuntime(
 
     /** A date, a person or a gift changed: arm or drop the reminders at once (the phone's own alarms, no routine). */
     suspend fun peopleChanged() { runCatching { com.past9.phoneaos.people.PersonReminders.syncAll(context) } }
+    /** One PayPal client for the app's life, so its token is reused; it reads the keys fresh on every call. */
+    val paypalApi by lazy { com.past9.phoneaos.paypal.PayPalApi({ settings.paypal() }) }
+    private val paypalLedger by lazy { com.past9.phoneaos.paypal.PayPalLedger(java.io.File(context.filesDir, "paypal/ledger.json")) }
 
     /** Everything that acts: what helpers and routines work with. */
     private fun workerTools(): List<Tool> {
@@ -450,6 +453,8 @@ class AgentRuntime(
             list += GuardedAppsRunTool(AppsRunTool(composio), appGuard)
             list += AppsConnectTool(composio) { _, url -> openSignIn(url) }
         }
+        // PayPal, when the user added their PayPal app: invoices, pay links, collecting and refunds. Money tools stop at an approval card.
+        if (settings.paypal() != null) list += com.past9.phoneaos.paypal.paypalTools(paypalApi, paypalLedger)
         list += AskUserTool(); list += ApprovalTool(); list += NotifyTool()
         list += com.past9.phoneaos.automation.AndroidIntentTool(context, settings.intentSettings); list += com.past9.phoneaos.automation.AndroidAppsTool(context)
         list += com.past9.phoneaos.automation.MacroDroidRunTool(context, settings.macroSettings)
@@ -566,6 +571,7 @@ class AgentRuntime(
             appendLine(com.past9.phoneaos.assist.AssistMessage.PROMPT)
             appendLine("- Files move between the phone, machines and websites: phone_files, machine_run (ls, find), machine_download, browser_upload, machine_upload, send_file (shows one to the user).")
             val ms = machines.store.machines.value
+            settings.paypal()?.let { pp -> appendLine("- PayPal is connected (${pp.label}): paypal_* tools draft and send invoices, make pay links, check who paid, collect payments and refund. Sending, collecting, cancelling and refunding each stop at an approval card built from PayPal's own data, so call them directly: no separate request_approval. PayPal has no rand: use USD unless told otherwise and say the conversion. 'The last order' or 'that invoice' resolves with paypal_recent.") }
             if (ms.isNotEmpty()) appendLine("- The user connected machines to work on over SSH: ${ms.joinToString { it.name + (if (it.about.isNotBlank()) " (" + it.about + ")" else "") }}. Heavy lifting goes there (building, compiling, installing, data crunching, long scripts, big downloads): machine_run for quick commands, machine_job_start for anything long, then machine_job_status. If a machine has a coding agent (claude, codex, opencode) it can run there in a job.")
             else appendLine("- No machines connected. If a task is too heavy for the phone, tell the user they can add any server or computer they can SSH into under Connections > Machines.")
             if (!s.composioEnabled) appendLine("- No apps are connected yet (Gmail, Calendar...). If a task needs one, tell the user they can connect apps in Connections.")
@@ -648,7 +654,7 @@ class AgentRuntime(
             val id = mainQuestions.maxOrNull()
             if (id != null) {
                 dictation?.let { com.past9.phoneaos.voice.Takes.of(context).discard(it) }
-                scope.launch { db.chat().insert(ChatItem(kind = "user", text = clean)) }
+                scope.launch { db.chat().insert(ChatItem(kind = "user", text = clean, meta = """{"own":true}""")) }
                 answer(id, clean)
                 return
             }
@@ -670,7 +676,7 @@ class AgentRuntime(
         var dictNote = ""
         if (dictation != null && fromCall == null && !quiet) {
             val takes = com.past9.phoneaos.voice.Takes.of(context)
-            dictRow = db.chat().insert(ChatItem(kind = "user", text = caption, meta = JSONObject().put("images", org.json.JSONArray(images.filter { !it.contains("/pdf-") }))
+            dictRow = db.chat().insert(ChatItem(kind = "user", text = caption, meta = JSONObject().put("own", true).put("images", org.json.JSONArray(images.filter { !it.contains("/pdf-") }))
                 .put("files", org.json.JSONArray(files)).put("voiceReply", voiceReply).put("dictation", JSONObject().put("id", dictation).put("state", "refining")).toString()))
             takes.submit(dictation)
             val got = takes.settled(dictation)
@@ -689,7 +695,7 @@ class AgentRuntime(
         val origin = if (fromCall != null) { db.chat().insert(ChatItem(kind = "activity", text = "On it: $fromCall", meta = JSONObject().put("tool", "call").toString())); null }
         else if (quiet) null // a button tap: the agent hears it, the chat shows nothing as the user's
         else if (dictRow > 0) dictRow
-        else db.chat().insert(ChatItem(kind = "user", text = clean, meta = JSONObject().put("images", org.json.JSONArray(images.filter { !it.contains("/pdf-") }))
+        else db.chat().insert(ChatItem(kind = "user", text = clean, meta = JSONObject().put("own", true).put("images", org.json.JSONArray(images.filter { !it.contains("/pdf-") }))
             .put("files", org.json.JSONArray(files)).put("voiceReply", voiceReply).toString()))
         val forModel = if (voiceReply) "$heard\n\n(The user is on the move: answer with a voice_note, then at most one short line of text. Don't repeat the voice note as text.)"
             else if (quiet) "[The user tapped a button on a card you drew. They did not type this and it is not in the chat as their message, so don't quote it back as something they said; just act on it.]\n$clean"

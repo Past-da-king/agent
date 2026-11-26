@@ -169,7 +169,7 @@ object AssistContextBuilder {
         .filter { r -> val m = AssistCore.meta(r); m.optString("chat").let { it.isEmpty() || it == "main" } && !m.optBoolean("call") }
         .mapNotNull { r ->
             when {
-                r.kind == "user" && Sender.isHis(r.kind, r.meta) -> CtxTurn("user", clip(AssistMessage.visible(r.text), AssistContext.TURN_CHARS))
+                r.kind == "user" && Sender.isHis(r.kind, r.meta, r.text) -> CtxTurn("user", clip(AssistMessage.visible(r.text), AssistContext.TURN_CHARS))
                 r.kind == "agent" && r.text.isNotBlank() -> CtxTurn("agent", clip(OpenUiLang.plainText(r.text), AssistContext.TURN_CHARS))
                 else -> null
             }

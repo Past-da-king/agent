@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">ভয়েস নোট চালান</string>
+    <string name="note_pause">ভয়েস নোট বিরতি দিন</string>
+    <string name="note_position">ভয়েস নোটের অবস্থান</string>
+    <string name="note_progress">%2$s এর মধ্যে %1$s</string>
+</resources>

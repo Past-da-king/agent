@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">Відтворити голосове повідомлення</string>
+    <string name="note_pause">Призупинити голосове повідомлення</string>
+    <string name="note_position">Позиція в голосовому повідомленні</string>
+    <string name="note_progress">%1$s із %2$s</string>
+</resources>

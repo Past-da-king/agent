@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">Toista ääniviesti</string>
+    <string name="note_pause">Keskeytä ääniviesti</string>
+    <string name="note_position">Ääniviestin toistokohta</string>
+    <string name="note_progress">Toistettu %1$s, yhteensä %2$s</string>
+</resources>

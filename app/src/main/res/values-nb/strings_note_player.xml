@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">Spill av talemelding</string>
+    <string name="note_pause">Sett talemelding på pause</string>
+    <string name="note_position">Posisjon i talemelding</string>
+    <string name="note_progress">%1$s av %2$s</string>
+</resources>

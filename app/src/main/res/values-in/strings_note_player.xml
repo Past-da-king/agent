@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">Putar pesan suara</string>
+    <string name="note_pause">Jeda pesan suara</string>
+    <string name="note_position">Posisi pesan suara</string>
+    <string name="note_progress">%1$s dari %2$s</string>
+</resources>

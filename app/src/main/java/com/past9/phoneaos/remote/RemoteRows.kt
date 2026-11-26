@@ -18,9 +18,18 @@ class RemoteIds {
     private val toRemote = ConcurrentHashMap<Long, String>()
 
     @Synchronized
-    fun local(remoteId: String, createdAt: Long): Long {
+    fun local(remoteId: String, createdAt: Long): Long = localAfter(remoteId, createdAt, 0L)
+
+    /**
+     * A row that just arrived live: its number goes after [floor] (the newest row this phone already holds), and
+     * after its own time when that is later. The sender's clock alone never decides where a new reply lands: on 26 Nov
+     * 2026 the PC's clock was 35 minutes slow and every reply it sent landed 35 minutes up the chat, out of view.
+     * A row already known keeps its number.
+     */
+    @Synchronized
+    fun localAfter(remoteId: String, createdAt: Long, floor: Long): Long {
         toLocal[remoteId]?.let { return it }
-        var id = createdAt.coerceIn(1L, 9_000_000_000_000L) * 1000L + Math.floorMod(remoteId.hashCode(), 1000)
+        var id = maxOf(createdAt.coerceIn(1L, 9_000_000_000_000L) * 1000L + Math.floorMod(remoteId.hashCode(), 1000), floor + 1)
         while (toRemote.containsKey(id)) id++
         toLocal[remoteId] = id; toRemote[id] = remoteId
         return id
@@ -88,9 +97,35 @@ object RemoteRows {
     /** The computer's id rides in the row, so a restart can map the phone's number back to it (answering a card). */
     fun withRid(meta: String, rid: String): String = runCatching { JSONObject(meta).put("rid", rid).toString() }.getOrDefault(meta)
 
-    fun chat(o: JSONObject, ids: RemoteIds, notes: NoteAudio? = null): ChatItem {
+    /** The computer names the row of a message it takes after the send's id (desktop runtime/send-once.ts sendRowId). */
+    fun sentRowId(sendId: String): String = "send-$sendId"
+
+    /**
+     * His own message, on screen the moment he sends it (26 Nov 2026: he sent from the phone and saw nothing go out
+     * until a slow or frozen computer answered). It carries the id the computer will give the row, so when the real
+     * row arrives it lands on this one and replaces it: no second copy, no clock deciding where it goes.
+     */
+    fun sentEcho(sendId: String, words: String, at: Long, ids: RemoteIds): ChatItem =
+        ChatItem(ids.local(sentRowId(sendId), at), "user", words, JSONObject().put("pending", true).put("rid", sentRowId(sendId)).toString(), at)
+
+    /** How far back a row arriving live can be and still count as new (a sender clock this far off still sorts right). */
+    const val LIVE_SKEW_MS = 6L * 3_600_000L
+
+    /**
+     * Where a main-chat row that arrived live goes: after [newestId] (the newest row held here) when it is new to this
+     * phone, or null to place it by its own time (history: a row the phone never held, written more than
+     * [LIVE_SKEW_MS] before the newest one it holds, an old card answered elsewhere say). Rows from a full read and
+     * Load earlier keep their own order; only rows that land while the phone is listening are put at the bottom.
+     */
+    fun liveFloor(known: Boolean, createdAt: Long, newestId: Long?, newestAt: Long?): Long? = when {
+        known || newestId == null || newestId <= 0L -> null
+        newestAt != null && createdAt < newestAt - LIVE_SKEW_MS -> null
+        else -> newestId
+    }
+
+    fun chat(o: JSONObject, ids: RemoteIds, notes: NoteAudio? = null, after: Long? = null): ChatItem {
         val created = o.optLong("createdAt", System.currentTimeMillis())
-        val id = ids.local(o.getString("id"), created)
+        val id = if (after == null) ids.local(o.getString("id"), created) else ids.localAfter(o.getString("id"), created, after)
         val meta = o.optString("meta").ifBlank { "{}" }
         if (o.optString("kind") == "voice_note") return ChatItem(id, "voice", o.optString("text"), voiceMeta(meta, notes).put("rid", o.getString("id")).toString(), created)
         if (o.optString("kind") == "question" || o.optString("kind") == "approval") return card(o, id, meta, created)

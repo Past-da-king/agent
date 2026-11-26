@@ -63,6 +63,8 @@ data class ConnectionsState(
     val devices: List<com.past9.phoneaos.remote.MeshDevice> = emptyList(),
     /** His mini-apps (made on the computer), for the Apps line. */
     val miniApps: List<com.past9.phoneaos.miniapps.MiniAppInfo> = emptyList(),
+    /** PayPal: a short label when the user's PayPal app is connected ("Sandbox · AbC1…"), null when not. */
+    val paypal: String? = null,
 )
 
 data class ConnectionsActions(
@@ -96,6 +98,9 @@ data class ConnectionsActions(
     val onMiniApps: () -> Unit = {},
     /** Linked devices: order, roles, add another (Settings > Linked devices). */
     val onLinkedDevices: () -> Unit = {},
+    /** PayPal: check the client ID and secret with a token call, then save; null on success, else what's wrong. */
+    val onSavePayPal: suspend (String, String) -> String? = { _, _ -> null },
+    val onRemovePayPal: () -> Unit = {},
 )
 
 /**
@@ -168,6 +173,7 @@ fun ConnectionsScreen(state: ConnectionsState, actions: ConnectionsActions, bott
                     if (!state.remote) MachinesLine(state.machines) { sheet = "list" }
                     LearnedLine(state.learned, state.remote) { sheet = "learned" }
                     MiniAppsLine(state.miniApps, actions.onMiniApps)
+                    PayPalLine(state.paypal, actions.onSavePayPal, actions.onRemovePayPal)
                 }
             }
             // Linked: his machines are the computers, servers and phones on the link, shown with their state.
@@ -508,6 +514,9 @@ internal fun LinkedMachines(devices: List<com.past9.phoneaos.remote.MeshDevice>,
     val cs = MaterialTheme.colorScheme
     Column {
         SectionHeader(stringResource(R.string.machines_your), if (devices.isEmpty()) stringResource(R.string.conn_machines_reading) else stringResource(R.string.conn_machines_linked), Modifier.padding(start = 4.dp, top = 16.dp, bottom = 8.dp))
+        devices.firstOrNull { it.state == com.past9.phoneaos.remote.MeshDevice.State.ANSWERING }?.let { answering ->
+            Text(answering.line, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp))
+        }
         AppCard(padding = PaddingValues(vertical = 4.dp)) {
             devices.forEach { d ->
                 Row(Modifier.fillMaxWidth().clickable(onClick = onDevices).heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -517,7 +526,7 @@ internal fun LinkedMachines(devices: List<com.past9.phoneaos.remote.MeshDevice>,
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
                         Text(d.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(d.line, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (d.state != com.past9.phoneaos.remote.MeshDevice.State.ANSWERING) Text(d.line, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     val extra = LocalExtra.current
                     when (d.state) {

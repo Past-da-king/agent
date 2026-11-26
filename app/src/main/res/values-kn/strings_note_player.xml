@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">ಧ್ವನಿ ಟಿಪ್ಪಣಿ ಪ್ಲೇ ಮಾಡಿ</string>
+    <string name="note_pause">ಧ್ವನಿ ಟಿಪ್ಪಣಿ ವಿರಾಮಗೊಳಿಸಿ</string>
+    <string name="note_position">ಧ್ವನಿ ಟಿಪ್ಪಣಿಯ ಸ್ಥಾನ</string>
+    <string name="note_progress">%2$s ರಲ್ಲಿ %1$s</string>
+</resources>

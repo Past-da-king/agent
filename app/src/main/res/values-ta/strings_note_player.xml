@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">குரல் குறிப்பை இயக்கு</string>
+    <string name="note_pause">குரல் குறிப்பை இடைநிறுத்து</string>
+    <string name="note_position">குரல் குறிப்பின் நிலை</string>
+    <string name="note_progress">%2$s இல் %1$s</string>
+</resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">ចាក់សារជាសំឡេង</string>
+    <string name="note_pause">ផ្អាកសារជាសំឡេង</string>
+    <string name="note_position">ទីតាំងក្នុងសារជាសំឡេង</string>
+    <string name="note_progress">%1$s ក្នុងចំណោម %2$s</string>
+</resources>

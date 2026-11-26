@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">የድምፅ መልዕክት አጫውት</string>
+    <string name="note_pause">የድምፅ መልዕክት ለአፍታ አቁም</string>
+    <string name="note_position">የድምፅ መልዕክት የማጫወቻ ቦታ</string>
+    <string name="note_progress">ከ%2$s ውስጥ %1$s</string>
+</resources>

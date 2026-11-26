@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="note_play">Tshameka molaetsa wa lentswe</string>
+    <string name="note_pause">Emisa molaetsa wa lentswe nakwana</string>
+    <string name="note_position">Lefelo la go tshameka mo molaetseng wa lentswe</string>
+    <string name="note_progress">%1$s mo go %2$s</string>
+</resources>
