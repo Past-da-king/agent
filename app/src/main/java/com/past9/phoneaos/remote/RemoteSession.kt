@@ -901,7 +901,7 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
                 if (c != "main" && (RemoteRows.isOpenCard(row) || (row.optString("kind") in setOf("question", "approval") && ids.localOrNull(row.optString("id")) != null))) {
                     putChat(RemoteRows.chat(row, ids, notes))
                 }
-                if (c == "main") { noteBrainRow(row); putChat(RemoteRows.chat(row, ids, notes)); fetchMedia(row) }
+                if (c == "main") { noteBrainRow(row); putChat(RemoteRows.chat(row, ids, notes, liveFloor(row))); fetchMedia(row) }
                 else if (projectOf.containsKey(c)) {
                     val list = projectRows.getOrPut(c) { ArrayList() }
                     list.removeAll { it.optString("id") == row.optString("id") }; list += row
@@ -1150,6 +1150,18 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
         if (seq <= lastSeq) return
         lastSeq = seq
         current?.let { p -> App.graph(app).settings.setExtra(seqKey(p), seq.toString()) }
+    }
+
+    /** A live main-chat row goes after the newest row held here (RemoteRows.liveFloor), never by its sender's clock alone. */
+    private fun liveFloor(row: JSONObject): Long? {
+        val known = ids.localOrNull(row.optString("id")) != null
+        if (known) return null
+        val (newestId, newestAt) = runCatching {
+            db.query("SELECT MAX(id), MAX(createdAt) FROM chat_items", null).use { c ->
+                if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) to (if (c.isNull(1)) null else c.getLong(1)) else null to null
+            }
+        }.getOrDefault(null to null)
+        return RemoteRows.liveFloor(false, row.optLong("createdAt", System.currentTimeMillis()), newestId, newestAt)
     }
 
     private fun chatRowCount(): Int = db.query("SELECT COUNT(*) FROM chat_items WHERE kind IN ('user','agent')", null).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
