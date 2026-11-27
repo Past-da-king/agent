@@ -137,6 +137,7 @@
     <string name="link_group_phone">Thông báo gửi cho bạn</string>
     <string name="link_group_location">Vị trí của bạn (hỏi một lần)</string>
     <string name="link_group_automation">Ứng dụng khác: intent, nhạc và video, macro (intent và macro sẽ hỏi trừ khi được cho phép)</string>
+    <string name="link_group_logs">Nhật ký của chính ứng dụng này, để máy tính tìm ra lỗi</string>
     <string name="link_ask_approve">Đồng ý: %1$s?</string>
     <string name="link_ask_title">Trợ lý của bạn hỏi</string>
     <string name="link_saved_downloads">Đã lưu vào Tải xuống. Nhấn để mở.</string>
@@ -667,6 +668,7 @@
     <string name="assist_read_all">Đọc toàn bộ</string>
     <string name="assist_mic_off">Micro đang tắt cho ứng dụng này, hãy gõ ở đây. Bạn có thể cho phép trong Cài đặt của điện thoại.</string>
     <string name="assist_live_stopped">Giọng nói trực tiếp đã dừng: %1$s Bạn có thể gõ ở đây, hoặc nhấn micro.</string>
+    <string name="assist_talk_live">Nói chuyện trực tiếp</string>
     <string name="assist_unlock_for_mic">Mở khóa điện thoại một lần và cho phép micro, sau đó nó nghe ngay lập tức.</string>
     <string name="assist_send_failed">Chưa gửi được: %1$s. Chữ của bạn vẫn còn ở đây.</string>
     <string name="assist_link_dropped">kết nối tới máy tính của bạn đã ngắt</string>

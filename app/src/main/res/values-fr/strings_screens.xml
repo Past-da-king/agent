@@ -312,6 +312,8 @@
     <string name="voice_hear">L\'écouter</string>
     <string name="voice_autoplay">Lecture auto avec des écouteurs branchés</string>
     <string name="voice_autoplay_sub">Les messages vocaux se lisent tout seuls quand vous portez des écouteurs</string>
+    <string name="voice_autoplay_notes">Lire les notes vocales dès leur arrivée</string>
+    <string name="voice_autoplay_notes_sub">Les notes vocales de ton agent se lisent seules et la musique baisse pendant la lecture</string>
     <string name="voice_live">Appels en direct</string>
     <string name="voice_live_sub">Appelez %1$s et parlez simplement. Il confie le vrai travail à votre agent principal et vous prévient quand quelque chose compte.</string>
     <string name="voice_live_needs">Nécessite une clé Google (Gemini) : choisissez Google ci-dessus et enregistrez-en une. Fonctionne avec Gemini Live.</string>

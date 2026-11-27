@@ -86,8 +86,8 @@ class LiveSession(
     private var track: AudioTrack? = null
     /** The call's voice waiting to be played; null for dictation, which plays nothing. */
     @Volatile private var speaker: PlaybackQueue? = null
-    private var focusAm: AudioManager? = null
-    private var focus: android.media.AudioFocusRequest? = null
+    /** Other sound steps aside for the call and comes back after (see [MediaHold]). Given by the caller, or made on first use. */
+    @Volatile private var media: MediaHold? = null
     private val running = AtomicBoolean(false)
     private val ready = AtomicBoolean(false)
     private val micOpen = AtomicBoolean(false)
@@ -609,15 +609,16 @@ class LiveSession(
     /** Moves the sound to the next place it can go (earphones, loudspeaker, earpiece). The new route arrives as [Event.Route]. */
     fun nextRoute() { router?.next() }
 
+    /**
+     * The hold that pauses other sound for this session. A caller that has a Context gives one early ([CallController]
+     * takes it the moment the call starts, before it connects), so music stops at once and media sessions can be paused.
+     */
+    fun holdMedia(hold: MediaHold) { media = hold }
+
     /** Other sound (music, a podcast) pauses for the call and comes back after it. */
     private fun requestFocus(am: AudioManager) {
-        runCatching {
-            val req = android.media.AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
-                .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
-                .build()
-            am.requestAudioFocus(req)
-            focusAm = am; focus = req
-        }
+        val h = media ?: MediaHold.android(null, am).also { media = it }
+        h.take()
     }
 
     /**
@@ -643,8 +644,8 @@ class LiveSession(
         router = null
         speaker?.close()
         speaker = null
-        runCatching { focus?.let { focusAm?.abandonAudioFocusRequest(it) } }
-        focus = null; focusAm = null
+        runCatching { media?.release() }
+        media = null
         micOpen.set(false)
         ready.set(false)
         runCatching { recorder?.stop() }

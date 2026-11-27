@@ -137,6 +137,7 @@
     <string name="link_group_phone">Àwọn ìkìlọ̀ sí ọ</string>
     <string name="link_group_location">Ibùdó rẹ (a ó béèrè lẹ́ẹ̀kan)</string>
     <string name="link_group_automation">Àwọn app mìíràn: intents, orin àti fídíò, macros (intents àti macros ń béèrè àyàfi tí a bá gbà wọ́n láàyè)</string>
+    <string name="link_group_logs">Àkọsílẹ̀ app yìí nìkan, kí kọ̀mpútà rẹ lè rí ohun tó bàjẹ́</string>
     <string name="link_ask_approve">Fọwọ́ sí: %1$s?</string>
     <string name="link_ask_title">Agent rẹ ń béèrè</string>
     <string name="link_saved_downloads">A ti fipamọ́ sí Downloads. Tẹ láti ṣí.</string>
@@ -667,6 +668,7 @@
     <string name="assist_read_all">Ka gbogbo rẹ̀</string>
     <string name="assist_mic_off">Gbohùngbohùn wà ní pípa fún app yìí, nítorí náà tẹ̀ ẹ́ níbí. O lè gbà á láàyè nínú Ètò fóònù.</string>
     <string name="assist_live_stopped">Ohùn gbígbé dúró: %1$s O lè tẹ̀ níbí, tàbí kí o tẹ gbohùngbohùn.</string>
+    <string name="assist_talk_live">Sọ̀rọ̀ ní tààràtà</string>
     <string name="assist_unlock_for_mic">Ṣí fóònù lẹ́ẹ̀kan kí o sì gba gbohùngbohùn láàyè, nígbà náà èyí yóò máa gbọ́ lẹ́sẹ̀kẹsẹ̀.</string>
     <string name="assist_send_failed">Iyẹn kò lọ: %1$s. Àwọn ọ̀rọ̀ rẹ wà níbí síbẹ̀.</string>
     <string name="assist_link_dropped">ìsopọ̀ sí kọ̀ǹpútà rẹ já</string>

@@ -300,6 +300,8 @@
     <string name="voice_hear">Le reetse</string>
     <string name="voice_autoplay">Tshameka ka go ikgogela fa di-earphone di kentswe</string>
     <string name="voice_autoplay_sub">Dinota tsa lentswe di ikatshameka fa o apere di-earphone</string>
+    <string name="voice_autoplay_notes">Tshameka melaetsa ya lentswe fa e goroga</string>
+    <string name="voice_autoplay_notes_sub">Melaetsa ya lentswe ya moemedi wa gago e tshameka ka boyone, mme mmino o fokotsega fa e tshameka</string>
     <string name="voice_live">Megala e e tshelang</string>
     <string name="voice_live_sub">Letsetsa %1$s mme o bue fela. E fa moemedi wa gago yo mogolo tiro ya mmatota mme e go bolelela fa go na le sengwe se se botlhokwa.</string>
     <string name="voice_live_needs">E tlhoka senotlolo sa Google (Gemini): kgetha Google kwa godimo mme o boloke nngwe. E dira mo go Gemini Live.</string>

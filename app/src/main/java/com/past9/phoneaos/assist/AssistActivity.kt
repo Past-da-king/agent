@@ -79,7 +79,7 @@ class AssistActivity : ComponentActivity() {
     private var follow: Job? = null
     private var closing by mutableStateOf(false)
     /** Live voice in the assistant: a Gemini Live session instead of the one-request listening input. */
-    private var liveMode = false
+    private var liveMode by mutableStateOf(false)
     private var liveView by mutableStateOf(LiveView())
     /** Minimise needs "display over other apps": the slide-up sheet that asks for it. */
     private var overlaySheet by mutableStateOf(false)
@@ -179,6 +179,18 @@ class AssistActivity : ComponentActivity() {
     private fun startLive() {
         if (LiveHost.active) { LiveHost.attached(); liveView = LiveHost.view.value; return }
         LiveHost.start(this, source)
+    }
+
+    /**
+     * He tapped "Talk live": this sheet becomes a Live voice session now, whatever the setting says. If Live cannot
+     * start (no Google key, no computer), the session ends with the reason and the sheet says it (see [liveEnded]).
+     */
+    private fun talkLive() {
+        stopListening()
+        g.stopSpeaking()
+        liveMode = true
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startLive()
+        else { askingPermission = true; askMic.launch(Manifest.permission.RECORD_AUDIO) }
     }
 
     /** Shrinks the sheet to the floating bubble. Asks for "display over other apps" first, in a slide-up sheet, when it is not allowed yet. */
@@ -348,6 +360,7 @@ class AssistActivity : ComponentActivity() {
                             onUnlock = { unlock() },
                             onPickAsk = { k, a -> choice = null; deliverAnswer(k, a) },
                             onDismissChoice = { choice = null; if (pendingWords.isNotBlank()) { val w = pendingWords; pendingWords = ""; send(w) } },
+                            onTalkLive = { talkLive() },
                         ), context = ctx, choice = choice)
                     }
                 }

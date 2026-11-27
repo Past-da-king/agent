@@ -137,6 +137,7 @@
     <string name="link_group_phone">Ọkwa nye gị</string>
     <string name="link_group_location">Ebe ị nọ (a na-ajụ otu ugboro)</string>
     <string name="link_group_automation">App ndị ọzọ: intents, egwu na vidiyo, macros (intents na macros na-ajụ ma ọ bụghị ma ekwere)</string>
+    <string name="link_group_logs">Ndekọ nke ngwa a naanị, ka kọmputa gị chọta ihe mebiri</string>
     <string name="link_ask_approve">Kwenye: %1$s?</string>
     <string name="link_ask_title">Agent gị na-ajụ</string>
     <string name="link_saved_downloads">Echekwara na Downloads. Pịa ime.</string>
@@ -667,6 +668,7 @@
     <string name="assist_read_all">Gụọ ya niile</string>
     <string name="assist_mic_off">Mikrofọn emechiri maka app a, ya mere pịnye ya ebe a. Ị nwere ike ikwe ya na Ntọala ekwentị.</string>
     <string name="assist_live_stopped">Olu dị ndụ kwụsịrị: %1$s Ị nwere ike pịnye ebe a, ma ọ bụ pịa mikrofọn.</string>
+    <string name="assist_talk_live">Kwuo okwu ozugbo</string>
     <string name="assist_unlock_for_mic">Meghee ekwentị otu ugboro ma kwe mikrofọn, wee nke a na-ege ntị ozugbo.</string>
     <string name="assist_send_failed">Nke ahụ ezighị: %1$s. Okwu gị ka nọ ebe a.</string>
     <string name="assist_link_dropped">njikọ na kọmputa gị gbajiri</string>

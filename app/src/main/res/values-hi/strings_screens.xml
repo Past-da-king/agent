@@ -300,6 +300,8 @@
     <string name="voice_hear">सुनें</string>
     <string name="voice_autoplay">इयरफ़ोन लगे होने पर अपने आप चलाएँ</string>
     <string name="voice_autoplay_sub">इयरफ़ोन लगे होने पर वॉइस नोट अपने आप चलते हैं</string>
+    <string name="voice_autoplay_notes">वॉइस नोट आते ही चलाएँ</string>
+    <string name="voice_autoplay_notes_sub">आपके एजेंट के वॉइस नोट अपने आप चलते हैं, और चलते समय संगीत धीमा हो जाता है</string>
     <string name="voice_live">लाइव कॉल</string>
     <string name="voice_live_sub">%1$s को कॉल करें और बस बात करें। यह असली काम आपके मुख्य एजेंट को सौंपता है और कुछ ज़रूरी होने पर आपको बताता है।</string>
     <string name="voice_live_needs">Google (Gemini) की चाहिए: ऊपर Google चुनें और एक सहेजें। यह Gemini Live पर चलता है।</string>

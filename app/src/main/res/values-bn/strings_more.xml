@@ -137,6 +137,7 @@
     <string name="link_group_phone">আপনাকে বিজ্ঞপ্তি</string>
     <string name="link_group_location">আপনার অবস্থান (একবার জিজ্ঞেস করা হবে)</string>
     <string name="link_group_automation">অন্য অ্যাপ: ইন্টেন্ট, গান ও ভিডিও, ম্যাক্রো (ইন্টেন্ট ও ম্যাক্রোর জন্য অনুমতি না দেওয়া পর্যন্ত জিজ্ঞেস করা হবে)</string>
+    <string name="link_group_logs">এই অ্যাপের নিজের লগ, যাতে আপনার কম্পিউটার সমস্যা খুঁজে পায়</string>
     <string name="link_ask_approve">অনুমোদন দেবেন: %1$s?</string>
     <string name="link_ask_title">আপনার এজেন্ট জিজ্ঞেস করছে</string>
     <string name="link_saved_downloads">ডাউনলোডসে সেভ হয়েছে। খুলতে ট্যাap করুন।</string>
@@ -677,6 +678,7 @@
     <string name="assist_read_all">সব পড়ুন</string>
     <string name="assist_mic_off">এই অ্যাপের জন্য মাইক্রোফোন বন্ধ আছে, তাই এখানে টাইপ করুন। ফোনের সেটিংস থেকে অনুমতি দিতে পারেন।</string>
     <string name="assist_live_stopped">লাইভ ভয়েস বন্ধ হয়েছে: %1$s এখানে টাইপ করতে পারেন, অথবা মাইক ট্যাপ করুন।</string>
+    <string name="assist_talk_live">সরাসরি কথা বলুন</string>
     <string name="assist_unlock_for_mic">ফোনটি একবার আনলক করে মাইক্রোফোনের অনুমতি দিন, তারপর এটি সঙ্গে সঙ্গে শুনবে।</string>
     <string name="assist_send_failed">পাঠানো যায়নি: %1$s। আপনার কথাগুলো এখনও এখানে আছে।</string>
     <string name="assist_link_dropped">আপনার কম্পিউটারের সংযোগ বিচ্ছিন্ন হয়ে গেছে</string>

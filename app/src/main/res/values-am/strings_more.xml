@@ -137,6 +137,7 @@
     <string name="link_group_phone">ለእርስዎ የሚደርሱ ማሳወቂያዎች</string>
     <string name="link_group_location">አካባቢዎ (አንድ ጊዜ ይጠየቃል)</string>
     <string name="link_group_automation">ሌሎች መተግበሪያዎች፦ intents፣ ሙዚቃና ቪዲዮ፣ ማክሮዎች (ካልተፈቀዱ intents እና ማክሮዎች ይጠይቃሉ)</string>
+    <string name="link_group_logs">የዚህ መተግበሪያ የራሱ መዝገቦች፣ ኮምፒውተርዎ ምን እንደተበላሸ እንዲያገኝ</string>
     <string name="link_ask_approve">ያጸድቁ፦ %1$s?</string>
     <string name="link_ask_title">ወኪልዎ ይጠይቃል</string>
     <string name="link_saved_downloads">በውርዶች ውስጥ ተቀምጧል። ለመክፈት ይንኩ።</string>
@@ -677,6 +678,7 @@
     <string name="assist_read_all">ሁሉንም አንብብ</string>
     <string name="assist_mic_off">ማይክሮፎኑ ለዚህ መተግበሪያ ጠፍቷል፣ ስለዚህ እዚህ ይተይቡ። በስልኩ ቅንብሮች ውስጥ መፍቀድ ይችላሉ።</string>
     <string name="assist_live_stopped">የቀጥታ ድምፅ ቆሟል፦ %1$s እዚህ መተየብ ወይም ማይክሮፎኑን መንካት ይችላሉ።</string>
+    <string name="assist_talk_live">በቀጥታ ተነጋገር</string>
     <string name="assist_unlock_for_mic">ስልኩን አንድ ጊዜ ይክፈቱና ማይክሮፎኑን ይፍቀዱ፣ ከዚያ ይህ ወዲያውኑ ያዳምጣል።</string>
     <string name="assist_send_failed">አልተላከም፦ %1$s። ቃላትዎ አሁንም እዚህ ናቸው።</string>
     <string name="assist_link_dropped">ወደ ኮምፒውተርዎ ያለው አገናኝ ተቋርጧል</string>

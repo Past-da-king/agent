@@ -32,6 +32,8 @@ class CallController(
     private var guard: Job? = null
     @Volatile private var serviceUp = false
     private var live: LiveSession? = null
+    /** Music or a video he had on: paused the moment the call starts (not once it has connected) and played again after. */
+    @Volatile private var media: MediaHold? = null
     private var watcher: Job? = null
     /** The link this call started on: its chat is the computer's, and so are its questions and status. */
     private var remote: com.past9.phoneaos.remote.RemoteSession? = null
@@ -181,6 +183,21 @@ class CallController(
         caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }.getOrDefault(true)
 
+    /**
+     * Other sound steps aside at once: focus now, and a moment later anything still playing is paused through its media
+     * session (27 Nov 2026: a song kept playing into the microphone and the call could not hear him).
+     */
+    private fun holdMedia(g: Int) {
+        val am = context.getSystemService(AudioManager::class.java) ?: return
+        val h = MediaHold.android(context, am)
+        media = h
+        h.take()
+        scope.launch { kotlinx.coroutines.delay(MediaHold.ENFORCE_AFTER_MS); if (core.current(g)) logHold(h.enforce()) }
+    }
+
+    private fun logHold(o: MediaHold.Outcome) =
+        android.util.Log.i("CallAgent", "media hold: focus=${o.focus} paused=${o.paused} sessions=${o.canSeeSessions} stillPlaying=${o.stillPlaying}")
+
     /** Ends call [g] with [why] if it is still sitting in [phase] after [ms]: no state can stick. */
     private fun watch(g: Int, phase: String, ms: Long, why: String) {
         guard?.cancel()
@@ -225,6 +242,7 @@ class CallController(
         val key = settings.voiceKey("gemini")
         if (r == null && key == null) { core.refuse(g, unavailableReason(false).orEmpty()); return }
         if (!online()) { core.refuse(g, CallCore.NO_NETWORK); return }
+        holdMedia(g)
         val s = settings.state.value
         val name = s.agentName.takeIf { it != "Your agent" } ?: "your agent"
         val system = systemPrompt(name, s.userName, r != null)
@@ -270,7 +288,8 @@ class CallController(
         // A computer's token is locked to the Live model its key reaches, so the call uses that model.
         val phoneVoice = s.ttsVoice.takeIf { s.ttsProvider == "gemini" && it.isNotBlank() }
         live = LiveSession(url, model?.ifBlank { null } ?: "gemini-3.1-flash-live-preview", phoneVoice ?: voice?.ifBlank { null } ?: "Kore", system,
-            tools = tools, renew = renew, tuning = com.past9.phoneaos.assist.AssistPrefs.liveTuning(context)) { e -> if (g == gen) onEvent(e) }.also { it.start() }
+            tools = tools, renew = renew, tuning = com.past9.phoneaos.assist.AssistPrefs.liveTuning(context)) { e -> if (g == gen) onEvent(e) }
+            .also { s -> media?.let { s.holdMedia(it) }; s.start() }
         // Ended in the instant between the check and the session: let go of it again.
         if (!core.current(g)) { releaseAll(); return }
         // Read the main agent's new messages and questions into the call.
@@ -400,6 +419,8 @@ class CallController(
                 val w = watchAudio
                 if (w == null) live?.openAudio(context.getSystemService(AudioManager::class.java))
                 else live?.openSplit(context.getSystemService(AudioManager::class.java), w.phoneMic, w.out)
+                // The microphone is open now: anything still playing would be heard as him talking, so check again.
+                media?.let { h -> scope.launch { kotlinx.coroutines.delay(MediaHold.ENFORCE_AFTER_MS); if (core.current(g)) logHold(h.enforce()) } }
                 // Muted while it was still connecting: the session starts muted too.
                 if (state.value.muted) live?.setMuted(true)
                 core.live(g)
@@ -515,6 +536,7 @@ class CallController(
     private fun releaseAll() {
         guard?.cancel(); guard = null
         runCatching { live?.stop() }
+        runCatching { media?.release() }; media = null
         cleanup()
     }
 

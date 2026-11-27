@@ -136,6 +136,7 @@
     <string name="link_group_phone">Notifikationer til dig</string>
     <string name="link_group_location">Din placering (spørges én gang)</string>
     <string name="link_group_automation">Andre apps: intents, musik og video, makroer (intents og makroer spørger, medmindre de er tilladt)</string>
+    <string name="link_group_logs">Appens egne logfiler, så din computer kan finde fejlen</string>
     <string name="link_ask_approve">Godkend: %1$s?</string>
     <string name="link_ask_title">Din agent spørger</string>
     <string name="link_saved_downloads">Gemt i Downloads. Tryk for at åbne.</string>
@@ -676,6 +677,7 @@
     <string name="assist_read_all">Læs det hele</string>
     <string name="assist_mic_off">Mikrofonen er slået fra for denne app, så skriv her. Du kan tillade den i telefonens Indstillinger.</string>
     <string name="assist_live_stopped">Livestemmen stoppede: %1$s Du kan skrive her eller trykke på mikrofonen.</string>
+    <string name="assist_talk_live">Tal direkte</string>
     <string name="assist_unlock_for_mic">Lås telefonen op én gang, og tillad mikrofonen, så lytter den med det samme.</string>
     <string name="assist_send_failed">Den blev ikke sendt: %1$s. Dine ord står stadig her.</string>
     <string name="assist_link_dropped">forbindelsen til din computer blev afbrudt</string>

@@ -348,6 +348,8 @@
     <string name="voice_hear">استمع إليه</string>
     <string name="voice_autoplay">تشغيل تلقائي مع سماعات الأذن</string>
     <string name="voice_autoplay_sub">تُشغَّل الملاحظات الصوتية من تلقاء نفسها عندما ترتدي سماعات الأذن</string>
+    <string name="voice_autoplay_notes">شغّل الملاحظات الصوتية عند وصولها</string>
+    <string name="voice_autoplay_notes_sub">تُشغَّل الملاحظات الصوتية من وكيلك تلقائيًا، ويُخفض صوت الموسيقى أثناء تشغيلها</string>
     <string name="voice_live">المكالمات المباشرة</string>
     <string name="voice_live_sub">اتصل بـ%1$s وتحدث فقط. يُسند العمل الفعلي إلى وكيلك الرئيسي ويخبرك عندما يهمك شيء.</string>
     <string name="voice_live_needs">يحتاج إلى مفتاح Google (Gemini): اختر Google أعلاه واحفظ واحدًا. يعمل على Gemini Live.</string>

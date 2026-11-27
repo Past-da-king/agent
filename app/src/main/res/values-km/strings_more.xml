@@ -137,6 +137,7 @@
     <string name="link_group_phone">ការជូនដំណឹងមកអ្នក</string>
     <string name="link_group_location">ទីតាំងរបស់អ្នក (សួរម្តង)</string>
     <string name="link_group_automation">កម្មវិធីផ្សេង៖ intent តន្ត្រី និងវីដេអូ ម៉ាក្រូ (intent និងម៉ាក្រូនឹងសួរ លុះត្រាតែត្រូវបានអនុញ្ញាត)</string>
+    <string name="link_group_logs">កំណត់ហេតុរបស់កម្មវិធីនេះផ្ទាល់ ដើម្បីឱ្យកុំព្យូទ័ររកឃើញបញ្ហា</string>
     <string name="link_ask_approve">យល់ព្រម៖ %1$s ឬ?</string>
     <string name="link_ask_title">ភ្នាក់ងាររបស់អ្នកសួរ</string>
     <string name="link_saved_downloads">បានរក្សាទុកក្នុងការទាញយក។ ចុចដើម្បីបើក។</string>
@@ -667,6 +668,7 @@
     <string name="assist_read_all">អានទាំងអស់</string>
     <string name="assist_mic_off">មីក្រូហ្វូនត្រូវបានបិទសម្រាប់កម្មវិធីនេះ ដូច្នេះសូមវាយនៅទីនេះ។ អ្នកអាចអនុញ្ញាតក្នុងការកំណត់របស់ទូរសព្ទ។</string>
     <string name="assist_live_stopped">សំឡេងផ្ទាល់ត្រូវបានបញ្ឈប់៖ %1$s អ្នកអាចវាយនៅទីនេះ ឬចុចមីក្រូហ្វូន។</string>
+    <string name="assist_talk_live">និយាយផ្ទាល់</string>
     <string name="assist_unlock_for_mic">ដោះសោទូរសព្ទម្តង ហើយអនុញ្ញាតមីក្រូហ្វូន នោះវានឹងស្តាប់ភ្លាមៗ។</string>
     <string name="assist_send_failed">មិនបានផ្ញើទេ៖ %1$s។ ពាក្យរបស់អ្នកនៅទីនេះនៅឡើយ។</string>
     <string name="assist_link_dropped">ការភ្ជាប់ទៅកុំព្យូទ័ររបស់អ្នកត្រូវបានផ្តាច់</string>

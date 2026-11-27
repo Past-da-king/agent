@@ -137,6 +137,7 @@
     <string name="link_group_phone">การแจ้งเตือนถึงคุณ</string>
     <string name="link_group_location">ตำแหน่งของคุณ (ถามครั้งเดียว)</string>
     <string name="link_group_automation">แอปอื่น: intent เพลงและวิดีโอ แมโคร (intent และแมโครจะถามเว้นแต่ได้รับอนุญาต)</string>
+    <string name="link_group_logs">บันทึกของแอปนี้เอง เพื่อให้คอมพิวเตอร์หาสาเหตุของปัญหาได้</string>
     <string name="link_ask_approve">อนุมัติ: %1$s ไหม</string>
     <string name="link_ask_title">เอเจนต์ของคุณถาม</string>
     <string name="link_saved_downloads">บันทึกลงดาวน์โหลดแล้ว แตะเพื่อเปิด</string>
@@ -667,6 +668,7 @@
     <string name="assist_read_all">อ่านทั้งหมด</string>
     <string name="assist_mic_off">ไมโครโฟนปิดอยู่สำหรับแอปนี้ พิมพ์ที่นี่ได้ คุณอนุญาตได้ในการตั้งค่าของโทรศัพท์</string>
     <string name="assist_live_stopped">เสียงสดหยุดแล้ว: %1$s พิมพ์ที่นี่ หรือแตะไมโครโฟน</string>
+    <string name="assist_talk_live">พูดคุยสด</string>
     <string name="assist_unlock_for_mic">ปลดล็อกโทรศัพท์สักครั้งและอนุญาตไมโครโฟน แล้วมันจะฟังทันที</string>
     <string name="assist_send_failed">ส่งไม่สำเร็จ: %1$s ข้อความของคุณยังอยู่ที่นี่</string>
     <string name="assist_link_dropped">การเชื่อมต่อกับคอมพิวเตอร์ของคุณหลุด</string>

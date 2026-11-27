@@ -137,6 +137,7 @@
     <string name="link_group_phone">Уведомления для вас</string>
     <string name="link_group_location">Ваше местоположение (спрашивается один раз)</string>
     <string name="link_group_automation">Другие приложения: intent, музыка и видео, макросы (intent и макросы спрашивают, если не разрешено)</string>
+    <string name="link_group_logs">Журналы этого приложения, чтобы компьютер нашёл причину сбоя</string>
     <string name="link_ask_approve">Подтвердить: %1$s?</string>
     <string name="link_ask_title">Агент спрашивает</string>
     <string name="link_saved_downloads">Сохранено в «Загрузки». Нажмите, чтобы открыть.</string>
@@ -697,6 +698,7 @@
     <string name="assist_read_all">Прочитать всё</string>
     <string name="assist_mic_off">Микрофон для этого приложения выключен, поэтому вводите текстом здесь. Разрешить его можно в настройках телефона.</string>
     <string name="assist_live_stopped">Живой голос остановлен: %1$s Можно ввести текст здесь или нажать на микрофон.</string>
+    <string name="assist_talk_live">Говорить вживую</string>
     <string name="assist_unlock_for_mic">Один раз разблокируйте телефон и разрешите микрофон, после этого он будет слушать сразу.</string>
     <string name="assist_send_failed">Не отправлено: %1$s. Ваш текст остался здесь.</string>
     <string name="assist_link_dropped">связь с вашим компьютером прервалась</string>

@@ -288,6 +288,8 @@
     <string name="voice_hear">ฟัง</string>
     <string name="voice_autoplay">เล่นอัตโนมัติเมื่อเสียบหูฟัง</string>
     <string name="voice_autoplay_sub">ข้อความเสียงเล่นเองเมื่อคุณใส่หูฟัง</string>
+    <string name="voice_autoplay_notes">เล่นข้อความเสียงทันทีที่มาถึง</string>
+    <string name="voice_autoplay_notes_sub">ข้อความเสียงจากเอเจนต์ของคุณจะเล่นเอง และเสียงเพลงจะเบาลงระหว่างเล่น</string>
     <string name="voice_live">การโทรสด</string>
     <string name="voice_live_sub">โทรหา %1$s แล้วคุยได้เลย มันส่งงานจริงให้เอเจนต์หลักของคุณและบอกคุณเมื่อมีเรื่องสำคัญ</string>
     <string name="voice_live_needs">ต้องใช้คีย์ Google (Gemini): เลือก Google ด้านบนแล้วบันทึกคีย์ ทำงานบน Gemini Live</string>

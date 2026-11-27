@@ -299,6 +299,8 @@
     <string name="voice_hear">Ji shi</string>
     <string name="voice_autoplay">Kunna ta atomatik da belun kunne a ciki</string>
     <string name="voice_autoplay_sub">Saƙonnin murya suna kunnawa da kansu idan kana sanye da belun kunne</string>
+    <string name="voice_autoplay_notes">Kunna saƙonnin murya da zarar sun iso</string>
+    <string name="voice_autoplay_notes_sub">Saƙonnin murya na wakilinka suna kunnuwa da kansu, kuma kiɗa yana raguwa yayin da suke kunnuwa</string>
     <string name="voice_live">Kiran kai tsaye</string>
     <string name="voice_live_sub">Kira %1$s ka yi magana kawai. Yana ba wakilinka na farko ayyuka na gaske kuma yana gaya maka idan wani abu yana da muhimmanci.</string>
     <string name="voice_live_needs">Yana buƙatar maɓallin Google (Gemini): zaɓi Google a sama ka ajiye ɗaya. Yana gudana a Gemini Live.</string>

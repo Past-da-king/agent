@@ -137,6 +137,7 @@
     <string name="link_group_phone">اعلان‌ها برای شما</string>
     <string name="link_group_location">مکان شما (یک بار پرسیده می‌شود)</string>
     <string name="link_group_automation">برنامه‌های دیگر: intentها، موسیقی و ویدیو، ماکروها (intentها و ماکروها می‌پرسند مگر مجاز باشند)</string>
+    <string name="link_group_logs">گزارش‌های خود این برنامه، تا رایانه شما بفهمد چه مشکلی پیش آمده</string>
     <string name="link_ask_approve">تأیید: %1$s؟</string>
     <string name="link_ask_title">عامل شما می‌پرسد</string>
     <string name="link_saved_downloads">در دانلودها ذخیره شد. برای باز کردن بزنید.</string>
@@ -677,6 +678,7 @@
     <string name="assist_read_all">خواندن همه آن</string>
     <string name="assist_mic_off">میکروفون برای این برنامه خاموش است، پس اینجا تایپ کنید. می‌توانید در تنظیمات گوشی اجازه‌اش را بدهید.</string>
     <string name="assist_live_stopped">صدای زنده متوقف شد: %1$s می‌توانید اینجا تایپ کنید، یا میکروفون را بزنید.</string>
+    <string name="assist_talk_live">گفتگوی زنده</string>
     <string name="assist_unlock_for_mic">یک بار قفل گوشی را باز کنید و به میکروفون اجازه دهید، بعد این بلافاصله گوش می‌دهد.</string>
     <string name="assist_send_failed">ارسال نشد: %1$s. نوشته‌تان هنوز اینجاست.</string>
     <string name="assist_link_dropped">پیوند با رایانه‌تان قطع شد</string>

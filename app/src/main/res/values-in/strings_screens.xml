@@ -288,6 +288,8 @@
     <string name="voice_hear">Dengarkan</string>
     <string name="voice_autoplay">Putar otomatis saat memakai earphone</string>
     <string name="voice_autoplay_sub">Pesan suara diputar sendiri saat Anda memakai earphone</string>
+    <string name="voice_autoplay_notes">Putar pesan suara saat tiba</string>
+    <string name="voice_autoplay_notes_sub">Pesan suara dari agenmu diputar sendiri, dan musik dikecilkan selama diputar</string>
     <string name="voice_live">Panggilan langsung</string>
     <string name="voice_live_sub">Telepon %1$s dan bicara saja. Pekerjaan nyata diserahkan ke agen utama Anda dan Anda diberi tahu saat ada yang penting.</string>
     <string name="voice_live_needs">Memerlukan kunci Google (Gemini): pilih Google di atas dan simpan satu. Berjalan di Gemini Live.</string>

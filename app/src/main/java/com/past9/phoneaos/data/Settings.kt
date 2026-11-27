@@ -76,7 +76,7 @@ data class AgentSettings(
     val ttsVoice: String = "",
     /** Live voice calls with the agent (needs a provider with a realtime model, e.g. Gemini Live). */
     val liveEnabled: Boolean = false,
-    /** Play voice notes (and read replies) automatically while earphones are in. */
+    /** Agent voice notes play by themselves when they arrive (music dips under them). On unless he turns it off. */
     val autoPlayEarphones: Boolean = true,
     /** Which account and model each kind of turn runs on (issue #64). A kind with no entry runs on the default above. */
     val routes: Map<ModelRoute, RouteChoice> = emptyMap(),
@@ -131,7 +131,7 @@ class SettingsStore(context: Context) {
             ttsProvider = prefs.getString("ttsProvider", "system") ?: "system",
             ttsVoice = prefs.getString("ttsVoice", "") ?: "",
             liveEnabled = prefs.getBoolean("liveEnabled", false),
-            autoPlayEarphones = prefs.getBoolean("autoPlayEarphones", true),
+            autoPlayEarphones = prefs.getBoolean("autoPlayVoiceNotes", true),
             notifApps = prefs.getStringSet("notifApps", emptySet()) ?: emptySet(),
             browserProfiles = (prefs.getString("browserProfiles", null) ?: "Personal").split("\n").filter { it.isNotBlank() }.ifEmpty { listOf("Personal") },
             subKind = runCatching { SubKind.valueOf(prefs.getString("subKind", "CLAUDE")!!) }.getOrDefault(SubKind.CLAUDE),
@@ -169,7 +169,7 @@ class SettingsStore(context: Context) {
     fun setSubModel(m: String) = edit { putString("subModel_" + _state.value.subKind.name, m) }
     fun setSubHelperModel(m: String) = edit { putString("subHelperModel_" + _state.value.subKind.name, m) }
     fun setTts(provider: String, voice: String) = edit { putString("ttsProvider", provider); putString("ttsVoice", voice) }
-    fun setAutoPlayEarphones(on: Boolean) = edit { putBoolean("autoPlayEarphones", on) }
+    fun setAutoPlayEarphones(on: Boolean) = edit { putBoolean("autoPlayVoiceNotes", on) }
     /**
      * Run this kind of turn on [provider]'s [model] (issue #64). Written to disk before it returns, and kept when the main
      * power source changes: a route is its own choice. A blank model clears the route.

@@ -300,6 +300,8 @@
     <string name="voice_hear">వినండి</string>
     <string name="voice_autoplay">ఇయర్‌ఫోన్లు ఉన్నప్పుడు ఆటో-ప్లే</string>
     <string name="voice_autoplay_sub">ఇయర్‌ఫోన్లు పెట్టుకున్నప్పుడు వాయిస్ నోట్స్ వాటంతట అవే ప్లే అవుతాయి</string>
+    <string name="voice_autoplay_notes">వాయిస్ నోట్స్ రాగానే ప్లే చేయి</string>
+    <string name="voice_autoplay_notes_sub">మీ ఏజెంట్ వాయిస్ నోట్స్ వాటంతటవే ప్లే అవుతాయి, అప్పుడు సంగీతం తగ్గుతుంది</string>
     <string name="voice_live">లైవ్ కాల్స్</string>
     <string name="voice_live_sub">%1$s‌కు కాల్ చేసి మాట్లాడండి. అసలైన పనిని మీ ప్రధాన ఏజెంట్‌కు అప్పగిస్తుంది, ముఖ్యమైనది ఉన్నప్పుడు మీకు చెబుతుంది.</string>
     <string name="voice_live_needs">Google (Gemini) కీ అవసరం: పైన Googleని ఎంచుకుని ఒకటి సేవ్ చేయండి. ఇది Gemini Liveపై నడుస్తుంది.</string>

@@ -137,6 +137,7 @@
     <string name="link_group_phone">나에게 오는 알림</string>
     <string name="link_group_location">내 위치(한 번 묻습니다)</string>
     <string name="link_group_automation">다른 앱: 인텐트, 음악과 동영상, 매크로(허용하지 않으면 인텐트와 매크로는 묻습니다)</string>
+    <string name="link_group_logs">이 앱의 자체 로그로, 컴퓨터가 문제 원인을 찾을 수 있습니다</string>
     <string name="link_ask_approve">승인: %1$s?</string>
     <string name="link_ask_title">에이전트가 묻습니다</string>
     <string name="link_saved_downloads">다운로드에 저장됨. 눌러서 열기.</string>
@@ -667,6 +668,7 @@
     <string name="assist_read_all">전체 읽기</string>
     <string name="assist_mic_off">이 앱의 마이크가 꺼져 있으니 여기에 입력하세요. 휴대폰 설정에서 허용할 수 있습니다.</string>
     <string name="assist_live_stopped">실시간 음성이 중지되었습니다: %1$s 여기에 입력하거나 마이크를 누르세요.</string>
+    <string name="assist_talk_live">실시간으로 대화</string>
     <string name="assist_unlock_for_mic">휴대폰 잠금을 한 번 풀고 마이크를 허용하면 바로 듣기 시작합니다.</string>
     <string name="assist_send_failed">전송되지 않았습니다: %1$s. 입력한 내용은 여기 그대로 있습니다.</string>
     <string name="assist_link_dropped">컴퓨터와의 연결이 끊어졌습니다</string>

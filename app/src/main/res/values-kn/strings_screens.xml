@@ -300,6 +300,8 @@
     <string name="voice_hear">ಕೇಳಿ ನೋಡಿ</string>
     <string name="voice_autoplay">ಇಯರ್‌ಫೋನ್ ಹಾಕಿದಾಗ ತಾನಾಗಿಯೇ ಪ್ಲೇ ಮಾಡಿ</string>
     <string name="voice_autoplay_sub">ಇಯರ್‌ಫೋನ್ ಧರಿಸಿದಾಗ ಧ್ವನಿ ಸಂದೇಶಗಳು ತಾನಾಗಿಯೇ ಪ್ಲೇ ಆಗುತ್ತವೆ</string>
+    <string name="voice_autoplay_notes">ಧ್ವನಿ ಸಂದೇಶಗಳು ಬಂದ ತಕ್ಷಣ ಪ್ಲೇ ಮಾಡಿ</string>
+    <string name="voice_autoplay_notes_sub">ನಿಮ್ಮ ಏಜೆಂಟ್‌ನ ಧ್ವನಿ ಸಂದೇಶಗಳು ತಾವಾಗಿಯೇ ಪ್ಲೇ ಆಗುತ್ತವೆ, ಆಗ ಸಂಗೀತ ಕಡಿಮೆಯಾಗುತ್ತದೆ</string>
     <string name="voice_live">ನೇರ ಕರೆಗಳು</string>
     <string name="voice_live_sub">%1$s ಗೆ ಕರೆ ಮಾಡಿ ಮಾತನಾಡಿ. ನಿಜವಾದ ಕೆಲಸವನ್ನು ನಿಮ್ಮ ಮುಖ್ಯ ಏಜೆಂಟ್‌ಗೆ ವರ್ಗಾಯಿಸುತ್ತದೆ ಮತ್ತು ಯಾವುದು ಮುಖ್ಯವೆಂದು ಅನಿಸಿದರೆ ತಿಳಿಸುತ್ತದೆ.</string>
     <string name="voice_live_needs">Google (Gemini) ಕೀ ಬೇಕು: ಮೇಲೆ Google ಆಯ್ಕೆಮಾಡಿ ಮತ್ತು ಒಂದು ಕೀ ಉಳಿಸಿ. ಇದು Gemini Live ಮೇಲೆ ಚಲಿಸುತ್ತದೆ.</string>

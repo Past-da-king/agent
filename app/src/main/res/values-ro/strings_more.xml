@@ -137,6 +137,7 @@
     <string name="link_group_phone">Notificări pentru tine</string>
     <string name="link_group_location">Locația ta (se cere o dată)</string>
     <string name="link_group_automation">Alte aplicații: intenturi, muzică și video, macrouri (intenturile și macrourile întreabă dacă nu sunt permise)</string>
+    <string name="link_group_logs">Jurnalele acestei aplicații, ca să afle computerul ce nu a mers</string>
     <string name="link_ask_approve">Aprobi: %1$s?</string>
     <string name="link_ask_title">Agentul tău întreabă</string>
     <string name="link_saved_downloads">Salvat în Descărcări. Atinge pentru a deschide.</string>
@@ -687,6 +688,7 @@
     <string name="assist_read_all">Citește tot</string>
     <string name="assist_mic_off">Microfonul este oprit pentru această aplicație, așa că scrie aici. Îl poți permite în Setările telefonului.</string>
     <string name="assist_live_stopped">Vocea live s-a oprit: %1$s Poți scrie aici sau atinge microfonul.</string>
+    <string name="assist_talk_live">Vorbește live</string>
     <string name="assist_unlock_for_mic">Deblochează telefonul o dată și permite microfonul, apoi ascultă imediat.</string>
     <string name="assist_send_failed">Nu s-a trimis: %1$s. Cuvintele tale sunt încă aici.</string>
     <string name="assist_link_dropped">legătura cu computerul tău s-a întrerupt</string>

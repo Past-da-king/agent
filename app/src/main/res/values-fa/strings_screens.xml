@@ -300,6 +300,8 @@
     <string name="voice_hear">شنیدنش</string>
     <string name="voice_autoplay">پخش خودکار با هدفون</string>
     <string name="voice_autoplay_sub">وقتی هدفون دارید پیام‌های صوتی خودشان پخش می‌شوند</string>
+    <string name="voice_autoplay_notes">پخش پیام‌های صوتی به محض رسیدن</string>
+    <string name="voice_autoplay_notes_sub">پیام‌های صوتی دستیار شما خودکار پخش می‌شوند و صدای موسیقی در این مدت کم می‌شود</string>
     <string name="voice_live">تماس‌های زنده</string>
     <string name="voice_live_sub">با %1$s تماس بگیرید و فقط صحبت کنید. کار واقعی را به عامل اصلی شما می‌سپارد و وقتی چیزی مهم باشد به شما می‌گوید.</string>
     <string name="voice_live_needs">به کلید Google (Gemini) نیاز دارد: بالا Google را انتخاب کنید و یکی ذخیره کنید. روی Gemini Live اجرا می‌شود.</string>

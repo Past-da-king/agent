@@ -10,6 +10,7 @@ import com.past9.phoneaos.triggers.Routines
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
@@ -79,6 +80,7 @@ class Graph(context: Context) {
 
     /** Mark everything already in the chat as heard (call once at start). */
     fun markHeard(ids: List<Long>) { spoken.addAll(ids) }
+    fun heardIds(): Set<Long> = spoken.toSet()
 
     /**
      * Read a reply aloud with the user's cloud voice. Never the robotic phone voice: with no voice
@@ -105,8 +107,9 @@ class Graph(context: Context) {
 
     /** Play a voice note the agent just sent, once. */
     fun autoPlayVoice(path: String, id: Long) {
-        if (!spoken.add(id)) return
+        // Only a note whose audio is here counts as heard: one still on its way must be able to play once it lands.
         val f = java.io.File(path); if (!f.exists()) return
+        if (!spoken.add(id)) return
         stopSpeaking()
         speakJob = scope.launch(kotlinx.coroutines.Dispatchers.Main.immediate) {
             try {
@@ -120,6 +123,37 @@ class Graph(context: Context) {
     }
 
     fun stopSpeaking() { speakJob?.cancel(); voiceNotes.stopAll(); com.past9.phoneaos.voice.Tts.stop(); systemVoice.stop(); _speaking.value = false }
+
+    /**
+     * Agent voice notes play by themselves as they arrive (Settings, Voice; on by default), on the speaker or earphones,
+     * with his music dipped under them, whether the app is in front or not. The chat followed is this phone's own or the
+     * linked computer's; a computer's note waits for its audio, which is fetched for it ([VoiceAutoPlay]). What was in
+     * the chat when it is first read is history and never plays.
+     */
+    private fun watchVoiceNotes() = scope.launch(kotlinx.coroutines.Dispatchers.Main.immediate) {
+        @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+        com.past9.phoneaos.remote.RemoteHub.session.flatMapLatest { r ->
+            val source = r?.db ?: db
+            var primed = false
+            val asked = HashSet<Long>()
+            source.chat().all().map { items -> if (!primed) { primed = true; markHeard(items.map { it.id }); emptyList() } else items }
+                .map { items -> Triple(r, items, asked) }
+        }.collect { (r, items, asked) ->
+            if (items.isEmpty()) return@collect
+            // On a call the voice already says what matters: a note that lands meanwhile is not played over it.
+            if (call.state.value.active) { markHeard(items.filter { it.kind == "voice" }.map { it.id }); return@collect }
+            com.past9.phoneaos.voice.VoiceAutoPlay.steps(items, heardIds(), asked, settings.state.value.autoPlayEarphones) { java.io.File(it).let { f -> f.isFile && f.length() > 44 } }.forEach { step ->
+                when (step) {
+                    is com.past9.phoneaos.voice.VoiceAutoPlay.Step.Play -> {
+                        markHeard(com.past9.phoneaos.voice.VoiceAutoPlay.skipped(items, heardIds(), step.id))
+                        autoPlayVoice(step.path, step.id)
+                    }
+                    is com.past9.phoneaos.voice.VoiceAutoPlay.Step.Fetch -> { asked += step.id; r?.getNote(step.id) }
+                }
+            }
+        }
+    }
+    init { watchVoiceNotes() }
 
     /** The runtime for whichever subscription the user picked (Claude, ChatGPT/Codex, OpenCode). */
     fun subRuntime() = com.past9.phoneaos.runtime.SubscriptionRuntime(app, settings.state.value.subKind)

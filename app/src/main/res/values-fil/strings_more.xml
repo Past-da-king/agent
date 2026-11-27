@@ -137,6 +137,7 @@
     <string name="link_group_phone">Mga notification para sa iyo</string>
     <string name="link_group_location">Iyong lokasyon (isang beses itinatanong)</string>
     <string name="link_group_automation">Ibang mga app: intent, musika at video, macro (nagtatanong ang intent at macro maliban kung pinayagan)</string>
+    <string name="link_group_logs">Ang sariling log ng app na ito, para mahanap ng computer mo ang nagkaproblema</string>
     <string name="link_ask_approve">Aprubahan: %1$s?</string>
     <string name="link_ask_title">Nagtatanong ang iyong agent</string>
     <string name="link_saved_downloads">Na-save sa Downloads. Pindutin para buksan.</string>
@@ -677,6 +678,7 @@
     <string name="assist_read_all">Basahin lahat</string>
     <string name="assist_mic_off">Naka-off ang mikropono para sa app na ito, kaya i-type ito rito. Maaari mo itong payagan sa Settings ng telepono.</string>
     <string name="assist_live_stopped">Huminto ang live voice: %1$s Maaari kang mag-type rito, o pindutin ang mic.</string>
+    <string name="assist_talk_live">Makipag-usap nang live</string>
     <string name="assist_unlock_for_mic">I-unlock ang telepono nang isang beses at payagan ang mikropono, at agad na makikinig ito.</string>
     <string name="assist_send_failed">Hindi naipadala iyon: %1$s. Nandito pa rin ang mga sinabi mo.</string>
     <string name="assist_link_dropped">naputol ang link sa computer mo</string>

@@ -300,6 +300,8 @@
     <string name="voice_hear">Pakinggan</string>
     <string name="voice_autoplay">Awtomatikong patugtugin kapag may earphones</string>
     <string name="voice_autoplay_sub">Kusang tumutugtog ang mga voice note kapag may suot kang earphones</string>
+    <string name="voice_autoplay_notes">I-play ang mga voice note pagdating nila</string>
+    <string name="voice_autoplay_notes_sub">Kusang nagpe-play ang mga voice note ng iyong agent, at humihina ang musika habang nagpe-play ang mga ito</string>
     <string name="voice_live">Mga live na tawag</string>
     <string name="voice_live_sub">Tawagan si %1$s at makipag-usap lang. Ipinapasa nito ang totoong gawain sa pangunahing agent mo at sinasabi sa iyo kapag may mahalaga.</string>
     <string name="voice_live_needs">Kailangan ng Google (Gemini) key: piliin ang Google sa itaas at mag-save ng isa. Tumatakbo ito sa Gemini Live.</string>

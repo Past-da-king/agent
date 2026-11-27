@@ -300,6 +300,8 @@
     <string name="voice_hear">கேட்டுப் பார்</string>
     <string name="voice_autoplay">இயர்ஃபோன் இணைக்கப்பட்டிருக்கும்போது தானாக இயக்கு</string>
     <string name="voice_autoplay_sub">இயர்ஃபோன் அணிந்திருக்கும்போது குரல் குறிப்புகள் தானாக இயங்கும்</string>
+    <string name="voice_autoplay_notes">குரல் குறிப்புகள் வந்தவுடன் இயக்கு</string>
+    <string name="voice_autoplay_notes_sub">உங்கள் முகவரின் குரல் குறிப்புகள் தானாக இயங்கும், அப்போது இசை சத்தம் குறையும்</string>
     <string name="voice_live">நேரடி அழைப்புகள்</string>
     <string name="voice_live_sub">%1$s-ஐ அழைத்து பேசுங்கள். உண்மையான வேலைகளை உங்கள் முதன்மை ஏஜென்டிடம் ஒப்படைக்கும், முக்கியமான ஒன்று இருந்தால் சொல்லும்.</string>
     <string name="voice_live_needs">Google (Gemini) விசை தேவை: மேலே Google-ஐத் தேர்ந்தெடுத்து ஒன்றைச் சேமிக்கவும். இது Gemini Live மூலம் இயங்கும்.</string>

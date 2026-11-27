@@ -30,10 +30,12 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 object DeviceTools {
     /** group -> on by default. Shell (run_code) is never lent. */
-    val GROUPS = linkedMapOf("browser" to true, "notifications" to true, "files" to true, "approval" to true, "phone" to true, "location" to true, "automation" to true)
+    val GROUPS = linkedMapOf("browser" to true, "notifications" to true, "files" to true, "approval" to true, "phone" to true, "location" to true, "automation" to true,
+        // The app's own log lines (phone_logs), for diagnosing a bad call without a cable. Off until he switches it on.
+        "logs" to false)
     val LABELS = mapOf("browser" to com.past9.phoneaos.R.string.settings_browser, "notifications" to com.past9.phoneaos.R.string.link_group_notifications, "files" to com.past9.phoneaos.R.string.link_group_files,
         "approval" to com.past9.phoneaos.R.string.link_group_approval, "phone" to com.past9.phoneaos.R.string.link_group_phone, "location" to com.past9.phoneaos.R.string.link_group_location,
-        "automation" to com.past9.phoneaos.R.string.link_group_automation)
+        "automation" to com.past9.phoneaos.R.string.link_group_automation, "logs" to com.past9.phoneaos.R.string.link_group_logs)
 
     /**
      * Every tool this phone lends to a linked computer, by name. A tool the phone has must be either here or in
@@ -48,6 +50,7 @@ object DeviceTools {
         "android_intent", "android_apps", "macrodroid_run", "play_media", "media_control",
         "screen_open_app", "screen_look", "screen_tap", "screen_type", "screen_swipe", "screen_key", "screen_wait", "screen_close", "screen_status",
         "screen_skill_save", "screen_skill_list", "screen_skill_run", "screen_skill_undo", "app_share",
+        "phone_logs",
     )
 
     /** Tools that stay on the phone on purpose, each with why. */
@@ -80,6 +83,7 @@ object DeviceTools {
         name == "ask_user" || name == "request_approval" -> "approval"
         name == "notify_user" -> "phone"
         name == "phone_location" -> "location"
+        name == "phone_logs" -> "logs"
         name == "macrodroid_run" || name == "android_intent" || name == "android_apps" || name == "play_media" || name == "media_control" -> "automation"
         name.startsWith("screen_") || name.startsWith("app_") -> "screen"
         else -> null
@@ -99,6 +103,7 @@ object DeviceTools {
             com.past9.phoneaos.tools.AskUserTool(), com.past9.phoneaos.tools.ApprovalTool(), com.past9.phoneaos.tools.NotifyTool(),
             com.past9.phoneaos.tools.PhoneLocationTool(context),
             com.past9.phoneaos.tools.PhotosTool(context),
+            com.past9.phoneaos.tools.PhoneLogsTool(),
             com.past9.phoneaos.tools.WaitForCodeTool(g.db, g.settings, com.past9.phoneaos.tools.NotificationsAllowTool(context, g.settings)),
             // The web apps this phone's agent taught itself, run in the phone's own signed-in browser.
             com.past9.phoneaos.connections.WebAppListTool(g.runtime.learned), com.past9.phoneaos.connections.WebAppTestTool(g.runtime.learned, g.runtime.pageRunner),

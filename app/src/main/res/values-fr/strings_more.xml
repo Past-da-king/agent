@@ -137,6 +137,7 @@
     <string name="link_group_phone">Notifications pour vous</string>
     <string name="link_group_location">Votre position (demandée une fois)</string>
     <string name="link_group_automation">Autres applis : intents, musique et vidéo, macros (intents et macros demandent sauf autorisation)</string>
+    <string name="link_group_logs">Les journaux de cette appli, pour que ton ordinateur trouve ce qui n\'a pas marché</string>
     <string name="link_ask_approve">Approuver : %1$s ?</string>
     <string name="link_ask_title">Votre agent demande</string>
     <string name="link_saved_downloads">Enregistré dans Téléchargements. Touchez pour ouvrir.</string>
@@ -687,6 +688,7 @@
     <string name="assist_read_all">Tout lire</string>
     <string name="assist_mic_off">Le micro est désactivé pour cette appli, saisissez donc ici. Vous pouvez l\'autoriser dans les Réglages du téléphone.</string>
     <string name="assist_live_stopped">La voix en direct s\'est arrêtée : %1$s Vous pouvez saisir ici, ou toucher le micro.</string>
+    <string name="assist_talk_live">Parler en direct</string>
     <string name="assist_unlock_for_mic">Déverrouillez le téléphone une fois et autorisez le micro, puis il écoute immédiatement.</string>
     <string name="assist_send_failed">L\'envoi n\'a pas abouti : %1$s. Vos mots sont toujours là.</string>
     <string name="assist_link_dropped">la liaison avec votre ordinateur a été coupée</string>

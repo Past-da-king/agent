@@ -299,6 +299,8 @@
     <string name="voice_hear">Isikie</string>
     <string name="voice_autoplay">Cheza kiotomatiki vipokea sauti vikiwa vimechomekwa</string>
     <string name="voice_autoplay_sub">Ujumbe wa sauti hucheza wenyewe unapovaa vipokea sauti</string>
+    <string name="voice_autoplay_notes">Cheza ujumbe wa sauti unapofika</string>
+    <string name="voice_autoplay_notes_sub">Ujumbe wa sauti wa wakala wako hucheza wenyewe, na muziki hupungua sauti wakati unacheza</string>
     <string name="voice_live">Simu za moja kwa moja</string>
     <string name="voice_live_sub">Mpigie %1$s na uongee tu. Humpa wakala wako mkuu kazi halisi na hukuambia kitu kinapokuwa muhimu.</string>
     <string name="voice_live_needs">Inahitaji ufunguo wa Google (Gemini): chagua Google hapo juu na uhifadhi mmoja. Huendeshwa kwenye Gemini Live.</string>

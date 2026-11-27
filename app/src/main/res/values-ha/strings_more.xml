@@ -136,6 +136,7 @@
     <string name="link_group_phone">Sanarwa gare ka</string>
     <string name="link_group_location">Wurin da kake (ana tambaya sau ɗaya)</string>
     <string name="link_group_automation">Wasu manhajoji: intents, kiɗa da bidiyo, macros (intents da macros suna tambaya sai an ba da izini)</string>
+    <string name="link_group_logs">Bayanan wannan manhaja kaɗai, don kwamfutarka ta gano matsalar</string>
     <string name="link_ask_approve">Amince: %1$s?</string>
     <string name="link_ask_title">Wakilinka yana tambaya</string>
     <string name="link_saved_downloads">An ajiye a Abubuwan da aka sauke. Danna don buɗewa.</string>
@@ -676,6 +677,7 @@
     <string name="assist_read_all">Karanta duka</string>
     <string name="assist_mic_off">An kashe makirufo ga wannan manhajar, don haka rubuta a nan. Za ka iya ba da izini a Saitunan waya.</string>
     <string name="assist_live_stopped">Muryar kai tsaye ta tsaya: %1$s Za ka iya rubutawa a nan, ko ka danna makirufo.</string>
+    <string name="assist_talk_live">Yi magana kai tsaye</string>
     <string name="assist_unlock_for_mic">Buɗe kulle wayar sau ɗaya ka ba da izinin makirufo, sannan wannan zai saurara nan take.</string>
     <string name="assist_send_failed">Ba a aika ba: %1$s. Kalmominka suna nan har yanzu.</string>
     <string name="assist_link_dropped">haɗin kwamfutarka ya yanke</string>

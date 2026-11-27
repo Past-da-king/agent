@@ -300,6 +300,8 @@
     <string name="voice_hear">Anhören</string>
     <string name="voice_autoplay">Automatisch mit Kopfhörern abspielen</string>
     <string name="voice_autoplay_sub">Sprachnachrichten spielen von selbst, wenn du Kopfhörer trägst</string>
+    <string name="voice_autoplay_notes">Sprachnachrichten beim Eintreffen abspielen</string>
+    <string name="voice_autoplay_notes_sub">Die Sprachnachrichten deines Agenten spielen von selbst, und Musik wird währenddessen leiser</string>
     <string name="voice_live">Live-Anrufe</string>
     <string name="voice_live_sub">Ruf %1$s an und sprich einfach. Echte Arbeit gibt er an deinen Haupt-Agent ab und sagt dir, wenn etwas wichtig ist.</string>
     <string name="voice_live_needs">Braucht einen Google-Schlüssel (Gemini): Wähle oben Google und speichere einen. Es läuft mit Gemini Live.</string>

@@ -137,6 +137,7 @@
     <string name="link_group_phone">Benachrichtigungen an dich</string>
     <string name="link_group_location">Dein Standort (einmal gefragt)</string>
     <string name="link_group_automation">Andere Apps: Intents, Musik und Video, Makros (Intents und Makros fragen, sofern nicht erlaubt)</string>
+    <string name="link_group_logs">Die eigenen Protokolle dieser App, damit dein Computer den Fehler findet</string>
     <string name="link_ask_approve">Freigeben: %1$s?</string>
     <string name="link_ask_title">Dein Agent fragt</string>
     <string name="link_saved_downloads">In Downloads gespeichert. Tippen zum Öffnen.</string>
@@ -677,6 +678,7 @@
     <string name="assist_read_all">Alles lesen</string>
     <string name="assist_mic_off">Das Mikrofon ist für diese App aus, tippe es also hier ein. Du kannst es in den Einstellungen des Handys erlauben.</string>
     <string name="assist_live_stopped">Live-Stimme gestoppt: %1$s Du kannst hier tippen oder auf das Mikrofon tippen.</string>
+    <string name="assist_talk_live">Live sprechen</string>
     <string name="assist_unlock_for_mic">Entsperre das Handy einmal und erlaube das Mikrofon, dann hört es sofort zu.</string>
     <string name="assist_send_failed">Das wurde nicht gesendet: %1$s. Dein Text ist noch da.</string>
     <string name="assist_link_dropped">die Verbindung zu deinem Computer ist abgebrochen</string>

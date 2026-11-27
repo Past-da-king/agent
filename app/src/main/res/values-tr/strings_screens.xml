@@ -300,6 +300,8 @@
     <string name="voice_hear">Dinle</string>
     <string name="voice_autoplay">Kulaklık takılıyken otomatik oynat</string>
     <string name="voice_autoplay_sub">Kulaklık takılıyken sesli mesajlar kendiliğinden oynar</string>
+    <string name="voice_autoplay_notes">Sesli notları gelir gelmez çal</string>
+    <string name="voice_autoplay_notes_sub">Temsilcinin sesli notları kendiliğinden çalar, bu sırada müziğin sesi kısılır</string>
     <string name="voice_live">Canlı aramalar</string>
     <string name="voice_live_sub">%1$s arayıp sadece konuş. Gerçek işi ana ajanına verir ve bir şey önemli olduğunda sana söyler.</string>
     <string name="voice_live_needs">Bir Google (Gemini) anahtarı gerekir: yukarıdan Google\'ı seç ve bir tane kaydet. Gemini Live üzerinde çalışır.</string>

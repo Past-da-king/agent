@@ -137,6 +137,7 @@
     <string name="link_group_phone">Notifications to you</string>
     <string name="link_group_location">Your location (asked once)</string>
     <string name="link_group_automation">Other apps: intents, music and video, macros (intents and macros ask unless allowed)</string>
+    <string name="link_group_logs">This app\'s own logs, so your computer can find what went wrong</string>
     <string name="link_ask_approve">Approve: %1$s?</string>
     <string name="link_ask_title">Your agent asks</string>
     <string name="link_saved_downloads">Saved to Downloads. Tap to open.</string>
@@ -677,6 +678,7 @@
     <string name="assist_read_all">Read all of it</string>
     <string name="assist_mic_off">The microphone is off for this app, so type it here. You can allow it in the phone\'s Settings.</string>
     <string name="assist_live_stopped">Live voice stopped: %1$s You can type here, or tap the mic.</string>
+    <string name="assist_talk_live">Talk live</string>
     <string name="assist_unlock_for_mic">Unlock the phone once and allow the microphone, then this listens straight away.</string>
     <string name="assist_send_failed">That did not send: %1$s. Your words are still here.</string>
     <string name="assist_link_dropped">the link to your computer dropped</string>

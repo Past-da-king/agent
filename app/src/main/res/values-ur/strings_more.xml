@@ -137,6 +137,7 @@
     <string name="link_group_phone">آپ کے لیے اطلاعات</string>
     <string name="link_group_location">آپ کی لوکیشن (ایک بار پوچھی جاتی ہے)</string>
     <string name="link_group_automation">دوسری ایپس: intents، موسیقی اور ویڈیو، میکروز (intents اور میکروز پوچھتے ہیں جب تک اجازت نہ ہو)</string>
+    <string name="link_group_logs">اس ایپ کے اپنے لاگز، تاکہ آپ کا کمپیوٹر خرابی ڈھونڈ سکے</string>
     <string name="link_ask_approve">منظوری: %1$s؟</string>
     <string name="link_ask_title">آپ کا ایجنٹ پوچھ رہا ہے</string>
     <string name="link_saved_downloads">ڈاؤن لوڈز میں محفوظ ہو گیا۔ کھولنے کے لیے دبائیں۔</string>
@@ -677,6 +678,7 @@
     <string name="assist_read_all">پورا پڑھیں</string>
     <string name="assist_mic_off">اس ایپ کے لیے مائیکروفون بند ہے، اس لیے یہاں ٹائپ کریں۔ آپ اسے فون کی سیٹنگز میں اجازت دے سکتے ہیں۔</string>
     <string name="assist_live_stopped">لائیو آواز رک گئی: %1$s آپ یہاں ٹائپ کر سکتے ہیں، یا مائیکروفون دبا سکتے ہیں۔</string>
+    <string name="assist_talk_live">براہ راست بات کریں</string>
     <string name="assist_unlock_for_mic">فون ایک بار ان لاک کریں اور مائیکروفون کی اجازت دیں، پھر یہ فوراً سنتا ہے۔</string>
     <string name="assist_send_failed">یہ نہیں بھیجا گیا: %1$s۔ آپ کے الفاظ ابھی یہیں ہیں۔</string>
     <string name="assist_link_dropped">آپ کے کمپیوٹر سے لنک ٹوٹ گیا</string>

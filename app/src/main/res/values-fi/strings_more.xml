@@ -136,6 +136,7 @@
     <string name="link_group_phone">Ilmoitukset sinulle</string>
     <string name="link_group_location">Sijaintisi (kysytään kerran)</string>
     <string name="link_group_automation">Muut sovellukset: intentit, musiikki ja video, makrot (intentit ja makrot kysyvät, ellei niitä ole sallittu)</string>
+    <string name="link_group_logs">Tämän sovelluksen omat lokit, jotta tietokone löytää vian</string>
     <string name="link_ask_approve">Hyväksytäänkö: %1$s?</string>
     <string name="link_ask_title">Agenttisi kysyy</string>
     <string name="link_saved_downloads">Tallennettu Lataukset-kansioon. Avaa napauttamalla.</string>
@@ -676,6 +677,7 @@
     <string name="assist_read_all">Lue kaikki</string>
     <string name="assist_mic_off">Mikrofoni on pois päältä tälle sovellukselle, joten kirjoita tähän. Voit sallia sen puhelimen Asetuksissa.</string>
     <string name="assist_live_stopped">Live-ääni pysähtyi: %1$s Voit kirjoittaa tähän tai napauttaa mikrofonia.</string>
+    <string name="assist_talk_live">Puhu suoraan</string>
     <string name="assist_unlock_for_mic">Avaa puhelimen lukitus kerran ja salli mikrofoni, niin tämä kuuntelee heti.</string>
     <string name="assist_send_failed">Sitä ei lähetetty: %1$s. Sanasi ovat edelleen tässä.</string>
     <string name="assist_link_dropped">yhteys tietokoneeseesi katkesi</string>

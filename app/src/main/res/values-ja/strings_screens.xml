@@ -288,6 +288,8 @@
     <string name="voice_hear">聞く</string>
     <string name="voice_autoplay">イヤホン接続時に自動再生</string>
     <string name="voice_autoplay_sub">イヤホンを着けているとき、ボイスメモが自動で再生されます</string>
+    <string name="voice_autoplay_notes">ボイスメモを届いたらすぐ再生</string>
+    <string name="voice_autoplay_notes_sub">エージェントのボイスメモが自動で再生され、その間は音楽の音量が下がります</string>
     <string name="voice_live">ライブ通話</string>
     <string name="voice_live_sub">%1$s に電話して、ただ話すだけ。実際の作業はメインのエージェントに任せ、重要なことがあれば知らせます。</string>
     <string name="voice_live_needs">Google（Gemini）のキーが必要です：上で Google を選んで保存してください。Gemini Live で動作します。</string>

@@ -110,7 +110,12 @@ class LiveAssistant(
         session = live
         core.manual(live.tune.waitForMe)
         // The microphone and speaker open now, in parallel with the token: nothing he says is lost.
-        live.prepare(context.getSystemService(AudioManager::class.java))
+        val am = context.getSystemService(AudioManager::class.java)
+        // Music or a video he had on pauses now, and is checked again a moment later (see MediaHold); it comes back after.
+        val hold = am?.let { com.past9.phoneaos.voice.MediaHold.android(context, it) }
+        hold?.let { live.holdMedia(it) }
+        live.prepare(am)
+        hold?.let { h -> scope.launch { delay(com.past9.phoneaos.voice.MediaHold.ENFORCE_AFTER_MS); if (!ended) { val o = h.enforce(); Log.i(TAG, "media hold: focus=${o.focus} paused=${o.paused} sessions=${o.canSeeSessions}") } } }
         scope.launch {
             LiveTiming.mark("token_req")
             val auth = runCatching { LiveToken.take(context) }.getOrElse { LiveAuth.Token.No(it.message ?: "Live voice could not start.", false) }

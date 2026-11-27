@@ -312,6 +312,8 @@
     <string name="voice_hear">Ouvir</string>
     <string name="voice_autoplay">Reprodução automática com auscultadores ligados</string>
     <string name="voice_autoplay_sub">As mensagens de voz são reproduzidas sozinhas quando tem auscultadores</string>
+    <string name="voice_autoplay_notes">Reproduzir mensagens de voz assim que chegam</string>
+    <string name="voice_autoplay_notes_sub">As mensagens de voz do seu agente tocam sozinhas e a música baixa enquanto tocam</string>
     <string name="voice_live">Chamadas ao vivo</string>
     <string name="voice_live_sub">Ligue para %1$s e fale simplesmente. Ele passa o trabalho a sério ao seu agente principal e avisa quando algo é importante.</string>
     <string name="voice_live_needs">Precisa de uma chave do Google (Gemini): escolha Google acima e guarde uma. Funciona no Gemini Live.</string>

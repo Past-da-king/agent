@@ -288,6 +288,8 @@
     <string name="voice_hear">Gee ya ntị</string>
     <string name="voice_autoplay">Kpọọ n\'onwe ya mgbe etinyere ntị-ekwentị</string>
     <string name="voice_autoplay_sub">Ozi olu na-akpọ n\'onwe ha mgbe ị na-eyi ntị-ekwentị</string>
+    <string name="voice_autoplay_notes">Kpọọ ozi olu ozugbo ha bịarutere</string>
+    <string name="voice_autoplay_notes_sub">Ozi olu onye nnọchite gị na-akpọ n\'onwe ha, egwu na-ada ala mgbe ha na-akpọ</string>
     <string name="voice_live">Oku dị ndụ</string>
     <string name="voice_live_sub">Kpọọ %1$s ma kwuo okwu nanị. Ọ na-enye agent gị bụ isi ọrụ n\'ezie ma na-agwa gị mgbe ihe dị mkpa.</string>
     <string name="voice_live_needs">Chọrọ igodo Google (Gemini): họrọ Google n\'elu ma chekwaa otu. Ọ na-arụ ọrụ na Gemini Live.</string>

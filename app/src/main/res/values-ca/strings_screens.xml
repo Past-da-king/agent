@@ -312,6 +312,8 @@
     <string name="voice_hear">Escolta-la</string>
     <string name="voice_autoplay">Reprodueix automàticament amb auriculars connectats</string>
     <string name="voice_autoplay_sub">Les notes de veu es reprodueixen soles quan portes auriculars</string>
+    <string name="voice_autoplay_notes">Reprodueix les notes de veu quan arribin</string>
+    <string name="voice_autoplay_notes_sub">Les notes de veu del teu agent sonen soles i la música baixa mentre sonen</string>
     <string name="voice_live">Trucades en directe</string>
     <string name="voice_live_sub">Truca a %1$s i parla sense més. Passa la feina de debò al teu agent principal i t\'avisa quan alguna cosa importa.</string>
     <string name="voice_live_needs">Necessita una clau de Google (Gemini): tria Google a dalt i desa\'n una. Funciona amb Gemini Live.</string>

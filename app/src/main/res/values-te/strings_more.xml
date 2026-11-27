@@ -137,6 +137,7 @@
     <string name="link_group_phone">మీకు నోటిఫికేషన్లు</string>
     <string name="link_group_location">మీ లొకేషన్ (ఒకసారి అడుగుతుంది)</string>
     <string name="link_group_automation">ఇతర యాప్‌లు: ఇంటెంట్‌లు, సంగీతం &amp; వీడియో, మాక్రోలు (అనుమతి లేకపోతే ఇంటెంట్‌లు, మాక్రోలు అడుగుతాయి)</string>
+    <string name="link_group_logs">ఈ యాప్ సొంత లాగ్‌లు, మీ కంప్యూటర్ సమస్యను కనుగొనడానికి</string>
     <string name="link_ask_approve">ఆమోదించాలా: %1$s?</string>
     <string name="link_ask_title">మీ ఏజెంట్ అడుగుతోంది</string>
     <string name="link_saved_downloads">డౌన్‌లోడ్స్‌లో సేవ్ అయింది. తెరవడానికి నొక్కండి.</string>
@@ -677,6 +678,7 @@
     <string name="assist_read_all">మొత్తం చదవండి</string>
     <string name="assist_mic_off">ఈ యాప్‌కు మైక్రోఫోన్ ఆఫ్‌లో ఉంది, కాబట్టి ఇక్కడ టైప్ చేయండి. ఫోన్ సెట్టింగ్‌లలో దీన్ని అనుమతించవచ్చు.</string>
     <string name="assist_live_stopped">లైవ్ వాయిస్ ఆగిపోయింది: %1$s మీరు ఇక్కడ టైప్ చేయవచ్చు, లేదా మైక్‌ను నొక్కండి.</string>
+    <string name="assist_talk_live">ప్రత్యక్షంగా మాట్లాడండి</string>
     <string name="assist_unlock_for_mic">ఫోన్‌ను ఒకసారి అన్‌లాక్ చేసి మైక్రోఫోన్‌ను అనుమతించండి, అప్పుడు ఇది వెంటనే వింటుంది.</string>
     <string name="assist_send_failed">అది పంపలేకపోయాం: %1$s. మీ మాటలు ఇంకా ఇక్కడే ఉన్నాయి.</string>
     <string name="assist_link_dropped">మీ కంప్యూటర్‌తో లింక్ తెగిపోయింది</string>

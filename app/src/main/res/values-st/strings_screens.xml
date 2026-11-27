@@ -300,6 +300,8 @@
     <string name="voice_hear">Le mamele</string>
     <string name="voice_autoplay">Bapala ka boeona ha li-earphone li kentsoe</string>
     <string name="voice_autoplay_sub">Lintlha tsa lentsoe li ipapala ha u apere li-earphone</string>
+    <string name="voice_autoplay_notes">Bapala melaetsa ya lentswe ha e fihla</string>
+    <string name="voice_autoplay_notes_sub">Melaetsa ya lentswe ya moemedi wa hao e bapala ka bo yona, mme mmino o fokotseha ha e bapala</string>
     <string name="voice_live">Mehala e phelang</string>
     <string name="voice_live_sub">Letsetsa %1$s \'me u bue feela. E fa moemeli oa hao o ka sehloohong mosebetsi oa sebele \'me e u bolella ha ho na le ntho ea bohlokoa.</string>
     <string name="voice_live_needs">E hloka senotlolo sa Google (Gemini): khetha Google ka holimo \'me u boloke se le seng. E sebetsa ho Gemini Live.</string>

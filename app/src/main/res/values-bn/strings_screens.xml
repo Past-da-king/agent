@@ -300,6 +300,8 @@
     <string name="voice_hear">শুনুন</string>
     <string name="voice_autoplay">ইয়ারফোন লাগানো থাকলে অটো-প্লে</string>
     <string name="voice_autoplay_sub">ইয়ারফোন পরা থাকলে ভয়েস নোট নিজে থেকেই চলবে</string>
+    <string name="voice_autoplay_notes">ভয়েস নোট এলেই চালান</string>
+    <string name="voice_autoplay_notes_sub">আপনার এজেন্টের ভয়েস নোট নিজে থেকেই চলে, আর চলার সময় গানের আওয়াজ কমে যায়</string>
     <string name="voice_live">লাইভ কল</string>
     <string name="voice_live_sub">%1$s-কে কল করে শুধু কথা বলুন। এ আপনার মূল এজেন্টকে আসল কাজ দেবে এবং কিছু গুরুত্বপূর্ণ হলে আপনাকে জানাবে।</string>
     <string name="voice_live_needs">একটি Google (Gemini) কী লাগবে: উপরে Google বেছে একটি সেভ করুন। এটি Gemini Live-এ চলে।</string>

@@ -136,6 +136,7 @@
     <string name="link_group_phone">Arifa kwako</string>
     <string name="link_group_location">Mahali ulipo (huulizwa mara moja)</string>
     <string name="link_group_automation">Programu nyingine: intents, muziki na video, makro (intents na makro huuliza isipokuwa ziruhusiwe)</string>
+    <string name="link_group_logs">Kumbukumbu za programu hii pekee, ili kompyuta yako ipate tatizo</string>
     <string name="link_ask_approve">Idhinisha: %1$s?</string>
     <string name="link_ask_title">Wakala wako anauliza</string>
     <string name="link_saved_downloads">Imehifadhiwa kwenye Vipakuliwa. Gusa kufungua.</string>
@@ -676,6 +677,7 @@
     <string name="assist_read_all">Soma yote</string>
     <string name="assist_mic_off">Kipaza sauti kimezimwa kwa programu hii, kwa hivyo andika hapa. Unaweza kukiruhusu kwenye Mipangilio ya simu.</string>
     <string name="assist_live_stopped">Sauti ya moja kwa moja imesimama: %1$s Unaweza kuandika hapa, au kugusa kipaza sauti.</string>
+    <string name="assist_talk_live">Ongea moja kwa moja</string>
     <string name="assist_unlock_for_mic">Fungua simu mara moja na uruhusu kipaza sauti, kisha hii itasikiliza mara moja.</string>
     <string name="assist_send_failed">Haikutumwa: %1$s. Maneno yako bado yapo hapa.</string>
     <string name="assist_link_dropped">kiungo cha kompyuta yako kimekatika</string>

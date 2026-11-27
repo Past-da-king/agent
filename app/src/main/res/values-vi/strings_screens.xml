@@ -288,6 +288,8 @@
     <string name="voice_hear">Nghe thử</string>
     <string name="voice_autoplay">Tự phát khi cắm tai nghe</string>
     <string name="voice_autoplay_sub">Ghi âm tự phát khi bạn đeo tai nghe</string>
+    <string name="voice_autoplay_notes">Phát tin nhắn thoại ngay khi đến</string>
+    <string name="voice_autoplay_notes_sub">Tin nhắn thoại của trợ lý tự phát, và nhạc sẽ nhỏ lại trong lúc phát</string>
     <string name="voice_live">Cuộc gọi trực tiếp</string>
     <string name="voice_live_sub">Gọi %1$s và cứ nói chuyện. Nó giao việc thật cho trợ lý chính của bạn và báo khi có điều quan trọng.</string>
     <string name="voice_live_needs">Cần khóa Google (Gemini): chọn Google ở trên và lưu một khóa. Nó chạy trên Gemini Live.</string>

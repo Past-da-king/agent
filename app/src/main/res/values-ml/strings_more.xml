@@ -137,6 +137,7 @@
     <string name="link_group_phone">നിങ്ങൾക്കുള്ള അറിയിപ്പുകൾ</string>
     <string name="link_group_location">നിങ്ങളുടെ ലൊക്കേഷൻ (ഒരിക്കൽ ചോദിക്കും)</string>
     <string name="link_group_automation">മറ്റ് ആപ്പുകൾ: ഇന്റന്റുകൾ, സംഗീതവും വീഡിയോയും, മാക്രോകൾ (അനുവദിച്ചില്ലെങ്കിൽ ഇന്റന്റുകളും മാക്രോകളും ചോദിക്കും)</string>
+    <string name="link_group_logs">ഈ ആപ്പിന്റെ സ്വന്തം ലോഗുകൾ, പ്രശ്നം കണ്ടെത്താൻ നിങ്ങളുടെ കമ്പ്യൂട്ടറിന്</string>
     <string name="link_ask_approve">അംഗീകരിക്കണോ: %1$s?</string>
     <string name="link_ask_title">നിങ്ങളുടെ ഏജന്റ് ചോദിക്കുന്നു</string>
     <string name="link_saved_downloads">ഡൗൺലോഡ്സിൽ സേവ് ചെയ്തു. തുറക്കാൻ ടാപ്പ് ചെയ്യുക.</string>
@@ -677,6 +678,7 @@
     <string name="assist_read_all">എല്ലാം വായിക്കുക</string>
     <string name="assist_mic_off">ഈ ആപ്പിന് മൈക്രോഫോൺ ഓഫ് ആണ്, അതിനാൽ ഇവിടെടൈപ്പ് ചെയ്യൂ. ഫോണിന്റെ ക്രമീകരണങ്ങളിൽ അനുമതി നൽകാം.</string>
     <string name="assist_live_stopped">ലൈവ് വോയ്സ് നിലച്ചു: %1$s ഇവിടെ ടൈപ്പ് ചെയ്യാം, അല്ലെങ്കിൽ മൈക്ക് ടാപ്പ് ചെയ്യൂ.</string>
+    <string name="assist_talk_live">തത്സമയം സംസാരിക്കുക</string>
     <string name="assist_unlock_for_mic">ഫോൺ ഒരിക്കൽ അൺലോക്ക് ചെയ്ത് മൈക്രോഫോണിന് അനുമതി നൽകൂ, പിന്നെ ഉടൻ കേൾക്കാൻ തുടങ്ങും.</string>
     <string name="assist_send_failed">അയയ്ക്കാനായില്ല: %1$s. നിങ്ങളുടെ വാക്കുകൾ ഇപ്പോഴും ഇവിടെയുണ്ട്.</string>
     <string name="assist_link_dropped">നിങ്ങളുടെ കമ്പ്യൂട്ടറുമായുള്ള ബന്ധം വിച്ഛേദിച്ചു</string>

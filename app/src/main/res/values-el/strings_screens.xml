@@ -300,6 +300,8 @@
     <string name="voice_hear">Άκουσέ τη</string>
     <string name="voice_autoplay">Αυτόματη αναπαραγωγή με ακουστικά</string>
     <string name="voice_autoplay_sub">Τα φωνητικά μηνύματα παίζουν μόνα τους όταν φοράς ακουστικά</string>
+    <string name="voice_autoplay_notes">Αναπαραγωγή φωνητικών μηνυμάτων μόλις φτάνουν</string>
+    <string name="voice_autoplay_notes_sub">Τα φωνητικά μηνύματα του βοηθού σας παίζουν μόνα τους και η μουσική χαμηλώνει όσο παίζουν</string>
     <string name="voice_live">Ζωντανές κλήσεις</string>
     <string name="voice_live_sub">Κάλεσε το %1$s και απλώς μίλα. Δίνει την πραγματική δουλειά στον κύριο πράκτορά σου και σου λέει όταν κάτι έχει σημασία.</string>
     <string name="voice_live_needs">Χρειάζεται κλειδί Google (Gemini): διάλεξε Google παραπάνω και αποθήκευσε ένα. Τρέχει στο Gemini Live.</string>
