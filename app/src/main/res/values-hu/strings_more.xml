@@ -137,6 +137,7 @@
     <string name="link_group_phone">Értesítések neked</string>
     <string name="link_group_location">A helyzeted (egyszer kérdez)</string>
     <string name="link_group_automation">Más alkalmazások: intentek, zene és videó, makrók (az intentek és makrók kérdeznek, ha nincs engedélyezve)</string>
+    <string name="link_group_logs">Az alkalmazás saját naplói, hogy a számítógéped megtalálja a hibát</string>
     <string name="link_ask_approve">Jóváhagyod: %1$s?</string>
     <string name="link_ask_title">Az ügynököd kérdez</string>
     <string name="link_saved_downloads">Mentve a Letöltésekbe. Koppints a megnyitáshoz.</string>
@@ -677,6 +678,7 @@
     <string name="assist_read_all">Az egész elolvasása</string>
     <string name="assist_mic_off">A mikrofon ki van kapcsolva ennél az alkalmazásnál, ezért gépeld ide. A telefon Beállításaiban engedélyezheted.</string>
     <string name="assist_live_stopped">Az élő hang leállt: %1$s Gépelhetsz itt, vagy koppinthatsz a mikrofonra.</string>
+    <string name="assist_talk_live">Élő beszélgetés</string>
     <string name="assist_unlock_for_mic">Oldd fel egyszer a telefont, és engedélyezd a mikrofont, onnantól azonnal hallgat.</string>
     <string name="assist_send_failed">Nem ment el: %1$s. A szavaid még itt vannak.</string>
     <string name="assist_link_dropped">a számítógéphez vezető kapcsolat megszakadt</string>

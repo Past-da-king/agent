@@ -324,6 +324,8 @@
     <string name="voice_hear">Послушать</string>
     <string name="voice_autoplay">Автовоспроизведение в наушниках</string>
     <string name="voice_autoplay_sub">Голосовые сообщения воспроизводятся сами, когда вы в наушниках</string>
+    <string name="voice_autoplay_notes">Воспроизводить голосовые сообщения сразу</string>
+    <string name="voice_autoplay_notes_sub">Голосовые сообщения агента играют сами, а музыка в это время становится тише</string>
     <string name="voice_live">Живые звонки</string>
     <string name="voice_live_sub">Позвоните %1$s и просто говорите. Настоящую работу он передаёт вашему основному агенту и сообщает вам, когда что-то важно.</string>
     <string name="voice_live_needs">Нужен ключ Google (Gemini): выберите Google выше и сохраните ключ. Работает на Gemini Live.</string>

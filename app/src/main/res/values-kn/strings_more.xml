@@ -137,6 +137,7 @@
     <string name="link_group_phone">ನಿಮಗೆ ಅಧಿಸೂಚನೆಗಳು</string>
     <string name="link_group_location">ನಿಮ್ಮ ಸ್ಥಳ (ಒಮ್ಮೆ ಕೇಳಲಾಗುವುದು)</string>
     <string name="link_group_automation">ಇತರ ಆ್ಯಪ್‌ಗಳು: ಇಂಟೆಂಟ್‌ಗಳು, ಸಂಗೀತ ಮತ್ತು ವೀಡಿಯೊ, ಮ್ಯಾಕ್ರೋಗಳು (ಅನುಮತಿಸದ ಹೊರತು ಇಂಟೆಂಟ್‌ಗಳು ಮತ್ತು ಮ್ಯಾಕ್ರೋಗಳು ಕೇಳುತ್ತವೆ)</string>
+    <string name="link_group_logs">ಈ ಆ್ಯಪ್‌ನ ಸ್ವಂತ ಲಾಗ್‌ಗಳು, ನಿಮ್ಮ ಕಂಪ್ಯೂಟರ್ ಸಮಸ್ಯೆಯನ್ನು ಕಂಡುಹಿಡಿಯಲು</string>
     <string name="link_ask_approve">ಅನುಮೋದಿಸಬೇಕೇ: %1$s?</string>
     <string name="link_ask_title">ನಿಮ್ಮ ಏಜೆಂಟ್ ಕೇಳುತ್ತಿದೆ</string>
     <string name="link_saved_downloads">ಡೌನ್‌ಲೋಡ್ಸ್‌ನಲ್ಲಿ ಉಳಿಸಲಾಗಿದೆ. ತೆರೆಯಲು ಟ್ಯಾಪ್ ಮಾಡಿ.</string>
@@ -677,6 +678,7 @@
     <string name="assist_read_all">ಎಲ್ಲವನ್ನೂ ಓದಿ</string>
     <string name="assist_mic_off">ಈ ಆ್ಯಪ್‌ಗೆ ಮೈಕ್ರೋಫೋನ್ ಆಫ್ ಆಗಿದೆ, ಆದ್ದರಿಂದ ಇಲ್ಲಿ ಟೈಪ್ ಮಾಡಿ. ಫೋನ್‌ನ ಸೆಟ್ಟಿಂಗ್‌ಗಳಲ್ಲಿ ಅನುಮತಿ ನೀಡಬಹುದು.</string>
     <string name="assist_live_stopped">ನೇರ ಧ್ವನಿ ನಿಂತಿದೆ: %1$s ಇಲ್ಲಿ ಟೈಪ್ ಮಾಡಬಹುದು, ಅಥವಾ ಮೈಕ್ ಒತ್ತಿ.</string>
+    <string name="assist_talk_live">ನೇರವಾಗಿ ಮಾತನಾಡಿ</string>
     <string name="assist_unlock_for_mic">ಫೋನ್ ಒಮ್ಮೆ ಅನ್‌ಲಾಕ್ ಮಾಡಿ ಮೈಕ್ರೋಫೋನ್‌ಗೆ ಅನುಮತಿ ನೀಡಿ; ಆಗ ಇದು ತಕ್ಷಣ ಕೇಳಲು ಶುರು ಮಾಡುತ್ತದೆ.</string>
     <string name="assist_send_failed">ಕಳುಹಿಸಲಾಗಲಿಲ್ಲ: %1$s. ನಿಮ್ಮ ಮಾತುಗಳು ಇನ್ನೂ ಇಲ್ಲಿವೆ.</string>
     <string name="assist_link_dropped">ನಿಮ್ಮ ಕಂಪ್ಯೂಟರ್‌ಗಿನ ಸಂಪರ್ಕ ಕಡಿತಗೊಂಡಿದೆ</string>

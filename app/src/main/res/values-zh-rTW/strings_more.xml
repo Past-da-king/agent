@@ -137,6 +137,7 @@
     <string name="link_group_phone">發給你的通知</string>
     <string name="link_group_location">你的位置（僅詢問一次）</string>
     <string name="link_group_automation">其他應用程式：intent、音樂和影片、巨集（除非已允許，否則 intent 和巨集會先詢問）</string>
+    <string name="link_group_logs">本應用程式自己的記錄，方便電腦找出問題原因</string>
     <string name="link_ask_approve">批准：%1$s？</string>
     <string name="link_ask_title">你的代理在詢問</string>
     <string name="link_saved_downloads">已儲存到下載。點一下開啟。</string>
@@ -667,6 +668,7 @@
     <string name="assist_read_all">閱讀全文</string>
     <string name="assist_mic_off">此應用程式的麥克風已關閉，請在這裡輸入。你可以在手機的設定中允許。</string>
     <string name="assist_live_stopped">實時語音已停止：%1$s 你可以在這裡輸入，或點一下麥克風。</string>
+    <string name="assist_talk_live">即時對話</string>
     <string name="assist_unlock_for_mic">解鎖手機一次並允許麥克風，之後它會立即開始聆聽。</string>
     <string name="assist_send_failed">傳送失敗：%1$s。你的文字仍保留在這裡。</string>
     <string name="assist_link_dropped">與你的電腦的連線斷開了</string>

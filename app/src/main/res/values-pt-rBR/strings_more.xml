@@ -137,6 +137,7 @@
     <string name="link_group_phone">Notificações para você</string>
     <string name="link_group_location">Sua localização (perguntada uma vez)</string>
     <string name="link_group_automation">Outros apps: intents, música e vídeo, macros (intents e macros perguntam, a menos que permitidos)</string>
+    <string name="link_group_logs">Os registros deste app, para o computador descobrir o que deu errado</string>
     <string name="link_ask_approve">Aprovar: %1$s?</string>
     <string name="link_ask_title">Seu agente pergunta</string>
     <string name="link_saved_downloads">Salvo em Downloads. Toque para abrir.</string>
@@ -687,6 +688,7 @@
     <string name="assist_read_all">Ler tudo</string>
     <string name="assist_mic_off">O microfone está desativado para este app, então digite aqui. Você pode permitir nas Configurações do celular.</string>
     <string name="assist_live_stopped">A voz ao vivo parou: %1$s Você pode digitar aqui ou tocar no microfone.</string>
+    <string name="assist_talk_live">Falar ao vivo</string>
     <string name="assist_unlock_for_mic">Desbloqueie o celular uma vez e permita o microfone, e então ele ouve na hora.</string>
     <string name="assist_send_failed">Isso não foi enviado: %1$s. Suas palavras ainda estão aqui.</string>
     <string name="assist_link_dropped">a conexão com seu computador caiu</string>

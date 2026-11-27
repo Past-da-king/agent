@@ -30,6 +30,9 @@ class AssistProbe : BroadcastReceiver() {
             s.setOnboarded(true)
             Log.i(AssistService.TAG, "probe setup: stand-in model at $url")
         }
+        // A real Google key for an emulator call proof (never in a release: this receiver is debug only). "-" removes it.
+        intent.getStringExtra("voice_key")?.let { k -> com.past9.phoneaos.App.graph(context).settings.setVoiceKey("gemini", k.takeIf { it != "-" }); Log.i(AssistService.TAG, "probe voice_key set=${k != "-"}") }
+        intent.getStringExtra("live_voice")?.let { AssistPrefs.setLiveVoice(context, it == "on"); Log.i(AssistService.TAG, "probe live_voice=$it") }
         intent.getStringExtra("read_screen")?.let { AssistPrefs.setReadScreen(context, it == "on"); Log.i(AssistService.TAG, "probe read_screen=$it") }
         intent.getStringExtra("read_picture")?.let { AssistPrefs.setReadScreenshot(context, it == "on"); Log.i(AssistService.TAG, "probe read_picture=$it") }
         intent.getStringExtra("open")?.let { Log.i(AssistService.TAG, "probe open: $it -> ${AssistEntry.open(context, it)}") }

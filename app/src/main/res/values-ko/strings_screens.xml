@@ -288,6 +288,8 @@
     <string name="voice_hear">들어 보기</string>
     <string name="voice_autoplay">이어폰을 끼면 자동 재생</string>
     <string name="voice_autoplay_sub">이어폰을 착용하고 있으면 음성 메모가 저절로 재생됩니다</string>
+    <string name="voice_autoplay_notes">음성 메모가 오면 바로 재생</string>
+    <string name="voice_autoplay_notes_sub">에이전트의 음성 메모가 저절로 재생되고, 재생되는 동안 음악 소리가 줄어듭니다</string>
     <string name="voice_live">실시간 통화</string>
     <string name="voice_live_sub">%1$s에게 전화해서 그냥 말하세요. 실제 작업은 메인 에이전트에게 넘기고, 중요한 일이 있으면 알려 줍니다.</string>
     <string name="voice_live_needs">Google(Gemini) 키가 필요합니다: 위에서 Google을 선택하고 키를 저장하세요. Gemini Live로 실행됩니다.</string>

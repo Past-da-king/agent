@@ -300,6 +300,8 @@
     <string name="voice_hear">Lilile</string>
     <string name="voice_autoplay">Dlala ngokuzenzekelayo nee-earphone zifakiwe</string>
     <string name="voice_autoplay_sub">Amanoti elizwi adlala ngokwawo xa unee-earphone</string>
+    <string name="voice_autoplay_notes">Dlala amanqaku elizwi xa efika</string>
+    <string name="voice_autoplay_notes_sub">Amanqaku elizwi e-arhente yakho azidlalela ngokwawo, kwaye umculo uyehla xa edlala</string>
     <string name="voice_live">Iminxeba eyiphilayo</string>
     <string name="voice_live_sub">Tshaya i-%1$s uthethe nje. Inika i-agent yakho engundoqo umsebenzi wokwenyani yaye ikuxelela xa kukho into ebalulekileyo.</string>
     <string name="voice_live_needs">Ifuna isitshixo se-Google (Gemini): khetha i-Google ngentla uze ugcine esinye. Isebenza kwi-Gemini Live.</string>

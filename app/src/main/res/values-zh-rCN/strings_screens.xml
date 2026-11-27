@@ -288,6 +288,8 @@
     <string name="voice_hear">试听</string>
     <string name="voice_autoplay">插入耳机时自动播放</string>
     <string name="voice_autoplay_sub">你戴着耳机时，语音消息会自动播放</string>
+    <string name="voice_autoplay_notes">语音消息到达时自动播放</string>
+    <string name="voice_autoplay_notes_sub">代理发来的语音消息会自动播放，播放时音乐音量会降低</string>
     <string name="voice_live">实时通话</string>
     <string name="voice_live_sub">给 %1$s 打电话，直接说话。它会把真正的工作交给你的主智能体，并在有重要事情时告诉你。</string>
     <string name="voice_live_needs">需要 Google（Gemini）密钥：在上面选择 Google 并保存一个。它使用 Gemini Live 运行。</string>

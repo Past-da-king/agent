@@ -300,6 +300,8 @@
     <string name="voice_hear">Meghallgatás</string>
     <string name="voice_autoplay">Automatikus lejátszás fülhallgatóval</string>
     <string name="voice_autoplay_sub">A hangüzenetek maguktól lejátszódnak, ha fülhallgatót viselsz</string>
+    <string name="voice_autoplay_notes">Hangüzenetek lejátszása érkezéskor</string>
+    <string name="voice_autoplay_notes_sub">Az ügynököd hangüzenetei maguktól lejátszódnak, és közben halkabb lesz a zene</string>
     <string name="voice_live">Élő hívások</string>
     <string name="voice_live_sub">Hívd %1$s-t, és csak beszélj. A valódi munkát a fő ügynöködre bízza, és szól, ha valami számít.</string>
     <string name="voice_live_needs">Google (Gemini) kulcs kell: válaszd fent a Google-t, és mentsd el. A Gemini Live-on fut.</string>

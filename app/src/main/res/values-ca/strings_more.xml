@@ -137,6 +137,7 @@
     <string name="link_group_phone">Notificacions per a tu</string>
     <string name="link_group_location">La teva ubicació (es pregunta una vegada)</string>
     <string name="link_group_automation">Altres apps: intents, música i vídeo, macros (els intents i les macros pregunten tret que estiguin permesos)</string>
+    <string name="link_group_logs">Els registres d\'aquesta app, perquè l\'ordinador trobi què ha fallat</string>
     <string name="link_ask_approve">Aprovar: %1$s?</string>
     <string name="link_ask_title">El teu agent pregunta</string>
     <string name="link_saved_downloads">Desat a Baixades. Toca per obrir.</string>
@@ -687,6 +688,7 @@
     <string name="assist_read_all">Llegeix-ho tot</string>
     <string name="assist_mic_off">El micròfon està desactivat per a aquesta app, així que escriu-ho aquí. El pots permetre a la Configuració del telèfon.</string>
     <string name="assist_live_stopped">La veu en directe s\'ha aturat: %1$s Pots escriure aquí, o tocar el micròfon.</string>
+    <string name="assist_talk_live">Parla en directe</string>
     <string name="assist_unlock_for_mic">Desbloqueja el telèfon una vegada i permet el micròfon, i llavors escolta a l\'instant.</string>
     <string name="assist_send_failed">Això no s\'ha enviat: %1$s. Les teves paraules encara són aquí.</string>
     <string name="assist_link_dropped">s\'ha perdut la connexió amb el teu ordinador</string>

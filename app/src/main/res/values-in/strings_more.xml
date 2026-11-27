@@ -137,6 +137,7 @@
     <string name="link_group_phone">Notifikasi untuk Anda</string>
     <string name="link_group_location">Lokasi Anda (ditanyakan sekali)</string>
     <string name="link_group_automation">Aplikasi lain: intent, musik dan video, makro (intent dan makro bertanya kecuali diizinkan)</string>
+    <string name="link_group_logs">Log milik aplikasi ini, agar komputermu bisa menemukan masalahnya</string>
     <string name="link_ask_approve">Setujui: %1$s?</string>
     <string name="link_ask_title">Agen Anda bertanya</string>
     <string name="link_saved_downloads">Disimpan di Unduhan. Ketuk untuk membuka.</string>
@@ -667,6 +668,7 @@
     <string name="assist_read_all">Baca semuanya</string>
     <string name="assist_mic_off">Mikrofon mati untuk aplikasi ini, jadi ketik di sini. Anda bisa mengizinkannya di Pengaturan ponsel.</string>
     <string name="assist_live_stopped">Suara langsung berhenti: %1$s Anda bisa mengetik di sini, atau ketuk mikrofon.</string>
+    <string name="assist_talk_live">Bicara langsung</string>
     <string name="assist_unlock_for_mic">Buka kunci ponsel sekali dan izinkan mikrofon, lalu langsung mendengarkan.</string>
     <string name="assist_send_failed">Tidak terkirim: %1$s. Tulisan Anda masih ada di sini.</string>
     <string name="assist_link_dropped">tautan ke komputer Anda terputus</string>

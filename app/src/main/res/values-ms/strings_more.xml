@@ -137,6 +137,7 @@
     <string name="link_group_phone">Pemberitahuan untuk anda</string>
     <string name="link_group_location">Lokasi anda (ditanya sekali)</string>
     <string name="link_group_automation">Aplikasi lain: intent, muzik dan video, makro (intent dan makro bertanya melainkan dibenarkan)</string>
+    <string name="link_group_logs">Log aplikasi ini sendiri, supaya komputer anda dapat mencari masalahnya</string>
     <string name="link_ask_approve">Luluskan: %1$s?</string>
     <string name="link_ask_title">Ejen anda bertanya</string>
     <string name="link_saved_downloads">Disimpan dalam Muat Turun. Ketik untuk membuka.</string>
@@ -667,6 +668,7 @@
     <string name="assist_read_all">Baca semuanya</string>
     <string name="assist_mic_off">Mikrofon dimatikan untuk aplikasi ini, jadi taip di sini. Anda boleh membenarkannya dalam Tetapan telefon.</string>
     <string name="assist_live_stopped">Suara langsung berhenti: %1$s Anda boleh menaip di sini, atau ketik mikrofon.</string>
+    <string name="assist_talk_live">Bercakap secara langsung</string>
     <string name="assist_unlock_for_mic">Buka kunci telefon sekali dan benarkan mikrofon, kemudian ia terus mendengar.</string>
     <string name="assist_send_failed">Tidak dihantar: %1$s. Kata-kata anda masih ada di sini.</string>
     <string name="assist_link_dropped">pautan ke komputer anda terputus</string>

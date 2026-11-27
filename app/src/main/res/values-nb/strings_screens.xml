@@ -299,6 +299,8 @@
     <string name="voice_hear">Hør den</string>
     <string name="voice_autoplay">Spill av automatisk med øretelefoner på</string>
     <string name="voice_autoplay_sub">Talemeldinger spilles av av seg selv når du har øretelefoner på</string>
+    <string name="voice_autoplay_notes">Spill av talemeldinger når de kommer</string>
+    <string name="voice_autoplay_notes_sub">Agentens talemeldinger spilles av av seg selv, og musikken dempes mens de spilles</string>
     <string name="voice_live">Direktesamtaler</string>
     <string name="voice_live_sub">Ring %1$s og bare snakk. Den gir ekte arbeid til hovedagenten din og forteller deg når noe er viktig.</string>
     <string name="voice_live_needs">Krever en Google-nøkkel (Gemini): velg Google over og lagre en. Den kjører på Gemini Live.</string>

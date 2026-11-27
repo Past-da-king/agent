@@ -288,6 +288,8 @@
     <string name="voice_hear">試聽</string>
     <string name="voice_autoplay">插入耳機時自動播放</string>
     <string name="voice_autoplay_sub">你戴著耳機時，語音訊息會自動播放</string>
+    <string name="voice_autoplay_notes">語音訊息送達時自動播放</string>
+    <string name="voice_autoplay_notes_sub">代理傳來的語音訊息會自動播放，播放時音樂音量會降低</string>
     <string name="voice_live">實時通話</string>
     <string name="voice_live_sub">給 %1$s 打電話，直接說話。它會把真正的工作交給你的主代理，並在有重要事情時告訴你。</string>
     <string name="voice_live_needs">需要 Google（Gemini）金鑰：在上面選擇 Google 並儲存一個。它使用 Gemini Live 執行。</string>

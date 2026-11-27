@@ -137,6 +137,7 @@
     <string name="link_group_phone">发给你的通知</string>
     <string name="link_group_location">你的位置（仅询问一次）</string>
     <string name="link_group_automation">其他应用：intent、音乐和视频、宏（除非已允许，否则 intent 和宏会先询问）</string>
+    <string name="link_group_logs">本应用自己的日志，便于电脑查找问题原因</string>
     <string name="link_ask_approve">批准：%1$s？</string>
     <string name="link_ask_title">你的智能体在询问</string>
     <string name="link_saved_downloads">已保存到下载。点按打开。</string>
@@ -667,6 +668,7 @@
     <string name="assist_read_all">阅读全文</string>
     <string name="assist_mic_off">此应用的麦克风已关闭，请在这里输入。你可以在手机的设置中允许。</string>
     <string name="assist_live_stopped">实时语音已停止：%1$s 你可以在这里输入，或点按麦克风。</string>
+    <string name="assist_talk_live">实时对话</string>
     <string name="assist_unlock_for_mic">解锁手机一次并允许麦克风，之后它会立即开始聆听。</string>
     <string name="assist_send_failed">发送失败：%1$s。你的文字仍保留在这里。</string>
     <string name="assist_link_dropped">与你的电脑的连接断开了</string>

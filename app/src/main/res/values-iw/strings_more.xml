@@ -137,6 +137,7 @@
     <string name="link_group_phone">התראות אליך</string>
     <string name="link_group_location">המיקום שלך (נשאל פעם אחת)</string>
     <string name="link_group_automation">אפליקציות אחרות: intents, מוזיקה ווידאו, מאקרו (intents ומאקרו שואלים אלא אם הותרו)</string>
+    <string name="link_group_logs">היומנים של האפליקציה הזאת בלבד, כדי שהמחשב ימצא מה השתבש</string>
     <string name="link_ask_approve">לאשר: %1$s?</string>
     <string name="link_ask_title">הסוכן שלך שואל</string>
     <string name="link_saved_downloads">נשמר בהורדות. הקש לפתיחה.</string>
@@ -697,6 +698,7 @@
     <string name="assist_read_all">קרא הכול</string>
     <string name="assist_mic_off">המיקרופון כבוי לאפליקציה הזו, ולכן הקלד כאן. אפשר לאפשר אותו בהגדרות הטלפון.</string>
     <string name="assist_live_stopped">הקול החי נעצר: %1$s אפשר להקליד כאן, או להקיש על המיקרופון.</string>
+    <string name="assist_talk_live">דברו בשידור חי</string>
     <string name="assist_unlock_for_mic">בטל נעילת הטלפון פעם אחת ואפשר את המיקרופון, ואז זה יאזין מיד.</string>
     <string name="assist_send_failed">השליחה נכשלה: %1$s. המילים שלך עדיין כאן.</string>
     <string name="assist_link_dropped">הקישור למחשב שלך נותק</string>

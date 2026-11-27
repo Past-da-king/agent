@@ -288,6 +288,8 @@
     <string name="voice_hear">Gbọ́ ọ</string>
     <string name="voice_autoplay">Máa ṣeré fúnra rẹ̀ nígbà tí o bá ti fi etí-fóònù sí i</string>
     <string name="voice_autoplay_sub">Àwọn ìwé ohùn ń ṣeré fúnra wọn nígbà tí o bá ń wọ etí-fóònù</string>
+    <string name="voice_autoplay_notes">Ṣe àwọn ìfiránṣẹ́ ohùn ní kété tí wọ́n bá dé</string>
+    <string name="voice_autoplay_notes_sub">Àwọn ìfiránṣẹ́ ohùn aṣojú rẹ ń dún fúnra wọn, orin sì máa ń rọlẹ̀ nígbà tí wọ́n bá ń dún</string>
     <string name="voice_live">Àwọn ìpè gbígbé</string>
     <string name="voice_live_sub">Pe %1$s kí o sì sọ̀rọ̀ lásán. Ó ń fi iṣẹ́ gidi lé agent rẹ àkọ́kọ́ lọ́wọ́ ó sì ń sọ fún ọ nígbà tí ohun kan bá ṣe pàtàkì.</string>
     <string name="voice_live_needs">Ó nílò kọ́kọ́rọ́ Google (Gemini): yan Google lókè kí o sì fi ọ̀kan pamọ́. Ó ń ṣiṣẹ́ lórí Gemini Live.</string>

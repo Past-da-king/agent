@@ -136,6 +136,7 @@
     <string name="link_group_phone">Kennisgewings aan jou</string>
     <string name="link_group_location">Jou ligging (een keer gevra)</string>
     <string name="link_group_automation">Ander programme: intents, musiek en video, makro\'s (intents en makro\'s vra tensy toegelaat)</string>
+    <string name="link_group_logs">Hierdie app se eie logs, sodat jou rekenaar kan vind wat skeefgeloop het</string>
     <string name="link_ask_approve">Keur goed: %1$s?</string>
     <string name="link_ask_title">Jou agent vra</string>
     <string name="link_saved_downloads">In Aflaaie gestoor. Tik om oop te maak.</string>
@@ -676,6 +677,7 @@
     <string name="assist_read_all">Lees alles</string>
     <string name="assist_mic_off">Die mikrofoon is af vir hierdie program, so tik dit hier. Jy kan dit in die foon se Instellings toelaat.</string>
     <string name="assist_live_stopped">Regstreekse stem het gestop: %1$s Jy kan hier tik, of op die mikrofoon tik.</string>
+    <string name="assist_talk_live">Praat regstreeks</string>
     <string name="assist_unlock_for_mic">Sluit die foon een keer oop en laat die mikrofoon toe, dan luister dit dadelik.</string>
     <string name="assist_send_failed">Dit is nie gestuur nie: %1$s. Jou woorde is nog hier.</string>
     <string name="assist_link_dropped">die skakel na jou rekenaar het weggeval</string>

@@ -137,6 +137,7 @@
     <string name="link_group_phone">Meldingen naar jou</string>
     <string name="link_group_location">Je locatie (één keer gevraagd)</string>
     <string name="link_group_automation">Andere apps: intents, muziek en video, macro’s (intents en macro’s vragen tenzij toegestaan)</string>
+    <string name="link_group_logs">De eigen logboeken van deze app, zodat je computer kan zien wat er misging</string>
     <string name="link_ask_approve">Goedkeuren: %1$s?</string>
     <string name="link_ask_title">Je agent vraagt</string>
     <string name="link_saved_downloads">Opgeslagen in Downloads. Tik om te openen.</string>
@@ -677,6 +678,7 @@
     <string name="assist_read_all">Alles lezen</string>
     <string name="assist_mic_off">De microfoon staat uit voor deze app, dus typ het hier. Je kunt hem toestaan in de Instellingen van de telefoon.</string>
     <string name="assist_live_stopped">Livestem gestopt: %1$s Je kunt hier typen of op de microfoon tikken.</string>
+    <string name="assist_talk_live">Live praten</string>
     <string name="assist_unlock_for_mic">Ontgrendel de telefoon één keer en sta de microfoon toe, dan luistert hij meteen.</string>
     <string name="assist_send_failed">Dat is niet verstuurd: %1$s. Je tekst staat er nog.</string>
     <string name="assist_link_dropped">de verbinding met je computer viel weg</string>

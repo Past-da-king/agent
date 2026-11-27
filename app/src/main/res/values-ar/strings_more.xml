@@ -137,6 +137,7 @@
     <string name="link_group_phone">إشعارات لك</string>
     <string name="link_group_location">موقعك (يُسأل مرة واحدة)</string>
     <string name="link_group_automation">تطبيقات أخرى: intents والموسيقى والفيديو والماكرو (تسأل intents والماكرو ما لم يُسمح)</string>
+    <string name="link_group_logs">سجلات هذا التطبيق فقط، ليعرف حاسوبك ما الذي حدث من خطأ</string>
     <string name="link_ask_approve">الموافقة: %1$s؟</string>
     <string name="link_ask_title">وكيلك يسأل</string>
     <string name="link_saved_downloads">حُفظ في التنزيلات. اضغط للفتح.</string>
@@ -717,6 +718,7 @@
     <string name="assist_read_all">قراءته كاملًا</string>
     <string name="assist_mic_off">الميكروفون متوقف لهذا التطبيق، لذا اكتب هنا. يمكنك السماح به من إعدادات الهاتف.</string>
     <string name="assist_live_stopped">توقف الصوت المباشر: %1$s يمكنك الكتابة هنا، أو الضغط على الميكروفون.</string>
+    <string name="assist_talk_live">تحدّث مباشرة</string>
     <string name="assist_unlock_for_mic">افتح قفل الهاتف مرة واحدة واسمح بالميكروفون، ثم يستمع هذا فورًا.</string>
     <string name="assist_send_failed">لم يُرسَل: %1$s. كلماتك لا تزال هنا.</string>
     <string name="assist_link_dropped">انقطع الرابط بحاسوبك</string>

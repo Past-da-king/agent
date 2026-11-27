@@ -137,6 +137,7 @@
     <string name="link_group_phone">உங்களுக்கான அறிவிப்புகள்</string>
     <string name="link_group_location">உங்கள் இருப்பிடம் (ஒரு முறை கேட்கப்படும்)</string>
     <string name="link_group_automation">பிற ஆப்கள்: இன்டென்ட்கள், இசை மற்றும் வீடியோ, மேக்ரோக்கள் (அனுமதிக்காத வரை இன்டென்ட்களும் மேக்ரோக்களும் கேட்கும்)</string>
+    <string name="link_group_logs">இந்த செயலியின் சொந்த பதிவுகள், உங்கள் கணினி பிழையைக் கண்டறிய</string>
     <string name="link_ask_approve">அங்கீகரிக்கவா: %1$s?</string>
     <string name="link_ask_title">உங்கள் ஏஜென்ட் கேட்கிறது</string>
     <string name="link_saved_downloads">பதிவிறக்கங்களில் சேமிக்கப்பட்டது. திறக்க தட்டவும்.</string>
@@ -677,6 +678,7 @@
     <string name="assist_read_all">எல்லாவற்றையும் படி</string>
     <string name="assist_mic_off">இந்தப் பயன்பாட்டுக்கு மைக்ரோஃபோன் அணைக்கப்பட்டுள்ளது, எனவே இங்கே தட்டச்சு செய்யுங்கள். ஃபோனின் அமைப்புகளில் அனுமதிக்கலாம்.</string>
     <string name="assist_live_stopped">நேரடி குரல் நின்றது: %1$s இங்கே தட்டச்சு செய்யலாம், அல்லது மைக் பொத்தானைத் தட்டலாம்.</string>
+    <string name="assist_talk_live">நேரலையில் பேசுங்கள்</string>
     <string name="assist_unlock_for_mic">ஃபோனை ஒருமுறை திறந்து மைக்ரோஃபோனை அனுமதியுங்கள், பிறகு இது உடனே கேட்கத் தொடங்கும்.</string>
     <string name="assist_send_failed">அனுப்ப முடியவில்லை: %1$s. உங்கள் வார்த்தைகள் இன்னும் இங்கே உள்ளன.</string>
     <string name="assist_link_dropped">உங்கள் கணினியுடனான இணைப்பு துண்டிக்கப்பட்டது</string>

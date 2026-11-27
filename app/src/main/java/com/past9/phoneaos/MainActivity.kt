@@ -364,17 +364,7 @@ class MainActivity : ComponentActivity() {
         }
         // The background screen's sheets (peek, setup, recordings): slide-up, drawn once here.
         com.past9.phoneaos.ui.screens.ScreenSheetsHost(settings.agentName.ifBlank { getString(R.string.svc_your_agent) })
-        // Read new replies aloud when the user asked for that.
-        // Only replies that arrive from now on are read out; the history never is.
-        var primed by remember { mutableStateOf(false) }
-        LaunchedEffect(items.lastOrNull()?.id) {
-            if (!primed) { g.markHeard(dataDb.chat().all().first().map { it.id }); primed = true; return@LaunchedEffect }
-            val last = items.lastOrNull() ?: return@LaunchedEffect
-            if (org.json.JSONObject(last.meta).optBoolean("call")) return@LaunchedEffect // already heard it on the call
-            val ears = settings.autoPlayEarphones && g.earphonesIn()
-            // Text replies are never read out (his ruling 5 Oct 17:49): voice comes as voice notes only.
-            if (last.kind == "voice" && ears) g.autoPlayVoice(org.json.JSONObject(last.meta).optString("path"), last.id)
-        }
+        // Agent voice notes play by themselves from the app's own scope (Graph.watchVoiceNotes), in front or not.
 
         // Start CameraX early (no camera is opened, no permission is asked) so the camera card opens fast.
         LaunchedEffect(route) { if (route == "chat") com.past9.phoneaos.camera.CameraWarm.warm(this@MainActivity) }

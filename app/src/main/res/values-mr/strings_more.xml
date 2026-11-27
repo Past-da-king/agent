@@ -137,6 +137,7 @@
     <string name="link_group_phone">तुमच्यासाठी नोटिफिकेशन</string>
     <string name="link_group_location">तुमचे स्थान (एकदाच विचारले जाते)</string>
     <string name="link_group_automation">इतर ॲप्स: intent, संगीत आणि व्हिडिओ, मॅक्रो (परवानगी दिली नसेल तर intent आणि मॅक्रो विचारतात)</string>
+    <string name="link_group_logs">या अॅपचे स्वतःचे लॉग, म्हणजे तुमचा संगणक बिघाड शोधू शकेल</string>
     <string name="link_ask_approve">मंजूर करायचे: %1$s?</string>
     <string name="link_ask_title">तुमचा एजंट विचारत आहे</string>
     <string name="link_saved_downloads">डाउनलोडमध्ये सेव्ह केले. उघडण्यासाठी टॅप करा.</string>
@@ -677,6 +678,7 @@
     <string name="assist_read_all">सर्व वाचा</string>
     <string name="assist_mic_off">या ॲपसाठी मायक्रोफोन बंद आहे, म्हणून इथे टाइप करा. तुम्ही फोनच्या सेटिंग्जमध्ये परवानगी देऊ शकता.</string>
     <string name="assist_live_stopped">लाइव्ह आवाज थांबला: %1$s तुम्ही इथे टाइप करू शकता, किंवा माइकवर टॅप करा.</string>
+    <string name="assist_talk_live">थेट बोला</string>
     <string name="assist_unlock_for_mic">फोन एकदा अनलॉक करा आणि मायक्रोफोनला परवानगी द्या, मग हे लगेच ऐकते.</string>
     <string name="assist_send_failed">ते पाठवले गेले नाही: %1$s. तुमचे शब्द इथेच आहेत.</string>
     <string name="assist_link_dropped">तुमच्या कॉम्प्युटरशी असलेला लिंक तुटला</string>

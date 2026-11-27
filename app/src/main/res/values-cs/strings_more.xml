@@ -137,6 +137,7 @@
     <string name="link_group_phone">Oznámení pro vás</string>
     <string name="link_group_location">Vaše poloha (ptá se jednou)</string>
     <string name="link_group_automation">Jiné aplikace: intenty, hudba a video, makra (intenty a makra se ptají, pokud nejsou povolená)</string>
+    <string name="link_group_logs">Vlastní záznamy této aplikace, aby počítač zjistil, co se pokazilo</string>
     <string name="link_ask_approve">Schválit: %1$s?</string>
     <string name="link_ask_title">Váš agent se ptá</string>
     <string name="link_saved_downloads">Uloženo do Stažených. Klepnutím otevřete.</string>
@@ -697,6 +698,7 @@
     <string name="assist_read_all">Přečíst vše</string>
     <string name="assist_mic_off">Mikrofon je pro tuto aplikaci vypnutý, takže to napište sem. Povolit ho můžete v nastavení telefonu.</string>
     <string name="assist_live_stopped">Živý hlas se zastavil: %1$s Můžete psát sem, nebo klepnout na mikrofon.</string>
+    <string name="assist_talk_live">Mluvit živě</string>
     <string name="assist_unlock_for_mic">Jednou odemkněte telefon a povolte mikrofon, pak bude poslouchat hned.</string>
     <string name="assist_send_failed">Nebylo odesláno: %1$s. Vaše slova tu pořád jsou.</string>
     <string name="assist_link_dropped">spojení s vaším počítačem se přerušilo</string>

@@ -137,6 +137,7 @@
     <string name="link_group_phone">Dikitsiso go wena</string>
     <string name="link_group_location">Lefelo la gago (le botswa ka nako e le nngwe)</string>
     <string name="link_group_automation">Diapp tse dingwe: di-intent, mmino le video, di-macro (di-intent le di-macro di a botsa fa di sa letlelelwe)</string>
+    <string name="link_group_logs">Direkoto tsa tiriso eno fela, gore khomputara ya gago e bone bothata</string>
     <string name="link_ask_approve">Dumela: %1$s?</string>
     <string name="link_ask_title">Moemedi wa gago o a botsa</string>
     <string name="link_saved_downloads">Go bolokilwe mo Downloads. Kgotla go bula.</string>
@@ -677,6 +678,7 @@
     <string name="assist_read_all">Bala tsotlhe</string>
     <string name="assist_mic_off">Maekerofone e tima mo app eno, ka jalo e kwale fano. O ka e letla mo Ditlhophisong tsa mogala.</string>
     <string name="assist_live_stopped">Lentswe le le tshelang le emisitswe: %1$s O ka kwala fano, kgotsa wa kgotla maekerofone.</string>
+    <string name="assist_talk_live">Bua ka tlhamalalo</string>
     <string name="assist_unlock_for_mic">Notlolola mogala ka nako e le nngwe mme o letle maekerofone, mme seno se reetsa ka bonako.</string>
     <string name="assist_send_failed">Seo ga se a romelwa: %1$s. Mafoko a gago a santse a le teng.</string>
     <string name="assist_link_dropped">kgolagano le khomphiutha ya gago e kgaoganngwe</string>

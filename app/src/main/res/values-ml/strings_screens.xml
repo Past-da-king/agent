@@ -300,6 +300,8 @@
     <string name="voice_hear">കേൾക്കുക</string>
     <string name="voice_autoplay">ഇയർഫോൺ വെച്ചാൽ സ്വയം പ്ലേ ചെയ്യുക</string>
     <string name="voice_autoplay_sub">ഇയർഫോൺ ധരിച്ചിരിക്കുമ്പോൾ വോയ്‌സ് നോട്ടുകൾ തനിയെ പ്ലേ ആകും</string>
+    <string name="voice_autoplay_notes">വോയ്സ് നോട്ടുകൾ എത്തുമ്പോൾ തന്നെ പ്ലേ ചെയ്യുക</string>
+    <string name="voice_autoplay_notes_sub">നിങ്ങളുടെ ഏജന്റിന്റെ വോയ്സ് നോട്ടുകൾ സ്വയം പ്ലേ ആകും, അപ്പോൾ സംഗീതം കുറയും</string>
     <string name="voice_live">ലൈവ് കോളുകൾ</string>
     <string name="voice_live_sub">%1$s വിളിച്ച് സംസാരിക്കുക. യഥാർത്ഥ ജോലികൾ പ്രധാന ഏജന്റിന് കൈമാറും, എന്തെങ്കിലും പ്രധാനമാകുമ്പോൾ അറിയിക്കും.</string>
     <string name="voice_live_needs">Google (Gemini) കീ വേണം: മുകളിൽ Google തിരഞ്ഞെടുത്ത് ഒന്ന് സേവ് ചെയ്യുക. ഇത് Gemini Live-ൽ പ്രവർത്തിക്കുന്നു.</string>

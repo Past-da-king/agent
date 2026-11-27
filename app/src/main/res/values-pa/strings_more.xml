@@ -137,6 +137,7 @@
     <string name="link_group_phone">ਤੁਹਾਨੂੰ ਸੂਚਨਾਵਾਂ</string>
     <string name="link_group_location">ਤੁਹਾਡਾ ਟਿਕਾਣਾ (ਇੱਕ ਵਾਰ ਪੁੱਛਿਆ ਜਾਂਦਾ ਹੈ)</string>
     <string name="link_group_automation">ਹੋਰ ਐਪਾਂ: intent, ਸੰਗੀਤ ਅਤੇ ਵੀਡੀਓ, ਮੈਕਰੋ (ਇਜਾਜ਼ਤ ਨਾ ਹੋਵੇ ਤਾਂ intent ਅਤੇ ਮੈਕਰੋ ਪੁੱਛਦੇ ਹਨ)</string>
+    <string name="link_group_logs">ਇਸ ਐਪ ਦੇ ਆਪਣੇ ਲੌਗ, ਤਾਂ ਜੋ ਤੁਹਾਡਾ ਕੰਪਿਊਟਰ ਗੜਬੜ ਲੱਭ ਸਕੇ</string>
     <string name="link_ask_approve">ਮਨਜ਼ੂਰ ਕਰਨਾ ਹੈ: %1$s?</string>
     <string name="link_ask_title">ਤੁਹਾਡਾ ਏਜੰਟ ਪੁੱਛਦਾ ਹੈ</string>
     <string name="link_saved_downloads">Downloads ਵਿੱਚ ਸੰਭਾਲਿਆ ਗਿਆ। ਖੋਲ੍ਹਣ ਲਈ ਟੈਪ ਕਰੋ।</string>
@@ -677,6 +678,7 @@
     <string name="assist_read_all">ਸਾਰਾ ਪੜ੍ਹੋ</string>
     <string name="assist_mic_off">ਇਸ ਐਪ ਲਈ ਮਾਈਕ੍ਰੋਫ਼ੋਨ ਬੰਦ ਹੈ, ਇਸ ਲਈ ਇੱਥੇ ਲਿਖੋ। ਤੁਸੀਂ ਫ਼ੋਨ ਦੀਆਂ ਸੈਟਿੰਗਾਂ ਵਿੱਚ ਇਜਾਜ਼ਤ ਦੇ ਸਕਦੇ ਹੋ।</string>
     <string name="assist_live_stopped">ਲਾਈਵ ਵੌਇਸ ਰੁਕ ਗਈ: %1$s ਤੁਸੀਂ ਇੱਥੇ ਲਿਖ ਸਕਦੇ ਹੋ, ਜਾਂ ਮਾਈਕ \'ਤੇ ਟੈਪ ਕਰੋ।</string>
+    <string name="assist_talk_live">ਸਿੱਧੀ ਗੱਲ ਕਰੋ</string>
     <string name="assist_unlock_for_mic">ਫ਼ੋਨ ਇੱਕ ਵਾਰ ਅਨਲਾਕ ਕਰੋ ਅਤੇ ਮਾਈਕ੍ਰੋਫ਼ੋਨ ਦੀ ਇਜਾਜ਼ਤ ਦਿਓ, ਫਿਰ ਇਹ ਤੁਰੰਤ ਸੁਣਦਾ ਹੈ।</string>
     <string name="assist_send_failed">ਇਹ ਭੇਜਿਆ ਨਹੀਂ ਗਿਆ: %1$s। ਤੁਹਾਡੇ ਸ਼ਬਦ ਅਜੇ ਇੱਥੇ ਹਨ।</string>
     <string name="assist_link_dropped">ਤੁਹਾਡੇ ਕੰਪਿਊਟਰ ਨਾਲ ਲਿੰਕ ਟੁੱਟ ਗਿਆ</string>

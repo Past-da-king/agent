@@ -300,6 +300,8 @@
     <string name="voice_hear">سنیں</string>
     <string name="voice_autoplay">ایئر فونز لگے ہوں تو خود چلائیں</string>
     <string name="voice_autoplay_sub">جب آپ ایئر فونز پہنے ہوں تو صوتی نوٹ خود چلتے ہیں</string>
+    <string name="voice_autoplay_notes">وائس نوٹس آتے ہی چلائیں</string>
+    <string name="voice_autoplay_notes_sub">آپ کے ایجنٹ کے وائس نوٹس خود بخود چلتے ہیں، اور اس دوران موسیقی دھیمی ہو جاتی ہے</string>
     <string name="voice_live">لائیو کالز</string>
     <string name="voice_live_sub">%1$s کو کال کریں اور بس بات کریں۔ یہ اصل کام آپ کے مرکزی ایجنٹ کو سونپتا ہے اور کوئی اہم بات ہو تو آپ کو بتاتا ہے۔</string>
     <string name="voice_live_needs">Google (Gemini) کلید چاہیے: اوپر Google چنیں اور ایک محفوظ کریں۔ یہ Gemini Live پر چلتا ہے۔</string>

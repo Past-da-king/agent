@@ -312,6 +312,8 @@
     <string name="voice_hear">Escucharla</string>
     <string name="voice_autoplay">Reproducción automática con auriculares</string>
     <string name="voice_autoplay_sub">Las notas de voz se reproducen solas cuando llevas auriculares</string>
+    <string name="voice_autoplay_notes">Reproducir notas de voz al llegar</string>
+    <string name="voice_autoplay_notes_sub">Las notas de voz de tu agente suenan solas y la música baja mientras suenan</string>
     <string name="voice_live">Llamadas en directo</string>
     <string name="voice_live_sub">Llama a %1$s y habla sin más. Pasa el trabajo de verdad a tu agente principal y te avisa cuando algo importa.</string>
     <string name="voice_live_needs">Necesita una clave de Google (Gemini): elige Google arriba y guarda una. Funciona con Gemini Live.</string>

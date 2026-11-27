@@ -136,6 +136,7 @@
     <string name="link_group_phone">Aviseringar till dig</string>
     <string name="link_group_location">Din plats (frågas en gång)</string>
     <string name="link_group_automation">Andra appar: intents, musik och video, makron (intents och makron frågar om de inte är tillåtna)</string>
+    <string name="link_group_logs">Appens egna loggar, så att datorn kan hitta felet</string>
     <string name="link_ask_approve">Godkänna: %1$s?</string>
     <string name="link_ask_title">Din agent frågar</string>
     <string name="link_saved_downloads">Sparad i Nedladdningar. Tryck för att öppna.</string>
@@ -676,6 +677,7 @@
     <string name="assist_read_all">Läs allt</string>
     <string name="assist_mic_off">Mikrofonen är avstängd för den här appen, så skriv här. Du kan tillåta den i telefonens Inställningar.</string>
     <string name="assist_live_stopped">Live-rösten stoppades: %1$s Du kan skriva här eller trycka på mikrofonen.</string>
+    <string name="assist_talk_live">Prata direkt</string>
     <string name="assist_unlock_for_mic">Lås upp telefonen en gång och tillåt mikrofonen, så lyssnar den direkt.</string>
     <string name="assist_send_failed">Det skickades inte: %1$s. Dina ord finns kvar här.</string>
     <string name="assist_link_dropped">länken till din dator bröts</string>

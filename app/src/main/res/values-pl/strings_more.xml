@@ -137,6 +137,7 @@
     <string name="link_group_phone">Powiadomienia do ciebie</string>
     <string name="link_group_location">Twoja lokalizacja (pytana raz)</string>
     <string name="link_group_automation">Inne aplikacje: intenty, muzyka i wideo, makra (intenty i makra pytają, o ile nie są dozwolone)</string>
+    <string name="link_group_logs">Dzienniki tej aplikacji, aby komputer znalazł przyczynę problemu</string>
     <string name="link_ask_approve">Zatwierdzić: %1$s?</string>
     <string name="link_ask_title">Twój agent pyta</string>
     <string name="link_saved_downloads">Zapisano w Pobranych. Dotknij, aby otworzyć.</string>
@@ -697,6 +698,7 @@
     <string name="assist_read_all">Przeczytaj całość</string>
     <string name="assist_mic_off">Mikrofon jest wyłączony dla tej aplikacji, więc wpisz tutaj. Możesz na to zezwolić w ustawieniach telefonu.</string>
     <string name="assist_live_stopped">Głos na żywo zatrzymany: %1$s Możesz wpisać tutaj albo dotknąć mikrofonu.</string>
+    <string name="assist_talk_live">Rozmawiaj na żywo</string>
     <string name="assist_unlock_for_mic">Odblokuj telefon raz i zezwól na mikrofon, a wtedy będzie słuchać od razu.</string>
     <string name="assist_send_failed">Nie wysłano: %1$s. Twoje słowa nadal tu są.</string>
     <string name="assist_link_dropped">połączenie z twoim komputerem zostało przerwane</string>

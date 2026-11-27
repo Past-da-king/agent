@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Keyboard
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Mic
@@ -69,12 +70,21 @@ data class AssistActions(
     /** He picked which waiting question his words answer (the choice sheet), or closed it without picking. */
     val onPickAsk: (CtxAsk, String) -> Unit = { _, _ -> },
     val onDismissChoice: () -> Unit = {},
+    /**
+     * Switch this sheet to Live voice (real-time talk, Gemini Live). Always offered while he could start talking,
+     * whether or not the Live setting is on (27 Nov 2026: the sheet gave him no way into Live). Null hides it.
+     */
+    val onTalkLive: (() -> Unit)? = null,
 )
 
 /** What the sheet says it knows about the screen: a line and whether anything is being read. */
 data class ScreenLine(val text: String, val reading: Boolean)
 
 object AssistWords {
+    /** When the sheet offers "Talk live": whenever he could start talking (not while a turn is on its way or locked). */
+    fun offersLive(phase: AssistPhase): Boolean = phase == AssistPhase.LISTENING || phase == AssistPhase.TYPING ||
+        phase == AssistPhase.ANSWERING || phase == AssistPhase.ERROR
+
     /** The line under the agent's name. */
     @Composable
     fun caption(v: AssistView): String = when (v.phase) {
@@ -181,6 +191,13 @@ fun AssistSheetBody(view: AssistView, agentName: String, screen: ScreenLine?, ac
                 Icon(if (screen.reading) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff, null, Modifier.size(16.dp), tint = cs.onSurfaceVariant)
                 Spacer(Modifier.width(6.dp))
                 Text(screen.text, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        if (actions.onTalkLive != null && AssistWords.offersLive(view.phase)) {
+            Spacer(Modifier.height(12.dp))
+            FilledTonalButton(onClick = actions.onTalkLive, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                Icon(Icons.Rounded.GraphicEq, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.assist_talk_live), style = MaterialTheme.typography.titleSmall)
             }
         }
         Spacer(Modifier.height(16.dp))

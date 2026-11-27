@@ -72,6 +72,18 @@ object AudioRoute {
         else -> TYPE_BUILTIN_SPEAKER
     }
 
+    /** How many times a headset that refused the voice link is tried again before the call stays on the loudspeaker. */
+    const val HEADSET_RETRIES = 3
+    const val HEADSET_RETRY_MS = 800L
+
+    /**
+     * A headset (Bluetooth earbuds, a Sony earphone mic) refused the voice link: try it again [HEADSET_RETRIES] times.
+     * A Bluetooth headset that is still streaming music (A2DP) often refuses the call link for a moment, until the
+     * music has paused for the call; giving up at once left him talking to the phone's loudspeaker with earbuds in.
+     */
+    fun retryHeadset(wanted: Kind?, attemptsSoFar: Int): Boolean =
+        wanted != null && wanted != Kind.SPEAKER && wanted != Kind.EARPIECE && attemptsSoFar < HEADSET_RETRIES
+
     fun kindOf(type: Int): Kind = when (type) {
         TYPE_BLE_HEADSET, TYPE_BLUETOOTH_SCO -> Kind.BLUETOOTH
         TYPE_WIRED_HEADSET, TYPE_WIRED_HEADPHONES -> Kind.WIRED
@@ -108,6 +120,7 @@ class AudioRouter(private val am: AudioManager, private val onRoute: (AudioRoute
     /** A device type the user chose to hold the sound on, or null for the usual pick. */
     @Volatile private var forced: Int? = null
     @Volatile private var last: AudioRoute.Route = AudioRoute.Speaker
+    private var headsetRetries = 0
 
     /** The user tapped the sound button: move to the next place the sound can go. */
     fun next() {
@@ -144,6 +157,8 @@ class AudioRouter(private val am: AudioManager, private val onRoute: (AudioRoute
     fun stop() {
         if (!started) return
         started = false
+        main.removeCallbacksAndMessages(null)
+        headsetRetries = 0
         runCatching { am.unregisterAudioDeviceCallback(devices) }
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -192,7 +207,14 @@ class AudioRouter(private val am: AudioManager, private val onRoute: (AudioRoute
             return AudioRoute.label(target.type, target.productName?.toString().orEmpty())
         }
         if (target != null && am.setCommunicationDevice(target)) {
+            headsetRetries = 0
             return AudioRoute.label(target.type, target.productName?.toString().orEmpty())
+        }
+        val wanted = target?.let { AudioRoute.kindOf(it.type) }
+        if (AudioRoute.retryHeadset(wanted, headsetRetries)) {
+            headsetRetries++
+            Log.i(TAG, "headset ${target?.productName} refused the voice link, trying again ($headsetRetries)")
+            main.postDelayed({ apply() }, AudioRoute.HEADSET_RETRY_MS)
         }
         // The headset refused (a Bluetooth link that would not come up) or nothing was listed at
         // all: fall back to the loudspeaker rather than the platform default, which is the earpiece.

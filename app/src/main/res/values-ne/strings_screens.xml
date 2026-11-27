@@ -300,6 +300,8 @@
     <string name="voice_hear">सुन्नुहोस्</string>
     <string name="voice_autoplay">इयरफोन लगाउँदा आफैँ चलाउनुहोस्</string>
     <string name="voice_autoplay_sub">इयरफोन लगाएको बेला भ्वाइस नोट आफैँ बज्छन्</string>
+    <string name="voice_autoplay_notes">भ्वाइस नोटहरू आउनासाथ बजाउनुहोस्</string>
+    <string name="voice_autoplay_notes_sub">तपाईंको एजेन्टका भ्वाइस नोटहरू आफैँ बज्छन्, र बज्दा सङ्गीत मधुरो हुन्छ</string>
     <string name="voice_live">लाइभ कलहरू</string>
     <string name="voice_live_sub">%1$s लाई फोन गरेर कुरा मात्र गर्नुहोस्। यसले वास्तविक काम तपाईंको मुख्य एजेन्टलाई दिन्छ र केही महत्त्वपूर्ण भएमा भन्छ।</string>
     <string name="voice_live_needs">Google (Gemini) कुञ्जी चाहिन्छ: माथि Google छानेर एउटा सेभ गर्नुहोस्। यो Gemini Live मा चल्छ।</string>

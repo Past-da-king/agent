@@ -324,6 +324,8 @@
     <string name="voice_hear">Poslechnout</string>
     <string name="voice_autoplay">Automaticky přehrát se sluchátky</string>
     <string name="voice_autoplay_sub">Hlasové zprávy se přehrají samy, když máte sluchátka</string>
+    <string name="voice_autoplay_notes">Přehrávat hlasové zprávy hned po doručení</string>
+    <string name="voice_autoplay_notes_sub">Hlasové zprávy od tvého agenta se přehrají samy a hudba se při nich ztlumí</string>
     <string name="voice_live">Živé hovory</string>
     <string name="voice_live_sub">Zavolejte %1$s a prostě mluvte. Skutečnou práci předá vašemu hlavnímu agentovi a řekne vám, když na něčem záleží.</string>
     <string name="voice_live_needs">Vyžaduje klíč Google (Gemini): výše vyberte Google a uložte ho. Běží na Gemini Live.</string>

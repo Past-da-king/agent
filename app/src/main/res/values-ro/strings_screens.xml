@@ -312,6 +312,8 @@
     <string name="voice_hear">Ascult-o</string>
     <string name="voice_autoplay">Redare automată cu căști</string>
     <string name="voice_autoplay_sub">Mesajele vocale se redau singure când porți căști</string>
+    <string name="voice_autoplay_notes">Redă mesajele vocale când sosesc</string>
+    <string name="voice_autoplay_notes_sub">Mesajele vocale ale agentului tău pornesc singure, iar muzica se aude mai încet cât timp rulează</string>
     <string name="voice_live">Apeluri live</string>
     <string name="voice_live_sub">Sună-l pe %1$s și vorbește pur și simplu. Dă munca reală agentului tău principal și îți spune când contează ceva.</string>
     <string name="voice_live_needs">Necesită o cheie Google (Gemini): alege Google mai sus și salvează una. Rulează pe Gemini Live.</string>

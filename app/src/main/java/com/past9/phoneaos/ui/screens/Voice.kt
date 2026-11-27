@@ -83,8 +83,8 @@ fun VoiceSheet(s: AgentSettings, actions: VoiceActions, onDismiss: () -> Unit) {
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.voice_autoplay), style = MaterialTheme.typography.titleSmall)
-                    Text(stringResource(R.string.voice_autoplay_sub), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    Text(stringResource(R.string.voice_autoplay_notes), style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(R.string.voice_autoplay_notes_sub), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
                 Switch(s.autoPlayEarphones, actions.setAutoPlay)
             }

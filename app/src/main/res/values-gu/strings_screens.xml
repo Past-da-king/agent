@@ -300,6 +300,8 @@
     <string name="voice_hear">સાંભળો</string>
     <string name="voice_autoplay">ઇયરફોન પહેર્યા હોય ત્યારે આપમેળે ચલાવો</string>
     <string name="voice_autoplay_sub">તમે ઇયરફોન પહેર્યા હો ત્યારે વૉઇસ નોંધ જાતે ચાલે છે</string>
+    <string name="voice_autoplay_notes">વૉઇસ નોટ્સ આવતાં જ ચલાવો</string>
+    <string name="voice_autoplay_notes_sub">તમારા એજન્ટની વૉઇસ નોટ્સ જાતે ચાલે છે, અને ચાલે ત્યારે સંગીત ધીમું થાય છે</string>
     <string name="voice_live">લાઇવ કૉલ</string>
     <string name="voice_live_sub">%1$s ને કૉલ કરો અને બસ વાત કરો. તે અસલી કામ તમારા મુખ્ય એજન્ટને સોંપે છે અને કંઈ મહત્વનું હોય ત્યારે તમને કહે છે.</string>
     <string name="voice_live_needs">Google (Gemini) કી જોઈએ: ઉપર Google પસંદ કરો અને એક સાચવો. તે Gemini Live પર ચાલે છે.</string>

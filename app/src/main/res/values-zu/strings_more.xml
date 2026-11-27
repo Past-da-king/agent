@@ -137,6 +137,7 @@
     <string name="link_group_phone">Izaziso kuwe</string>
     <string name="link_group_location">Indawo yakho (ibuzwa kanye)</string>
     <string name="link_group_automation">Ama-app amanye: ama-intent, umculo nevidiyo, amakhro (ama-intent namakhro ayabuza ngaphandle kokuthi avunyelwe)</string>
+    <string name="link_group_logs">Amalogi ale app kuphela, ukuze ikhompyutha yakho ithole inkinga</string>
     <string name="link_ask_approve">Vuma: %1$s?</string>
     <string name="link_ask_title">I-agent yakho iyabuza</string>
     <string name="link_saved_downloads">Kulondolozwe ku-Downloads. Thepha ukuvula.</string>
@@ -677,6 +678,7 @@
     <string name="assist_read_all">Funda konke</string>
     <string name="assist_mic_off">Imakrofoni ivaliwe kule app, ngakho yibhale lapha. Ungayivumela ku-Izilungiselelo zefoni.</string>
     <string name="assist_live_stopped">Izwi bukhoma limisiwe: %1$s Ungabhala lapha, noma uthepha imakrofoni.</string>
+    <string name="assist_talk_live">Khuluma bukhoma</string>
     <string name="assist_unlock_for_mic">Vula ifoni kanye bese uvumela imakrofoni, bese lokhu kulalela ngaso leso sikhathi.</string>
     <string name="assist_send_failed">Lokho akuthunyelwanga: %1$s. Amagama akho asekhona.</string>
     <string name="assist_link_dropped">umxhumano nekhompyutha yakho unqamukile</string>

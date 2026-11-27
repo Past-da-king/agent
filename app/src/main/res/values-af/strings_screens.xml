@@ -299,6 +299,8 @@
     <string name="voice_hear">Hoor dit</string>
     <string name="voice_autoplay">Speel outomaties met oorfone in</string>
     <string name="voice_autoplay_sub">Stemnotas speel vanself wanneer jy oorfone dra</string>
+    <string name="voice_autoplay_notes">Speel stemnotas sodra hulle aankom</string>
+    <string name="voice_autoplay_notes_sub">Jou agent se stemnotas speel vanself, en musiek word sagter terwyl hulle speel</string>
     <string name="voice_live">Regstreekse oproepe</string>
     <string name="voice_live_sub">Bel %1$s en praat net. Dit gee regte werk aan jou hoofagent en sê vir jou wanneer iets saak maak.</string>
     <string name="voice_live_needs">Het \'n Google-sleutel (Gemini) nodig: kies Google hierbo en stoor een. Dit loop op Gemini Live.</string>

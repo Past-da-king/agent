@@ -299,6 +299,8 @@
     <string name="voice_hear">Kuuntele</string>
     <string name="voice_autoplay">Toista automaattisesti kuulokkeiden ollessa kiinni</string>
     <string name="voice_autoplay_sub">Ääniviestit toistuvat itsestään, kun sinulla on kuulokkeet korvilla</string>
+    <string name="voice_autoplay_notes">Toista ääniviestit heti kun ne saapuvat</string>
+    <string name="voice_autoplay_notes_sub">Agenttisi ääniviestit toistuvat itsestään, ja musiikki hiljenee niiden ajaksi</string>
     <string name="voice_live">Live-puhelut</string>
     <string name="voice_live_sub">Soita: %1$s ja puhu vain. Se antaa oikeat työt pääagentillesi ja kertoo sinulle, kun jokin on tärkeää.</string>
     <string name="voice_live_needs">Vaatii Google-avaimen (Gemini): valitse yllä Google ja tallenna sellainen. Se toimii Gemini Livellä.</string>

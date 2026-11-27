@@ -300,6 +300,8 @@
     <string name="voice_hear">አድምጠው</string>
     <string name="voice_autoplay">በጆሮ ማዳመጫ በራስ-ሰር አጫውት</string>
     <string name="voice_autoplay_sub">የጆሮ ማዳመጫ ሲለብሱ የድምፅ መልዕክቶች በራሳቸው ይጫወታሉ</string>
+    <string name="voice_autoplay_notes">የድምፅ ማስታወሻዎች ሲደርሱ አጫውት</string>
+    <string name="voice_autoplay_notes_sub">የወኪልዎ የድምፅ ማስታወሻዎች በራሳቸው ይጫወታሉ፣ ሙዚቃ ደግሞ ሲጫወቱ ይቀንሳል</string>
     <string name="voice_live">የቀጥታ ጥሪዎች</string>
     <string name="voice_live_sub">ወደ %1$s ይደውሉና ብቻ ይናገሩ። እውነተኛውን ሥራ ለዋና ወኪልዎ ይሰጣል አንድ ነገር አስፈላጊ ሲሆንም ይነግርዎታል።</string>
     <string name="voice_live_needs">የGoogle (Gemini) ቁልፍ ያስፈልገዋል፦ ከላይ Googleን ይምረጡና አንድ ያስቀምጡ። በGemini Live ላይ ይሠራል።</string>

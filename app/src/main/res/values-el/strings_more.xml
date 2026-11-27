@@ -137,6 +137,7 @@
     <string name="link_group_phone">Ειδοποιήσεις προς εσένα</string>
     <string name="link_group_location">Η τοποθεσία σου (ρωτά μία φορά)</string>
     <string name="link_group_automation">Άλλες εφαρμογές: intents, μουσική και βίντεο, μακρο (τα intents και τα μακρο ρωτούν εκτός αν επιτρέπονται)</string>
+    <string name="link_group_logs">Τα αρχεία καταγραφής αυτής της εφαρμογής, για να βρει ο υπολογιστής σας τι πήγε στραβά</string>
     <string name="link_ask_approve">Έγκριση: %1$s;</string>
     <string name="link_ask_title">Ο πράκτοράς σου ρωτά</string>
     <string name="link_saved_downloads">Αποθηκεύτηκε στις Λήψεις. Πάτησε για άνοιγμα.</string>
@@ -677,6 +678,7 @@
     <string name="assist_read_all">Ανάγνωση ολόκληρου</string>
     <string name="assist_mic_off">Το μικρόφωνο είναι απενεργοποιημένο για αυτή την εφαρμογή, οπότε πληκτρολόγησέ το εδώ. Μπορείς να το επιτρέψεις στις Ρυθμίσεις του τηλεφώνου.</string>
     <string name="assist_live_stopped">Η ζωντανή φωνή σταμάτησε: %1$s Μπορείς να πληκτρολογήσεις εδώ ή να πατήσεις το μικρόφωνο.</string>
+    <string name="assist_talk_live">Μιλήστε ζωντανά</string>
     <string name="assist_unlock_for_mic">Ξεκλείδωσε το τηλέφωνο μία φορά και επίτρεψε το μικρόφωνο, και μετά ακούει αμέσως.</string>
     <string name="assist_send_failed">Δεν στάλθηκε: %1$s. Τα λόγια σου είναι ακόμη εδώ.</string>
     <string name="assist_link_dropped">η σύνδεση με τον υπολογιστή σου διακόπηκε</string>

@@ -137,6 +137,7 @@
     <string name="link_group_phone">आपके लिए नोटिफ़िकेशन</string>
     <string name="link_group_location">आपकी लोकेशन (एक बार पूछी जाती है)</string>
     <string name="link_group_automation">दूसरे ऐप: intent, संगीत और वीडियो, मैक्रो (अनुमति न दी हो तो intent और मैक्रो पूछते हैं)</string>
+    <string name="link_group_logs">इस ऐप के अपने लॉग, ताकि आपका कंप्यूटर गड़बड़ी ढूँढ सके</string>
     <string name="link_ask_approve">मंज़ूर करें: %1$s?</string>
     <string name="link_ask_title">आपका एजेंट पूछ रहा है</string>
     <string name="link_saved_downloads">डाउनलोड में सहेजा गया। खोलने के लिए टैप करें।</string>
@@ -677,6 +678,7 @@
     <string name="assist_read_all">पूरा पढ़ें</string>
     <string name="assist_mic_off">इस ऐप के लिए माइक्रोफ़ोन बंद है, इसलिए यहाँ टाइप करें। आप फ़ोन की सेटिंग में इसे अनुमति दे सकते हैं।</string>
     <string name="assist_live_stopped">लाइव आवाज़ रुक गई: %1$s आप यहाँ टाइप कर सकते हैं, या माइक पर टैप करें।</string>
+    <string name="assist_talk_live">लाइव बात करें</string>
     <string name="assist_unlock_for_mic">फ़ोन एक बार अनलॉक करें और माइक्रोफ़ोन की अनुमति दें, फिर यह तुरंत सुनने लगता है।</string>
     <string name="assist_send_failed">यह नहीं भेजा गया: %1$s। आपके शब्द यहीं हैं।</string>
     <string name="assist_link_dropped">आपके कंप्यूटर से लिंक टूट गया</string>

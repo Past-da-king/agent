@@ -300,6 +300,8 @@
     <string name="voice_hear">Hear it</string>
     <string name="voice_autoplay">Auto-play with earphones in</string>
     <string name="voice_autoplay_sub">Voice notes play by themselves when you\'re wearing earphones</string>
+    <string name="voice_autoplay_notes">Play voice notes as they arrive</string>
+    <string name="voice_autoplay_notes_sub">Your agent\'s voice notes play by themselves, and music dips while they play</string>
     <string name="voice_live">Live calls</string>
     <string name="voice_live_sub">Call %1$s and just talk. It hands real work to your main agent and tells you when something matters.</string>
     <string name="voice_live_needs">Needs a Google (Gemini) key: pick Google above and save one. It runs on Gemini Live.</string>

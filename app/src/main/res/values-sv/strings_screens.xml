@@ -299,6 +299,8 @@
     <string name="voice_hear">Hör den</string>
     <string name="voice_autoplay">Spela upp automatiskt med hörlurar i</string>
     <string name="voice_autoplay_sub">Röstmeddelanden spelas av sig själva när du har hörlurar på</string>
+    <string name="voice_autoplay_notes">Spela upp röstmeddelanden när de kommer</string>
+    <string name="voice_autoplay_notes_sub">Agentens röstmeddelanden spelas upp av sig själva, och musiken sänks medan de spelas</string>
     <string name="voice_live">Live-samtal</string>
     <string name="voice_live_sub">Ring %1$s och prata bara. Den lämnar riktigt arbete till din huvudagent och berättar när något är viktigt.</string>
     <string name="voice_live_needs">Kräver en Google-nyckel (Gemini): välj Google ovan och spara en. Den körs på Gemini Live.</string>

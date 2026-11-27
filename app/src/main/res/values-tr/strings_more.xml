@@ -137,6 +137,7 @@
     <string name="link_group_phone">Sana bildirimler</string>
     <string name="link_group_location">Konumun (bir kez sorulur)</string>
     <string name="link_group_automation">Diğer uygulamalar: intent\'ler, müzik ve video, makrolar (intent\'ler ve makrolar, izinli değilse sorar)</string>
+    <string name="link_group_logs">Bu uygulamanın kendi kayıtları, bilgisayarın sorunu bulabilmesi için</string>
     <string name="link_ask_approve">Onaylıyor musun: %1$s?</string>
     <string name="link_ask_title">Ajanın soruyor</string>
     <string name="link_saved_downloads">İndirilenler\'e kaydedildi. Açmak için dokun.</string>
@@ -677,6 +678,7 @@
     <string name="assist_read_all">Tamamını oku</string>
     <string name="assist_mic_off">Bu uygulama için mikrofon kapalı, bu yüzden buraya yaz. Telefonun Ayarlar\'ından izin verebilirsin.</string>
     <string name="assist_live_stopped">Canlı ses durdu: %1$s Buraya yazabilir veya mikrofona dokunabilirsin.</string>
+    <string name="assist_talk_live">Canlı konuş</string>
     <string name="assist_unlock_for_mic">Telefonun kilidini bir kez aç ve mikrofona izin ver; sonra hemen dinler.</string>
     <string name="assist_send_failed">Gönderilemedi: %1$s. Yazdıkların hâlâ burada.</string>
     <string name="assist_link_dropped">bilgisayarınla bağlantı koptu</string>

@@ -288,6 +288,8 @@
     <string name="voice_hear">ស្តាប់</string>
     <string name="voice_autoplay">ចាក់ស្វ័យប្រវត្តិពេលដោតកាស</string>
     <string name="voice_autoplay_sub">សារជាសំឡេងចាក់ដោយខ្លួនឯងពេលអ្នកពាក់កាស</string>
+    <string name="voice_autoplay_notes">ចាក់សារសំឡេងពេលវាមកដល់</string>
+    <string name="voice_autoplay_notes_sub">សារសំឡេងរបស់ភ្នាក់ងារអ្នកចាក់ដោយខ្លួនឯង ហើយតន្ត្រីបន្ថយសំឡេងពេលវាកំពុងចាក់</string>
     <string name="voice_live">ការហៅផ្ទាល់</string>
     <string name="voice_live_sub">ហៅ %1$s ហើយគ្រាន់តែនិយាយ។ វាប្រគល់ការងារពិតទៅភ្នាក់ងារចម្បងរបស់អ្នក ហើយប្រាប់អ្នកពេលមានរឿងសំខាន់។</string>
     <string name="voice_live_needs">ត្រូវការសោ Google (Gemini)៖ ជ្រើសរើស Google ខាងលើ ហើយរក្សាទុកមួយ។ វាដំណើរការលើ Gemini Live។</string>

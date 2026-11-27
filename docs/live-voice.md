@@ -116,3 +116,24 @@ A call on 17 Nov 2026: Live said "On it. Done." before the agent had answered, i
 - **Turns into the main chat as they happen.** `voice.callTurn` {session, startedAt, index, who, text, at} per finalised turn (computer: one `call` row per session, collapsed, never a user bubble; the final `voice.callSave` finishes the same row). On this phone the same turns are call rows. The previous call's words (newest first, bounded) go into the next call's instructions (`LiveHistory`, `LiveTruth.previousCall`).
 
 Proof: `scripts/live-proof.mjs` runs the exact instructions, tool answer and framed replies against the real Gemini Live model (gemini-3.1-flash-live-preview and gemini-3.8-live): holding line only, "no result yet" when asked, late line once, each agent reply and the later helper result read as written. Tests: `LiveTruthTest`.
+
+## Music, the call and the assistant (0.15.80, 27 Nov 2026)
+
+He started a call while a song played and the call "acted stupid". Causes: audio focus was asked for only once Live had
+connected, its answer was ignored, and a player that keeps going on a transient focus loss kept the song in the
+microphone (the echo canceller only removes the agent's own voice), so Live's turn detection never heard a pause. The
+assistant sheet with "Live voice in the assistant" off had no way into Live at all.
+
+- `voice/MediaHold`: focus the moment a call (or the assistant's Live session, or its one-request listening) starts;
+  700 ms later anything still playing is paused through its media session (needs notification access); on the way out
+  focus is released and only what the hold paused is played again, unless he started something else meanwhile.
+  Logged under `AosMediaHold` and `CallAgent` ("media hold: focus=... paused=[...]").
+- `AudioRouter`: a headset that refuses the voice link (Bluetooth earbuds still streaming music) is tried again three
+  times, 800 ms apart, before the call stays on the loudspeaker.
+- The assist sheet always offers **Talk live** while he could speak, whatever the setting; if Live cannot start it says
+  why and offers it again.
+- `phone_logs` (lent group "logs", OFF by default, Settings > Linked computer): the app's own log lines, keys and tokens
+  blanked, so a bad call can be read from the computer without a cable.
+- Voice notes play by themselves again (`voice/VoiceAutoPlay`, Settings > Voice, on by default, speaker or earphones,
+  music dipped): a linked computer's note waits for its audio and has it fetched on mobile data, instead of being marked
+  heard before its audio arrived. Runs from the app's scope, in front or not.

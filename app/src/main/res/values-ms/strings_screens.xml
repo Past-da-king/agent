@@ -288,6 +288,8 @@
     <string name="voice_hear">Dengar</string>
     <string name="voice_autoplay">Main automatik semasa memakai fon telinga</string>
     <string name="voice_autoplay_sub">Nota suara dimainkan dengan sendirinya apabila anda memakai fon telinga</string>
+    <string name="voice_autoplay_notes">Mainkan nota suara sebaik tiba</string>
+    <string name="voice_autoplay_notes_sub">Nota suara ejen anda dimainkan sendiri, dan muzik diperlahankan semasa ia dimainkan</string>
     <string name="voice_live">Panggilan langsung</string>
     <string name="voice_live_sub">Telefon %1$s dan bercakap sahaja. Kerja sebenar diserahkan kepada ejen utama anda dan anda diberitahu apabila sesuatu penting.</string>
     <string name="voice_live_needs">Memerlukan kunci Google (Gemini): pilih Google di atas dan simpan satu. Ia berjalan pada Gemini Live.</string>

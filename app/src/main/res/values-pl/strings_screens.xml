@@ -324,6 +324,8 @@
     <string name="voice_hear">Posłuchaj</string>
     <string name="voice_autoplay">Autoodtwarzanie w słuchawkach</string>
     <string name="voice_autoplay_sub">Wiadomości głosowe odtwarzają się same, gdy masz słuchawki</string>
+    <string name="voice_autoplay_notes">Odtwarzaj notatki głosowe od razu</string>
+    <string name="voice_autoplay_notes_sub">Notatki głosowe od agenta odtwarzają się same, a muzyka cichnie na ten czas</string>
     <string name="voice_live">Rozmowy na żywo</string>
     <string name="voice_live_sub">Zadzwoń do %1$s i po prostu rozmawiaj. Prawdziwą pracę przekazuje twojemu głównemu agentowi i mówi ci, gdy coś jest ważne.</string>
     <string name="voice_live_needs">Wymaga klucza Google (Gemini): wybierz powyżej Google i zapisz klucz. Działa na Gemini Live.</string>

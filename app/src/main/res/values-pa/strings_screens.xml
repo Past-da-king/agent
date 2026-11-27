@@ -300,6 +300,8 @@
     <string name="voice_hear">ਸੁਣੋ</string>
     <string name="voice_autoplay">ਈਅਰਫ਼ੋਨ ਲੱਗੇ ਹੋਣ \'ਤੇ ਆਪਣੇ-ਆਪ ਚਲਾਓ</string>
     <string name="voice_autoplay_sub">ਜਦੋਂ ਤੁਸੀਂ ਈਅਰਫ਼ੋਨ ਲਗਾਏ ਹੋਣ ਤਾਂ ਵੌਇਸ ਨੋਟ ਆਪੇ ਚੱਲਦੇ ਹਨ</string>
+    <string name="voice_autoplay_notes">ਵੌਇਸ ਨੋਟ ਆਉਂਦੇ ਹੀ ਚਲਾਓ</string>
+    <string name="voice_autoplay_notes_sub">ਤੁਹਾਡੇ ਏਜੰਟ ਦੇ ਵੌਇਸ ਨੋਟ ਆਪਣੇ ਆਪ ਚੱਲਦੇ ਹਨ, ਅਤੇ ਉਦੋਂ ਸੰਗੀਤ ਹੌਲੀ ਹੋ ਜਾਂਦਾ ਹੈ</string>
     <string name="voice_live">ਲਾਈਵ ਕਾਲਾਂ</string>
     <string name="voice_live_sub">%1$s ਨੂੰ ਕਾਲ ਕਰੋ ਅਤੇ ਬਸ ਗੱਲ ਕਰੋ। ਇਹ ਅਸਲੀ ਕੰਮ ਤੁਹਾਡੇ ਮੁੱਖ ਏਜੰਟ ਨੂੰ ਸੌਂਪਦਾ ਹੈ ਅਤੇ ਕੁਝ ਅਹਿਮ ਹੋਣ \'ਤੇ ਤੁਹਾਨੂੰ ਦੱਸਦਾ ਹੈ।</string>
     <string name="voice_live_needs">Google (Gemini) ਕੁੰਜੀ ਚਾਹੀਦੀ ਹੈ: ਉੱਪਰ Google ਚੁਣੋ ਅਤੇ ਇੱਕ ਸੰਭਾਲੋ। ਇਹ Gemini Live \'ਤੇ ਚੱਲਦਾ ਹੈ।</string>

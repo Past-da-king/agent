@@ -137,6 +137,7 @@
     <string name="link_group_phone">તમને નોટિફિકેશન</string>
     <string name="link_group_location">તમારું લોકેશન (એક વાર પૂછાય છે)</string>
     <string name="link_group_automation">અન્ય એપ: intent, સંગીત અને વીડિયો, મૅક્રો (મંજૂરી ન હોય તો intent અને મૅક્રો પૂછે છે)</string>
+    <string name="link_group_logs">આ એપના પોતાના લૉગ, જેથી તમારું કમ્પ્યુટર સમસ્યા શોધી શકે</string>
     <string name="link_ask_approve">મંજૂર કરવું: %1$s?</string>
     <string name="link_ask_title">તમારો એજન્ટ પૂછે છે</string>
     <string name="link_saved_downloads">Downloads માં સાચવ્યું. ખોલવા ટૅપ કરો.</string>
@@ -677,6 +678,7 @@
     <string name="assist_read_all">આખું વાંચો</string>
     <string name="assist_mic_off">આ એપ માટે માઇક્રોફોન બંધ છે, તેથી અહીં લખો. તમે ફોનના સેટિંગ્સ માં મંજૂરી આપી શકો છો.</string>
     <string name="assist_live_stopped">લાઇવ વૉઇસ બંધ થયો: %1$s તમે અહીં લખી શકો છો, અથવા માઇક પર ટૅપ કરો.</string>
+    <string name="assist_talk_live">લાઇવ વાત કરો</string>
     <string name="assist_unlock_for_mic">ફોન એક વાર અનલૉક કરો અને માઇક્રોફોનની મંજૂરી આપો, પછી આ તરત સાંભળે છે.</string>
     <string name="assist_send_failed">તે મોકલાયું નહીં: %1$s. તમારા શબ્દો હજી અહીં છે.</string>
     <string name="assist_link_dropped">તમારા કમ્પ્યુટર સાથેની લિંક તૂટી ગઈ</string>

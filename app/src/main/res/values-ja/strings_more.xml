@@ -137,6 +137,7 @@
     <string name="link_group_phone">あなたへの通知</string>
     <string name="link_group_location">あなたの位置情報（初回のみ確認）</string>
     <string name="link_group_automation">他のアプリ：インテント、音楽と動画、マクロ（許可しない限りインテントとマクロは確認します）</string>
+    <string name="link_group_logs">このアプリ自身のログ。パソコンが問題の原因を調べられます</string>
     <string name="link_ask_approve">承認：%1$s？</string>
     <string name="link_ask_title">エージェントからの確認</string>
     <string name="link_saved_downloads">ダウンロードに保存しました。タップして開く。</string>
@@ -667,6 +668,7 @@
     <string name="assist_read_all">全文を読む</string>
     <string name="assist_mic_off">このアプリのマイクがオフのため、ここに入力してください。スマホの設定で許可できます。</string>
     <string name="assist_live_stopped">ライブ音声が停止しました：%1$s ここに入力するか、マイクをタップしてください。</string>
+    <string name="assist_talk_live">ライブで話す</string>
     <string name="assist_unlock_for_mic">スマホのロックを一度解除してマイクを許可すると、すぐに聞き取りを始めます。</string>
     <string name="assist_send_failed">送信できませんでした：%1$s。入力した内容はここに残っています。</string>
     <string name="assist_link_dropped">パソコンとのリンクが切れました</string>

@@ -137,6 +137,7 @@
     <string name="link_group_phone">Litsebiso ho uena</string>
     <string name="link_group_location">Sebaka sa hao (se botsoa hang)</string>
     <string name="link_group_automation">Liapp tse ling: li-intent, mmino le video, li-macro (li-intent le li-macro lia botsa ntle le ha li lumelloe)</string>
+    <string name="link_group_logs">Direkoto tsa sesebediswa sena feela, hore khomputara ya hao e fumane bothata</string>
     <string name="link_ask_approve">Lumela: %1$s?</string>
     <string name="link_ask_title">Moemeli oa hao oa botsa</string>
     <string name="link_saved_downloads">Ho bolokiloe ho Downloads. Tobetsa ho bula.</string>
@@ -677,6 +678,7 @@
     <string name="assist_read_all">Bala tsohle</string>
     <string name="assist_mic_off">Maekrofono e tima bakeng sa app ena, ka hona e ngole mona. U ka e lumella Litlhophisong tsa mohala.</string>
     <string name="assist_live_stopped">Lentsoe le phelang le emisitsoe: %1$s U ka ngola mona, kapa ua tobetsa maekrofono.</string>
+    <string name="assist_talk_live">Bua ka kotloloho</string>
     <string name="assist_unlock_for_mic">Notlolla mohala hang \'me u lumelle maekrofono, ebe sena se mamela hang-hang.</string>
     <string name="assist_send_failed">Seo ha se a romelloa: %1$s. Mantsoe a hao a ntse a le teng.</string>
     <string name="assist_link_dropped">kamano le k\'homphieutha ea hao e khaotsoe</string>

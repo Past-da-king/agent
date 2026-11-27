@@ -50,11 +50,17 @@ class SystemDictation(
     private var netRetries = 0
     /** Whether this stretch heard anything; a stretch of silence after words means he is done. */
     private var heardThisStretch = false
+    private var media: MediaHold? = null
 
     fun start() { main.post {
         if (ended) return@post
         // The wake word listener stands aside while the recogniser has the microphone.
         com.past9.phoneaos.wakeword.MicUse.hold(MIC)
+        // One request to the agent (the assist sheet): music or a video he has on pauses while it listens, so the
+        // recogniser hears him and not the song, and plays again after (MediaHold). A dictation leaves his music alone.
+        if (oneShot && media == null) context.getSystemService(android.media.AudioManager::class.java)?.let { am ->
+            media = MediaHold.android(context, am).also { h -> h.take(); main.postDelayed({ if (!ended) h.enforce() }, MediaHold.ENFORCE_AFTER_MS) }
+        }
         val r = runCatching { service(context)?.let { SpeechRecognizer.createSpeechRecognizer(context, it) } ?: SpeechRecognizer.createSpeechRecognizer(context) }.getOrNull()
         if (r == null) { end("This phone's speech recogniser could not start."); return@post }
         r.setRecognitionListener(listener)
@@ -144,6 +150,7 @@ class SystemDictation(
     private fun release() {
         com.past9.phoneaos.wakeword.MicUse.release(MIC)
         main.removeCallbacksAndMessages(null)
+        runCatching { media?.release() }; media = null
         runCatching { sr?.cancel() }
         runCatching { sr?.destroy() }
         sr = null

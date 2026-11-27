@@ -300,6 +300,8 @@
     <string name="voice_hear">Beluisteren</string>
     <string name="voice_autoplay">Automatisch afspelen met oordopjes in</string>
     <string name="voice_autoplay_sub">Spraakberichten spelen vanzelf af als je oordopjes draagt</string>
+    <string name="voice_autoplay_notes">Spraakberichten afspelen zodra ze binnenkomen</string>
+    <string name="voice_autoplay_notes_sub">De spraakberichten van je agent spelen vanzelf af, en muziek wordt zachter zolang ze spelen</string>
     <string name="voice_live">Live gesprekken</string>
     <string name="voice_live_sub">Bel %1$s en praat gewoon. Echt werk geeft hij door aan je hoofdagent en hij laat het je weten als iets belangrijk is.</string>
     <string name="voice_live_needs">Vereist een Google-sleutel (Gemini): kies hierboven Google en sla er een op. Draait op Gemini Live.</string>
