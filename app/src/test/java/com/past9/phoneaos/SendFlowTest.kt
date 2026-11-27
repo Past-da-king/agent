@@ -84,6 +84,54 @@ class SendFlowTest {
         assertEquals(listOf("pc"), rig.asked)
     }
 
+    /**
+     * 27 Nov 2026: the computer's disk was full, every message came back with ENOSPC or "database or disk is full", and
+     * the phone stopped there and showed the same error again and again while the server was healthy and idle.
+     */
+    @Test fun aFullDiskLeavesThatBrainAndTheNextOneTakesTheMessage() = runBlocking {
+        val rig = Rig(
+            "pc" to { throw RpcException("ENOSPC: no space left on device, write") },
+            "server" to ok,
+        )
+        rig.flow().run()
+        assertEquals("the message went on to the server", listOf("pc", "server"), rig.asked)
+        assertEquals(1, rig.left)
+    }
+
+    @Test fun sqlitesOwnWordsForAFullDiskReadTheSameAsEnospc() = runBlocking {
+        for (words in listOf(
+            "database or disk is full",
+            "SQLITE_FULL: database or disk is full",
+            "Couldn't close Project X on your computer: database or disk is full",
+            "Not enough space on the disk.",
+        )) {
+            val rig = Rig("pc" to { throw RpcException(words) }, "server" to ok)
+            rig.flow().run()
+            assertEquals(words, listOf("pc", "server"), rig.asked)
+        }
+    }
+
+    @Test fun anOrdinaryRefusalStillStopsAndIsShownInsteadOfMovingTheMessage() = runBlocking {
+        for (words in listOf("A bad send id.", "That row cannot be set.", "Your computer didn't take that message.")) {
+            val rig = Rig("pc" to { throw RpcException(words) }, "server" to ok)
+            assertThrows(RpcException::class.java) { runBlocking { rig.flow().run() } }
+            assertEquals(words, listOf("pc"), rig.asked)
+            assertEquals(0, rig.left)
+        }
+    }
+
+    @Test fun everyBrainFullGivesTheSameHeldMessageAsEveryBrainGone() = runBlocking {
+        val rig = Rig(
+            "pc" to { throw RpcException("database or disk is full") },
+            "server" to { throw RpcException("ENOSPC: no space left on device, write") },
+        )
+        // Both are left and tried again within the hold: his words are not thrown away.
+        val e = assertThrows(RpcException::class.java) { runBlocking { rig.flow(giveUp = 300, ack = 20).run() } }
+        assertEquals(SendFlow.NO_BRAIN, e.message)
+        assertTrue("both brains were tried", rig.asked.contains("pc") && rig.asked.contains("server"))
+        assertTrue("both were left, not answered", rig.left >= 2)
+    }
+
     @Test fun staleIsRepeatedAsFreshOnTheSameBrain() = runBlocking {
         val rig = Rig("pc" to { fresh -> if (fresh) JSONObject().put("accepted", true) else JSONObject().put("accepted", false).put("stale", true) })
         rig.flow().run()

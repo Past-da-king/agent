@@ -18,6 +18,9 @@ import org.json.JSONObject
  * is what left his words in the message box and the Send button spinning for the length of a turn (30 Oct 2026, "text
  * stays in the input box after sending", "the send icon shows loading while the agent works"). So the old call is
  * HANDED OVER: the frame leaves the phone and the send is done at once; the turn's answer arrives on its own.
+ *
+ * A computer that refuses because its own disk is full is left like one that does not answer (27 Nov 2026): it cannot
+ * take the message now, and the next brain in the order can.
  */
 internal class SendFlow(
     /** Is a socket open now, waiting up to this long for one? */
@@ -59,6 +62,15 @@ internal class SendFlow(
                 leave()
                 continue
             } catch (e: RpcException) {
+                // A computer whose disk is full cannot take this message however many times it is asked (27 Nov 2026:
+                // "ENOSPC: no space left on device, write", "database or disk is full", over and over, while the server
+                // was healthy). That is the brain failing, not the message being wrong, so it is left and the next brain
+                // in the order takes the same message, with the same id.
+                if (DiskFull.isIn(e.message)) {
+                    leave()
+                    delay(pauseMs)
+                    continue
+                }
                 if (e.message.orEmpty().contains("not available", ignoreCase = true)) {
                     if (legacy()) return
                     // No socket to hand it to: the link went as we tried, so the next brain gets it.
