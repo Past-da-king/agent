@@ -57,7 +57,8 @@ class AndroidNotePlaybackTest {
     @Test fun screenOffAndConfigurationChangesDoNotPauseNotes() {
         assertFalse(com.past9.phoneaos.voice.shouldPauseNotesOnStop(true, true))
         assertFalse(com.past9.phoneaos.voice.shouldPauseNotesOnStop(false, false))
-        assertTrue(com.past9.phoneaos.voice.shouldPauseNotesOnStop(false, true))
+        // Home with the screen on: the note keeps playing (27 Nov 2026).
+        assertFalse(com.past9.phoneaos.voice.shouldPauseNotesOnStop(false, true))
         val holder = com.past9.phoneaos.voice.NotePlayers(context)
         val note = holder.get(9001)
         notes += note

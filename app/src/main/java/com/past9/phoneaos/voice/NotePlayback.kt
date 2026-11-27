@@ -27,7 +27,13 @@ fun noteSeek(x: Float, width: Float, duration: Int, rtl: Boolean): Int {
 fun noteTime(ms: Int): String = "%d:%02d".format(java.util.Locale.ROOT, ms.coerceAtLeast(0) / 60000, ms.coerceAtLeast(0) / 1000 % 60)
 fun noteTimeParts(ms: Int): Pair<Int, Int> = (ms.coerceAtLeast(0) / 60000) to (ms.coerceAtLeast(0) / 1000 % 60)
 
-fun shouldPauseNotesOnStop(changingConfigurations: Boolean, interactive: Boolean): Boolean = !changingConfigurations && interactive
+/**
+ * Leaving the app never stops a voice note (27 Nov 2026, "why does the VN stop playing when I home the app"): Home, the
+ * lock screen, rotation and another app in front all leave it playing to the end, with its lock-screen and notification
+ * controls. Only his own pause, a new note, a call or the agent speaking stop it.
+ */
+@Suppress("UNUSED_PARAMETER")
+fun shouldPauseNotesOnStop(changingConfigurations: Boolean, interactive: Boolean): Boolean = false
 
 interface NoteFocusPort {
     fun request(listener: (Int) -> Unit): Boolean
