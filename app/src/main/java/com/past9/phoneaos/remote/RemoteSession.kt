@@ -542,9 +542,28 @@ class RemoteSession(private val app: Context, link: Link, val db: AppDb) : Remot
     /** Never a machine name in errors and status: which computer answers lives in Settings > Linked devices. Only a stand-in says its name, once. */
     private fun brainName(): String = "your computer"
 
-    /** A line in the chat when something the person did couldn't reach the computer. */
+    /** The chat line the same trouble keeps writing, and the row it is in, so a repeat folds in instead of piling up. */
+    private val noticeLine = NoticeLine()
+    private val noticeMutex = Mutex()
+    private var noticeRow = 0L
+
+    /**
+     * A line in the chat when something the person did couldn't reach the computer. The same words again go into the
+     * line already there, with a count (27 Nov 2026: a full computer turned the chat into a wall of identical errors).
+     */
     private fun notice(text: String) = scope.launch {
-        db.chat().insert(ChatItem(id = ids.local("phone-notice-" + System.nanoTime(), System.currentTimeMillis()), kind = "notice", text = text))
+        noticeMutex.withLock {
+            val folded = noticeLine.lineFor(text)
+            if (folded != null) {
+                val row = db.chat().get(noticeRow)
+                if (row != null) {
+                    db.chat().update(row.copy(text = folded))
+                    return@withLock
+                }
+            }
+            noticeRow = ids.local("phone-notice-" + System.nanoTime(), System.currentTimeMillis())
+            db.chat().insert(ChatItem(id = noticeRow, kind = "notice", text = folded ?: text))
+        }
     }
 
     /**
