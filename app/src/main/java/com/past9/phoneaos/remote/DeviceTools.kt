@@ -46,7 +46,7 @@ object DeviceTools {
         "browser_upload", "browser_open", "site_probe", "site_catalog", "browser_read", "browser_click", "browser_type", "browser_press_key", "browser_wait_for", "browser_scroll",
         "browser_back", "browser_show_user", "browser_look", "browser_handoff", "browser_eval", "browser_network", "browser_console", "browser_call_voice", "place_whatsapp_call",
         "webapp_list", "webapp_test",
-        "notifications_read", "notifications_wait_code", "notification_act", "phone_files", "photos_recent", "ask_user", "request_approval", "notify_user", "phone_location",
+        "receive_file", "notifications_read", "notifications_wait_code", "notification_act", "phone_files", "photos_recent", "ask_user", "request_approval", "notify_user", "phone_location",
         "android_intent", "android_apps", "macrodroid_run", "play_media", "media_control",
         "screen_open_app", "screen_look", "screen_tap", "screen_type", "screen_swipe", "screen_key", "screen_wait", "screen_close", "screen_status",
         "screen_skill_save", "screen_skill_list", "screen_skill_run", "screen_skill_undo", "app_share",
@@ -79,7 +79,7 @@ object DeviceTools {
         name.startsWith("browser_") || name == "site_probe" || name == "site_catalog" || name == "place_whatsapp_call" -> "browser"
         name == "webapp_list" || name == "webapp_test" || name.startsWith("web_") -> "browser"
         name == "notifications_read" || name == "notifications_wait_code" || name == "notification_act" -> "notifications"
-        name == "phone_files" || name == "photos_recent" -> "files"
+        name == "receive_file" || name == "phone_files" || name == "photos_recent" -> "files"
         name == "ask_user" || name == "request_approval" -> "approval"
         name == "notify_user" -> "phone"
         name == "phone_location" -> "location"
@@ -99,7 +99,7 @@ object DeviceTools {
         return com.past9.phoneaos.tools.browserTools(context) + listOf(
             com.past9.phoneaos.tools.NotificationsTool(g.db.notifications()) { g.settings.state.value.notifApps },
             com.past9.phoneaos.tools.NotificationActTool { g.settings.state.value.notifApps },
-            com.past9.phoneaos.tools.PhoneFilesTool(context),
+            com.past9.phoneaos.tools.PhoneFilesTool(context), ReceiveFileTool(context),
             com.past9.phoneaos.tools.AskUserTool(), com.past9.phoneaos.tools.ApprovalTool(), com.past9.phoneaos.tools.NotifyTool(),
             com.past9.phoneaos.tools.PhoneLocationTool(context),
             com.past9.phoneaos.tools.PhotosTool(context),
