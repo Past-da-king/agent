@@ -630,20 +630,36 @@ internal fun UserBubble(item: ChatItem) {
 /** Agent-to-agent messages have their own left-aligned card, distinct from the person's bubble. */
 @Composable
 internal fun AgentSenderCard(sender: com.past9.phoneaos.remote.Sender, text: String) {
+    // Folded by default (27 Nov 2026): the card shows who sent it and the first two lines; a tap opens the whole message.
+    var open by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    val cs = MaterialTheme.colorScheme
     Surface(
         modifier = Modifier.fillMaxWidth().padding(end = 16.dp).testTag("agent-sender-card"),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = cs.surfaceContainerLow,
         shape = RoundedCornerShape(com.past9.phoneaos.ui.theme.Radius.lg),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        border = androidx.compose.foundation.BorderStroke(1.dp, cs.outlineVariant),
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(
+            Modifier
+                .clickable(onClickLabel = if (open) "Collapse" else "Expand") { open = !open }
+                .animateContentSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (sender.glyph.isNotBlank()) com.past9.phoneaos.ui.ProjectIconTile(sender.name, sender.glyph, sender.color, "", 22.dp)
-                else Icon(senderIcon(sender), null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                else Icon(senderIcon(sender), null, Modifier.size(16.dp), tint = cs.onSurfaceVariant)
                 Spacer(Modifier.width(6.dp))
-                Text(sender.line, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(sender.line, Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Icon(
+                    if (open) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown, null,
+                    Modifier.padding(start = 4.dp).size(20.dp).testTag("agent-sender-chevron"), tint = cs.onSurfaceVariant,
+                )
             }
-            Text(text, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+            Text(
+                text, Modifier.testTag("agent-sender-body"), style = MaterialTheme.typography.bodyLarge, color = cs.onSurface,
+                maxLines = if (open) Int.MAX_VALUE else 2, overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

@@ -16,6 +16,8 @@ import com.past9.phoneaos.ui.screens.UserBubble
 import com.past9.phoneaos.ui.theme.AppTheme
 import org.junit.Assert.assertTrue
 import org.junit.Rule
+import org.junit.Assert.assertEquals
+import androidx.compose.ui.test.performClick
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.ParameterizedRobolectricTestRunner
@@ -48,5 +50,27 @@ class AgentSenderShotsTest(private val dark: Boolean) {
         assertTrue("Agent card starts left of his bubble", card.left < own.left)
         val out = File("/tmp/agent-sender-phone-shots/${if (dark) "dark" else "light"}.png").also { it.parentFile?.mkdirs() }
         rule.onRoot().captureRoboImage(out.path)
+    }
+
+    @Test fun agentCardStartsFoldedAndOpensOnTap() {
+        val long = (1..12).joinToString(" ") { "Line $it of a long helper report that wraps across the card." }
+        rule.setContent {
+            AppTheme(dark = dark) {
+                Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).padding(16.dp)) {
+                    UserBubble(ChatItem(id = 3, kind = "user", text = long, meta = """{"via":{"from":"helper","name":"Re-render invoice PDF","chat":"main"}}"""))
+                }
+            }
+        }
+        val folded = rule.onNodeWithTag("agent-sender-body", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.height
+        val dir = File("/tmp/agent-sender-phone-shots").also { it.mkdirs() }
+        rule.onRoot().captureRoboImage(File(dir, "folded-${if (dark) "dark" else "light"}.png").path)
+        rule.onNodeWithTag("agent-sender-card").performClick()
+        rule.waitForIdle()
+        val opened = rule.onNodeWithTag("agent-sender-body", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.height
+        assertTrue("Folded card shows at most two lines ($folded vs $opened)", opened > folded * 2)
+        rule.onRoot().captureRoboImage(File(dir, "open-${if (dark) "dark" else "light"}.png").path)
+        rule.onNodeWithTag("agent-sender-card").performClick()
+        rule.waitForIdle()
+        assertEquals(folded, rule.onNodeWithTag("agent-sender-body", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.height, 0.5f)
     }
 }
